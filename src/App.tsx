@@ -68,11 +68,14 @@ const App: React.FC = () => {
       let outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
       const useLegacyAudio = localStorage.getItem('useLegacyAudioBackend') === 'true';
 
-      // Override output device ID to force SCK if experimental mode is enabled
-      // Default to SCK unless legacy is enabled
-      if (!useLegacyAudio) {
-        console.log("[App] Using ScreenCaptureKit backend (Default).");
+      // Use ScreenCaptureKit on macOS, default WASAPI loopback on Windows
+      const isMac = window.navigator.platform.toLowerCase().includes('mac');
+      if (isMac && !useLegacyAudio) {
+        console.log("[App] Using ScreenCaptureKit backend (macOS).");
         outputDeviceId = "sck";
+      } else if (!isMac) {
+        console.log("[App] Using WASAPI loopback backend (Windows).");
+        outputDeviceId = null; // null = default render device loopback in Rust
       } else {
         console.log("[App] Using Legacy CoreAudio backend (User Preference).");
       }
