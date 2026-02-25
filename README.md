@@ -172,9 +172,12 @@ You explicitly control:
 ## Installation (Developers & Contributors)
 
 ### Prerequisites
-- Node.js (v20+ recommended)
-- Git
-- Rust (required for native audio capture)
+- [Node.js](https://nodejs.org/) (v20+ recommended)
+- [Git](https://git-scm.com/)
+- [Rust](https://rustup.rs/) (Required for compiling the native audio capture module)
+- C++ Build Tools (Required for `better-sqlite3` and `napi`)
+  - **Windows**: [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
 
 ### AI Credentials & Speech Providers
 
@@ -239,6 +242,20 @@ cd natively-cluely-ai-assistant
 ### Install Dependencies
 ```bash
 npm install
+```
+
+### Build Native Audio Module
+Natively uses a Rust-based native module for high-performance audio capture. You must build it before running the app for the first time:
+```bash
+npm run build:native
+```
+> [!TIP]
+> You only need to re-run this if you modify the code inside the `native-module/` directory.
+
+### Troubleshooting Native Modules
+If you encounter `ERR_DLOPEN_FAILED` or issues with `better-sqlite3` after `npm install`, run:
+```bash
+npx electron-rebuild -w better-sqlite3
 ```
 
 ### Environment Variables
