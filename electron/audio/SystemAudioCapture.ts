@@ -17,6 +17,7 @@ export class SystemAudioCapture extends EventEmitter {
     private isRecording: boolean = false;
     private deviceId: string | null = null;
     private detectedSampleRate: number = 16000;
+    private chunkCount: number = 0;
 
     constructor(deviceId?: string | null) {
         super();
@@ -67,15 +68,24 @@ export class SystemAudioCapture extends EventEmitter {
                 // The native module sends raw PCM bytes (Uint8Array)
                 if (chunk && chunk.length > 0) {
                     const buffer = Buffer.from(chunk);
-                    if (Math.random() < 0.05) {
+                    this.chunkCount++;
+                    // Log first chunk and then every 100th
+                    if (this.chunkCount === 1 || this.chunkCount % 100 === 0) {
                         const prefix = buffer.slice(0, 10).toString('hex');
-                        console.log(`[SystemAudioCapture] Chunk: ${buffer.length}b, Rate: ${this.detectedSampleRate}, Data(hex): ${prefix}...`);
+                        console.log(`[SystemAudioCapture] Chunk #${this.chunkCount}: ${buffer.length}b, Data(hex): ${prefix}...`);
                     }
                     this.emit('data', buffer);
+                } else {
+                    // Log empty/null chunks occasionally to detect silent capture
+                    if (this.chunkCount === 0) {
+                        console.warn('[SystemAudioCapture] Received empty chunk from native module');
+                    }
                 }
             });
 
             this.isRecording = true;
+            this.chunkCount = 0;
+            console.log('[SystemAudioCapture] Native capture started, waiting for chunks...');
             this.emit('start');
         } catch (error) {
             console.error('[SystemAudioCapture] Failed to start:', error);
