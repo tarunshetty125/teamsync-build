@@ -75,7 +75,7 @@ _The privacy-first AI assistant for meetings._
   <a href="https://github.com/evinjohnn/natively-cluely-ai-assistant/releases/latest">
     <img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" />
   </a>
-  <a href="https://github.com/evinjohnn/natively-cluely-ai-assistant/releases/latest">
+  <a href="https://github.com/evinjohnn/natively-cluely-ai-assistant/releases/tag/v1.1.2">
     <img src="https://img.shields.io/badge/Download-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" />
   </a>
 </p>
