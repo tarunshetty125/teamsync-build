@@ -5,7 +5,7 @@ use std::thread;
 use std::time::Duration;
 use tracing::error;
 use wasapi::{get_default_device, DeviceCollection, Direction, SampleType, WaveFormat, ShareMode};
-use ringbuf::{traits::{Producer, Consumer, Split}, HeapRb, HeapProd, HeapCons};
+use ringbuf::{traits::{Producer, Split}, HeapRb, HeapProd, HeapCons};
 use crate::audio_config::RING_BUFFER_SAMPLES;
 
 struct WakerState {
