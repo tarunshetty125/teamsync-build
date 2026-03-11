@@ -10,7 +10,14 @@ import StartupSequence from "./components/StartupSequence"
 import { AnimatePresence, motion } from "framer-motion"
 import UpdateBanner from "./components/UpdateBanner"
 import { SupportToaster } from "./components/SupportToaster"
-import { ProfileFeatureToaster, JDAwarenessToaster, PremiumPromoToaster, PremiumUpgradeModal, useAdCampaigns, RemoteCampaignToaster } from "./premium"
+import {
+  JDAwarenessToaster,
+  ProfileFeatureToaster,
+  PremiumPromoToaster,
+  RemoteCampaignToaster,
+  PremiumUpgradeModal,
+  useAdCampaigns
+} from './premium'
 import { analytics } from "./lib/analytics/analytics.service"
 
 const queryClient = new QueryClient()
@@ -69,13 +76,35 @@ const App: React.FC = () => {
   const [hasProfile, setHasProfile] = useState(false);
 
   // Initialize Ads Campaign Manager
+  const [appStartTime] = useState<number>(Date.now());
+  const [lastMeetingEndTime, setLastMeetingEndTime] = useState<number | null>(null);
+  const [isProcessingMeeting, setIsProcessingMeeting] = useState<boolean>(false);
+  
   const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !showStartup;
-  const { activeAd, dismissAd } = useAdCampaigns(isPremiumActive, hasProfile, isAppReady);
+  const { activeAd, dismissAd } = useAdCampaigns(
+    isPremiumActive, 
+    hasProfile, 
+    isAppReady,
+    appStartTime,
+    lastMeetingEndTime,
+    isProcessingMeeting
+  );
 
   useEffect(() => {
     // Basic status check for campaign targeting
     window.electronAPI?.profileGetStatus?.().then(s => setHasProfile(s?.hasProfile || false)).catch(() => {});
     window.electronAPI?.licenseCheckPremium?.().then(setIsPremiumActive).catch(() => {});
+
+    // Listen for meeting processing completion to trigger post-meeting ads
+    const removeMeetingsListener = window.electronAPI?.onMeetingsUpdated?.(() => {
+      console.log("[App.tsx] Meetings updated (processing finished), starting ad delay timer");
+      setIsProcessingMeeting(false);
+      setLastMeetingEndTime(Date.now());
+    });
+
+    return () => {
+      if (removeMeetingsListener) removeMeetingsListener();
+    }
   }, []);
 
   // Handlers
@@ -117,6 +146,7 @@ const App: React.FC = () => {
   const handleEndMeeting = async () => {
     console.log("[App.tsx] handleEndMeeting triggered");
     analytics.trackMeetingEnded();
+    setIsProcessingMeeting(true);
     try {
       await window.electronAPI.endMeeting();
       console.log("[App.tsx] endMeeting IPC completed");
@@ -132,6 +162,7 @@ const App: React.FC = () => {
       }
 
       // Switch back to Native Launcher Mode
+      // (Ad delay tracking moved to onMeetingsUpdated listener so ads wait for note generation to finish)
       await window.electronAPI.setWindowMode('launcher');
     } catch (err) {
       console.error("Failed to end meeting:", err);
@@ -254,13 +285,14 @@ const App: React.FC = () => {
           setShowPremiumModal(true);
         }} 
       />
-      {typeof activeAd === 'object' && activeAd !== null && (
-        <RemoteCampaignToaster
-          isOpen={true}
-          campaign={activeAd}
-          onDismiss={() => dismissAd(activeAd.id)}
-        />
-      )}
+      
+      {/* Remote Campaigns Render Logic */}
+      <RemoteCampaignToaster
+        isOpen={typeof activeAd === 'object' && activeAd !== null}
+        campaign={typeof activeAd === 'object' && activeAd !== null ? activeAd : undefined as any}
+        onDismiss={dismissAd}
+      />
+
       <PremiumUpgradeModal
         isOpen={showPremiumModal}
         onClose={() => setShowPremiumModal(false)}

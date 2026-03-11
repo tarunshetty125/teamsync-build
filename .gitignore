@@ -168,8 +168,9 @@ target/
 native-module/target/
 native-module/*.node
 
-
+old files
 # Rust build artifacts
 native-module/target/
 native-module/*.node
 
+.github/RepoGuide.md

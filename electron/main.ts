@@ -229,8 +229,8 @@ export class AppState {
     this.setupOllamaIpcHandlers()
 
     // --- NEW SYSTEM AUDIO PIPELINE (SOX + NODE GOOGLE STT) ---
-    // LAZY INIT: Do not setup pipeline here to prevent launch volume surge.
-    // this.setupSystemAudioPipeline()
+    // EAGER INIT: Requested by user to prevent SCK freeze during meeting start.
+    this.setupSystemAudioPipeline()
 
     // Initialize Auto-Updater
     this.setupAutoUpdater()
@@ -291,16 +291,12 @@ export class AppState {
           this.knowledgeOrchestrator.setEmbedFn(async (text: string) => {
             const result = await genAI.models.embedContent({
               model: 'models/gemini-embedding-001',
-              contents: [text],
-              config: {
-                outputDimensionality: 768
-              }
-            } as any);
+              contents: [{ parts: [{ text }] }]
+            });
             if (!result.embeddings || !result.embeddings[0]) {
               throw new Error('No embedding returned from API');
             }
-            const values = (result.embeddings[0] as any).values || result.embeddings[0];
-            return values as number[];
+            return result.embeddings[0].values as number[];
           });
         }
 
@@ -648,7 +644,7 @@ export class AppState {
 
     // 1. System Audio (Output Capture)
     if (this.systemAudioCapture) {
-      this.systemAudioCapture.stop();
+      this.systemAudioCapture.destroy();
       this.systemAudioCapture = null;
     }
 
@@ -823,32 +819,36 @@ export class AppState {
     this.isMeetingActive = true;
     if (metadata) {
       this.intelligenceManager.setMeetingMetadata(metadata);
-
-      // Check for audio configuration preference
-      if (metadata.audio) {
-        await this.reconfigureAudio(metadata.audio.inputDeviceId, metadata.audio.outputDeviceId);
-      }
     }
 
-    // Emit session reset to clear UI state
+    // Emit session reset to clear UI state synchronously
     this.getWindowHelper().getOverlayWindow()?.webContents.send('session-reset');
     this.getWindowHelper().getLauncherWindow()?.webContents.send('session-reset');
 
-    // LAZY INIT: Ensure pipeline is ready (if not reconfigured above)
-    this.setupSystemAudioPipeline();
+    // Defer the heavy native audio/capture initializations
+    // This allows the IPC call to return instantly, avoiding UI freeze on Start Natively
+    setImmediate(async () => {
+      // Check for audio configuration preference
+      if (metadata && metadata.audio) {
+        await this.reconfigureAudio(metadata.audio.inputDeviceId, metadata.audio.outputDeviceId);
+      }
 
-    // 3. Start System Audio
-    this.systemAudioCapture?.start();
-    this.googleSTT?.start();
+      // LAZY INIT: Ensure pipeline is ready (if not reconfigured above)
+      this.setupSystemAudioPipeline();
 
-    // 4. Start Microphone
-    this.microphoneCapture?.start();
-    this.googleSTT_User?.start();
+      // 3. Start System Audio
+      this.systemAudioCapture?.start();
+      this.googleSTT?.start();
 
-    // 5. Start JIT RAG live indexing
-    if (this.ragManager) {
-      this.ragManager.startLiveIndexing('live-meeting-current');
-    }
+      // 4. Start Microphone
+      this.microphoneCapture?.start();
+      this.googleSTT_User?.start();
+
+      // 5. Start JIT RAG live indexing
+      if (this.ragManager) {
+        this.ragManager.startLiveIndexing('live-meeting-current');
+      }
+    });
   }
 
   public async endMeeting(): Promise<void> {

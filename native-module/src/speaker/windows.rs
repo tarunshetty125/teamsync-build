@@ -1,3 +1,4 @@
+// Ported logic
 use anyhow::Result;
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc, Mutex, Condvar};
@@ -211,7 +212,7 @@ impl SpeakerInput {
     }
 }
 
-
+// Implement Drop to stop the thread
 impl Drop for SpeakerStream {
     fn drop(&mut self) {
         if let Ok(mut state) = self.waker_state.lock() {
