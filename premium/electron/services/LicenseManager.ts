@@ -18,8 +18,8 @@ try {
     const nativeModule = require('natively-audio');
     getHardwareId = nativeModule.getHardwareId;
     verifyGumroadKey = nativeModule.verifyGumroadKey;
-} catch {
-    console.warn('[LicenseManager] Native module not available — license features disabled.');
+} catch (error: any) {
+    console.warn('[LicenseManager] Native module not available — license features disabled. Error:', error.message);
 }
 
 const LICENSE_PATH = path.join(app.getPath('userData'), 'license.enc');
