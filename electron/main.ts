@@ -173,6 +173,7 @@ export class AppState {
     // Load initial stealth state from SettingsManager (boot-critical)
     const settingsManager = SettingsManager.getInstance();
     this.isUndetectable = settingsManager.get('isUndetectable') || false;
+    this.disguiseMode = settingsManager.get('disguiseMode') || 'terminal';
     
     // Non-boot settings still come from CredentialsManager
     this.windowHelper.setContentProtection(this.isUndetectable);
@@ -1591,11 +1592,16 @@ export class AppState {
 
   public setDisguise(mode: 'terminal' | 'settings' | 'activity' | 'none'): void {
     this.disguiseMode = mode;
+    SettingsManager.getInstance().set('disguiseMode', mode);
 
     // Apply the disguise regardless of undetectable state
     // (disguise affects Activity Monitor name via process.title,
     //  dock icon only updates when NOT in stealth)
     this._applyDisguise(mode);
+  }
+
+  public applyInitialDisguise(): void {
+    this._applyDisguise(this.disguiseMode);
   }
 
   private _applyDisguise(mode: 'terminal' | 'settings' | 'activity' | 'none'): void {
@@ -1774,24 +1780,6 @@ export class AppState {
 
 // Application initialization
 
-// Canonical Dock Icon Setup (dev + prod safe) - MUST be called before any window is created
-function setMacDockIcon() {
-  if (process.platform !== "darwin") return;
-
-  const appState = AppState.getInstance();
-  if (appState && appState.getUndetectable()) {
-    console.log("[DockIcon] Skipping dock icon setup due to stealth mode");
-    return;
-  }
-
-  const iconPath = app.isPackaged
-    ? path.join(process.resourcesPath, "natively.icns")
-    : path.join(app.getAppPath(), "assets/natively.icns");
-
-  console.log("[DockIcon] Using:", iconPath);
-  app.dock.setIcon(nativeImage.createFromPath(iconPath));
-}
-
 async function initializeApp() {
   // 2. Wait for app to be ready
   await app.whenReady()
@@ -1811,18 +1799,8 @@ async function initializeApp() {
   // Initialize IPC handlers before window creation
   initializeIpcHandlers(appState)
 
-  // Set initial app name — apply disguise name early if configured
-  const initialDisguise = appState.getDisguise();
-  const initialAppName = (() => {
-    switch (initialDisguise) {
-      case 'terminal': return 'Terminal ';
-      case 'settings': return 'System Settings ';
-      case 'activity': return 'Activity Monitor ';
-      default: return 'Natively';
-    }
-  })();
-  app.setName(initialAppName);
-  process.title = initialAppName;
+  // Apply the full disguise payload (names, dock icon, AUMID) early
+  appState.applyInitialDisguise();
 
   app.whenReady().then(() => {
     // Start the Ollama lifecycle manager
@@ -1841,12 +1819,6 @@ async function initializeApp() {
     if (storedServiceAccountPath) {
       console.log("[Init] Loading stored Google Service Account path");
       appState.updateGoogleCredentials(storedServiceAccountPath);
-    }
-
-    try {
-      setMacDockIcon(); // 🔴 MUST be first, before any window
-    } catch (e) {
-      console.error("Failed to set dock icon:", e);
     }
 
     console.log("App is ready")
