@@ -159,23 +159,20 @@ export class AppState {
   } as const
 
   constructor() {
-    // Initialize WindowHelper with this
+    // 1. Load boot-critical settings first (used by WindowHelpers)
+    const settingsManager = SettingsManager.getInstance();
+    this.isUndetectable = settingsManager.get('isUndetectable') || false;
+    this.disguiseMode = settingsManager.get('disguiseMode') || 'terminal';
+
+    // 2. Initialize Helpers with loaded state
     this.windowHelper = new WindowHelper(this)
     this.settingsWindowHelper = new SettingsWindowHelper()
     this.modelSelectorWindowHelper = new ModelSelectorWindowHelper()
 
-    // Initialize ScreenshotHelper
+    // 3. Initialize other helpers
     this.screenshotHelper = new ScreenshotHelper(this.view)
-
-    // Initialize ProcessingHelper
     this.processingHelper = new ProcessingHelper(this)
 
-    // Load initial stealth state from SettingsManager (boot-critical)
-    const settingsManager = SettingsManager.getInstance();
-    this.isUndetectable = settingsManager.get('isUndetectable') || false;
-    this.disguiseMode = settingsManager.get('disguiseMode') || 'terminal';
-    
-    // Non-boot settings still come from CredentialsManager
     this.windowHelper.setContentProtection(this.isUndetectable);
     this.settingsWindowHelper.setContentProtection(this.isUndetectable);
     this.modelSelectorWindowHelper.setContentProtection(this.isUndetectable);

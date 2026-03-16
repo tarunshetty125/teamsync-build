@@ -13,7 +13,8 @@ Version 2.0.6 introduces critical stealth mode enhancements, an upgraded model r
 
 - **SEO & Documentation**: Optimized `README.md` for search engines with hidden targeted keywords.
 - **Code Quality**: Performed a senior-level code review across modified files to address potential race conditions, edge cases, and empty references.
-- **STT Providers**: Clarified routing logic between REST-based and streaming WebSocket implementations for ElevenLabs in `main.ts` and `RestSTT.ts`.
+- **STT Providers**: Refactored Google, Deepgram, Soniox, and ElevenLabs streaming implementations with lazy connection and automatic reconnection logic. Added smart audio buffering to ensure no data is lost during stream initialization or network jitter.
+- **Stealth Boot Refactor**: Centralized platform disguise and dock icon management into `AppState` for consistent stealth behavior across reboots.
 
 ## Fixes
 
@@ -34,7 +35,7 @@ Version 2.0.6 introduces critical stealth mode enhancements, an upgraded model r
 
 - **PR Integration**: Safely integrated changes from PR #64 ("Build stealth-mode enhancements") and PR #71, conducted code reviews, and ensured build compatibility without modifying git history.
 - **SettingsManager**: Created `SettingsManager` to securely persist boot-critical settings (`isUndetectable`).
-- **Initialization**: Refactored `initializeApp` sequence in `main.ts` to immediately read cached `isUndetectable` state on boot via `SettingsManager` for instant stealth.
+- **Initialization**: Refactored `initializeApp` sequence in `main.ts` to immediately read cached `isUndetectable` state on boot via `SettingsManager` for instant stealth. Migrated dock icon and process title management to a unified `applyInitialDisguise` lifecycle method.
 
 ## ⚠️macOS Installation (Unsigned Build)
 
