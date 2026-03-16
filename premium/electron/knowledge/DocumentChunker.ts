@@ -204,14 +204,36 @@ export async function chunkAndEmbedDocument(
             batch.map(node => embedFn(node.text_content))
         );
 
+        // Collect failed indices for retry
+        const failedIndices: number[] = [];
         for (let j = 0; j < batch.length; j++) {
             const result = results[j];
-            nodesWithEmbeddings.push({
-                ...batch[j],
-                embedding: result.status === 'fulfilled' ? result.value : undefined
-            });
-            if (result.status === 'rejected') {
-                console.warn(`[DocumentChunker] Failed to embed node ${i + j}: ${(result.reason as Error)?.message}. Skipping embedding.`);
+            if (result.status === 'fulfilled') {
+                nodesWithEmbeddings.push({ ...batch[j], embedding: result.value });
+            } else {
+                failedIndices.push(j);
+            }
+        }
+
+        // Retry failed embeddings once after a short delay
+        if (failedIndices.length > 0) {
+            console.warn(`[DocumentChunker] ${failedIndices.length} embedding(s) failed in batch ${Math.floor(i / EMBED_BATCH_SIZE) + 1}, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            const retryResults = await Promise.allSettled(
+                failedIndices.map(j => embedFn(batch[j].text_content))
+            );
+
+            for (let k = 0; k < failedIndices.length; k++) {
+                const j = failedIndices[k];
+                const retryResult = retryResults[k];
+                nodesWithEmbeddings.push({
+                    ...batch[j],
+                    embedding: retryResult.status === 'fulfilled' ? retryResult.value : undefined
+                });
+                if (retryResult.status === 'rejected') {
+                    console.warn(`[DocumentChunker] Retry also failed for node ${i + j}: ${(retryResult.reason as Error)?.message}. Storing without embedding.`);
+                }
             }
         }
 

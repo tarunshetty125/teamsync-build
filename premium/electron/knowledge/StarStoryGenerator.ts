@@ -160,16 +160,40 @@ export async function generateStarStoryNodes(
         const results = await Promise.allSettled(
             batch.map(node => embedFn(node.text_content))
         );
+
+        // Collect failed indices for retry
+        const failedIndices: number[] = [];
         for (let j = 0; j < batch.length; j++) {
             const result = results[j];
-            nodesWithEmbeddings.push({
-                ...batch[j],
-                embedding: result.status === 'fulfilled' ? result.value : undefined
-            });
-            if (result.status === 'rejected') {
-                console.warn(`[StarStoryGenerator] Failed to embed STAR story ${i + j}: ${(result.reason as Error)?.message}`);
+            if (result.status === 'fulfilled') {
+                nodesWithEmbeddings.push({ ...batch[j], embedding: result.value });
+            } else {
+                failedIndices.push(j);
             }
         }
+
+        // Retry failed embeddings once after a short delay
+        if (failedIndices.length > 0) {
+            console.warn(`[StarStoryGenerator] ${failedIndices.length} embedding(s) failed, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            const retryResults = await Promise.allSettled(
+                failedIndices.map(j => embedFn(batch[j].text_content))
+            );
+
+            for (let k = 0; k < failedIndices.length; k++) {
+                const j = failedIndices[k];
+                const retryResult = retryResults[k];
+                nodesWithEmbeddings.push({
+                    ...batch[j],
+                    embedding: retryResult.status === 'fulfilled' ? retryResult.value : undefined
+                });
+                if (retryResult.status === 'rejected') {
+                    console.warn(`[StarStoryGenerator] Retry also failed for STAR story ${i + j}: ${(retryResult.reason as Error)?.message}`);
+                }
+            }
+        }
+
         if (i + EMBED_BATCH < rawNodes.length) {
             await new Promise(resolve => setTimeout(resolve, 100));
         }

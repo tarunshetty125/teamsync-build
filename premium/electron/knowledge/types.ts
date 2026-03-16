@@ -186,6 +186,21 @@ export interface CompanyDossier {
 }
 
 // ============================================
+// Resume-Only Salary Estimation
+// ============================================
+
+export interface ResumeSalaryEstimate {
+    role: string;
+    location: string;
+    currency: string;
+    min: number;
+    max: number;
+    confidence: 'low' | 'medium' | 'high';
+    justification_factors: string[];
+    estimated_at: string;
+}
+
+// ============================================
 // Advanced Knowledge Pipeline Types
 // ============================================
 
@@ -240,5 +255,6 @@ export enum IntentType {
     INTRO = 'intro',
     COMPANY_RESEARCH = 'company_research',
     NEGOTIATION = 'negotiation',
+    PROFILE_DETAIL = 'profile_detail',
     GENERAL = 'general'
 }

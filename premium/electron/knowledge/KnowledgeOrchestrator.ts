@@ -4,7 +4,7 @@ import { extractDocumentText } from './DocumentReader';
 import { extractStructuredData } from './StructuredExtractor';
 import { chunkAndEmbedDocument } from './DocumentChunker';
 import { processResume } from './PostProcessor';
-import { getRelevantNodes, formatDossierBlock } from './HybridSearchEngine';
+import { getRelevantNodes, formatDossierBlock, detectCategoryHints } from './HybridSearchEngine';
 import { assemblePromptContext, PromptAssemblyResult } from './ContextAssembler';
 import { classifyIntent, needsCompanyResearch } from './IntentClassifier';
 import { CompanyResearchEngine, jdContextFromStructured } from './CompanyResearchEngine';
@@ -13,12 +13,14 @@ import { AOTPipeline } from './AOTPipeline';
 import { generateStarStories, generateStarStoryNodes } from './StarStoryGenerator';
 import { generateMockQuestions } from './MockInterviewGenerator';
 import { findRelevantValueAlignments, formatValueAlignmentBlock, CultureMappingResult } from './CultureValuesMapper';
+import { SalaryIntelligenceEngine } from './SalaryIntelligenceEngine';
 
 export class KnowledgeOrchestrator {
     private db: KnowledgeDatabaseManager;
     private knowledgeModeActive: boolean = false;
     private depthScorer: TechnicalDepthScorer;
     private aotPipeline: AOTPipeline;
+    private salaryEngine: SalaryIntelligenceEngine;
 
     // Cached state for fast retrieval
     private activeResume: KnowledgeDocument | null = null;
@@ -38,6 +40,7 @@ export class KnowledgeOrchestrator {
         this.companyResearch = new CompanyResearchEngine(db);
         this.depthScorer = new TechnicalDepthScorer();
         this.aotPipeline = new AOTPipeline(db, this.companyResearch);
+        this.salaryEngine = new SalaryIntelligenceEngine();
         this.refreshCache();
     }
 
@@ -243,6 +246,15 @@ export class KnowledgeOrchestrator {
                 ).catch((err: Error) => console.error('[KnowledgeOrchestrator] AOT Pipeline failed:', err));
             }
 
+            // 10. Pre-compute salary estimate (Resume Only, non-blocking)
+            if (type === DocType.RESUME && this.generateContentFn) {
+                const resumeData = structuredData as StructuredResume;
+                const { totalExperienceYears } = processResume(resumeData);
+                this.salaryEngine.estimateFromResume(
+                    resumeData, totalExperienceYears, this.generateContentFn
+                ).catch((err: Error) => console.error('[KnowledgeOrchestrator] Salary pre-compute failed:', err));
+            }
+
             return { success: true };
 
         } catch (error: any) {
@@ -264,6 +276,16 @@ export class KnowledgeOrchestrator {
         const intent = classifyIntent(question);
         console.log(`[KnowledgeOrchestrator] Intent classified: ${intent}`);
 
+        // Detect category hints for boosting (e.g. "projects" → boost project nodes)
+        const categoryHints = detectCategoryHints(question);
+        if (categoryHints.length > 0) {
+            console.log(`[KnowledgeOrchestrator] Category hints detected: ${categoryHints.join(', ')}`);
+        }
+
+        // For PROFILE_DETAIL queries (e.g. "what projects have you worked on?"),
+        // use a higher node limit to retrieve all relevant items
+        const maxNodes = intent === IntentType.PROFILE_DETAIL ? 12 : undefined;
+
         // Get JD required skills for boosting
         let jdRequiredSkills: string[] = [];
         if (this.activeJD) {
@@ -271,13 +293,15 @@ export class KnowledgeOrchestrator {
             jdRequiredSkills = [...(jd.requirements || []), ...(jd.technologies || [])];
         }
 
-        // Retrieve relevant nodes with JD boost
+        // Retrieve relevant nodes with JD boost and category hints
         let relevantNodes: ContextNode[] = [];
         if (this.embedFn && this.cachedNodes.length > 0) {
             try {
                 const scoredNodes = await getRelevantNodes(question, this.cachedNodes, this.embedFn, {
                     sourceTypes: [DocType.RESUME, DocType.JD],
-                    jdRequiredSkills
+                    jdRequiredSkills,
+                    categoryHintKeywords: categoryHints.length > 0 ? categoryHints : undefined,
+                    maxNodes
                 });
                 relevantNodes = scoredNodes.map(sn => sn.node);
             } catch (error: any) {
@@ -308,6 +332,36 @@ export class KnowledgeOrchestrator {
                 } catch (error: any) {
                     console.warn('[KnowledgeOrchestrator] Company research failed:', error.message);
                 }
+            }
+        }
+
+        // Salary intelligence injection — for negotiation/salary questions
+        let salaryContext = '';
+        if (intent === IntentType.NEGOTIATION && this.activeResume && this.generateContentFn) {
+            try {
+                const resume = this.activeResume.structured_data as StructuredResume;
+                const { totalExperienceYears } = processResume(resume);
+
+                if (this.activeJD) {
+                    // JD mode: use pre-computed negotiation script + dossier salary data
+                    const negotiationScript = this.getNegotiationScript();
+                    const resumeEstimate = this.salaryEngine.getCachedEstimate();
+                    salaryContext = SalaryIntelligenceEngine.buildSalaryContextBlock(
+                        resumeEstimate, negotiationScript, true
+                    );
+                    console.log('[KnowledgeOrchestrator] Injecting JD-based salary intelligence');
+                } else {
+                    // Resume-only mode: generate salary estimate from resume data
+                    const resumeEstimate = await this.salaryEngine.estimateFromResume(
+                        resume, totalExperienceYears, this.generateContentFn
+                    );
+                    salaryContext = SalaryIntelligenceEngine.buildSalaryContextBlock(
+                        resumeEstimate, null, false
+                    );
+                    console.log('[KnowledgeOrchestrator] Injecting resume-based salary intelligence');
+                }
+            } catch (error: any) {
+                console.warn('[KnowledgeOrchestrator] Salary intelligence failed:', error.message);
             }
         }
         // Gap analysis pivot injection — if question mentions a gap skill, inject the pre-computed pivot script
@@ -349,11 +403,53 @@ export class KnowledgeOrchestrator {
                 : dossierContext;
         }
 
+        // Append salary intelligence if available
+        if (salaryContext && result) {
+            result.contextBlock = result.contextBlock
+                ? `${result.contextBlock}\n\n${salaryContext}`
+                : salaryContext;
+        }
+
         // Append gap pivot scripts if available
         if (gapContext && result) {
             result.contextBlock = result.contextBlock
                 ? `${result.contextBlock}\n\n${gapContext}`
                 : gapContext;
+        }
+
+        // Mock question matching — if the interviewer's question matches a pre-computed mock question,
+        // inject the suggested answer key to help the candidate
+        if (this.activeJD && result) {
+            const mockQuestions = this.getMockQuestions() as import('./types').MockQuestion[] | null;
+            if (mockQuestions && mockQuestions.length > 0) {
+                const questionLower = question.toLowerCase();
+                const questionWords = new Set(questionLower.split(/\s+/).filter(w => w.length > 3));
+
+                // Score each mock question by keyword overlap with the interviewer's question
+                const scoredMocks = mockQuestions.map(mq => {
+                    const mqWords = mq.question.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+                    const overlap = mqWords.filter(w => questionWords.has(w)).length;
+                    const similarity = mqWords.length > 0 ? overlap / mqWords.length : 0;
+                    return { mock: mq, similarity };
+                }).filter(s => s.similarity >= 0.4) // At least 40% word overlap
+                  .sort((a, b) => b.similarity - a.similarity);
+
+                if (scoredMocks.length > 0) {
+                    const bestMatch = scoredMocks[0];
+                    const hintLines = [
+                        `Predicted Question: "${bestMatch.mock.question}"`,
+                        `Category: ${bestMatch.mock.category} | Difficulty: ${bestMatch.mock.difficulty}`,
+                        `Key Points to Hit: ${bestMatch.mock.suggested_answer_key}`,
+                        `Why This Is Asked: ${bestMatch.mock.rationale}`
+                    ];
+                    const mockBlock = `<mock_question_hint>\nThis question closely matches a predicted interview question. Use these key points:\n${hintLines.join('\n')}\n</mock_question_hint>`;
+
+                    result.contextBlock = result.contextBlock
+                        ? `${result.contextBlock}\n\n${mockBlock}`
+                        : mockBlock;
+                    console.log(`[KnowledgeOrchestrator] Injecting mock question hint (${(bestMatch.similarity * 100).toFixed(0)}% match): "${bestMatch.mock.question.substring(0, 60)}..."`);
+                }
+            }
         }
 
         // Culture values alignment injection
@@ -383,7 +479,10 @@ export class KnowledgeOrchestrator {
 
     deleteDocumentsByType(type: DocType): void {
         this.db.deleteDocumentsByType(type);
-        if (type === DocType.RESUME) this.knowledgeModeActive = false;
+        if (type === DocType.RESUME) {
+            this.knowledgeModeActive = false;
+            this.salaryEngine.clearCache();
+        }
         this.refreshCache();
     }
 

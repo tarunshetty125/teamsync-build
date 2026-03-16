@@ -39,6 +39,18 @@ const TECHNICAL_PATTERNS = [
     'code', 'debug', 'optimize', 'performance'
 ];
 
+const PROFILE_DETAIL_PATTERNS = [
+    'project', 'projects', 'what have you built', 'what did you build',
+    'what have you worked on', 'side project',
+    'education', 'degree', 'university', 'college', 'school', 'studied',
+    'certification', 'certifications', 'certified',
+    'achievement', 'achievements', 'award', 'awards',
+    'leadership', 'volunteer',
+    'skill', 'skills', 'tech stack', 'technologies you know',
+    'your background', 'your experience', 'work history',
+    'roles', 'previous roles', 'past roles', 'companies you worked'
+];
+
 /**
  * Classify the intent of a user question.
  * Returns the most likely intent type based on keyword matching.
@@ -57,6 +69,7 @@ export function classifyIntent(question: string): IntentType {
         [IntentType.INTRO]: 0,
         [IntentType.COMPANY_RESEARCH]: 0,
         [IntentType.NEGOTIATION]: 0,
+        [IntentType.PROFILE_DETAIL]: 0,
         [IntentType.GENERAL]: 0
     };
 
@@ -72,16 +85,22 @@ export function classifyIntent(question: string): IntentType {
         if (q.includes(pattern)) scores[IntentType.TECHNICAL]++;
     }
 
+    for (const pattern of PROFILE_DETAIL_PATTERNS) {
+        if (q.includes(pattern)) scores[IntentType.PROFILE_DETAIL]++;
+    }
+
     // Find highest scoring intent
     const maxScore = Math.max(
         scores[IntentType.COMPANY_RESEARCH],
         scores[IntentType.NEGOTIATION],
-        scores[IntentType.TECHNICAL]
+        scores[IntentType.TECHNICAL],
+        scores[IntentType.PROFILE_DETAIL]
     );
 
     if (maxScore === 0) return IntentType.GENERAL;
 
-    // Priority: negotiation > company_research > technical (when scores tie)
+    // Priority: profile_detail > negotiation > company_research > technical (when scores tie)
+    if (scores[IntentType.PROFILE_DETAIL] === maxScore) return IntentType.PROFILE_DETAIL;
     if (scores[IntentType.NEGOTIATION] === maxScore) return IntentType.NEGOTIATION;
     if (scores[IntentType.COMPANY_RESEARCH] === maxScore) return IntentType.COMPANY_RESEARCH;
     if (scores[IntentType.TECHNICAL] === maxScore) return IntentType.TECHNICAL;

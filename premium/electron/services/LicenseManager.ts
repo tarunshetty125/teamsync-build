@@ -54,6 +54,10 @@ export class LicenseManager {
             return { success: false, error: 'Premium features not available in this build.' };
         }
 
+        // Invalidate cache before async verification so concurrent isPremium() calls
+        // don't return stale true while a new key is being verified.
+        this.cachedPremium = null;
+
         try {
             const trimmedKey = key.trim();
             if (!trimmedKey) {
@@ -84,7 +88,11 @@ export class LicenseManager {
             }
 
             const encrypted = safeStorage.encryptString(JSON.stringify(payload));
-            fs.writeFileSync(LICENSE_PATH, encrypted);
+            // Atomic write: write to a temp file then rename to prevent corrupt license.enc
+            // if the process is killed mid-write.
+            const tmpPath = LICENSE_PATH + '.tmp';
+            fs.writeFileSync(tmpPath, encrypted);
+            fs.renameSync(tmpPath, LICENSE_PATH);
 
             // Update cached state
             this.cachedPremium = true;
