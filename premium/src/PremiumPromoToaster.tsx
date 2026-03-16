@@ -106,15 +106,15 @@ export const PremiumPromoToaster: React.FC<PremiumPromoToasterProps> = ({ classN
                                 </div>
                                 
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/30">Early Adopter Bundle</span>
+                                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/30">Spring Sale Bundle</span>
                                     <div className="px-2 py-0.5 rounded-full bg-white text-black text-[9px] font-black tracking-tighter">
-                                        50% OFF
+                                        30% OFF
                                     </div>
                                 </div>
 
                                 <div className="flex items-end gap-3 leading-none">
                                     <div className="flex items-baseline gap-1.5">
-                                        <span className="text-[48px] font-[700] text-white leading-none tracking-[-0.02em]">$5</span>
+                                        <span className="text-[48px] font-[700] text-white leading-none tracking-[-0.02em]">$7</span>
                                         <span className="text-[14px] font-bold text-white/40 mb-1.5">USD</span>
                                     </div>
                                     <div className="h-[24px] w-px bg-white/10 mx-1 mb-2" />

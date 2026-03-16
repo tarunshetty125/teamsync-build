@@ -8,7 +8,7 @@ interface RemoteCampaignToasterProps {
     className?: string;
     isOpen: boolean;
     campaign: RemoteCampaign;
-    onDismiss: () => void;
+    onDismiss: (id?: string) => void;
 }
 
 export const RemoteCampaignToaster: React.FC<RemoteCampaignToasterProps> = ({ 
@@ -24,7 +24,7 @@ export const RemoteCampaignToaster: React.FC<RemoteCampaignToasterProps> = ({
             if (!import.meta.env.DEV) return;
             if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
                 e.preventDefault();
-                if (isOpen) onDismiss();
+                if (isOpen) onDismiss(campaign?.id);
             }
         };
 
@@ -46,7 +46,7 @@ export const RemoteCampaignToaster: React.FC<RemoteCampaignToasterProps> = ({
             window.open(campaign.url, '_blank');
         }
         
-        onDismiss();
+        onDismiss(campaign.id);
     };
 
     const renderIcon = () => {
@@ -139,18 +139,18 @@ export const RemoteCampaignToaster: React.FC<RemoteCampaignToasterProps> = ({
                                     
                                     <div className="flex items-center justify-between mb-3 relative z-10">
                                         <div className="flex flex-col">
-                                            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#4DA3FF]/80">Early Adopter Bonus</span>
-                                            <span className="text-[14px] font-[900] tracking-widest text-white/90 font-mono mt-0.5 animate-pulse">EARLYADOPTER</span>
+                                            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#4DA3FF]/80">Spring Sale Bonus</span>
+                                            <span className="text-[14px] font-[900] tracking-widest text-white/90 font-mono mt-0.5 animate-pulse">SAVE30</span>
                                         </div>
                                         <div className="px-2.5 py-1 rounded-full bg-[#4DA3FF] text-black text-[10px] font-black tracking-tighter shadow-[0_0_12px_rgba(77,163,255,0.5)] animate-pulse">
-                                            ONLY 50 LEFT
+                                            LIMITED TIME
                                         </div>
                                     </div>
 
                                     <div className="flex items-end gap-3 leading-none relative z-10 mt-5">
                                         <div className="flex items-baseline gap-1.5">
-                                            <span className="text-[48px] font-[700] text-white leading-none tracking-[-0.02em] text-shadow-sm">$5</span>
-                                            <span className="text-[14px] font-bold text-[#4DA3FF]/80 mb-1.5">50% OFF</span>
+                                            <span className="text-[48px] font-[700] text-white leading-none tracking-[-0.02em] text-shadow-sm">$7</span>
+                                            <span className="text-[14px] font-bold text-[#4DA3FF]/80 mb-1.5">30% OFF</span>
                                         </div>
                                         <div className="h-[24px] w-px bg-white/10 mx-1 mb-2" />
                                         <div className="mb-2">
@@ -186,7 +186,7 @@ export const RemoteCampaignToaster: React.FC<RemoteCampaignToasterProps> = ({
                                         <span className="text-[12px] font-medium">3000+ people are already using Natively</span>
                                     </div>
                                     <button
-                                        onClick={onDismiss}
+                                        onClick={() => onDismiss(campaign.id)}
                                         className="text-[12px] text-white/20 font-bold hover:text-white/40 transition-colors duration-200 uppercase tracking-[0.15em] mt-1"
                                     >
                                         Maybe later
