@@ -30,7 +30,7 @@ Version 2.0.6 introduces critical stealth mode enhancements, an upgraded model r
 - **Windows Icon Pathing**: Rewrote the `icon` constructor option mapping to dynamically resolve `natively.icns` for `darwin`, `icon.ico` for `win32`, and `icon.png` for Linux.
 - **Cross-Platform Disguise**: Verified mapping `Terminal` to `Command Prompt` on Windows and isolating `CFBundleName` safely to macOS environments.
 - **SQLite-Vec Per-Dimension Table Fix (v8 Migration)**: Fixed a critical silent data-corruption bug by provisioning three per-dimension table pairs (`vec_chunks_768`, `1536`, `3072`) and updating the VectorStore write path and native search payloads.
-- **Permanent Hide Bug**: Fixed a UI sync desync where hiding the app broke the `Cmd+B` shortcut, causing the window to become irreparably transparent and leading users to believe their settings were cleared. App visibility now safely derives from the React frontend state.
+- **Permanent Hide & State Clear Trap**: Repaired a critical IPC routing flaw in `WindowHelper.this.getMainWindow()` where hiding the session UI dynamically misrouted all subsequent `Cmd+B` / "Toggle Visibility" commands to the background Launcher. This invisible interface trap caused users to repeatedly Force Quit the application via macOS dock. The forceful ungraceful exits during background syncing rounds led to truncated (wiped out) JSON files, erasing STT API keys and Disguise Settings. Atomic writes (implemented prior) prevent corruption during sudden exits, and this IPC fix completely solves the actual interface disappearance bug.
 
 ## Technical
 
