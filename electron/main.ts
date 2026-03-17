@@ -944,7 +944,7 @@ export class AppState {
         // Notify UI so user knows microphone/audio failed to start
         this.broadcast('meeting-audio-error', (err as Error).message || 'Audio pipeline failed to start');
       }
-    }, 100); // 100ms to ensure setWindowMode IPC resolves first
+    }, 0); // Defer to next event loop tick — ensures IPC response reaches renderer before audio init
   }
 
   public async endMeeting(): Promise<void> {

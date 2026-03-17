@@ -1,5 +1,8 @@
 import { EventEmitter } from 'events';
 import WebSocket from 'ws';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 const ELEVENLABS_WS_URL = 'wss://api.elevenlabs.io/v1/speech-to-text/realtime';
 
@@ -16,10 +19,21 @@ export class ElevenLabsStreamingSTT extends EventEmitter {
     private buffer: Buffer[] = [];
     private isConnecting = false;
     private isSessionReady = false;
+    
+    private debugWriteStream: fs.WriteStream | null = null;
 
     constructor(apiKey: string) {
         super();
         this.apiKey = apiKey;
+        
+        // Open a debug file to log exactly what we send to ElevenLabs
+        try {
+            const debugPath = path.join(os.homedir(), 'elevenlabs_debug.raw');
+            this.debugWriteStream = fs.createWriteStream(debugPath);
+            console.log(`[ElevenLabsStreaming] Audio debug stream opened at: ${debugPath}`);
+        } catch (e) {
+            console.error('[ElevenLabsStreaming] Failed to open debug stream:', e);
+        }
     }
 
     public setSampleRate(rate: number): void {
@@ -38,7 +52,8 @@ export class ElevenLabsStreamingSTT extends EventEmitter {
     public setCredentials(_path: string): void {}
 
     public start(): void {
-        if (this.isActive || this.ws) return;
+        if (this.isActive && this.ws) return;  // Guard: only block if truly active with live ws
+        if (this.isConnecting) return;          // Already in the middle of a connect
         this.shouldReconnect = true;
         this.reconnectAttempts = 0;
         this.connect();
@@ -59,6 +74,10 @@ export class ElevenLabsStreamingSTT extends EventEmitter {
         this.isConnecting = false;
         this.isSessionReady = false;
         this.buffer = [];
+        if (this.debugWriteStream) {
+            this.debugWriteStream.end();
+            this.debugWriteStream = null;
+        }
         console.log('[ElevenLabsStreaming] Stopped');
     }
 
@@ -94,6 +113,11 @@ export class ElevenLabsStreamingSTT extends EventEmitter {
                 const sample = inputF32[Math.floor(i * downsampleFactor)];
                 // Convert F32 [-1,1] to S16 [-32768, 32767]
                 outputS16[i] = Math.max(-32768, Math.min(32767, sample * 32767));
+            }
+
+            // Write to debug file
+            if (this.debugWriteStream) {
+                this.debugWriteStream.write(Buffer.from(outputS16.buffer));
             }
 
             const base64 = Buffer.from(outputS16.buffer).toString('base64');
@@ -196,12 +220,16 @@ export class ElevenLabsStreamingSTT extends EventEmitter {
         });
 
         this.ws.on('close', (code, reason) => {
-            // Do not force isActive=false; let write() trigger reconnect if isActive is still true
+            // Null out the ws reference immediately to prevent stale reuse
+            this.ws = null;
             this.isConnecting = false;
             this.isSessionReady = false;
             console.log(`[ElevenLabsStreaming] Closed: code=${code} reason=${reason}`);
             if (this.shouldReconnect && code !== 1000) {
                 this.scheduleReconnect();
+            } else {
+                // If not reconnecting, mark session as truly inactive
+                this.isActive = false;
             }
         });
 
