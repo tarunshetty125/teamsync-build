@@ -576,7 +576,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 await window.electronAPI?.setGroqSttApiKey?.(key.trim());
             } else if (provider === 'openai') {
                 // @ts-ignore
-                await window.electronAPI?.setOpenaiSttApiKey?.(key.trim());
+                await window.electronAPI?.setOpenAiSttApiKey?.(key.trim());
             } else if (provider === 'elevenlabs') {
                 // @ts-ignore
                 await window.electronAPI?.setElevenLabsApiKey?.(key.trim());
@@ -623,7 +623,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 setHasStoredSttGroqKey(false);
             } else if (provider === 'openai') {
                 // @ts-ignore
-                await window.electronAPI?.setOpenaiSttApiKey?.('');
+                await window.electronAPI?.setOpenAiSttApiKey?.('');
                 setSttOpenaiKey('');
                 setHasStoredSttOpenaiKey(false);
             } else if (provider === 'elevenlabs') {
@@ -1971,7 +1971,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                             { id: 'groq', label: 'Groq Whisper', badge: hasStoredSttGroqKey ? 'Saved' : null, recommended: true, desc: 'Ultra-fast REST transcription', color: 'orange', icon: <Mic size={14} /> },
                                                             { id: 'openai', label: 'OpenAI Whisper', badge: hasStoredSttOpenaiKey ? 'Saved' : null, desc: 'OpenAI-compatible Whisper API', color: 'green', icon: <Mic size={14} /> },
                                                             { id: 'deepgram', label: 'Deepgram Nova-2', badge: hasStoredDeepgramKey ? 'Saved' : null, recommended: true, desc: 'High-accuracy REST transcription', color: 'purple', icon: <Mic size={14} /> },
-                                                            { id: 'elevenlabs', label: 'ElevenLabs Scribe', badge: hasStoredElevenLabsKey ? 'Saved' : null, desc: 'High-quality Scribe v1 API', color: 'teal', icon: <Mic size={14} /> },
+                                                            { id: 'elevenlabs', label: 'ElevenLabs Scribe', badge: hasStoredElevenLabsKey ? 'Saved' : null, desc: 'Scribe v2 Realtime API', color: 'teal', icon: <Mic size={14} /> },
                                                             { id: 'azure', label: 'Azure Speech', badge: hasStoredAzureKey ? 'Saved' : null, desc: 'Microsoft Cognitive Services STT', color: 'cyan', icon: <Mic size={14} /> },
                                                             { id: 'ibmwatson', label: 'IBM Watson', badge: hasStoredIbmWatsonKey ? 'Saved' : null, desc: 'IBM Watson cloud STT service', color: 'indigo', icon: <Mic size={14} /> },
                                                             { id: 'soniox', label: 'Soniox', badge: hasStoredSonioxKey ? 'Saved' : null, recommended: true, desc: '60+ languages, multilingual, domain context', color: 'cyan', icon: <Mic size={14} /> },
