@@ -120,7 +120,7 @@ export class AppState {
   private knowledgeOrchestrator: any = null
   private tray: Tray | null = null
   private updateAvailable: boolean = false
-  private disguiseMode: 'terminal' | 'settings' | 'activity' | 'none' = 'terminal'
+  private disguiseMode: 'terminal' | 'settings' | 'activity' | 'none' = 'none'
 
   // View management
   private view: "queue" | "solutions" = "queue"
@@ -161,8 +161,9 @@ export class AppState {
   constructor() {
     // 1. Load boot-critical settings first (used by WindowHelpers)
     const settingsManager = SettingsManager.getInstance();
-    this.isUndetectable = settingsManager.get('isUndetectable') || false;
-    this.disguiseMode = settingsManager.get('disguiseMode') || 'terminal';
+    this.isUndetectable = settingsManager.get('isUndetectable') ?? false;
+    this.disguiseMode = settingsManager.get('disguiseMode') ?? 'none';
+    console.log(`[AppState] Initialized with isUndetectable=${this.isUndetectable}, disguiseMode=${this.disguiseMode}`);
 
     // 2. Initialize Helpers with loaded state
     this.windowHelper = new WindowHelper(this)
@@ -1270,7 +1271,16 @@ export class AppState {
       "Extra screenshots: ",
       this.screenshotHelper.getExtraScreenshotQueue().length
     )
-    this.windowHelper.toggleMainWindow()
+    
+    // Send toggle-expand to the currently active window mode's window.
+    // If we use getMainWindow(), it might return the launcher window when the overlay is hidden,
+    // causing the IPC event to go to the wrong React tree and silently fail.
+    const mode = this.windowHelper.getCurrentWindowMode();
+    const targetWindow = mode === 'overlay' ? this.windowHelper.getOverlayWindow() : this.windowHelper.getLauncherWindow();
+
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('toggle-expand');
+    }
   }
 
   public setWindowDimensions(width: number, height: number): void {
@@ -1397,7 +1407,7 @@ export class AppState {
     trayIcon.setTemplateImage(iconToUse.endsWith('Template.png'));
 
     this.tray = new Tray(trayIcon)
-    this.tray.setToolTip('Natively - Press Cmd+Shift+Space to show') // This tooltip might also need update if we change global shortcut, but global shortcut is removed.
+    this.tray.setToolTip('Natively') // This tooltip might also need update if we change global shortcut, but global shortcut is removed.
     this.updateTrayMenu();
 
     // Double-click to show window
@@ -1415,7 +1425,7 @@ export class AppState {
     console.log('[Main] updateTrayMenu called. Screenshot Accelerator:', screenshotAccel);
 
     // Update tooltip for verification
-    this.tray.setToolTip(`Natively (${screenshotAccel}) - Press Cmd+Shift+Space to show`);
+    this.tray.setToolTip('Natively');
 
     // Helper to format accelerator for display (e.g. CommandOrControl+H -> Cmd+H)
     const formatAccel = (accel: string) => {
@@ -1882,8 +1892,15 @@ async function initializeApp() {
         app.dock.show();
       }
     }
+    
+    // If no window exists, create it
     if (appState.getMainWindow() === null) {
       appState.createWindow()
+    } else {
+      // If the window exists but is hidden, clicking the dock icon should restore it
+      if (!appState.isVisible()) {
+        appState.toggleMainWindow();
+      }
     }
   })
 
