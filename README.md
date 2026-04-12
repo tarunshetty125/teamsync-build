@@ -258,9 +258,11 @@ While other tools act as simple API wrappers, Natively is a complete, native int
 
 Are you managing separate accounts for your AI reasoning, live transcription, fast inference, and web search? Juggling multiple API keys, rate limits, and invoices across completely different categories of tools is unnecessary overhead. Natively API replaces all of those categories with **one flat subscription**.
 
-### 4 Categories → 1 Key
+Under the hood, Natively API connects you to the absolute best models for the optimal user experience:
+- **Backend AI Models**: Claude, OpenAI, Gemini, and Groq.
+- **Premium STT Models**: Google Chirp 2/3, ElevenLabs Scribe v2, and Deepgram Nova-3.
 
-Most people spend 20 minutes getting their API keys set up across different platforms, only to hit rate limits or unexpected bills on per-token usage.
+### 4 Categories → 1 Key
 
 **Your current unbundled stack:**
 
@@ -272,41 +274,18 @@ Most people spend 20 minutes getting their API keys set up across different plat
 **Replaced by Natively API:**
 
 - **AI chat, transcription & web search** — all included
-- **One flat subscription.** Zero surprise bills. Starts at $7/mo.
+- **One flat subscription.** Zero surprise bills. Starts at $8/mo.
 - **Single key.** Zero rotation. Zero configuration.
 
-**Don't start the long way.** Skip the 20-minute manual setup. One Natively subscription skips all of it — AI, transcription, and web search are ready immediately.
+### API Plan Comparison
 
-<p align="center">
-  <a href="https://checkout.dodopayments.com/buy/pdt_0NbFixGmD8CSeawb5qvVl">
-    <img src="https://img.shields.io/badge/Get_Natively_API-Subscribe_Now-F97316?style=for-the-badge&logo=fastapi&logoColor=white" />
-  </a>
-</p>
-
----
-
-## Natively API (Hosted Tier)
-
-**Stop managing four separate services. One key. Zero configuration.**
-
-Are you managing separate accounts for your AI reasoning, live transcription, fast inference, and web search? Juggling multiple API keys, rate limits, and invoices across completely different categories of tools is unnecessary overhead. Natively API replaces all of those categories with **one flat subscription**.
-
-### 4 Categories → 1 Key
-
-Most people spend 20 minutes getting their API keys set up across different platforms, only to hit rate limits or unexpected bills on per-token usage.
-
-**Your current unbundled stack:**
-
-- **AI Intelligence (GPT/Claude/Gemini):** per-token billing and usage anxiety
-- **Lightning-Fast Inference (Groq/Llama):** strict rate limits to monitor
-- **Real-Time Transcription (Deepgram/Google STT):** separate key + quota
-- **Web Search & Research (Tavily/Perplexity):** yet another subscription
-
-**Replaced by Natively API:**
-
-- **AI chat, transcription & web search** — all included
-- **One flat subscription.** Zero surprise bills. Starts at $7/mo.
-- **Single key.** Zero rotation. Zero configuration.
+| Feature | Standard ($8/mo) | Pro ($15/mo) | Max ($25/mo) | Ultra ($35/mo) |
+| :--- | :--- | :--- | :--- | :--- |
+| **All-in-One Cloud AI Access** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Real-Time Transcription** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Included Natively Pro Desktop App** | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Premium Support** | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Higher Monthly Quotas** | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
 
 **Don't start the long way.** Skip the 20-minute manual setup. One Natively subscription skips all of it — AI, transcription, and web search are ready immediately.
 
@@ -320,7 +299,7 @@ Most people spend 20 minutes getting their API keys set up across different plat
 
 ## Natively Pro
 
-While Natively is **free and open-source forever**, we also offer a **Pro Edition** designed specifically for power users and job seekers. Purchasing a Pro license gives you an edge in the job market, all while directly supporting the continued development of the open-source Natively core!
+While Natively is **free and open-source forever**, we also offer a **Pro Edition** (available as **Lifetime or Yearly** subscriptions) designed specifically for power users and job seekers. Purchasing a Pro license gives you an edge in the job market, all while directly supporting the continued development of the open-source Natively core!
 
 ### Free vs Pro Feature Comparison
 
@@ -346,21 +325,19 @@ While Natively is **free and open-source forever**, we also offer a **Pro Editio
 
 ---
 
-### What's New in v2.0.9
+### What's New in v2.4.0
 
-Version 2.0.9 delivers the Natively API tier, fixes the root-cause audio transcription bug, hardens stealth and shortcuts, and integrates numerous community PRs.
+Version 2.4.0 introduces major feature upgrades, architectural overhauls, and robust stability fixes:
 
-- **Fixed Audio Transcription**: Resolved the root-cause zero-transcription bug — Deepgram was receiving raw PCM without `encoding=linear16` in the WebSocket URL, causing an immediate `upstream_closed` loop with no output.
-- **Natively API Integration**: New hosted STT + AI tier. Activate with an API key to route transcription through Deepgram/Google and AI calls through the Natively API server, with an inline usage dashboard (quota bars, plan badge, reset date).
-- **Dual-Channel STT**: System audio and microphone now connect to the Natively API simultaneously using per-channel session keys (`system` / `mic`), eliminating `concurrent_session_blocked` errors.
-- **LLM Resilience & Fallbacks**: 60 s / 3-retry wrapper for OpenAI and 90 s / 3-retry wrapper for Claude; Natively API falls back to Gemini on failure; `streamChat` chain now tries Natively first across all call sites.
-- **STT Over-Billing Fixed**: Removed duplicate mic-channel billing (was doubling every session); added 30 s minimum threshold for short reconnect sessions; replaced `Math.ceil` with `Math.round` for fairer rounding.
-- **Screen Recording Permission Flow**: Proactive TCC dialog via `desktopCapturer.getSources()` before the audio pipeline starts; clear error when permission is `denied` or `restricted` instead of silent black frames.
-- **Dodo Payments Integration**: Webhook processing with HMAC-SHA256 verification, 24 h idempotent replay guard, `subscription.on_hold` / `subscription.failed` handling, and correct plan detection via product-ID env vars.
-- **STT Key Pre-Population**: Settings panel now correctly restores saved STT provider keys (Groq, OpenAI, Deepgram, ElevenLabs, Azure, IBM, Soniox) across provider switches.
-- **GoogleSTT Proactive Restart**: Pre-emptive stream restart at 4 min 30 s avoids the hard 5-minute gRPC limit, eliminating the 1-second transcription gap in long sessions.
-- **REST STT Upload Size**: Audio resampled to 16 kHz mono before upload — ~6× smaller files, reliably under the Groq/OpenAI 25 MB limit.
-- **Integrated Several PRs**: napi-rs v3 migration for native audio, Windows header layout fix, platform-aware shortcut symbols in About section, TypeScript type-safety fixes across `electron.d.ts`, `preload.ts`, and `ipcHandlers.ts`.
+- **10-Minute Free Trial**: A new free trial system lets you experience Natively API with built-in HWID+IP anti-abuse protections and seamless upgrade paths.
+- **Tavily Search Integration**: Replaced standard search with Tavily Search API for deep company research and robust context gathering.
+- **Guided Permissions Setup**: A polished, proactive macOS/Windows permissions flow ensures screen recording and microphone access is easily granted.
+- **Reliable Screenshot Capture**: Hardened and completely stable multi-screenshot capture with single-trigger `Cmd+Shift+Enter` analysis.
+- **Custom Provider Notes & Summaries**: Custom cURL endpoints and custom API integrations now natively support automatic meeting summaries and custom AI behaviors without breaking the prompt injection strategy.
+- **Two-Stage Silence Processing**: Combined adaptive RMS threshold with WebRTC ML VAD for unparalleled microphone background noise rejection.
+- **Dynamic AI Model Selection**: Smoothly select real-time models dynamically from OpenAI, Anthropic, Gemini, Groq, and Ollama.
+- **Zero-Copy ABI Transfers**: Rust pipeline refactored to stream audio buffers with true zero-allocation natively, eliminating garbage collection freezes and ensuring constant <500ms latency.
+- **Robust Webhook Billing**: Hardened API subsciptions webhook verifications and payment processing to properly coordinate Standard, Pro, Max, and Ultra API plans.
 
 ---
 
@@ -373,7 +350,7 @@ Version 2.0.9 delivers the Natively API tier, fixes the root-cause audio transcr
 - [Why Natively wins](#why-natively-wins)
 - [Why Natively?](#why-natively)
 - [Natively Pro](#natively-pro)
-- [What's New in v2.0.9](#whats-new-in-v209)
+- [What's New in v2.4.0](#whats-new-in-v240)
 - [Privacy & Security](#privacy--security-core-design-principle)
 - [Installation](#installation-developers--contributors)
 - [AI Providers](#ai-providers)
