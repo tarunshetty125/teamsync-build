@@ -35,6 +35,7 @@ import { oneLight, vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/
 // import { ModelSelector } from './ui/ModelSelector'; // REMOVED
 import TopPill from './ui/TopPill';
 import RollingTranscript from './ui/RollingTranscript';
+import SttRuntimePanel from './ui/SttRuntimePanel';
 import { NegotiationCoachingCard } from '../premium';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -67,6 +68,47 @@ interface Message {
     };
 }
 
+interface SttTelemetryData {
+    type: 'provider_started' | 'provider_failed' | 'failover_triggered' | 'debug_failure_injected';
+    provider: string;
+    channel: 'user' | 'interviewer';
+    sourceLabel: string;
+    timestamp: number;
+    reason?: string;
+    nextProvider?: string;
+    consecutiveFailures?: number;
+    disabledUntil?: number | null;
+    replayBufferEntries?: number;
+    replayBufferDurationMs?: number;
+}
+
+interface SttMetricsData {
+    channel: 'user' | 'interviewer';
+    sourceLabel: string;
+    activeProvider: string;
+    started: boolean;
+    replayInProgress: boolean;
+    pendingWrites: number;
+    replayBufferEntries: number;
+    replayBufferDurationMs: number;
+    failoverCount: number;
+    totalTranscripts: number;
+    totalFinalTranscripts: number;
+    transcriptsPerSecond: number;
+    providers: Array<{
+        provider: string;
+        starts: number;
+        transcripts: number;
+        finalTranscripts: number;
+        failures: number;
+        failovers: number;
+        successRate: number;
+        cooldownUntil: number | null;
+        lastLatencyMs?: number;
+        averageLatencyMs?: number;
+    }>;
+}
+
 interface NativelyInterfaceProps {
     onEndMeeting?: () => void;
     overlayOpacity?: number;
@@ -85,6 +127,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const [sttInterviewerStatus, setSttInterviewerStatus] = useState<'connected' | 'reconnecting' | 'failed'>('connected');
     const [sttInterviewerError, setSttInterviewerError] = useState<string>('');
     const [sttInterviewerProvider, setSttInterviewerProvider] = useState<string>('');
+    const [sttTelemetry, setSttTelemetry] = useState<{ user: SttTelemetryData | null; interviewer: SttTelemetryData | null }>({ user: null, interviewer: null });
+    const [sttMetrics, setSttMetrics] = useState<{ user: SttMetricsData | null; interviewer: SttMetricsData | null }>({ user: null, interviewer: null });
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [conversationContext, setConversationContext] = useState<string>('');
@@ -426,6 +470,34 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                 if (data.state === 'connected') setSttInterviewerError('');
             }
         });
+    }, []);
+
+    useEffect(() => {
+        const cleanups: Array<() => void> = [];
+        window.electronAPI.getSttRuntimeState().then((state) => {
+            setSttMetrics({
+                user: state?.user || null,
+                interviewer: state?.interviewer || null,
+            });
+        }).catch(() => {});
+
+        cleanups.push(window.electronAPI.onSttTelemetry((data) => {
+            setSttTelemetry((prev) => ({
+                ...prev,
+                [data.channel]: data,
+            }));
+        }));
+
+        cleanups.push(window.electronAPI.onSttMetrics((data) => {
+            setSttMetrics((prev) => ({
+                ...prev,
+                [data.channel]: data,
+            }));
+        }));
+
+        return () => {
+            cleanups.forEach((cleanup) => cleanup());
+        };
     }, []);
 
     // Connect to Native Audio Backend
@@ -2003,11 +2075,19 @@ Provide only the answer, nothing else.`;
             `---`,
             `Microphone Provider: ${sttUserProvider}`,
             `Microphone Status: ${sttUserStatus}`,
+            `Microphone Active Provider: ${sttMetrics.user?.activeProvider || 'inactive'}`,
+            `Microphone Fallback Event: ${sttTelemetry.user?.type || 'N/A'}`,
+            `Microphone Failovers: ${sttMetrics.user?.failoverCount ?? 0}`,
+            `Microphone Transcripts/sec: ${sttMetrics.user?.transcriptsPerSecond ?? 0}`,
             userCat ? `Microphone Category: ${userCat.title} [${userCat.category}]` : '',
             `Microphone Error: ${sttUserError || 'N/A'}`,
             `---`,
             `System Audio Provider: ${sttInterviewerProvider}`,
             `System Audio Status: ${sttInterviewerStatus}`,
+            `System Active Provider: ${sttMetrics.interviewer?.activeProvider || 'inactive'}`,
+            `System Fallback Event: ${sttTelemetry.interviewer?.type || 'N/A'}`,
+            `System Failovers: ${sttMetrics.interviewer?.failoverCount ?? 0}`,
+            `System Transcripts/sec: ${sttMetrics.interviewer?.transcriptsPerSecond ?? 0}`,
             interviewerCat ? `System Audio Category: ${interviewerCat.title} [${interviewerCat.category}]` : '',
             `System Audio Error: ${sttInterviewerError || 'N/A'}`,
             `Timestamp: ${new Date().toISOString()}`,
@@ -2120,22 +2200,34 @@ Provide only the answer, nothing else.`;
 
                             {/* Rolling Transcript Bar — includes STT status indicator inline */}
                             {(showTranscript && rollingTranscript) || interviewerSttIndicatorStatus !== 'connected' || sttUserStatus !== 'connected' ? (
-                                <RollingTranscript
-                                    text={showTranscript ? rollingTranscript : ''}
-                                    isActive={isInterviewerSpeaking}
-                                    surfaceStyle={showTranscript ? appearance.transcriptStyle : undefined}
-                                    interviewerChannel={{
-                                        status: interviewerSttIndicatorStatus,
-                                        error: interviewerSttIndicatorError,
-                                        provider: sttInterviewerProvider,
-                                    }}
-                                    microphoneChannel={{
-                                        status: sttUserStatus,
-                                        error: sttUserError,
-                                        provider: sttUserProvider,
-                                    }}
-                                    onCopyDiagnostics={copyDiagnostics}
-                                />
+                                <>
+                                    <RollingTranscript
+                                        text={showTranscript ? rollingTranscript : ''}
+                                        isActive={isInterviewerSpeaking}
+                                        surfaceStyle={showTranscript ? appearance.transcriptStyle : undefined}
+                                        interviewerChannel={{
+                                            status: interviewerSttIndicatorStatus,
+                                            error: interviewerSttIndicatorError,
+                                            provider: sttMetrics.interviewer?.activeProvider || sttInterviewerProvider,
+                                        }}
+                                        microphoneChannel={{
+                                            status: sttUserStatus,
+                                            error: sttUserError,
+                                            provider: sttMetrics.user?.activeProvider || sttUserProvider,
+                                        }}
+                                        onCopyDiagnostics={copyDiagnostics}
+                                    />
+                                    <SttRuntimePanel
+                                        sttUserStatus={sttUserStatus}
+                                        sttUserError={sttUserError}
+                                        sttUserProvider={sttUserProvider}
+                                        sttInterviewerStatus={sttInterviewerStatus}
+                                        sttInterviewerError={sttInterviewerError}
+                                        sttInterviewerProvider={sttInterviewerProvider}
+                                        sttTelemetry={sttTelemetry}
+                                        sttMetrics={sttMetrics}
+                                    />
+                                </>
                             ) : null}
 
                             {/* Chat History - Only show if there are messages OR active states */}

@@ -12,6 +12,7 @@ const SettingsPopup = () => {
     });
     const [profileMode, setProfileMode] = useState(false);
     const [hasProfile, setHasProfile] = useState(false);
+    const [profileEngineReady, setProfileEngineReady] = useState(false);
     const [isPremium, setIsPremium] = useState(false);
 
     const isFirstRender = React.useRef(true);
@@ -51,6 +52,7 @@ const SettingsPopup = () => {
                 if (status) {
                     setHasProfile(status.hasProfile);
                     setProfileMode(status.profileMode);
+                    setProfileEngineReady(!!status.isReady);
                 }
                 // Check premium status
                 const premium = await window.electronAPI?.licenseCheckPremium?.();
@@ -61,6 +63,21 @@ const SettingsPopup = () => {
         loadProfile();
 
         return () => window.removeEventListener('focus', handleFocus);
+    }, []);
+
+    useEffect(() => {
+        if (window.electronAPI?.onKnowledgeEngineReady) {
+            return window.electronAPI.onKnowledgeEngineReady(() => {
+                loadCredentials().catch(() => { });
+                window.electronAPI?.profileGetStatus?.().then((status) => {
+                    if (status) {
+                        setHasProfile(status.hasProfile);
+                        setProfileMode(status.profileMode);
+                        setProfileEngineReady(!!status.isReady);
+                    }
+                }).catch(() => { });
+            });
+        }
     }, []);
 
     // Fetch initial undetectable state from main process (source of truth)
@@ -302,7 +319,7 @@ const SettingsPopup = () => {
 
                 {/* Profile Mode Toggle */}
                 {hasProfile && (
-                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group ${!isPremium ? 'opacity-50 grayscale cursor-not-allowed' : `${itemHoverClass} cursor-default`}`} title={!isPremium ? 'Requires Pro license to be active' : ''}>
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group ${(!isPremium || !profileEngineReady) ? 'opacity-50 grayscale cursor-not-allowed' : `${itemHoverClass} cursor-default`}`} title={!isPremium ? 'Requires Pro license to be active' : !profileEngineReady ? 'Profile engine is still restoring' : ''}>
                         <div className="flex items-center gap-3">
                             <User
                                 className={`w-3.5 h-3.5 transition-colors ${profileMode && isPremium ? 'text-accent-primary' : iconInactiveClass}`}
@@ -312,7 +329,7 @@ const SettingsPopup = () => {
                         </div>
                         <button
                             onClick={async () => {
-                                if (!isPremium) return;
+                                if (!isPremium || !profileEngineReady) return;
                                 const newState = !profileMode;
                                 setProfileMode(newState);
                                 try {

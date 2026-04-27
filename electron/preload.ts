@@ -111,6 +111,15 @@ interface ElectronAPI {
 
   // STT Status Events
   onSttStatusChanged: (callback: (data: { state: 'connected' | 'reconnecting' | 'failed'; provider: string; error?: string; channel: 'user' | 'interviewer'; reconnectAttempts?: number }) => void) => () => void
+  onSttTelemetry: (callback: (data: { type: 'provider_started' | 'provider_failed' | 'failover_triggered' | 'debug_failure_injected'; provider: string; channel: 'user' | 'interviewer'; sourceLabel: string; timestamp: number; reason?: string; nextProvider?: string; consecutiveFailures?: number; disabledUntil?: number | null; replayBufferEntries?: number; replayBufferDurationMs?: number }) => void) => () => void
+  onSttMetrics: (callback: (data: { channel: 'user' | 'interviewer'; sourceLabel: string; activeProvider: string; started: boolean; replayInProgress: boolean; pendingWrites: number; replayBufferEntries: number; replayBufferDurationMs: number; failoverCount: number; totalTranscripts: number; totalFinalTranscripts: number; transcriptsPerSecond: number; providers: Array<{ provider: string; starts: number; transcripts: number; finalTranscripts: number; failures: number; failovers: number; successRate: number; cooldownUntil: number | null; lastLatencyMs?: number; averageLatencyMs?: number }> }) => void) => () => void
+  sttDebugSimulateFailure: (channel: 'user' | 'interviewer', provider?: string, reason?: string) => Promise<{ success: boolean; error?: string; channel?: 'user' | 'interviewer'; provider?: string }>
+  sttDebugPrimeReplayBuffer: (channel: 'user' | 'interviewer', durationMs?: number) => Promise<{ success: boolean; entryCount?: number; durationMs?: number; error?: string }>
+  getSttRuntimeState: () => Promise<{ user: any; interviewer: any; error?: string }>
+  setSttDebugEnabled: (enabled: boolean) => Promise<{ success: boolean; enabled?: boolean; error?: string }>
+  getSttDebugEnabled: () => Promise<boolean>
+  runSttFailoverValidation: (channel?: 'user' | 'interviewer') => Promise<{ success: boolean; channel: 'user' | 'interviewer'; assertions: Record<string, boolean>; beforeProvider: string; afterProvider: string; replayBuffer: { entryCount: number; durationMs: number } | null; logs: string[] }>
+  runSttLoadTest: (channel?: 'user' | 'interviewer', options?: { durationMinutes?: number; chunkMs?: number; sampleRate?: number; audioChannelCount?: number; failureEveryMs?: number; metricsSampleEveryMs?: number }) => Promise<any>
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
@@ -262,7 +271,7 @@ interface ElectronAPI {
 
   // Profile Engine API
   profileUploadResume: (filePath: string) => Promise<{ success: boolean; error?: string }>;
-  profileGetStatus: () => Promise<{ hasProfile: boolean; profileMode: boolean; name?: string; role?: string; totalExperienceYears?: number }>;
+  profileGetStatus: () => Promise<{ hasProfile: boolean; profileMode: boolean; isReady: boolean; name?: string; role?: string; totalExperienceYears?: number }>;
   profileSetMode: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
   profileDelete: () => Promise<{ success: boolean; error?: string }>;
   profileGetProfile: () => Promise<any>;
@@ -275,6 +284,50 @@ interface ElectronAPI {
   profileGenerateNegotiation: (force?: boolean) => Promise<{ success: boolean; script?: any; error?: string }>;
   profileGetNegotiationState: () => Promise<{ success: boolean; state?: any; isActive?: boolean; error?: string }>;
   profileResetNegotiation: () => Promise<{ success: boolean; error?: string }>;
+  onNegotiationRestored: (callback: (data: { restored: boolean }) => void) => () => void;
+  onNegotiationRegenerated: (callback: (data: { regenerated: boolean }) => void) => () => void;
+  onGapAnalysisRestored: (callback: (data: { restored: boolean }) => void) => () => void;
+  onQuestionsRestored: (callback: (data: { restored: boolean }) => void) => () => void;
+  onKnowledgeEngineReady: (callback: (data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => void) => () => void;
+  getStartupState: () => Promise<{
+    bootstrapComplete: boolean;
+    license: { isPremium: boolean; plan?: string; provider?: string };
+    knowledge: {
+      engineReady: boolean;
+      hasResume: boolean;
+      hasJD: boolean;
+      nodeCount: number;
+      aot: {
+        negotiationScript: boolean;
+        gapAnalysis: boolean;
+        questions: boolean;
+      };
+    };
+  }>;
+  getAOTState: () => Promise<{
+    engineReady: boolean;
+    hasResume: boolean;
+    hasJD: boolean;
+    inputHash: string | null;
+    negotiation: { exists: boolean; data: any | null; updatedAt: string | null; version: number; hash: string | null };
+    gapAnalysis: { exists: boolean; data: any | null; updatedAt: string | null; version: number; hash: string | null };
+    questions: { exists: boolean; data: any | null; updatedAt: string | null; version: number; hash: string | null };
+  }>;
+  forceResync: () => Promise<{
+    bootstrapComplete: boolean;
+    license: { isPremium: boolean; plan?: string; provider?: string };
+    knowledge: {
+      engineReady: boolean;
+      hasResume: boolean;
+      hasJD: boolean;
+      nodeCount: number;
+      aot: {
+        negotiationScript: boolean;
+        gapAnalysis: boolean;
+        questions: boolean;
+      };
+    };
+  }>;
 
   // Tavily Search API
   setTavilyApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
@@ -677,6 +730,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on('stt-status', subscription);
     return () => { ipcRenderer.removeListener('stt-status', subscription); };
   },
+  onSttTelemetry: (callback: (data: { type: 'provider_started' | 'provider_failed' | 'failover_triggered' | 'debug_failure_injected'; provider: string; channel: 'user' | 'interviewer'; sourceLabel: string; timestamp: number; reason?: string; nextProvider?: string; consecutiveFailures?: number; disabledUntil?: number | null; replayBufferEntries?: number; replayBufferDurationMs?: number }) => void) => {
+    const subscription = (_: any, data: any) => callback(data);
+    ipcRenderer.on('stt-telemetry', subscription);
+    return () => { ipcRenderer.removeListener('stt-telemetry', subscription); };
+  },
+  onSttMetrics: (callback: (data: { channel: 'user' | 'interviewer'; sourceLabel: string; activeProvider: string; started: boolean; replayInProgress: boolean; pendingWrites: number; replayBufferEntries: number; replayBufferDurationMs: number; failoverCount: number; totalTranscripts: number; totalFinalTranscripts: number; transcriptsPerSecond: number; providers: Array<{ provider: string; starts: number; transcripts: number; finalTranscripts: number; failures: number; failovers: number; successRate: number; cooldownUntil: number | null; lastLatencyMs?: number; averageLatencyMs?: number }> }) => void) => {
+    const subscription = (_: any, data: any) => callback(data);
+    ipcRenderer.on('stt-metrics', subscription);
+    return () => { ipcRenderer.removeListener('stt-metrics', subscription); };
+  },
+  sttDebugSimulateFailure: (channel: 'user' | 'interviewer', provider?: string, reason?: string) => ipcRenderer.invoke("stt:debug-simulate-failure", channel, provider, reason),
+  sttDebugPrimeReplayBuffer: (channel: 'user' | 'interviewer', durationMs?: number) => ipcRenderer.invoke("stt:debug-prime-replay-buffer", channel, durationMs),
+  getSttRuntimeState: () => ipcRenderer.invoke("stt:get-runtime-state"),
+  setSttDebugEnabled: (enabled: boolean) => ipcRenderer.invoke("stt:set-debug-enabled", enabled),
+  getSttDebugEnabled: () => ipcRenderer.invoke("stt:get-debug-enabled"),
+  runSttFailoverValidation: (channel: 'user' | 'interviewer' = 'interviewer') => ipcRenderer.invoke("stt:run-failover-validation", channel),
+  runSttLoadTest: (channel: 'user' | 'interviewer' = 'interviewer', options?: { durationMinutes?: number; chunkMs?: number; sampleRate?: number; audioChannelCount?: number; failureEveryMs?: number; metricsSampleEveryMs?: number }) => ipcRenderer.invoke("stt:run-load-test", channel, options),
 
   // Intelligence Mode IPC
   generateAssist: () => ipcRenderer.invoke("generate-assist"),
@@ -1117,6 +1187,41 @@ contextBridge.exposeInMainWorld("electronAPI", {
   profileResetNegotiation: () => ipcRenderer.invoke('profile:reset-negotiation'),
   profileGetNotes: () => ipcRenderer.invoke('profile:get-notes'),
   profileSaveNotes: (content: string) => ipcRenderer.invoke('profile:save-notes', content),
+  onNegotiationRestored: (callback: (data: { restored: boolean }) => void) => {
+    const subscription = (_: any, data: { restored: boolean }) => callback(data);
+    ipcRenderer.on('negotiation_restored', subscription);
+    return () => {
+      ipcRenderer.removeListener('negotiation_restored', subscription);
+    };
+  },
+  onNegotiationRegenerated: (callback: (data: { regenerated: boolean }) => void) => {
+    const subscription = (_: any, data: { regenerated: boolean }) => callback(data);
+    ipcRenderer.on('negotiation_regenerated', subscription);
+    return () => {
+      ipcRenderer.removeListener('negotiation_regenerated', subscription);
+    };
+  },
+  onGapAnalysisRestored: (callback: (data: { restored: boolean }) => void) => {
+    const subscription = (_: any, data: { restored: boolean }) => callback(data);
+    ipcRenderer.on('gap_analysis_restored', subscription);
+    return () => {
+      ipcRenderer.removeListener('gap_analysis_restored', subscription);
+    };
+  },
+  onQuestionsRestored: (callback: (data: { restored: boolean }) => void) => {
+    const subscription = (_: any, data: { restored: boolean }) => callback(data);
+    ipcRenderer.on('questions_restored', subscription);
+    return () => {
+      ipcRenderer.removeListener('questions_restored', subscription);
+    };
+  },
+  onKnowledgeEngineReady: (callback: (data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => void) => {
+    const subscription = (_: any, data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => callback(data);
+    ipcRenderer.on('knowledge_engine_ready', subscription);
+    return () => {
+      ipcRenderer.removeListener('knowledge_engine_ready', subscription);
+    };
+  },
 
   // Tavily Search API
   setTavilyApiKey: (apiKey: string) => ipcRenderer.invoke('set-tavily-api-key', apiKey),
@@ -1130,8 +1235,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   licenseCheckPremium: () => ipcRenderer.invoke('license:check-premium'),
   licenseGetDetails: () => ipcRenderer.invoke('license:get-details'),
   licenseCheckPremiumAsync: () => ipcRenderer.invoke('license:check-premium-async'),
+  getStartupState: () => ipcRenderer.invoke('app:get-startup-state'),
+  getAOTState: () => ipcRenderer.invoke('app:get-aot-state'),
+  forceResync: () => ipcRenderer.invoke('app:force-resync'),
   licenseDeactivate: () => ipcRenderer.invoke('license:deactivate'),
   licenseGetHardwareId: () => ipcRenderer.invoke('license:get-hardware-id'),
+  onLicenseRestored: (callback: (data: { isPremium: boolean; plan?: string; provider?: string }) => void) => {
+    const subscription = (_: any, data: { isPremium: boolean; plan?: string; provider?: string }) => callback(data);
+    ipcRenderer.on('license-restored', subscription);
+    return () => {
+      ipcRenderer.removeListener('license-restored', subscription);
+    };
+  },
   onLicenseStatusChanged: (callback: (data: { isPremium: boolean, plan?: string }) => void) => {
     const subscription = (_: any, data: { isPremium: boolean, plan?: string }) => callback(data);
     ipcRenderer.on('license-status-changed', subscription);

@@ -157,24 +157,19 @@ import { ProcessingHelper } from "./ProcessingHelper"
 import { IntelligenceManager } from "./IntelligenceManager"
 import { SystemAudioCapture } from "./audio/SystemAudioCapture"
 import { MicrophoneCapture } from "./audio/MicrophoneCapture"
-import { GoogleSTT } from "./audio/GoogleSTT"
-import { RestSTT } from "./audio/RestSTT"
-import { DeepgramStreamingSTT } from "./audio/DeepgramStreamingSTT"
-import { SonioxStreamingSTT } from "./audio/SonioxStreamingSTT"
-import { ElevenLabsStreamingSTT } from "./audio/ElevenLabsStreamingSTT"
-import { OpenAIStreamingSTT } from "./audio/OpenAIStreamingSTT"
-import { NativelyProSTT } from "./audio/NativelyProSTT"
+import { SttSupervisor } from "./audio/stt/SttSupervisor"
+import { DeepgramSttAdapter } from "./audio/stt/DeepgramSttAdapter"
+import { GoogleStreamingSttAdapter } from "./audio/stt/GoogleStreamingSttAdapter"
+import { WhisperFallbackSttAdapter } from "./audio/stt/WhisperFallbackSttAdapter"
+import type { SttMetricsSnapshot, StreamingSttAdapter, SttTelemetryEvent } from "./audio/stt/SttAdapter"
+import { assertValidSttRuntimeConfig, loadSttRuntimeConfig, validateSttRuntimeConfig } from "./audio/stt/SttRuntimeConfig"
+import { runSttLoadTest, type SttLoadTestResult } from "./audio/stt/SttLoadTester"
 import { ThemeManager } from "./ThemeManager"
 import { RAGManager } from "./rag/RAGManager"
 import { DatabaseManager } from "./db/DatabaseManager"
 import { warmupIntentClassifier } from "./llm"
 
-/** Unified type for all STT providers with optional extended capabilities */
-type STTProvider = (GoogleSTT | RestSTT | DeepgramStreamingSTT | SonioxStreamingSTT | ElevenLabsStreamingSTT | OpenAIStreamingSTT | NativelyProSTT) & {
-  finalize?: () => void;
-  setAudioChannelCount?: (count: number) => void;
-  notifySpeechEnded?: () => void;
-};
+type STTProvider = SttSupervisor;
 
 type ScreenshotWindowMode = 'launcher' | 'overlay';
 
@@ -186,7 +181,44 @@ interface SttStatusPayload {
   channel: 'user' | 'interviewer';
   reconnectAttempts?: number;
 }
+
+interface SttTelemetryPayload extends SttTelemetryEvent {
+  channel: 'user' | 'interviewer';
+}
+
+interface SttMetricsPayload extends SttMetricsSnapshot {
+  channel: 'user' | 'interviewer';
+}
+
+interface KnowledgeBootstrapSnapshot {
+  isReady: boolean;
+  hasResume: boolean;
+  hasJD: boolean;
+  restoredNodeCount: number;
+  restoredOutputs: {
+    negotiationScript: boolean;
+    gapAnalysis: boolean;
+    questions: boolean;
+  };
+}
 type ScreenshotCaptureKind = 'full' | 'selective';
+
+function cloneSnapshot<T>(value: T): T {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function deepFreezeSnapshot<T>(value: T): T {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const nested of Object.values(value as Record<string, unknown>)) {
+      deepFreezeSnapshot(nested);
+    }
+  }
+  return value;
+}
 
 interface ScreenshotCaptureSession {
   captureKind: ScreenshotCaptureKind;
@@ -254,6 +286,19 @@ export class AppState {
   private _dockReassertTimers: NodeJS.Timeout[] = []; // Re-assert dock-hidden state after show+focus
   private _ollamaBootstrapPromise: Promise<void> | null = null;
   private screenshotCaptureInProgress: boolean = false;
+  private bootstrapComplete: boolean = false;
+  private bootstrapPromise: Promise<void> | null = null;
+  private knowledgeBootstrapSnapshot: KnowledgeBootstrapSnapshot = {
+    isReady: false,
+    hasResume: false,
+    hasJD: false,
+    restoredNodeCount: 0,
+    restoredOutputs: {
+      negotiationScript: false,
+      gapAnalysis: false,
+      questions: false
+    }
+  };
 
 
   // Processing events
@@ -626,6 +671,102 @@ export class AppState {
     }
   }
 
+  public async bootstrapPersistentState(): Promise<void> {
+    if (this.bootstrapComplete) {
+      return;
+    }
+    if (this.bootstrapPromise) {
+      return this.bootstrapPromise;
+    }
+    this.bootstrapPromise = (async () => {
+      await this.bootstrapLicenseState();
+      await this.bootstrapKnowledgeState();
+      await this.bootstrapIntelligenceState();
+      this.bootstrapComplete = true;
+      const startupState = this.getStartupState();
+      console.log(
+        `[AppState] Startup bootstrap complete: engineReady=${startupState.knowledge.engineReady} aotRestored=${startupState.knowledge.aot.negotiationScript || startupState.knowledge.aot.gapAnalysis || startupState.knowledge.aot.questions} licenseActive=${startupState.license.isPremium}`
+      );
+    })();
+    try {
+      await this.bootstrapPromise;
+    } finally {
+      this.bootstrapPromise = null;
+    }
+  }
+
+  private async bootstrapLicenseState(): Promise<void> {
+    try {
+      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
+      const licenseManager = LicenseManager.getInstance();
+      if (typeof licenseManager.init === 'function') {
+        licenseManager.init();
+      }
+      const details = typeof licenseManager.getLicenseDetails === 'function'
+        ? licenseManager.getLicenseDetails()
+        : { isPremium: !!licenseManager.isPremium?.() };
+      console.log(`[AppState] License bootstrap complete: premium=${details.isPremium} provider=${details.provider || 'none'} plan=${details.plan || 'none'}`);
+    } catch (error) {
+      console.warn('[AppState] License bootstrap skipped:', error);
+    }
+  }
+
+  private async bootstrapKnowledgeState(): Promise<void> {
+    try {
+      if (!this.knowledgeOrchestrator || typeof this.knowledgeOrchestrator.loadFromDatabase !== 'function') {
+        this.knowledgeBootstrapSnapshot = {
+          isReady: true,
+          hasResume: false,
+          hasJD: false,
+          restoredNodeCount: 0,
+          restoredOutputs: {
+            negotiationScript: false,
+            gapAnalysis: false,
+            questions: false
+          }
+        };
+        return;
+      }
+      const state = await this.knowledgeOrchestrator.loadFromDatabase();
+      this.knowledgeBootstrapSnapshot = {
+        isReady: !!this.knowledgeOrchestrator?.isEngineReady?.(),
+        hasResume: !!state.hasResume,
+        hasJD: !!state.hasJD,
+        restoredNodeCount: state.restoredNodeCount ?? 0,
+        restoredOutputs: {
+          negotiationScript: !!state.restoredOutputs?.negotiationScript,
+          gapAnalysis: !!state.restoredOutputs?.gapAnalysis,
+          questions: !!state.restoredOutputs?.questions
+        }
+      };
+      console.log(
+        `[AppState] Knowledge bootstrap complete: resume=${state.hasResume} jd=${state.hasJD} restoredNodes=${state.restoredNodeCount} restoredAOT=${state.restoredAOT} negotiation=${this.knowledgeBootstrapSnapshot.restoredOutputs.negotiationScript} gap=${this.knowledgeBootstrapSnapshot.restoredOutputs.gapAnalysis} questions=${this.knowledgeBootstrapSnapshot.restoredOutputs.questions} ready=${this.knowledgeBootstrapSnapshot.isReady}`
+      );
+    } catch (error) {
+      this.knowledgeBootstrapSnapshot = {
+        isReady: true,
+        hasResume: false,
+        hasJD: false,
+        restoredNodeCount: 0,
+        restoredOutputs: {
+          negotiationScript: false,
+          gapAnalysis: false,
+          questions: false
+        }
+      };
+      console.error('[AppState] Knowledge bootstrap failed:', error);
+    }
+  }
+
+  private async bootstrapIntelligenceState(): Promise<void> {
+    try {
+      await this.intelligenceManager.recoverUnprocessedMeetings();
+      console.log('[AppState] Intelligence bootstrap complete');
+    } catch (error) {
+      console.error('[AppState] Intelligence bootstrap failed:', error);
+    }
+  }
+
   private setupAutoUpdater(): void {
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = false  // Manual install only via button
@@ -828,98 +969,86 @@ export class AppState {
 
   private createSTTProvider(speaker: 'interviewer' | 'user'): STTProvider | null {
     const { CredentialsManager } = require('./services/CredentialsManager');
-    const sttProvider = CredentialsManager.getInstance().getSttProvider();
+    const credentialsManager = CredentialsManager.getInstance();
+    const config = loadSttRuntimeConfig(credentialsManager);
+    const configuredProvider = config.selectedProvider;
     const sttLanguage = CredentialsManager.getInstance().getSttLanguage();
 
     // 'none' means the user has explicitly disabled STT (no provider selected).
     // Return null so the pipeline skips STT without falling back to Google.
-    if (sttProvider === 'none') {
+    if (configuredProvider === 'none') {
       console.log(`[Main] STT provider is 'none' — audio capture will proceed but transcription is disabled.`);
       return null;
     }
 
-    let stt: STTProvider;
-
-    if (sttProvider === 'natively') {
-      const nativelyKey = CredentialsManager.getInstance().getNativelyApiKey();
-      if (!nativelyKey) {
-        // Natively is Coming Soon — no key means degrade gracefully like every other provider
-        console.warn(`[Main] No Natively API Key configured for ${speaker}, falling back to GoogleSTT`);
-        stt = new GoogleSTT(speaker);
-      } else {
-        // 'system' for interviewer (system audio), 'mic' for user (microphone).
-        // The server uses ${key}:${channel} as the session key so both streams
-        // can coexist without triggering concurrent_session_blocked.
-        stt = new NativelyProSTT(nativelyKey, speaker === 'interviewer' ? 'system' : 'mic');
-      }
-    } else if (sttProvider === 'deepgram') {
-      const apiKey = CredentialsManager.getInstance().getDeepgramApiKey();
-      if (apiKey) {
-        console.log(`[Main] Using DeepgramStreamingSTT for ${speaker}`);
-        stt = new DeepgramStreamingSTT(apiKey);
-      } else {
-        console.warn(`[Main] No API key for Deepgram STT, falling back to GoogleSTT`);
-        stt = new GoogleSTT(speaker);
-      }
-    } else if (sttProvider === 'soniox') {
-      const apiKey = CredentialsManager.getInstance().getSonioxApiKey();
-      if (apiKey) {
-        console.log(`[Main] Using SonioxStreamingSTT for ${speaker}`);
-        stt = new SonioxStreamingSTT(apiKey);
-      } else {
-        console.warn(`[Main] No API key for Soniox STT, falling back to GoogleSTT`);
-        stt = new GoogleSTT(speaker);
-      }
-    } else if (sttProvider === 'elevenlabs') {
-      const apiKey = CredentialsManager.getInstance().getElevenLabsApiKey();
-      if (apiKey) {
-        console.log(`[Main] Using ElevenLabsStreamingSTT for ${speaker}`);
-        stt = new ElevenLabsStreamingSTT(apiKey);
-      } else {
-        console.warn(`[Main] No API key for ElevenLabs STT, falling back to GoogleSTT`);
-        stt = new GoogleSTT(speaker);
-      }
-    } else if (sttProvider === 'openai') {
-      // OpenAI: WebSocket Realtime (gpt-4o-transcribe → gpt-4o-mini-transcribe) with whisper-1 REST fallback
-      const apiKey = CredentialsManager.getInstance().getOpenAiSttApiKey();
-      if (apiKey) {
-        console.log(`[Main] Using OpenAIStreamingSTT (WebSocket+REST fallback) for ${speaker}`);
-        stt = new OpenAIStreamingSTT(apiKey);
-      } else {
-        console.warn(`[Main] No API key for OpenAI STT, falling back to GoogleSTT`);
-        stt = new GoogleSTT(speaker);
-      }
-    } else if (sttProvider === 'groq' || sttProvider === 'azure' || sttProvider === 'ibmwatson') {
-      let apiKey: string | undefined;
-      let region: string | undefined;
-      let modelOverride: string | undefined;
-
-      if (sttProvider === 'groq') {
-        apiKey = CredentialsManager.getInstance().getGroqSttApiKey();
-        modelOverride = CredentialsManager.getInstance().getGroqSttModel();
-      } else if (sttProvider === 'azure') {
-        apiKey = CredentialsManager.getInstance().getAzureApiKey();
-        region = CredentialsManager.getInstance().getAzureRegion();
-      } else if (sttProvider === 'ibmwatson') {
-        apiKey = CredentialsManager.getInstance().getIbmWatsonApiKey();
-        region = CredentialsManager.getInstance().getIbmWatsonRegion();
-      }
-
-      if (apiKey) {
-        console.log(`[Main] Using RestSTT (${sttProvider}) for ${speaker}`);
-        stt = new RestSTT(sttProvider, apiKey, modelOverride, region);
-      } else {
-        console.warn(`[Main] No API key for ${sttProvider} STT, falling back to GoogleSTT`);
-        stt = new GoogleSTT(speaker);
-      }
-    } else {
-      stt = new GoogleSTT(speaker);
+    if (configuredProvider !== 'deepgram' && configuredProvider !== 'google') {
+      console.warn(
+        `[Main] Configured STT provider "${configuredProvider}" is not yet implemented in SttSupervisor. Using Deepgram -> Google fallback chain for ${speaker}.`
+      );
     }
 
+    console.log(`[Main] STT priority order for ${speaker}: ${config.priorityOrder.join(" -> ")}`);
+
+    const adapters: StreamingSttAdapter[] = [];
+    for (const provider of config.priorityOrder) {
+      if (provider === "deepgram") {
+        adapters.push(new DeepgramSttAdapter({
+          apiKey: config.deepgramApiKey,
+          sourceLabel: speaker,
+        }));
+      } else if (provider === "google") {
+        const googleAdapter = new GoogleStreamingSttAdapter({ sourceLabel: speaker });
+        if (config.googleCredentialsPath) {
+          googleAdapter.setCredentials(config.googleCredentialsPath);
+        }
+        adapters.push(googleAdapter);
+      } else if (provider === "whisper" && config.whisperEnabled) {
+        adapters.push(new WhisperFallbackSttAdapter({
+          sourceLabel: speaker,
+          enabled: config.whisperEnabled,
+          modelId: config.whisperModelId,
+        }));
+      }
+    }
+
+    const stt = new SttSupervisor({
+      sourceLabel: speaker,
+      adapters,
+      replayBufferDurationMs: 12_000,
+    });
+
     stt.setRecognitionLanguage(sttLanguage);
+    const currentGoogleCredentials = config.googleCredentialsPath || CredentialsManager.getInstance().getGoogleServiceAccountPath();
+    if (currentGoogleCredentials) {
+      stt.setCredentials(currentGoogleCredentials);
+    }
+
+    const getBroadcastProvider = () => {
+      const active = stt.getActiveProviderName();
+      return active === 'inactive' ? configuredProvider : active;
+    };
+
+    stt.on("telemetry", (event: SttTelemetryEvent) => {
+      this.broadcast("stt-telemetry", {
+        ...event,
+        channel: speaker,
+      } as SttTelemetryPayload);
+    });
+
+    stt.on("metrics", (metrics: SttMetricsSnapshot) => {
+      this.broadcast("stt-metrics", {
+        ...metrics,
+        channel: speaker,
+      } as SttMetricsPayload);
+    });
 
     // Wire Transcript Events
     stt.on('transcript', (segment: { text: string, isFinal: boolean, confidence: number }) => {
+      if (this.isSttDebugEnabled()) {
+        console.log(
+          `[STT_DEBUG][Main/${speaker}] provider=${(segment as any).provider || getBroadcastProvider()} final=${segment.isFinal} text="${segment.text.slice(0, 80)}"`
+        );
+      }
       if (!this.isMeetingActive) {
         return;
       }
@@ -994,7 +1123,7 @@ export class AppState {
         _lastState = 'failed';
         this.broadcast('stt-status', {
           state: 'failed',
-          provider: sttProvider,
+          provider: getBroadcastProvider(),
           error: errorMessage,
           channel: speaker,
         } as SttStatusPayload);
@@ -1009,7 +1138,7 @@ export class AppState {
         _lastState = 'failed';
         this.broadcast('stt-status', {
           state: 'failed',
-          provider: sttProvider,
+          provider: getBroadcastProvider(),
           error: isQuotaError
             ? errorMessage
             : `STT provider failed (${_consecutiveErrors} consecutive errors): ${errorMessage}`,
@@ -1020,7 +1149,7 @@ export class AppState {
         _lastState = 'reconnecting';
         this.broadcast('stt-status', {
           state: 'reconnecting',
-          provider: sttProvider,
+          provider: getBroadcastProvider(),
           error: errorMessage,
           channel: speaker,
           reconnectAttempts: _consecutiveErrors,
@@ -1037,26 +1166,22 @@ export class AppState {
           _lastState = 'connected';
           this.broadcast('stt-status', {
             state: 'connected',
-            provider: sttProvider,
+            provider: getBroadcastProvider(),
             channel: speaker,
           } as SttStatusPayload);
         }
       }
     });
 
-    // Auto language detection: NativelyProSTT emits 'languageDetected' when the
-    // backend resolves the language from the first audio batch. Notify the renderer
-    // so the settings UI can show what was detected.
-    if (stt instanceof NativelyProSTT) {
-      stt.on('languageDetected', (bcp47: string) => {
-        console.log(`[Main] STT language auto-detected (${speaker}): ${bcp47}`);
-        const helper = this.getWindowHelper();
-        helper.getMainWindow()?.webContents.send('stt-language-auto-detected', bcp47);
-        helper.getLauncherWindow()?.webContents.send('stt-language-auto-detected', bcp47);
-      });
-    }
-
     return stt;
+  }
+
+  private getSttProviderForChannel(channel: 'user' | 'interviewer'): STTProvider | null {
+    return channel === 'user' ? this.googleSTT_User : this.googleSTT;
+  }
+
+  private isSttDebugEnabled(): boolean {
+    return process.env.STT_DEBUG === "true";
   }
 
   private setupSystemAudioPipeline(): void {
@@ -1286,13 +1411,11 @@ export class AppState {
 
     // Now safe to destroy STT instances — no more audio events incoming
     if (this.googleSTT) {
-      this.googleSTT.stop();
-      this.googleSTT.removeAllListeners();
+      this.googleSTT.destroy();
       this.googleSTT = null;
     }
     if (this.googleSTT_User) {
-      this.googleSTT_User.stop();
-      this.googleSTT_User.removeAllListeners();
+      this.googleSTT_User.destroy();
       this.googleSTT_User = null;
     }
 
@@ -1469,6 +1592,126 @@ export class AppState {
       console.log('[Main] Finalizing STT');
       this.googleSTT_User.finalize();
     }
+  }
+
+  public debugSimulateSttFailure(channel: 'user' | 'interviewer', provider?: string, reason?: string): boolean {
+    const stt = this.getSttProviderForChannel(channel);
+    if (!stt) {
+      return false;
+    }
+    return stt.debugSimulateFailure(provider, reason);
+  }
+
+  public debugPrimeSttReplayBuffer(channel: 'user' | 'interviewer', durationMs?: number): { entryCount: number; durationMs: number } | null {
+    const stt = this.getSttProviderForChannel(channel);
+    if (!stt) {
+      return null;
+    }
+    return stt.debugPrimeReplayBuffer(durationMs);
+  }
+
+  public getSttRuntimeState(): {
+    user: SttMetricsSnapshot | null;
+    interviewer: SttMetricsSnapshot | null;
+  } {
+    return {
+      user: this.googleSTT_User?.getMetricsSnapshot() || null,
+      interviewer: this.googleSTT?.getMetricsSnapshot() || null,
+    };
+  }
+
+  public setSttDebugEnabled(enabled: boolean): void {
+    process.env.STT_DEBUG = enabled ? "true" : "false";
+    this.broadcast("stt-debug-enabled", enabled);
+  }
+
+  public getSttDebugEnabled(): boolean {
+    return this.isSttDebugEnabled();
+  }
+
+  public async runSttFailoverValidation(channel: 'user' | 'interviewer' = 'interviewer'): Promise<{
+    success: boolean;
+    channel: 'user' | 'interviewer';
+    assertions: Record<string, boolean>;
+    beforeProvider: string;
+    afterProvider: string;
+    replayBuffer: { entryCount: number; durationMs: number } | null;
+    logs: string[];
+  }> {
+    const stt = this.getSttProviderForChannel(channel);
+    const logs: string[] = [];
+    if (!stt) {
+      return {
+        success: false,
+        channel,
+        assertions: {
+          sttAvailable: false,
+        },
+        beforeProvider: "inactive",
+        afterProvider: "inactive",
+        replayBuffer: null,
+      logs: ["No STT supervisor available for validation"],
+      };
+    }
+
+    const before = stt.getMetricsSnapshot();
+    const beforeProvider = stt.getActiveProviderName();
+    const replayBuffer = stt.debugPrimeReplayBuffer(4_000);
+    logs.push(`Primed replay buffer with ${replayBuffer.entryCount} chunks (${replayBuffer.durationMs}ms)`);
+
+    const injected = stt.debugSimulateFailure("deepgram", "validation_forced_deepgram_failure");
+    logs.push(`Injected Deepgram failure: ${injected}`);
+
+    const timeoutMs = 6_000;
+    const pollStart = Date.now();
+    while (Date.now() - pollStart < timeoutMs) {
+      if (stt.getActiveProviderName() === "google") {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    const after = stt.getMetricsSnapshot();
+    const afterProvider = stt.getActiveProviderName();
+    const assertions = {
+      sttAvailable: true,
+      deepgramWasActive: beforeProvider === "deepgram",
+      failureInjected: injected,
+      googleActivated: afterProvider === "google",
+      failoverCountIncremented: after.failoverCount > before.failoverCount,
+      replayBufferPrimed: replayBuffer.entryCount > 0,
+      replayDurationCaptured: after.replayBufferDurationMs >= Math.max(0, replayBuffer.durationMs - 50),
+    };
+
+    logs.push(`Before provider: ${beforeProvider}`);
+    logs.push(`After provider: ${afterProvider}`);
+    logs.push(`Failover count: ${before.failoverCount} -> ${after.failoverCount}`);
+    logs.push(`Replay duration after failover: ${after.replayBufferDurationMs}ms`);
+
+    return {
+      success: Object.values(assertions).every(Boolean),
+      channel,
+      assertions,
+      beforeProvider,
+      afterProvider,
+      replayBuffer,
+      logs,
+    };
+  }
+
+  public async runSttLoadTest(channel: 'user' | 'interviewer' = 'interviewer', options?: {
+    durationMinutes?: number;
+    chunkMs?: number;
+    sampleRate?: number;
+    audioChannelCount?: number;
+    failureEveryMs?: number;
+    metricsSampleEveryMs?: number;
+  }): Promise<SttLoadTestResult | null> {
+    const stt = this.getSttProviderForChannel(channel);
+    if (!stt) {
+      return null;
+    }
+    return runSttLoadTest(stt, options);
   }
 
   public async startMeeting(metadata?: any): Promise<void> {
@@ -1868,6 +2111,115 @@ export class AppState {
     return this.knowledgeOrchestrator;
   }
 
+  public isBootstrapReady(): boolean {
+    return this.bootstrapComplete;
+  }
+
+  public getKnowledgeBootstrapSnapshot(): KnowledgeBootstrapSnapshot {
+    return {
+      isReady: this.knowledgeBootstrapSnapshot.isReady,
+      hasResume: this.knowledgeBootstrapSnapshot.hasResume,
+      hasJD: this.knowledgeBootstrapSnapshot.hasJD,
+      restoredNodeCount: this.knowledgeBootstrapSnapshot.restoredNodeCount,
+      restoredOutputs: { ...this.knowledgeBootstrapSnapshot.restoredOutputs }
+    };
+  }
+
+  public getStartupState(): {
+    bootstrapComplete: boolean;
+    license: { isPremium: boolean; plan?: string; provider?: string };
+    knowledge: {
+      engineReady: boolean;
+      hasResume: boolean;
+      hasJD: boolean;
+      nodeCount: number;
+      aot: {
+        negotiationScript: boolean;
+        gapAnalysis: boolean;
+        questions: boolean;
+      };
+    };
+  } {
+    let license = { isPremium: false as boolean, plan: undefined as string | undefined, provider: undefined as string | undefined };
+    try {
+      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
+      license = LicenseManager.getInstance().getLicenseDetails();
+    } catch { /* optional premium build */ }
+
+    let liveKnowledge = this.getKnowledgeBootstrapSnapshot();
+    try {
+      if (this.knowledgeOrchestrator) {
+        const status = this.knowledgeOrchestrator.getStatus?.();
+        const profileData = this.knowledgeOrchestrator.getProfileData?.();
+        liveKnowledge = {
+          isReady: !!(status?.isReady ?? this.knowledgeBootstrapSnapshot.isReady),
+          hasResume: !!(status?.hasResume ?? this.knowledgeBootstrapSnapshot.hasResume),
+          hasJD: !!(status?.hasActiveJD ?? this.knowledgeBootstrapSnapshot.hasJD),
+          restoredNodeCount: typeof profileData?.nodeCount === 'number'
+            ? profileData.nodeCount
+            : this.knowledgeBootstrapSnapshot.restoredNodeCount,
+          restoredOutputs: {
+            negotiationScript: !!this.knowledgeOrchestrator.getNegotiationScript?.(),
+            gapAnalysis: !!this.knowledgeOrchestrator.getGapAnalysis?.(),
+            questions: !!this.knowledgeOrchestrator.getMockQuestions?.()
+          }
+        };
+      }
+    } catch (error) {
+      console.warn('[AppState] Failed to build live startup snapshot, using boot snapshot:', error);
+    }
+
+    return deepFreezeSnapshot(cloneSnapshot({
+      bootstrapComplete: this.bootstrapComplete,
+      license,
+      knowledge: {
+        engineReady: liveKnowledge.isReady,
+        hasResume: liveKnowledge.hasResume,
+        hasJD: liveKnowledge.hasJD,
+        nodeCount: liveKnowledge.restoredNodeCount,
+        aot: { ...liveKnowledge.restoredOutputs }
+      }
+    }));
+  }
+
+  public getAOTState(): {
+    engineReady: boolean;
+    hasResume: boolean;
+    hasJD: boolean;
+    inputHash: string | null;
+    negotiation: { exists: boolean; data: any | null; updatedAt: string | null; version: number; hash: string | null };
+    gapAnalysis: { exists: boolean; data: any | null; updatedAt: string | null; version: number; hash: string | null };
+    questions: { exists: boolean; data: any | null; updatedAt: string | null; version: number; hash: string | null };
+  } {
+    let aotState = {
+      engineReady: this.knowledgeBootstrapSnapshot.isReady,
+      hasResume: this.knowledgeBootstrapSnapshot.hasResume,
+      hasJD: this.knowledgeBootstrapSnapshot.hasJD,
+      inputHash: null as string | null,
+      negotiation: { exists: false, data: null as any | null, updatedAt: null as string | null, version: 0, hash: null as string | null },
+      gapAnalysis: { exists: false, data: null as any | null, updatedAt: null as string | null, version: 0, hash: null as string | null },
+      questions: { exists: false, data: null as any | null, updatedAt: null as string | null, version: 0, hash: null as string | null }
+    };
+
+    try {
+      if (this.knowledgeOrchestrator?.getAOTState) {
+        aotState = this.knowledgeOrchestrator.getAOTState();
+      }
+    } catch (error) {
+      console.warn('[AppState] Failed to build AOT snapshot, using fallback snapshot:', error);
+    }
+
+    return deepFreezeSnapshot(cloneSnapshot(aotState));
+  }
+
+  public async forceResyncState(): Promise<ReturnType<AppState['getStartupState']>> {
+    await this.bootstrapPersistentState();
+    if (this.knowledgeOrchestrator?.isEngineReady && !this.knowledgeOrchestrator.isEngineReady() && this.knowledgeOrchestrator.loadFromDatabase) {
+      await this.knowledgeOrchestrator.loadFromDatabase();
+    }
+    return this.getStartupState();
+  }
+
   public getView(): "queue" | "solutions" {
     return this.view
   }
@@ -1928,6 +2280,46 @@ export class AppState {
 
   public createWindow(): void {
     this.windowHelper.createWindow()
+    this.queueBootstrapRestoreEvents();
+  }
+
+  private queueBootstrapRestoreEvents(): void {
+    if (!this.bootstrapComplete || !this.knowledgeBootstrapSnapshot.isReady) {
+      return;
+    }
+
+    const mainWindow = this.getMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    const emit = () => {
+      setTimeout(() => {
+        const startupState = this.getStartupState();
+        const aotState = this.getAOTState();
+        this.broadcast('license-restored', startupState.license);
+        if (aotState.negotiation.exists) {
+          this.broadcast('negotiation_restored', { restored: true, updatedAt: aotState.negotiation.updatedAt, version: aotState.negotiation.version, hash: aotState.negotiation.hash });
+        }
+        if (aotState.gapAnalysis.exists) {
+          this.broadcast('gap_analysis_restored', { restored: true, updatedAt: aotState.gapAnalysis.updatedAt, version: aotState.gapAnalysis.version, hash: aotState.gapAnalysis.hash });
+        }
+        if (aotState.questions.exists) {
+          this.broadcast('questions_restored', { restored: true, updatedAt: aotState.questions.updatedAt, version: aotState.questions.version, hash: aotState.questions.hash });
+        }
+        this.broadcast('knowledge_engine_ready', this.getKnowledgeBootstrapSnapshot());
+        console.log(
+          `[AppState] Renderer state synced: licenseActive=${startupState.license.isPremium} negotiation=${aotState.negotiation.exists} gap=${aotState.gapAnalysis.exists} questions=${aotState.questions.exists} nodes=${this.knowledgeBootstrapSnapshot.restoredNodeCount} engineReady=${this.knowledgeBootstrapSnapshot.isReady}`
+        );
+      }, 300);
+    };
+
+    if (mainWindow.webContents.isLoading()) {
+      mainWindow.webContents.once('did-finish-load', emit);
+      return;
+    }
+
+    emit();
   }
 
   public hideMainWindow(): void {
@@ -2651,12 +3043,30 @@ async function initializeApp() {
   // This fixes the issue where keys (especially in production) aren't loaded in time for RAG/LLM
   const { CredentialsManager } = require('./services/CredentialsManager');
   CredentialsManager.getInstance().init();
+  const sttConfig = loadSttRuntimeConfig(CredentialsManager.getInstance());
+  const sttValidation = validateSttRuntimeConfig(sttConfig);
+  for (const warning of sttValidation.warnings) {
+    console.warn(`[STT Config] ${warning}`);
+  }
+  const strictSttConfig = app.isPackaged || process.env.STT_STRICT_CONFIG === "true";
+  if (strictSttConfig) {
+    assertValidSttRuntimeConfig(sttConfig);
+  }
 
   // 4. Initialize State
   const appState = AppState.getInstance()
 
   // Explicitly load credentials into helpers
   appState.processingHelper.loadStoredCredentials();
+
+  // Rehydrate persisted premium, knowledge, and meeting state before the UI asks for it.
+  try {
+    await appState.bootstrapPersistentState();
+  } catch (error) {
+    console.error('[Main] Bootstrap failed before window creation:', error);
+    app.exit(1);
+    return;
+  }
 
   // Initialize IPC handlers before window creation
   initializeIpcHandlers(appState)
@@ -2797,11 +3207,6 @@ async function initializeApp() {
   } catch (e) {
     console.error('[Main] Failed to initialize CalendarManager:', e);
   }
-
-  // Recover unprocessed meetings (persistence check)
-  appState.getIntelligenceManager().recoverUnprocessedMeetings().catch(err => {
-    console.error('[Main] Failed to recover unprocessed meetings:', err);
-  });
 
   // Note: We do NOT force dock show here anymore, respecting stealth mode.
 

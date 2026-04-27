@@ -1,18 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import appIcon from './icon.png';
 
 interface StartupSequenceProps {
     onComplete: () => void;
+    isReady: boolean;
 }
 
-const StartupSequence: React.FC<StartupSequenceProps> = ({ onComplete }) => {
+const StartupSequence: React.FC<StartupSequenceProps> = ({ onComplete, isReady }) => {
+    const [minDurationElapsed, setMinDurationElapsed] = useState(false);
+
     useEffect(() => {
         const timer = setTimeout(() => {
-            onComplete();
+            setMinDurationElapsed(true);
         }, 2200);
         return () => clearTimeout(timer);
-    }, [onComplete]);
+    }, []);
+
+    useEffect(() => {
+        if (isReady && minDurationElapsed) {
+            onComplete();
+        }
+    }, [isReady, minDurationElapsed, onComplete]);
 
     return (
         <div className="fixed inset-0 z-[100] bg-[#000000] flex items-center justify-center overflow-hidden">

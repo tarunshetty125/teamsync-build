@@ -1,6 +1,6 @@
 // ipcHandlers.ts
 
-import { app, ipcMain, shell, dialog, desktopCapturer, systemPreferences, BrowserWindow, screen } from "electron"
+import { app, ipcMain, shell, dialog, desktopCapturer, systemPreferences, BrowserWindow, screen, type OpenDialogOptions, type OpenDialogReturnValue } from "electron"
 import { AppState } from "./main"
 import { GEMINI_FLASH_MODEL } from "./IntelligenceManager"
 import { DatabaseManager } from "./db/DatabaseManager"; // Import Database Manager
@@ -16,6 +16,18 @@ export function initializeIpcHandlers(appState: AppState): void {
   const safeHandle = (channel: string, listener: (event: any, ...args: any[]) => Promise<any> | any) => {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, listener);
+  };
+
+  const showOpenDialogNormalized = async (options: OpenDialogOptions): Promise<OpenDialogReturnValue> => {
+    const result = await dialog.showOpenDialog(options as any);
+    if (Array.isArray(result)) {
+      return {
+        canceled: result.length === 0,
+        filePaths: result,
+        bookmarks: [],
+      };
+    }
+    return result;
   };
 
   /**
@@ -118,6 +130,52 @@ export function initializeIpcHandlers(appState: AppState): void {
       return LicenseManager.getInstance().getLicenseDetails();
     } catch {
       return { isPremium: false };
+    }
+  });
+
+  safeHandle("app:get-startup-state", async () => {
+    try {
+      return appState.getStartupState();
+    } catch {
+      return {
+        bootstrapComplete: false,
+        license: { isPremium: false },
+        knowledge: {
+          engineReady: false,
+          hasResume: false,
+          hasJD: false,
+          nodeCount: 0,
+          aot: {
+            negotiationScript: false,
+            gapAnalysis: false,
+            questions: false
+          }
+        }
+      };
+    }
+  });
+
+  safeHandle("app:force-resync", async () => {
+    try {
+      return await appState.forceResyncState();
+    } catch {
+      return appState.getStartupState();
+    }
+  });
+
+  safeHandle("app:get-aot-state", async () => {
+    try {
+      return appState.getAOTState();
+    } catch {
+      return {
+        engineReady: false,
+        hasResume: false,
+        hasJD: false,
+        inputHash: null,
+        negotiation: { exists: false, data: null, updatedAt: null, version: 0, hash: null },
+        gapAnalysis: { exists: false, data: null, updatedAt: null, version: 0, hash: null },
+        questions: { exists: false, data: null, updatedAt: null, version: 0, hash: null }
+      };
     }
   });
   // Async variant: performs Dodo server-side revocation check on startup.
@@ -1520,6 +1578,68 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  safeHandle("stt:debug-simulate-failure", async (_, channel: 'user' | 'interviewer', provider?: string, reason?: string) => {
+    try {
+      const triggered = appState.debugSimulateSttFailure(channel, provider, reason);
+      return { success: triggered, channel, provider: provider || 'active' };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  safeHandle("stt:debug-prime-replay-buffer", async (_, channel: 'user' | 'interviewer', durationMs?: number) => {
+    try {
+      const result = appState.debugPrimeSttReplayBuffer(channel, durationMs);
+      return { success: !!result, ...(result || {}) };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  safeHandle("stt:get-runtime-state", async () => {
+    try {
+      return appState.getSttRuntimeState();
+    } catch (error: any) {
+      return { user: null, interviewer: null, error: error.message };
+    }
+  });
+
+  safeHandle("stt:set-debug-enabled", async (_, enabled: boolean) => {
+    try {
+      appState.setSttDebugEnabled(!!enabled);
+      return { success: true, enabled: appState.getSttDebugEnabled() };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  safeHandle("stt:get-debug-enabled", async () => {
+    return appState.getSttDebugEnabled();
+  });
+
+  safeHandle("stt:run-failover-validation", async (_, channel: 'user' | 'interviewer' = 'interviewer') => {
+    try {
+      return await appState.runSttFailoverValidation(channel);
+    } catch (error: any) {
+      return { success: false, channel, assertions: {}, logs: [error.message] };
+    }
+  });
+
+  safeHandle("stt:run-load-test", async (_, channel: 'user' | 'interviewer' = 'interviewer', options?: {
+    durationMinutes?: number;
+    chunkMs?: number;
+    sampleRate?: number;
+    audioChannelCount?: number;
+    failureEveryMs?: number;
+    metricsSampleEveryMs?: number;
+  }) => {
+    try {
+      return await appState.runSttLoadTest(channel, options);
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
   safeHandle("set-groq-stt-api-key", async (_, apiKey: string) => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
@@ -2351,7 +2471,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   // Service Account Selection
   safeHandle("select-service-account", async () => {
     try {
-      const result: any = await dialog.showOpenDialog({
+      const result = await showOpenDialogNormalized({
         properties: ['openFile'],
         filters: [{ name: 'JSON', extensions: ['json'] }]
       });
@@ -2720,19 +2840,20 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) {
-        return { hasProfile: false, profileMode: false };
+        return { hasProfile: false, profileMode: false, isReady: false };
       }
       // Map new KnowledgeStatus back to legacy UI shape temporarily
       const status = orchestrator.getStatus();
       return {
         hasProfile: status.hasResume,
         profileMode: status.activeMode,
+        isReady: status.isReady,
         name: status.resumeSummary?.name,
         role: status.resumeSummary?.role,
         totalExperienceYears: status.resumeSummary?.totalExperienceYears
       };
     } catch (error: any) {
-      return { hasProfile: false, profileMode: false };
+      return { hasProfile: false, profileMode: false, isReady: false };
     }
   });
 
@@ -2775,7 +2896,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) return null;
-      return orchestrator.getProfileData();
+      return {
+        ...(orchestrator.getProfileData() || {}),
+        engineReady: !!orchestrator.isEngineReady?.()
+      };
     } catch (error: any) {
       return null;
     }
@@ -2783,7 +2907,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("profile:select-file", async () => {
     try {
-      const result: any = await dialog.showOpenDialog({
+      const result = await showOpenDialogNormalized({
         properties: ['openFile'],
         filters: [
           { name: 'Resume Files', extensions: ['pdf', 'docx', 'txt'] }
@@ -2899,7 +3023,14 @@ export function initializeIpcHandlers(appState: AppState): void {
       }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) {
-        return { success: false, error: 'Knowledge engine not initialized' };
+        return { success: false, error: 'Knowledge engine unavailable' };
+      }
+      if (typeof orchestrator.isEngineReady === 'function' && !orchestrator.isEngineReady()) {
+        const restoredScript = orchestrator.getNegotiationScript?.();
+        if (restoredScript) {
+          return { success: true, script: restoredScript };
+        }
+        return { success: false, error: 'Knowledge engine is still restoring. Please try again in a moment.' };
       }
       const status = orchestrator.getStatus();
       if (!status.hasResume) {
@@ -2908,11 +3039,29 @@ export function initializeIpcHandlers(appState: AppState): void {
 
       // Use cache unless force-regenerating
       let script = force ? null : orchestrator.getNegotiationScript();
+      let regenerated = false;
+      let hashChanged = false;
       if (!script) {
-        script = await orchestrator.generateNegotiationScriptOnDemand();
+        const result = await orchestrator.generateNegotiationScriptOnDemand();
+        script = result?.script ?? null;
+        regenerated = !!result?.regenerated;
+        hashChanged = !!result?.hashChanged;
       }
       if (!script) {
         return { success: false, error: 'Could not generate negotiation script. Ensure a resume and job description are uploaded.' };
+      }
+      if (regenerated && hashChanged) {
+        const aotState = appState.getAOTState();
+        BrowserWindow.getAllWindows().forEach(win => {
+          if (!win.isDestroyed()) {
+            win.webContents.send('negotiation_regenerated', {
+              regenerated: true,
+              updatedAt: aotState.negotiation.updatedAt,
+              version: aotState.negotiation.version,
+              hash: aotState.negotiation.hash
+            });
+          }
+        });
       }
       return { success: true, script };
     } catch (error: any) {
@@ -3149,7 +3298,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("modes:upload-reference-file", async (_, modeId: string) => {
     try {
       if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
-      const result = await dialog.showOpenDialog({
+      const result = await showOpenDialogNormalized({
         properties: ['openFile'],
         filters: [
           { name: 'Text & Documents', extensions: ['txt', 'md', 'pdf', 'docx', 'doc'] },
@@ -3258,4 +3407,3 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 }
-

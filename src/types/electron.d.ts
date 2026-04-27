@@ -140,6 +140,15 @@ export interface ElectronAPI {
 
   // STT Status Events
   onSttStatusChanged: (callback: (data: { state: 'connected' | 'reconnecting' | 'failed'; provider: string; error?: string; channel: 'user' | 'interviewer'; reconnectAttempts?: number }) => void) => () => void
+  onSttTelemetry: (callback: (data: { type: 'provider_started' | 'provider_failed' | 'failover_triggered' | 'debug_failure_injected'; provider: string; channel: 'user' | 'interviewer'; sourceLabel: string; timestamp: number; reason?: string; nextProvider?: string; consecutiveFailures?: number; disabledUntil?: number | null; replayBufferEntries?: number; replayBufferDurationMs?: number }) => void) => () => void
+  onSttMetrics: (callback: (data: { channel: 'user' | 'interviewer'; sourceLabel: string; activeProvider: string; started: boolean; replayInProgress: boolean; pendingWrites: number; replayBufferEntries: number; replayBufferDurationMs: number; failoverCount: number; totalTranscripts: number; totalFinalTranscripts: number; transcriptsPerSecond: number; providers: Array<{ provider: string; starts: number; transcripts: number; finalTranscripts: number; failures: number; failovers: number; successRate: number; cooldownUntil: number | null; lastLatencyMs?: number; averageLatencyMs?: number }> }) => void) => () => void
+  sttDebugSimulateFailure: (channel: 'user' | 'interviewer', provider?: string, reason?: string) => Promise<{ success: boolean; error?: string; channel?: 'user' | 'interviewer'; provider?: string }>
+  sttDebugPrimeReplayBuffer: (channel: 'user' | 'interviewer', durationMs?: number) => Promise<{ success: boolean; entryCount?: number; durationMs?: number; error?: string }>
+  getSttRuntimeState: () => Promise<{ user: any; interviewer: any; error?: string }>
+  setSttDebugEnabled: (enabled: boolean) => Promise<{ success: boolean; enabled?: boolean; error?: string }>
+  getSttDebugEnabled: () => Promise<boolean>
+  runSttFailoverValidation: (channel?: 'user' | 'interviewer') => Promise<{ success: boolean; channel: 'user' | 'interviewer'; assertions: Record<string, boolean>; beforeProvider: string; afterProvider: string; replayBuffer: { entryCount: number; durationMs: number } | null; logs: string[] }>
+  runSttLoadTest: (channel?: 'user' | 'interviewer', options?: { durationMinutes?: number; chunkMs?: number; sampleRate?: number; audioChannelCount?: number; failureEveryMs?: number; metricsSampleEveryMs?: number }) => Promise<any>
 
   getNativeAudioStatus: () => Promise<{ connected: boolean }>
 
@@ -314,7 +323,7 @@ export interface ElectronAPI {
 
   // Profile Engine API
   profileUploadResume: (filePath: string) => Promise<{ success: boolean; error?: string }>
-  profileGetStatus: () => Promise<{ hasProfile: boolean; profileMode: boolean; name?: string; role?: string; totalExperienceYears?: number }>
+  profileGetStatus: () => Promise<{ hasProfile: boolean; profileMode: boolean; isReady: boolean; name?: string; role?: string; totalExperienceYears?: number }>
   profileSetMode: (enabled: boolean) => Promise<{ success: boolean; error?: string }>
   profileDelete: () => Promise<{ success: boolean; error?: string }>
   profileGetProfile: () => Promise<any>
@@ -329,6 +338,11 @@ export interface ElectronAPI {
   profileResetNegotiation: () => Promise<{ success: boolean; error?: string }>
   profileGetNotes: () => Promise<{ success: boolean; content: string; error?: string }>
   profileSaveNotes: (content: string) => Promise<{ success: boolean; error?: string }>
+  onNegotiationRestored: (callback: (data: { restored: boolean }) => void) => () => void
+  onNegotiationRegenerated: (callback: (data: { regenerated: boolean }) => void) => () => void
+  onGapAnalysisRestored: (callback: (data: { restored: boolean }) => void) => () => void
+  onQuestionsRestored: (callback: (data: { restored: boolean }) => void) => () => void
+  onKnowledgeEngineReady: (callback: (data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => void) => () => void
 
   // Tavily Search API
   setTavilyApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
@@ -338,11 +352,51 @@ export interface ElectronAPI {
   setProviderPreferredModel: (provider: 'gemini' | 'groq' | 'openai' | 'claude', modelId: string) => Promise<void>
 
   // License Management
+  getStartupState: () => Promise<{
+    bootstrapComplete: boolean;
+    license: { isPremium: boolean; plan?: string; provider?: string };
+    knowledge: {
+      engineReady: boolean;
+      hasResume: boolean;
+      hasJD: boolean;
+      nodeCount: number;
+      aot: {
+        negotiationScript: boolean;
+        gapAnalysis: boolean;
+        questions: boolean;
+      };
+    };
+  }>
+  getAOTState: () => Promise<{
+    engineReady: boolean;
+    hasResume: boolean;
+    hasJD: boolean;
+    inputHash: string | null;
+    negotiation: { exists: boolean; data: any | null; updatedAt: string | null; version: number; hash: string | null };
+    gapAnalysis: { exists: boolean; data: any | null; updatedAt: string | null; version: number; hash: string | null };
+    questions: { exists: boolean; data: any | null; updatedAt: string | null; version: number; hash: string | null };
+  }>
+  forceResync: () => Promise<{
+    bootstrapComplete: boolean;
+    license: { isPremium: boolean; plan?: string; provider?: string };
+    knowledge: {
+      engineReady: boolean;
+      hasResume: boolean;
+      hasJD: boolean;
+      nodeCount: number;
+      aot: {
+        negotiationScript: boolean;
+        gapAnalysis: boolean;
+        questions: boolean;
+      };
+    };
+  }>
   licenseActivate: (key: string) => Promise<{ success: boolean; error?: string }>
   licenseCheckPremium: () => Promise<boolean>
   licenseGetDetails: () => Promise<{ isPremium: boolean; plan?: string; provider?: string }>
   /** Async startup check — calls Dodo validate endpoint to detect server-side revocations. */
   licenseCheckPremiumAsync: () => Promise<boolean>
+  onLicenseRestored: (callback: (data: { isPremium: boolean; plan?: string; provider?: string }) => void) => () => void
   onLicenseStatusChanged: (callback: (data: { isPremium: boolean, plan?: string }) => void) => () => void
   licenseDeactivate: () => Promise<void>
   licenseGetHardwareId: () => Promise<string>

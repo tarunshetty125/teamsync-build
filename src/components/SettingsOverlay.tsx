@@ -369,6 +369,7 @@ interface SettingsOverlayProps {
 const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, initialTab = 'general', isTrialActive = false }) => {
     const isLight = useResolvedTheme() === 'light';
     const [activeTab, setActiveTab] = useState(initialTab);
+    const refreshProfileStateRef = React.useRef<(() => Promise<void>) | null>(null);
     
     // Sync active tab when modal opens
     useEffect(() => {
@@ -377,11 +378,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             
             // Proactively load profile data if starting on profile tab
             if (initialTab === 'profile') {
-                window.electronAPI?.profileGetStatus?.().then(setProfileStatus).catch(() => { });
-                window.electronAPI?.profileGetProfile?.().then(data => {
-                    setProfileData(data);
-                    if (data?.negotiationScript) setNegotiationScript(data.negotiationScript);
-                }).catch(() => { });
+                refreshProfileStateRef.current?.().catch(() => { });
                 window.electronAPI?.profileGetNotes?.().then(res => {
                     if (res?.success) setCustomNotes(res.content ?? '');
                 }).catch(() => { });
@@ -405,10 +402,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [profileStatus, setProfileStatus] = useState<{
         hasProfile: boolean;
         profileMode: boolean;
+        isReady: boolean;
         name?: string;
         role?: string;
         totalExperienceYears?: number;
-    }>({ hasProfile: false, profileMode: false });
+    }>({ hasProfile: false, profileMode: false, isReady: false });
     const [profileUploading, setProfileUploading] = useState(false);
     const [profileError, setProfileError] = useState('');
     const [profileData, setProfileData] = useState<any>(null);
@@ -429,12 +427,61 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [negotiationScript, setNegotiationScript] = useState<any>(null);
     const [negotiationGenerating, setNegotiationGenerating] = useState(false);
     const [negotiationError, setNegotiationError] = useState('');
+    const lastAotRevisionRef = React.useRef<{ negotiation: string; gapAnalysis: string; questions: string }>({
+        negotiation: '',
+        gapAnalysis: '',
+        questions: ''
+    });
     const [customNotes, setCustomNotes] = useState('');
     const [customNotesSaved, setCustomNotesSaved] = useState(false);
     const customNotesDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const [verboseLogging, setVerboseLogging] = useState(false);
     const [showVerboseToast, setShowVerboseToast] = useState(false);
     const verboseToastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    refreshProfileStateRef.current = async () => {
+        const [status, data, aotState] = await Promise.all([
+            window.electronAPI?.profileGetStatus?.().catch(() => null),
+            window.electronAPI?.profileGetProfile?.().catch(() => null),
+            window.electronAPI?.getAOTState?.().catch(() => null)
+        ]);
+
+        if (status) {
+            setProfileStatus(status);
+        }
+
+        const negotiationRevision = aotState
+            ? `${aotState.negotiation.hash || 'none'}:${aotState.negotiation.version}:${aotState.negotiation.updatedAt || 'none'}`
+            : '';
+        const gapRevision = aotState
+            ? `${aotState.gapAnalysis.hash || 'none'}:${aotState.gapAnalysis.version}:${aotState.gapAnalysis.updatedAt || 'none'}`
+            : '';
+        const questionsRevision = aotState
+            ? `${aotState.questions.hash || 'none'}:${aotState.questions.version}:${aotState.questions.updatedAt || 'none'}`
+            : '';
+
+        if (aotState && lastAotRevisionRef.current.negotiation !== negotiationRevision) {
+            setNegotiationScript(aotState.negotiation.data ?? null);
+            lastAotRevisionRef.current.negotiation = negotiationRevision;
+        } else if (!aotState && !data?.negotiationScript) {
+            setNegotiationScript(null);
+        }
+
+        if (data) {
+            setProfileData({
+                ...data,
+                negotiationScript: aotState?.negotiation.data ?? data?.negotiationScript ?? null,
+                gapAnalysis: aotState?.gapAnalysis.data ?? data?.gapAnalysis ?? null,
+                mockQuestions: aotState?.questions.data ?? data?.mockQuestions ?? null,
+                aotState
+            });
+        }
+
+        if (aotState) {
+            lastAotRevisionRef.current.gapAnalysis = gapRevision;
+            lastAotRevisionRef.current.questions = questionsRevision;
+        }
+    };
 
     // Close dropdown when clicking outside
     // Sync with global state changes
@@ -483,6 +530,38 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 }
             });
         }
+    }, []);
+
+    useEffect(() => {
+        const unsubscribers: Array<() => void> = [];
+        if (window.electronAPI?.onKnowledgeEngineReady) {
+            unsubscribers.push(window.electronAPI.onKnowledgeEngineReady(() => {
+                refreshProfileStateRef.current?.().catch(() => { });
+            }));
+        }
+        if (window.electronAPI?.onNegotiationRestored) {
+            unsubscribers.push(window.electronAPI.onNegotiationRestored(() => {
+                refreshProfileStateRef.current?.().catch(() => { });
+            }));
+        }
+        if (window.electronAPI?.onNegotiationRegenerated) {
+            unsubscribers.push(window.electronAPI.onNegotiationRegenerated(() => {
+                refreshProfileStateRef.current?.().catch(() => { });
+            }));
+        }
+        if (window.electronAPI?.onGapAnalysisRestored) {
+            unsubscribers.push(window.electronAPI.onGapAnalysisRestored(() => {
+                refreshProfileStateRef.current?.().catch(() => { });
+            }));
+        }
+        if (window.electronAPI?.onQuestionsRestored) {
+            unsubscribers.push(window.electronAPI.onQuestionsRestored(() => {
+                refreshProfileStateRef.current?.().catch(() => { });
+            }));
+        }
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
     }, []);
 
     useEffect(() => {
@@ -1887,6 +1966,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                         </p>
                                     </div>
 
+                                    {!profileStatus.isReady && (
+                                        <div className="mb-4 rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-xs text-text-secondary">
+                                            Restoring your saved profile intelligence and AOT outputs...
+                                        </div>
+                                    )}
+
                                     {/* Intelligence Graph Hero Card */}
                                     <div className="bg-bg-item-surface rounded-xl border border-border-subtle flex flex-col justify-between overflow-hidden">
                                         <div className="flex flex-col justify-between min-h-[160px]">
@@ -1917,7 +2002,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                     if (!confirm('Are you sure you want to delete your mapped persona? This will destroy all structured timeline data.')) return;
                                                                     try {
                                                                         await window.electronAPI?.profileDelete?.();
-                                                                        setProfileStatus({ hasProfile: false, profileMode: false });
+                                                                        setProfileStatus({ hasProfile: false, profileMode: false, isReady: true });
                                                                         setProfileData(null);
                                                                     } catch (e) { console.error('Failed to delete profile:', e); }
                                                                 }}

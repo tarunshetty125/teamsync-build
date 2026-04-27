@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react" // forcing refresh
+import React, { useState, useEffect, useCallback } from "react" // forcing refresh
 import { QueryClient, QueryClientProvider } from "react-query"
 import { ToastProvider, ToastViewport } from "./components/ui/toast"
 import NativelyInterface from "./components/NativelyInterface"
@@ -94,6 +94,7 @@ const App: React.FC = () => {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremiumActive, setIsPremiumActive] = useState(false);
   const [hasLoadedLicense, setHasLoadedLicense] = useState(false);
+  const [hasLoadedProfileEngine, setHasLoadedProfileEngine] = useState(false);
   const [planDetails, setPlanDetails] = useState<{ isPremium: boolean; plan?: string; provider?: string }>({ isPremium: false });
 
   // Overlay opacity — only meaningful when isOverlayWindow, but stored centrally
@@ -136,6 +137,23 @@ const App: React.FC = () => {
     usage: { ai: number; stt_seconds: number; search: number };
   } | null>(null);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
+  const bootstrapUiReady = hasLoadedLicense && hasLoadedProfileEngine;
+
+  const syncStartupState = useCallback(async () => {
+    const reader = window.electronAPI?.forceResync ?? window.electronAPI?.getStartupState;
+    if (!reader) return;
+    try {
+      const state = await reader();
+      setPlanDetails(state?.license ?? { isPremium: false });
+      setIsPremiumActive(state?.license?.isPremium ?? false);
+      setHasLoadedLicense(true);
+      setHasProfile(state?.knowledge?.hasResume ?? false);
+      setHasLoadedProfileEngine(!!state?.knowledge?.engineReady);
+    } catch {
+      setHasLoadedLicense(true);
+      setHasLoadedProfileEngine(false);
+    }
+  }, []);
 
   const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !showStartup && !isSettingsOpen && isLauncherMainView;
   const { activeAd, dismissAd, previewAd } = useAdCampaigns(
@@ -173,28 +191,7 @@ const App: React.FC = () => {
     // Clean up old local storage
     localStorage.removeItem('useLegacyAudioBackend');
 
-    // Basic status check for campaign targeting
-    window.electronAPI?.profileGetStatus?.().then(s => setHasProfile(s?.hasProfile || false)).catch(() => {});
-    // Load full plan details for targeted ad delivery (plan tier + provider).
-    window.electronAPI?.licenseGetDetails?.()
-      .then(details => {
-        setPlanDetails(details ?? { isPremium: false });
-        setIsPremiumActive(details?.isPremium ?? false);
-        setHasLoadedLicense(true);
-      })
-      .catch(() => {
-        // Fallback: async premium check if licenseGetDetails is unavailable
-        const premiumCheck = window.electronAPI?.licenseCheckPremiumAsync ?? window.electronAPI?.licenseCheckPremium;
-        if (premiumCheck) {
-          premiumCheck().then((active: boolean) => {
-            setIsPremiumActive(active);
-            setPlanDetails({ isPremium: active });
-            setHasLoadedLicense(true);
-          }).catch(() => setHasLoadedLicense(true));
-        } else {
-          setHasLoadedLicense(true);
-        }
-      });
+    void syncStartupState();
 
     // Also check for Natively API key
     window.electronAPI?.getStoredCredentials?.()
@@ -298,10 +295,19 @@ const App: React.FC = () => {
     }
 
     // Listen for real-time license status changes (activation, revocation, deactivation)
+    const removeLicenseRestored = window.electronAPI?.onLicenseRestored?.(() => {
+      void syncStartupState();
+    });
+
     const removeLicenseListener = window.electronAPI?.onLicenseStatusChanged?.((data) => {
       setIsPremiumActive(data.isPremium);
       setPlanDetails(prev => ({ ...prev, isPremium: data.isPremium, ...(data.plan ? { plan: data.plan } : {}) }));
       setHasLoadedLicense(true);
+      void syncStartupState();
+    });
+
+    const removeKnowledgeReady = window.electronAPI?.onKnowledgeEngineReady?.(() => {
+      void syncStartupState();
     });
 
     return () => {
@@ -309,12 +315,14 @@ const App: React.FC = () => {
       if (removeProgress) removeProgress();
       if (removeComplete) removeComplete();
       if (removeWarning) removeWarning();
+      if (removeLicenseRestored) removeLicenseRestored();
       if (removeLicenseListener) removeLicenseListener();
+      if (removeKnowledgeReady) removeKnowledgeReady();
       if (trialPollId) clearInterval(trialPollId);
       if (removeTrialListener) removeTrialListener();
       if (removeOpenSettingsTab) removeOpenSettingsTab();
     }
-  }, []);
+  }, [syncStartupState]);
 
   // Listen for overlay opacity changes — scoped to overlay window only
   useEffect(() => {
@@ -478,7 +486,7 @@ const App: React.FC = () => {
             initial={{ opacity: 1 }}
             exit={{ opacity: 0, scale: 1.1, pointerEvents: "none", transition: { duration: 0.6, ease: "easeInOut" } }}
           >
-            <StartupSequence onComplete={() => setShowStartup(false)} />
+            <StartupSequence isReady={bootstrapUiReady} onComplete={() => setShowStartup(false)} />
           </motion.div>
         ) : (
           <motion.div
