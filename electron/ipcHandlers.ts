@@ -2834,30 +2834,6 @@ export function initializeIpcHandlers(appState: AppState): void {
   // Profile Engine IPC Handlers
   // ==========================================
 
-  const configureProfileResearchProviders = (orchestrator: any) => {
-    if (!orchestrator) return;
-
-    const { CredentialsManager } = require('./services/CredentialsManager');
-    const cm = CredentialsManager.getInstance();
-    const tavilyApiKey = cm.getTavilyApiKey();
-
-    if (tavilyApiKey) {
-      const { TavilySearchProvider } = require('../premium/electron/knowledge/TavilySearchProvider');
-      orchestrator.setCompanyResearchProvider?.(new TavilySearchProvider(tavilyApiKey));
-      return;
-    }
-
-    const nativelyKey = cm.getNativelyApiKey();
-    if (nativelyKey) {
-      const { NativelySearchProvider } = require('../premium/electron/knowledge/NativelySearchProvider');
-      const trialToken = nativelyKey === '__trial__' ? cm.getTrialToken() : undefined;
-      orchestrator.setCompanyResearchProvider?.(new NativelySearchProvider(nativelyKey, trialToken ?? undefined));
-      return;
-    }
-
-    orchestrator.setCompanyResearchProvider?.(null);
-  };
-
   const getTavilyKey = (): string | null => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
@@ -2984,7 +2960,6 @@ export function initializeIpcHandlers(appState: AppState): void {
       }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) return null;
-      configureProfileResearchProviders(orchestrator);
       return {
         ...(orchestrator.getProfileData() || {}),
         engineReady: !!orchestrator.isEngineReady?.()
@@ -3035,7 +3010,6 @@ export function initializeIpcHandlers(appState: AppState): void {
       if (!orchestrator) {
         return { success: false, error: 'Knowledge engine not initialized. Please ensure API keys are configured.' };
       }
-      configureProfileResearchProviders(orchestrator);
       const { DocType } = require('../premium/electron/knowledge/types');
       const result = await orchestrator.ingestDocument(filePath, DocType.JD);
       return result;

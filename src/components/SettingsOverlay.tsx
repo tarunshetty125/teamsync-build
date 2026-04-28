@@ -2118,7 +2118,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                         <div className="flex items-center justify-between mb-1">
                                             <div className="flex items-center gap-2">
                                                 <h3 className="text-sm font-bold text-text-primary">Professional Identity</h3>
-                                                <span className="bg-yellow-500/10 text-yellow-500 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">BETA</span>
                                                 {isPremium && premiumPlan && (
                                                     <span className="bg-[#FACC15]/10 text-[#FACC15] border border-[#FACC15]/20 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ml-1">
                                                         {premiumPlan.toUpperCase()} PLAN
@@ -2598,7 +2597,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                 <h4 className="text-sm font-bold text-text-primary">
                                                                     Company Intel: <span className="text-purple-400">{profileData.activeJD.company}</span>
                                                                 </h4>
-                                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full tracking-widest uppercase bg-purple-500/15 text-purple-400 border border-purple-500/25">Beta</span>
                                                             </div>
                                                             <p className="text-[11px] text-text-secondary mt-0.5">
                                                                 {profileData?.research ? 'Research complete — company intelligence is synced in this panel.' : 'Click Research to generate hiring strategy, salary, culture, and interview intelligence.'}
