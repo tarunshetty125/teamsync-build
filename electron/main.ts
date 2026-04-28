@@ -234,11 +234,22 @@ interface ScreenshotCaptureSession {
 // Premium: Knowledge modules loaded conditionally
 let KnowledgeOrchestratorClass: any = null;
 let KnowledgeDatabaseManagerClass: any = null;
-try {
+let knowledgeModuleLoadError: unknown = null;
+function loadKnowledgeModuleClasses(): boolean {
+  if (KnowledgeOrchestratorClass && KnowledgeDatabaseManagerClass) {
+    return true;
+  }
+
+  try {
     KnowledgeOrchestratorClass = require('../premium/electron/knowledge/KnowledgeOrchestrator').KnowledgeOrchestrator;
     KnowledgeDatabaseManagerClass = require('../premium/electron/knowledge/KnowledgeDatabaseManager').KnowledgeDatabaseManager;
-} catch {
-    console.log('[Main] Knowledge modules not available — profile intelligence disabled.');
+    knowledgeModuleLoadError = null;
+    return true;
+  } catch (error) {
+    knowledgeModuleLoadError = error;
+    console.warn('[Main] Knowledge modules not available — profile intelligence disabled.', error);
+    return false;
+  }
 }
 
 import { CredentialsManager } from "./services/CredentialsManager"
@@ -605,69 +616,88 @@ export class AppState {
       console.error('[AppState] Failed to initialize RAGManager:', error);
     }
 
-    // Initialize Knowledge Orchestrator
+    this.initializeKnowledgeOrchestrator();
+  }
+
+  private initializeKnowledgeOrchestrator(): boolean {
+    if (this.knowledgeOrchestrator) {
+      return true;
+    }
+
+    if (!loadKnowledgeModuleClasses()) {
+      console.warn('[AppState] KnowledgeOrchestrator unavailable because premium knowledge modules failed to load.', knowledgeModuleLoadError);
+      return false;
+    }
+
     try {
       const db = DatabaseManager.getInstance();
       const sqliteDb = db.getDb();
 
-      if (sqliteDb && KnowledgeDatabaseManagerClass && KnowledgeOrchestratorClass) {
-        const knowledgeDb = new KnowledgeDatabaseManagerClass(sqliteDb);
-        this.knowledgeOrchestrator = new KnowledgeOrchestratorClass(knowledgeDb);
+      if (!sqliteDb) {
+        console.warn('[AppState] KnowledgeOrchestrator initialization deferred: SQLite database is not ready yet.');
+        return false;
+      }
 
-        // Wire up LLM functions
-        const llmHelper = this.processingHelper.getLLMHelper();
+      const knowledgeDb = new KnowledgeDatabaseManagerClass(sqliteDb);
+      const orchestrator = new KnowledgeOrchestratorClass(knowledgeDb);
 
-        // generateContent function for LLM calls
-        this.knowledgeOrchestrator.setGenerateContentFn(async (contents: any[]) => {
-          return await llmHelper.generateContentStructured(
-            contents[0]?.text || ''
-          );
-        });
+      const llmHelper = this.processingHelper.getLLMHelper();
+      orchestrator.setGenerateContentFn(async (contents: any[]) => {
+        return await llmHelper.generateContentStructured(
+          contents[0]?.text || ''
+        );
+      });
 
-        // Embedding function — lazily delegate to the cascaded EmbeddingPipeline
-        // (OpenAI → Gemini → Ollama → Local bundled model).
-        // We await waitForReady() so uploads during boot wait for the pipeline
-        // instead of immediately throwing 'not ready'.
-        const self = this;
-        this.knowledgeOrchestrator.setEmbedFn(async (text: string) => {
+      const self = this;
+      orchestrator.setEmbedFn(async (text: string) => {
+        const pipeline = self.ragManager?.getEmbeddingPipeline();
+        if (!pipeline) throw new Error('RAG pipeline not available');
+        await pipeline.waitForReady();
+        return await pipeline.getEmbedding(text);
+      });
+
+      if (typeof orchestrator.setEmbedQueryFn === 'function') {
+        orchestrator.setEmbedQueryFn(async (text: string) => {
           const pipeline = self.ragManager?.getEmbeddingPipeline();
           if (!pipeline) throw new Error('RAG pipeline not available');
           await pipeline.waitForReady();
-          return await pipeline.getEmbedding(text);
+          return await pipeline.getEmbeddingForQuery(text);
         });
-        if (typeof this.knowledgeOrchestrator.setEmbedQueryFn === 'function') {
-          this.knowledgeOrchestrator.setEmbedQueryFn(async (text: string) => {
-            const pipeline = self.ragManager?.getEmbeddingPipeline();
-            if (!pipeline) throw new Error('RAG pipeline not available');
-            await pipeline.waitForReady();
-            return await pipeline.getEmbeddingForQuery(text);
-          });
-        }
-
-        // Attach KnowledgeOrchestrator to LLMHelper
-        llmHelper.setKnowledgeOrchestrator(this.knowledgeOrchestrator);
-
-        // Restore persisted toggle states so UI reflects what the user left them as.
-        // NOTE: groqFastTextMode is now restored unconditionally in the AppState constructor
-        // so it is not repeated here.
-        const sm = SettingsManager.getInstance();
-        if (sm.get('knowledgeMode')) {
-          this.knowledgeOrchestrator.setKnowledgeMode(true);
-          console.log('[AppState] Knowledge mode restored from settings');
-        }
-
-        // Restore custom notes so orchestrator has them from first request
-        const savedNotes = DatabaseManager.getInstance().getCustomNotes();
-        if (savedNotes) {
-          this.knowledgeOrchestrator.setCustomNotes(savedNotes);
-          llmHelper.setCustomNotes(savedNotes);
-          console.log('[AppState] Custom notes restored');
-        }
-
-        console.log('[AppState] KnowledgeOrchestrator initialized');
       }
+
+      if (typeof orchestrator.setProfileResearchUpdateListener === 'function') {
+        orchestrator.setProfileResearchUpdateListener((research: any) => {
+          this.broadcast('profile_research_updated', {
+            company: research?.company || '',
+            role: research?.role || '',
+            updatedAt: research?.updatedAt || new Date().toISOString(),
+            sourceCount: research?.sourceCount || 0
+          });
+        });
+      }
+
+      this.knowledgeOrchestrator = orchestrator;
+      llmHelper.setKnowledgeOrchestrator(this.knowledgeOrchestrator);
+
+      const sm = SettingsManager.getInstance();
+      if (sm.get('knowledgeMode')) {
+        this.knowledgeOrchestrator.setKnowledgeMode(true);
+        console.log('[AppState] Knowledge mode restored from settings');
+      }
+
+      const savedNotes = DatabaseManager.getInstance().getCustomNotes();
+      if (savedNotes) {
+        this.knowledgeOrchestrator.setCustomNotes(savedNotes);
+        llmHelper.setCustomNotes(savedNotes);
+        console.log('[AppState] Custom notes restored');
+      }
+
+      console.log('[AppState] KnowledgeOrchestrator initialized');
+      return true;
     } catch (error) {
+      this.knowledgeOrchestrator = null;
       console.error('[AppState] Failed to initialize KnowledgeOrchestrator:', error);
+      return false;
     }
   }
 
@@ -713,9 +743,10 @@ export class AppState {
 
   private async bootstrapKnowledgeState(): Promise<void> {
     try {
-      if (!this.knowledgeOrchestrator || typeof this.knowledgeOrchestrator.loadFromDatabase !== 'function') {
+      const orchestrator = this.getKnowledgeOrchestrator();
+      if (!orchestrator || typeof orchestrator.loadFromDatabase !== 'function') {
         this.knowledgeBootstrapSnapshot = {
-          isReady: true,
+          isReady: false,
           hasResume: false,
           hasJD: false,
           restoredNodeCount: 0,
@@ -727,9 +758,9 @@ export class AppState {
         };
         return;
       }
-      const state = await this.knowledgeOrchestrator.loadFromDatabase();
+      const state = await orchestrator.loadFromDatabase();
       this.knowledgeBootstrapSnapshot = {
-        isReady: !!this.knowledgeOrchestrator?.isEngineReady?.(),
+        isReady: !!orchestrator?.isEngineReady?.(),
         hasResume: !!state.hasResume,
         hasJD: !!state.hasJD,
         restoredNodeCount: state.restoredNodeCount ?? 0,
@@ -744,7 +775,7 @@ export class AppState {
       );
     } catch (error) {
       this.knowledgeBootstrapSnapshot = {
-        isReady: true,
+        isReady: false,
         hasResume: false,
         hasJD: false,
         restoredNodeCount: 0,
@@ -2108,6 +2139,9 @@ export class AppState {
   }
 
   public getKnowledgeOrchestrator(): any {
+    if (!this.knowledgeOrchestrator) {
+      this.initializeKnowledgeOrchestrator();
+    }
     return this.knowledgeOrchestrator;
   }
 

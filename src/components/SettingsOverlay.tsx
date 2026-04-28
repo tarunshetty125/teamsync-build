@@ -559,6 +559,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 refreshProfileStateRef.current?.().catch(() => { });
             }));
         }
+        if (window.electronAPI?.onProfileResearchUpdated) {
+            unsubscribers.push(window.electronAPI.onProfileResearchUpdated(() => {
+                refreshProfileStateRef.current?.().catch(() => { });
+            }));
+        }
         return () => {
             unsubscribers.forEach((unsubscribe) => unsubscribe());
         };

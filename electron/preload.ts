@@ -1215,6 +1215,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener('questions_restored', subscription);
     };
   },
+  onProfileResearchUpdated: (callback: (data: { company: string; role: string; updatedAt: string; sourceCount: number }) => void) => {
+    const subscription = (_: any, data: { company: string; role: string; updatedAt: string; sourceCount: number }) => callback(data);
+    ipcRenderer.on('profile_research_updated', subscription);
+    return () => {
+      ipcRenderer.removeListener('profile_research_updated', subscription);
+    };
+  },
   onKnowledgeEngineReady: (callback: (data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => void) => {
     const subscription = (_: any, data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => callback(data);
     ipcRenderer.on('knowledge_engine_ready', subscription);

@@ -94,7 +94,7 @@ const App: React.FC = () => {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremiumActive, setIsPremiumActive] = useState(false);
   const [hasLoadedLicense, setHasLoadedLicense] = useState(false);
-  const [hasLoadedProfileEngine, setHasLoadedProfileEngine] = useState(false);
+  const [hasCompletedBootstrap, setHasCompletedBootstrap] = useState(false);
   const [planDetails, setPlanDetails] = useState<{ isPremium: boolean; plan?: string; provider?: string }>({ isPremium: false });
 
   // Overlay opacity — only meaningful when isOverlayWindow, but stored centrally
@@ -137,7 +137,7 @@ const App: React.FC = () => {
     usage: { ai: number; stt_seconds: number; search: number };
   } | null>(null);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
-  const bootstrapUiReady = hasLoadedLicense && hasLoadedProfileEngine;
+  const bootstrapUiReady = hasLoadedLicense && hasCompletedBootstrap;
 
   const syncStartupState = useCallback(async () => {
     const reader = window.electronAPI?.forceResync ?? window.electronAPI?.getStartupState;
@@ -147,11 +147,11 @@ const App: React.FC = () => {
       setPlanDetails(state?.license ?? { isPremium: false });
       setIsPremiumActive(state?.license?.isPremium ?? false);
       setHasLoadedLicense(true);
+      setHasCompletedBootstrap(!!state?.bootstrapComplete);
       setHasProfile(state?.knowledge?.hasResume ?? false);
-      setHasLoadedProfileEngine(!!state?.knowledge?.engineReady);
     } catch {
       setHasLoadedLicense(true);
-      setHasLoadedProfileEngine(false);
+      setHasCompletedBootstrap(true);
     }
   }, []);
 

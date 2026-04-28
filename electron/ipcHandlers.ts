@@ -2816,6 +2816,30 @@ export function initializeIpcHandlers(appState: AppState): void {
   // Profile Engine IPC Handlers
   // ==========================================
 
+  const configureProfileResearchProviders = (orchestrator: any) => {
+    if (!orchestrator) return;
+
+    const { CredentialsManager } = require('./services/CredentialsManager');
+    const cm = CredentialsManager.getInstance();
+    const tavilyApiKey = cm.getTavilyApiKey();
+
+    if (tavilyApiKey) {
+      const { TavilySearchProvider } = require('../premium/electron/knowledge/TavilySearchProvider');
+      orchestrator.setCompanyResearchProvider?.(new TavilySearchProvider(tavilyApiKey));
+      return;
+    }
+
+    const nativelyKey = cm.getNativelyApiKey();
+    if (nativelyKey) {
+      const { NativelySearchProvider } = require('../premium/electron/knowledge/NativelySearchProvider');
+      const trialToken = nativelyKey === '__trial__' ? cm.getTrialToken() : undefined;
+      orchestrator.setCompanyResearchProvider?.(new NativelySearchProvider(nativelyKey, trialToken ?? undefined));
+      return;
+    }
+
+    orchestrator.setCompanyResearchProvider?.(null);
+  };
+
   safeHandle("profile:upload-resume", async (_, filePath: string) => {
     try {
       // Premium gate: require active license or free trial for profile features
@@ -2823,6 +2847,9 @@ export function initializeIpcHandlers(appState: AppState): void {
         return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
       }
       console.log(`[IPC] profile:upload-resume called with: ${filePath}`);
+      if (!appState.isBootstrapReady()) {
+        await appState.bootstrapPersistentState();
+      }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) {
         return { success: false, error: 'Knowledge engine not initialized. Please ensure API keys are configured.' };
@@ -2838,6 +2865,9 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("profile:get-status", async () => {
     try {
+      if (!appState.isBootstrapReady()) {
+        await appState.bootstrapPersistentState();
+      }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) {
         return { hasProfile: false, profileMode: false, isReady: false };
@@ -2862,6 +2892,9 @@ export function initializeIpcHandlers(appState: AppState): void {
       // Premium gate: only allow enabling profile mode with active license or free trial
       if (enabled && !isProOrTrialActive()) {
         return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
+      }
+      if (!appState.isBootstrapReady()) {
+        await appState.bootstrapPersistentState();
       }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) {
@@ -2894,8 +2927,12 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("profile:get-profile", async () => {
     try {
+      if (!appState.isBootstrapReady()) {
+        await appState.bootstrapPersistentState();
+      }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) return null;
+      configureProfileResearchProviders(orchestrator);
       return {
         ...(orchestrator.getProfileData() || {}),
         engineReady: !!orchestrator.isEngineReady?.()
@@ -2935,10 +2972,14 @@ export function initializeIpcHandlers(appState: AppState): void {
         return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
       }
       console.log(`[IPC] profile:upload-jd called with: ${filePath}`);
+      if (!appState.isBootstrapReady()) {
+        await appState.bootstrapPersistentState();
+      }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) {
         return { success: false, error: 'Knowledge engine not initialized. Please ensure API keys are configured.' };
       }
+      configureProfileResearchProviders(orchestrator);
       const { DocType } = require('../premium/electron/knowledge/types');
       const result = await orchestrator.ingestDocument(filePath, DocType.JD);
       return result;
@@ -2972,26 +3013,8 @@ export function initializeIpcHandlers(appState: AppState): void {
       if (!orchestrator) {
         return { success: false, error: 'Knowledge engine not initialized' };
       }
+      configureProfileResearchProviders(orchestrator);
       const engine = orchestrator.getCompanyResearchEngine();
-
-      // Wire search provider: Tavily (user key) → Natively API (fallback) → none (LLM-only)
-      const { CredentialsManager } = require('./services/CredentialsManager');
-      const cm = CredentialsManager.getInstance();
-      const tavilyApiKey = cm.getTavilyApiKey();
-      if (tavilyApiKey) {
-        const { TavilySearchProvider } = require('../premium/electron/knowledge/TavilySearchProvider');
-        engine.setSearchProvider(new TavilySearchProvider(tavilyApiKey));
-      } else {
-        const nativelyKey = cm.getNativelyApiKey();
-        if (nativelyKey) {
-          const { NativelySearchProvider } = require('../premium/electron/knowledge/NativelySearchProvider');
-          // Pass the real trial token when key is the __trial__ sentinel so the
-          // server can authenticate via x-trial-token instead of the invalid key.
-          const trialToken = nativelyKey === '__trial__' ? cm.getTrialToken() : undefined;
-          engine.setSearchProvider(new NativelySearchProvider(nativelyKey, trialToken ?? undefined));
-          console.log('[IPC] Company research: using Natively API search (no Tavily key configured)');
-        }
-      }
 
       // Build full JD context so the dossier is tailored to the exact role
       const profileData = orchestrator.getProfileData();
@@ -3008,6 +3031,16 @@ export function initializeIpcHandlers(appState: AppState): void {
       } : {};
       const dossier = await engine.researchCompany(companyName, jdCtx, true);
       const searchQuotaExhausted = (engine.searchProvider as any)?.quotaExhausted === true;
+      const refreshedProfile = orchestrator.getProfileData?.();
+      const win = appState.getMainWindow();
+      if (refreshedProfile?.research && win && !win.isDestroyed()) {
+        win.webContents.send('profile_research_updated', {
+          company: refreshedProfile.research.company || companyName,
+          role: refreshedProfile.research.role || jdCtx.title || '',
+          updatedAt: refreshedProfile.research.updatedAt || new Date().toISOString(),
+          sourceCount: refreshedProfile.research.sourceCount || 0
+        });
+      }
       return { success: true, dossier, searchQuotaExhausted };
     } catch (error: any) {
       console.error('[IPC] profile:research-company error:', error);

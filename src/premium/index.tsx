@@ -74,7 +74,17 @@ const _modesSettings = import.meta.glob<any>(
 // ─── Helper ──────────────────────────────────────────────────────────
 function get<T>(mods: Record<string, any>, name: string, fallback: T): T {
   const mod = Object.values(mods)[0];
-  return mod?.[name] ?? fallback;
+  if (!mod) {
+    console.warn(`[PremiumLoader] Missing module: ${name}`);
+    return fallback;
+  }
+
+  if (!mod[name]) {
+    console.warn(`[PremiumLoader] Missing export: ${name}`);
+    return fallback;
+  }
+
+  return mod[name];
 }
 
 // ─── Exports (always safe to import) ─────────────────────────────────

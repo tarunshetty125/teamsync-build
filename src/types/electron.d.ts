@@ -343,6 +343,7 @@ export interface ElectronAPI {
   onGapAnalysisRestored: (callback: (data: { restored: boolean }) => void) => () => void
   onQuestionsRestored: (callback: (data: { restored: boolean }) => void) => () => void
   onKnowledgeEngineReady: (callback: (data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => void) => () => void
+  onProfileResearchUpdated: (callback: (data: { company: string; role: string; updatedAt: string; sourceCount: number }) => void) => () => void
 
   // Tavily Search API
   setTavilyApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
