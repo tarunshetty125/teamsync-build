@@ -332,7 +332,11 @@ export interface ElectronAPI {
   // JD & Research API
   profileUploadJD: (filePath: string) => Promise<{ success: boolean; error?: string }>
   profileDeleteJD: () => Promise<{ success: boolean; error?: string }>
-  profileResearchCompany: (companyName: string) => Promise<{ success: boolean; dossier?: any; error?: string; searchQuotaExhausted?: boolean }>
+  profileResearchCompany: (companyName: string) => Promise<{ success: boolean; status?: string; research?: any; error?: string }>
+  runCompanyResearch: (company: string, role: string, forceRefresh?: boolean) => Promise<{ success: boolean; status?: string; research?: any; error?: string }>
+  onProfileUpdated: (callback: (data: any) => void) => () => void
+  onProfileModeChanged: (callback: (enabled: boolean) => void) => () => void
+  getTavilyKey: () => Promise<string | null>
   profileGenerateNegotiation: (force?: boolean) => Promise<{ success: boolean; script?: any; error?: string }>
   profileGetNegotiationState: () => Promise<{ success: boolean; state?: any; isActive?: boolean; error?: string }>
   profileResetNegotiation: () => Promise<{ success: boolean; error?: string }>
@@ -344,6 +348,7 @@ export interface ElectronAPI {
   onQuestionsRestored: (callback: (data: { restored: boolean }) => void) => () => void
   onKnowledgeEngineReady: (callback: (data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => void) => () => void
   onProfileResearchUpdated: (callback: (data: { company: string; role: string; updatedAt: string; sourceCount: number }) => void) => () => void
+  onCompanyResearchReady: (callback: (data: any) => void) => () => void
 
   // Tavily Search API
   setTavilyApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
@@ -395,6 +400,7 @@ export interface ElectronAPI {
   licenseActivate: (key: string) => Promise<{ success: boolean; error?: string }>
   licenseCheckPremium: () => Promise<boolean>
   licenseGetDetails: () => Promise<{ isPremium: boolean; plan?: string; provider?: string }>
+  getUserPlan: () => Promise<{ plan: string; isActive: boolean; isPremium: boolean; provider?: string }>
   /** Async startup check — calls Dodo validate endpoint to detect server-side revocations. */
   licenseCheckPremiumAsync: () => Promise<boolean>
   onLicenseRestored: (callback: (data: { isPremium: boolean; plan?: string; provider?: string }) => void) => () => void

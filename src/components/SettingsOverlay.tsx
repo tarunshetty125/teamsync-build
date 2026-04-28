@@ -6,7 +6,7 @@ import {
     Camera, RotateCcw, Eye, Layout, MessageSquare, Crop,
     ChevronDown, ChevronUp, Check, BadgeCheck, Power, Palette, Calendar, Ghost, Sun, Moon, RefreshCw, Info, Globe, FlaskConical, Terminal, Settings, Activity, ExternalLink, Trash2,
     Sparkles, Pencil, Briefcase, Building2, Search, MapPin, CheckCircle, HelpCircle, Zap, SlidersHorizontal, PointerOff,
-    Star, AlertCircle, Gift
+    AlertCircle
 } from 'lucide-react';
 import { analytics } from '../lib/analytics/analytics.service';
 import { AboutSection } from './AboutSection';
@@ -24,31 +24,8 @@ import {
     getDefaultOverlayOpacity,
 } from '../lib/overlayAppearance';
 import { KeyRecorder } from './ui/KeyRecorder';
-import { ProfileVisualizer, PremiumUpgradeModal } from '../premium';
+import { ProfileVisualizer, PremiumUpgradeModal, ResearchPanel } from '../premium';
 import icon from './icon.png';
-
-// ---------------------------------------------------------------------------
-// StarRating — renders filled/empty stars for culture ratings
-// ---------------------------------------------------------------------------
-const StarRating = ({ value, size = 11 }: { value: number; size?: number }) => {
-    const clamped = Math.min(5, Math.max(0, value ?? 0));
-    // Round to nearest 0.5 so 3.7→3.5 stars, 3.8→4 stars, 4.75→5 stars
-    const rounded = Math.round(clamped * 2) / 2;
-    const full = Math.floor(rounded);
-    const half = rounded - full === 0.5;
-    const empty = 5 - full - (half ? 1 : 0);
-    return (
-        <span className="flex items-center gap-0.5">
-            {Array.from({ length: full }).map((_, i) => (
-                <Star key={`f${i}`} size={size} className="text-yellow-400 fill-yellow-400" />
-            ))}
-            {half && <Star size={size} className="text-yellow-400 fill-yellow-400/40" />}
-            {Array.from({ length: empty }).map((_, i) => (
-                <Star key={`e${i}`} size={size} className="text-text-tertiary/25 fill-transparent" />
-            ))}
-        </span>
-    );
-};
 
 // ---------------------------------------------------------------------------
 // MockupNativelyInterface — fake in-meeting widget for the opacity preview
@@ -369,7 +346,7 @@ interface SettingsOverlayProps {
 const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, initialTab = 'general', isTrialActive = false }) => {
     const isLight = useResolvedTheme() === 'light';
     const [activeTab, setActiveTab] = useState(initialTab);
-    const refreshProfileStateRef = React.useRef<(() => Promise<void>) | null>(null);
+    const refreshProfileStateRef = React.useRef<((expectedGenerationId?: number) => Promise<void>) | null>(null);
     
     // Sync active tab when modal opens
     useEffect(() => {
@@ -410,28 +387,36 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [profileUploading, setProfileUploading] = useState(false);
     const [profileError, setProfileError] = useState('');
     const [profileData, setProfileData] = useState<any>(null);
+    const [profileViewStatus, setProfileViewStatus] = useState<'idle' | 'processing' | 'ready' | 'empty' | 'error'>('idle');
+    const [lastResumePath, setLastResumePath] = useState<string | null>(null);
+    const [lastJdPath, setLastJdPath] = useState<string | null>(null);
+    const [lastUploadKind, setLastUploadKind] = useState<'resume' | 'jd' | null>(null);
     const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
     const [isPremium, setIsPremium] = useState(false);
     const [premiumPlan, setPremiumPlan] = useState<string>('');
     // Trial users get the same profile access as premium users for the duration of the trial
     const hasProfileAccess = isPremium || isTrialActive;
+    const hasResumeAndJd = profileStatus.hasProfile && Boolean(profileData?.hasActiveJD);
+    const canEnableProfileIntelligence = hasProfileAccess && hasResumeAndJd;
     const [jdUploading, setJdUploading] = useState(false);
     const [jdError, setJdError] = useState('');
     const [companyResearching, setCompanyResearching] = useState(false);
-    const [companyDossier, setCompanyDossier] = useState<any>(null);
-    const [companySearchQuotaExhausted, setCompanySearchQuotaExhausted] = useState(false);
+    const [companyResearchToast, setCompanyResearchToast] = useState<null | {
+        variant: 'neutral' | 'success' | 'error';
+        title: string;
+        description: string;
+    }>(null);
     const [tavilyApiKey, setTavilyApiKey] = useState('');
     const [hasStoredTavilyKey, setHasStoredTavilyKey] = useState(false);
     const [tavilySaving, setTavilySaving] = useState(false);
     const [tavilyError, setTavilyError] = useState('');
+    const companyResearchToastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const [negotiationScript, setNegotiationScript] = useState<any>(null);
     const [negotiationGenerating, setNegotiationGenerating] = useState(false);
     const [negotiationError, setNegotiationError] = useState('');
-    const lastAotRevisionRef = React.useRef<{ negotiation: string; gapAnalysis: string; questions: string }>({
-        negotiation: '',
-        gapAnalysis: '',
-        questions: ''
-    });
+    const uploadGenerationRef = React.useRef(0);
+    const profileGenerationRef = React.useRef(0);
+    const profileViewStatusRef = React.useRef<'idle' | 'processing' | 'ready' | 'empty' | 'error'>('idle');
     const [customNotes, setCustomNotes] = useState('');
     const [customNotesSaved, setCustomNotesSaved] = useState(false);
     const customNotesDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -439,47 +424,97 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [showVerboseToast, setShowVerboseToast] = useState(false);
     const verboseToastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    refreshProfileStateRef.current = async () => {
-        const [status, data, aotState] = await Promise.all([
+    const updateProfileViewStatus = React.useCallback((nextStatus: 'idle' | 'processing' | 'ready' | 'empty' | 'error') => {
+        profileViewStatusRef.current = nextStatus;
+        setProfileViewStatus(nextStatus);
+    }, []);
+
+    const retryLastUpload = React.useCallback(async () => {
+        if (profileViewStatusRef.current === 'processing') return;
+        if (lastUploadKind === 'resume' && !lastResumePath) return;
+        if (lastUploadKind === 'jd' && !lastJdPath) return;
+        if (!lastUploadKind) return;
+
+        let uploadGenerationId = 0;
+        try {
+            uploadGenerationId = Date.now();
+            uploadGenerationRef.current = uploadGenerationId;
+            setProfileError('');
+            setJdError('');
+            setProfileData(null);
+            profileGenerationRef.current = 0;
+            setNegotiationScript(null);
+            updateProfileViewStatus('processing');
+
+            if (lastUploadKind === 'resume' && lastResumePath) {
+                setProfileUploading(true);
+                setProfileStatus({
+                    hasProfile: false,
+                    profileMode: false,
+                    isReady: false
+                });
+                const result = await window.electronAPI?.profileUploadResume?.(lastResumePath);
+                if (uploadGenerationRef.current !== uploadGenerationId) return;
+                if (!result?.success) {
+                    if (result?.error !== 'STALE_GENERATION') {
+                        updateProfileViewStatus('error');
+                        setProfileError(result?.error || 'Upload failed');
+                    }
+                    return;
+                }
+            } else if (lastUploadKind === 'jd' && lastJdPath) {
+                setJdUploading(true);
+                setProfileStatus(prev => ({ ...prev, isReady: false }));
+                const result = await window.electronAPI?.profileUploadJD?.(lastJdPath);
+                if (uploadGenerationRef.current !== uploadGenerationId) return;
+                if (!result?.success) {
+                    if (result?.error !== 'STALE_GENERATION') {
+                        updateProfileViewStatus('error');
+                        setJdError(result?.error || 'JD upload failed');
+                    }
+                    return;
+                }
+            }
+
+            await refreshProfileStateRef.current?.(uploadGenerationId);
+        } catch (error: any) {
+            updateProfileViewStatus('error');
+            setProfileError(error?.message || 'Retry failed');
+        } finally {
+            if (uploadGenerationRef.current === uploadGenerationId) {
+                setProfileUploading(false);
+                setJdUploading(false);
+            }
+        }
+    }, [lastJdPath, lastResumePath, lastUploadKind, updateProfileViewStatus]);
+
+    refreshProfileStateRef.current = async (expectedGenerationId?: number) => {
+        const [status, data] = await Promise.all([
             window.electronAPI?.profileGetStatus?.().catch(() => null),
-            window.electronAPI?.profileGetProfile?.().catch(() => null),
-            window.electronAPI?.getAOTState?.().catch(() => null)
+            window.electronAPI?.profileGetProfile?.().catch(() => null)
         ]);
+
+        if (typeof expectedGenerationId === 'number' && expectedGenerationId !== uploadGenerationRef.current) {
+            return;
+        }
+        if (typeof expectedGenerationId === 'number' && profileViewStatusRef.current !== 'processing') {
+            return;
+        }
 
         if (status) {
             setProfileStatus(status);
         }
 
-        const negotiationRevision = aotState
-            ? `${aotState.negotiation.hash || 'none'}:${aotState.negotiation.version}:${aotState.negotiation.updatedAt || 'none'}`
-            : '';
-        const gapRevision = aotState
-            ? `${aotState.gapAnalysis.hash || 'none'}:${aotState.gapAnalysis.version}:${aotState.gapAnalysis.updatedAt || 'none'}`
-            : '';
-        const questionsRevision = aotState
-            ? `${aotState.questions.hash || 'none'}:${aotState.questions.version}:${aotState.questions.updatedAt || 'none'}`
-            : '';
-
-        if (aotState && lastAotRevisionRef.current.negotiation !== negotiationRevision) {
-            setNegotiationScript(aotState.negotiation.data ?? null);
-            lastAotRevisionRef.current.negotiation = negotiationRevision;
-        } else if (!aotState && !data?.negotiationScript) {
-            setNegotiationScript(null);
-        }
-
         if (data) {
-            setProfileData({
-                ...data,
-                negotiationScript: aotState?.negotiation.data ?? data?.negotiationScript ?? null,
-                gapAnalysis: aotState?.gapAnalysis.data ?? data?.gapAnalysis ?? null,
-                mockQuestions: aotState?.questions.data ?? data?.mockQuestions ?? null,
-                aotState
-            });
-        }
-
-        if (aotState) {
-            lastAotRevisionRef.current.gapAnalysis = gapRevision;
-            lastAotRevisionRef.current.questions = questionsRevision;
+            profileGenerationRef.current = typeof data?.generationId === 'number' ? data.generationId : profileGenerationRef.current;
+            setNegotiationScript(data?.aot?.negotiation_script ?? data?.negotiationScript ?? null);
+            setProfileData(data);
+            updateProfileViewStatus('ready');
+        } else {
+            profileGenerationRef.current = 0;
+            setNegotiationScript(null);
+            setProfileData(null);
+            updateProfileViewStatus('empty');
         }
     };
 
@@ -513,6 +548,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     }, [showVerboseToast]);
 
     useEffect(() => {
+        if (!companyResearchToast) return;
+        companyResearchToastTimerRef.current = setTimeout(() => setCompanyResearchToast(null), 4200);
+        return () => {
+            if (companyResearchToastTimerRef.current) clearTimeout(companyResearchToastTimerRef.current);
+        };
+    }, [companyResearchToast]);
+
+    useEffect(() => {
         if (window.electronAPI?.onLicenseStatusChanged) {
             return window.electronAPI.onLicenseStatusChanged((data) => {
                 if (data.isPremium) {
@@ -528,8 +571,37 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                     setIsPremium(false);
                     setPremiumPlan('');
                 }
+                refreshProfileStateRef.current?.().catch(() => { });
             });
         }
+    }, []);
+
+    useEffect(() => {
+        if (window.electronAPI?.onProfileModeChanged) {
+            return window.electronAPI.onProfileModeChanged((enabled) => {
+                setProfileStatus((prev) => ({
+                    ...prev,
+                    profileMode: prev.hasProfile && Boolean(profileData?.hasActiveJD) ? enabled : false
+                }));
+            });
+        }
+    }, [profileData?.hasActiveJD]);
+
+    useEffect(() => {
+        if (!profileStatus.profileMode || hasResumeAndJd) return;
+
+        setProfileStatus((prev) => ({ ...prev, profileMode: false }));
+        window.electronAPI?.profileSetMode?.(false).catch((error) => {
+            console.error('Failed to auto-disable profile intelligence:', error);
+        });
+    }, [hasResumeAndJd, profileStatus.profileMode]);
+
+    useEffect(() => {
+        const openPremiumUpgrade = () => setIsPremiumModalOpen(true);
+        window.addEventListener('open-premium-upgrade', openPremiumUpgrade);
+        return () => {
+            window.removeEventListener('open-premium-upgrade', openPremiumUpgrade);
+        };
     }, []);
 
     useEffect(() => {
@@ -564,10 +636,40 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 refreshProfileStateRef.current?.().catch(() => { });
             }));
         }
+        if (window.electronAPI?.onCompanyResearchReady) {
+            unsubscribers.push(window.electronAPI.onCompanyResearchReady((research) => {
+                if (typeof research?.generationId === 'number' && profileGenerationRef.current > 0 && research.generationId < profileGenerationRef.current) {
+                    return;
+                }
+                setCompanyResearching(false);
+                setCompanyResearchToast({
+                    variant: 'success',
+                    title: 'Company research ready',
+                    description: `${research?.company || 'Company'} insights have been added to your dashboard.`
+                });
+                refreshProfileStateRef.current?.().catch(() => { });
+            }));
+        }
+        if (window.electronAPI?.onProfileUpdated) {
+            unsubscribers.push(window.electronAPI.onProfileUpdated((profile) => {
+                if (typeof profile?.generationId === 'number' && uploadGenerationRef.current > 0 && profile.generationId !== uploadGenerationRef.current && profileViewStatusRef.current === 'processing') {
+                    return;
+                }
+                if (typeof profile?.generationId === 'number' && profileGenerationRef.current > 0 && profile.generationId < profileGenerationRef.current) {
+                    return;
+                }
+                profileGenerationRef.current = typeof profile?.generationId === 'number'
+                    ? profile.generationId
+                    : (profile ? profileGenerationRef.current : 0);
+                setNegotiationScript(profile?.aot?.negotiation_script ?? profile?.negotiationScript ?? null);
+                setProfileData(profile);
+                updateProfileViewStatus(profile ? 'ready' : 'empty');
+            }));
+        }
         return () => {
             unsubscribers.forEach((unsubscribe) => unsubscribe());
         };
-    }, []);
+    }, [updateProfileViewStatus]);
 
     useEffect(() => {
         if (window.electronAPI?.onUndetectableChanged) {
@@ -1031,6 +1133,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                     setHasStoredAzureKey(creds.hasAzureKey);
                     setHasStoredIbmWatsonKey(creds.hasIbmWatsonKey);
                     setHasStoredSonioxKey(creds.hasSonioxKey || false);
+                    setHasStoredTavilyKey(creds.hasTavilyKey || false);
                 }).catch(() => { /* silently ignore */ });
             }
         });
@@ -1172,6 +1275,84 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             setHasStoredTavilyKey(false);
         } catch (e) {
             console.error('Failed to remove Tavily API key:', e);
+        }
+    };
+
+    const handleRunCompanyResearch = async () => {
+        const company = profileData?.activeJD?.company?.trim?.();
+        const role = profileData?.activeJD?.title?.trim?.() || '';
+
+        if (!company) {
+            setCompanyResearchToast({
+                variant: 'error',
+                title: 'Missing company',
+                description: 'Upload a job description first so company research knows what to analyze.'
+            });
+            return;
+        }
+
+        const tavilyKey = await window.electronAPI?.getTavilyKey?.().catch(() => null);
+        if (!tavilyKey) {
+            setCompanyResearchToast({
+                variant: 'error',
+                title: 'Tavily key required',
+                description: 'Please add your Tavily API key in Settings before running company research.'
+            });
+            return;
+        }
+
+        setCompanyResearching(true);
+        setCompanyResearchToast({
+            variant: 'neutral',
+            title: 'Research started',
+            description: `Gathering live company intelligence for ${company}.`
+        });
+
+        try {
+            const result = await window.electronAPI?.runCompanyResearch?.(
+                company,
+                role,
+                Boolean(profileData?.research)
+            );
+
+            if (!result?.success) {
+                setCompanyResearching(false);
+                setCompanyResearchToast({
+                    variant: 'error',
+                    title: 'Research unavailable',
+                    description: result?.error === 'MISSING_API_KEY'
+                        ? 'Please add your Tavily API key in Settings before running company research.'
+                        : (result?.error || 'Company research could not be started.')
+                });
+                return;
+            }
+
+            if (result.status === 'cached' && result.research) {
+                await refreshProfileStateRef.current?.();
+                setCompanyResearching(false);
+                setCompanyResearchToast({
+                    variant: 'success',
+                    title: 'Using cached research',
+                    description: `${company} intelligence is already available and has been restored instantly.`
+                });
+                return;
+            }
+
+            if (result.status === 'running') {
+                setCompanyResearchToast({
+                    variant: 'neutral',
+                    title: 'Research already running',
+                    description: `We are already compiling live company intelligence for ${company}.`
+                });
+                return;
+            }
+        } catch (error: any) {
+            setCompanyResearching(false);
+            setCompanyResearchToast({
+                variant: 'error',
+                title: 'Research failed',
+                description: error?.message || 'Unexpected error starting company research.'
+            });
         }
     };
 
@@ -1405,11 +1586,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                         onClick={() => {
                                             setActiveTab('profile');
                                             // Load profile status when switching to this tab
-                                            window.electronAPI?.profileGetStatus?.().then(setProfileStatus).catch(() => { });
-                                            window.electronAPI?.profileGetProfile?.().then(data => {
-                                                setProfileData(data);
-                                                if (data?.negotiationScript) setNegotiationScript(data.negotiationScript);
-                                            }).catch(() => { });
+                                            refreshProfileStateRef.current?.().catch(() => { });
                                             window.electronAPI?.profileGetNotes?.().then(res => {
                                                 if (res?.success) setCustomNotes(res.content ?? '');
                                             }).catch(() => { });
@@ -2001,39 +2178,25 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                     </div>
 
                                                     <div className="flex items-center gap-3">
-                                                        {profileStatus.hasProfile && (
-                                                            <button
-                                                                onClick={async () => {
-                                                                    if (!confirm('Are you sure you want to delete your mapped persona? This will destroy all structured timeline data.')) return;
-                                                                    try {
-                                                                        await window.electronAPI?.profileDelete?.();
-                                                                        setProfileStatus({ hasProfile: false, profileMode: false, isReady: true });
-                                                                        setProfileData(null);
-                                                                    } catch (e) { console.error('Failed to delete profile:', e); }
-                                                                }}
-                                                                className="text-[12px] font-medium text-text-tertiary hover:text-red-500 transition-colors px-3 py-1.5 rounded-full hover:bg-red-500/10"
-                                                            >
-                                                                Disconnect
-                                                            </button>
-                                                        )}
-
-                                                        {/* High-fidelity Toggle */}
-                                                        <div className={`flex items-center gap-2 bg-bg-input px-3 py-1.5 rounded-full border border-border-subtle ${!hasProfileAccess ? 'opacity-40 cursor-not-allowed' : ''}`} title={!hasProfileAccess ? 'Requires Pro license' : ''}>
-                                                            <span className="text-xs font-medium text-text-secondary">Persona Engine</span>
+                                                        {/* Profile Intelligence Toggle */}
+                                                        <div
+                                                            className={`flex items-center gap-2 bg-bg-input px-3 py-1.5 rounded-full border border-border-subtle ${!canEnableProfileIntelligence ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                                            title={!hasProfileAccess ? 'Requires Pro license' : !hasResumeAndJd ? 'Upload both a resume and a job description to enable Profile Intelligence' : ''}
+                                                        >
+                                                            <span className="text-xs font-medium text-text-secondary">Profile Intelligence</span>
                                                             <div
                                                                 onClick={async () => {
-                                                                    if (!profileStatus.hasProfile || !hasProfileAccess) return;
+                                                                    if (!canEnableProfileIntelligence) return;
                                                                     const newState = !profileStatus.profileMode;
                                                                     try {
                                                                         await window.electronAPI?.profileSetMode?.(newState);
-                                                                        setProfileStatus(prev => ({ ...prev, profileMode: newState }));
                                                                     } catch (e) {
-                                                                        console.error('Failed to toggle profile mode:', e);
+                                                                        console.error('Failed to toggle profile intelligence:', e);
                                                                     }
                                                                 }}
-                                                                className={`w-9 h-5 rounded-full relative transition-colors ${(!profileStatus.hasProfile || !hasProfileAccess) ? 'opacity-40 cursor-not-allowed bg-bg-toggle-switch' : profileStatus.profileMode ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                                                                className={`w-9 h-5 rounded-full relative transition-colors ${!canEnableProfileIntelligence ? 'opacity-40 cursor-not-allowed bg-bg-toggle-switch' : profileStatus.profileMode ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
                                                             >
-                                                                <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${profileStatus.profileMode && hasProfileAccess ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                                <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${profileStatus.profileMode && canEnableProfileIntelligence ? 'translate-x-4' : 'translate-x-0'}`} />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -2119,29 +2282,47 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
 
                                                 <button
                                                     onClick={async () => {
+                                                        let uploadGenerationId = 0;
                                                         setProfileError('');
                                                         try {
                                                             const fileResult = await window.electronAPI?.profileSelectFile?.();
                                                             if (fileResult?.cancelled || !fileResult?.filePath) return;
 
+                                                            setLastResumePath(fileResult.filePath);
+                                                            setLastUploadKind('resume');
+                                                            uploadGenerationId = Date.now();
+                                                            uploadGenerationRef.current = uploadGenerationId;
                                                             setProfileUploading(true);
+                                                            updateProfileViewStatus('processing');
+                                                            setProfileData(null);
+                                                            profileGenerationRef.current = 0;
+                                                            setNegotiationScript(null);
+                                                            setProfileStatus({
+                                                                hasProfile: false,
+                                                                profileMode: false,
+                                                                isReady: false
+                                                            });
                                                             const result = await window.electronAPI?.profileUploadResume?.(fileResult.filePath);
+                                                            if (uploadGenerationRef.current !== uploadGenerationId) return;
                                                             if (result?.success) {
-                                                                const status = await window.electronAPI?.profileGetStatus?.();
-                                                                if (status) setProfileStatus(status);
-                                                                const data = await window.electronAPI?.profileGetProfile?.();
-                                                                if (data) setProfileData(data);
+                                                                await refreshProfileStateRef.current?.(uploadGenerationId);
+                                                            } else if (result?.error === 'STALE_GENERATION') {
+                                                                return;
                                                             } else {
+                                                                updateProfileViewStatus('error');
                                                                 setProfileError(result?.error || 'Upload failed');
                                                             }
                                                         } catch (e: any) {
+                                                            updateProfileViewStatus('error');
                                                             setProfileError(e.message || 'Upload failed');
                                                         } finally {
-                                                            setProfileUploading(false);
+                                                            if (uploadGenerationRef.current === uploadGenerationId) {
+                                                                setProfileUploading(false);
+                                                            }
                                                         }
                                                     }}
-                                                    disabled={profileUploading}
-                                                    className={`px-4 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${profileUploading ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-text-primary text-bg-main hover:opacity-90 shadow-sm'}`}
+                                                    disabled={profileViewStatus === 'processing'}
+                                                    className={`px-4 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${profileViewStatus === 'processing' ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-text-primary text-bg-main hover:opacity-90 shadow-sm'}`}
                                                 >
                                                     {profileUploading ? 'Ingesting...' : 'Select File'}
                                                 </button>
@@ -2200,9 +2381,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                         <button
                                                             onClick={async () => {
                                                                 await window.electronAPI?.profileDeleteJD?.();
-                                                                const data = await window.electronAPI?.profileGetProfile?.();
-                                                                if (data) setProfileData(data);
-                                                                setCompanyDossier(null);
+                                                                await refreshProfileStateRef.current?.();
                                                             }}
                                                             className="px-2.5 py-2 rounded-full text-xs text-text-tertiary hover:text-red-500 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
                                                         >
@@ -2211,27 +2390,46 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                     )}
                                                     <button
                                                         onClick={async () => {
+                                                            let uploadGenerationId = 0;
                                                             setJdError('');
                                                             try {
                                                                 const fileResult = await window.electronAPI?.profileSelectFile?.();
                                                                 if (fileResult?.cancelled || !fileResult?.filePath) return;
 
+                                                                setLastJdPath(fileResult.filePath);
+                                                                setLastUploadKind('jd');
+                                                                uploadGenerationId = Date.now();
+                                                                uploadGenerationRef.current = uploadGenerationId;
                                                                 setJdUploading(true);
+                                                                updateProfileViewStatus('processing');
+                                                                setProfileData(null);
+                                                                profileGenerationRef.current = 0;
+                                                                setNegotiationScript(null);
+                                                                setProfileStatus(prev => ({
+                                                                    ...prev,
+                                                                    isReady: false
+                                                                }));
                                                                 const result = await window.electronAPI?.profileUploadJD?.(fileResult.filePath);
+                                                                if (uploadGenerationRef.current !== uploadGenerationId) return;
                                                                 if (result?.success) {
-                                                                    const data = await window.electronAPI?.profileGetProfile?.();
-                                                                    if (data) setProfileData(data);
+                                                                    await refreshProfileStateRef.current?.(uploadGenerationId);
+                                                                } else if (result?.error === 'STALE_GENERATION') {
+                                                                    return;
                                                                 } else {
+                                                                    updateProfileViewStatus('error');
                                                                     setJdError(result?.error || 'JD upload failed');
                                                                 }
                                                             } catch (e: any) {
+                                                                updateProfileViewStatus('error');
                                                                 setJdError(e.message || 'JD upload failed');
                                                             } finally {
-                                                                setJdUploading(false);
+                                                                if (uploadGenerationRef.current === uploadGenerationId) {
+                                                                    setJdUploading(false);
+                                                                }
                                                             }
                                                         }}
-                                                        disabled={jdUploading}
-                                                        className={`px-4 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${jdUploading ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-sm'}`}
+                                                        disabled={profileViewStatus === 'processing'}
+                                                        className={`px-4 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${profileViewStatus === 'processing' ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-sm'}`}
                                                     >
                                                         {jdUploading ? 'Parsing...' : profileData?.hasActiveJD ? 'Replace JD' : 'Upload JD'}
                                                     </button>
@@ -2403,272 +2601,75 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full tracking-widest uppercase bg-purple-500/15 text-purple-400 border border-purple-500/25">Beta</span>
                                                             </div>
                                                             <p className="text-[11px] text-text-secondary mt-0.5">
-                                                                {companyDossier ? 'Research complete' : 'Run research to get hiring strategy, salaries & competitors'}
+                                                                {profileData?.research ? 'Research complete — company intelligence is synced in this panel.' : 'Click Research to generate hiring strategy, salary, culture, and interview intelligence.'}
                                                             </p>
                                                         </div>
                                                     </div>
 
                                                     <button
-                                                        onClick={async () => {
-                                                            setCompanyResearching(true);
-                                                            setCompanySearchQuotaExhausted(false);
-                                                            try {
-                                                                const result = await window.electronAPI?.profileResearchCompany?.(profileData.activeJD.company);
-                                                                if (result?.success && result.dossier) {
-                                                                    setCompanyDossier(result.dossier);
-                                                                }
-                                                                if (result?.searchQuotaExhausted) {
-                                                                    setCompanySearchQuotaExhausted(true);
-                                                                }
-                                                            } catch (e) {
-                                                                console.error('Research failed:', e);
-                                                            } finally {
-                                                                setCompanyResearching(false);
-                                                            }
-                                                        }}
+                                                        onClick={handleRunCompanyResearch}
                                                         disabled={companyResearching}
                                                         className={`px-4 py-2 rounded-full text-xs font-medium transition-all flex items-center gap-2 ${companyResearching ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-purple-600/10 text-purple-500 hover:bg-purple-600/20 border border-purple-500/20'}`}
                                                     >
                                                         {companyResearching ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
-                                                        {companyResearching ? 'Researching...' : companyDossier ? 'Refresh' : 'Research Now'}
+                                                        {companyResearching ? 'Researching...' : profileData?.research ? 'Refresh Research' : 'Research'}
                                                     </button>
                                                 </div>
 
-                                                {/* Search quota exhausted notice */}
-                                                {companySearchQuotaExhausted && (
-                                                    <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-amber-500/8 border border-amber-500/20 text-[11px] text-amber-400 leading-relaxed">
-                                                        <span className="shrink-0 mt-[1px]">⚠</span>
-                                                        <span>
-                                                            Web search credits exhausted for this month — showing AI-only research instead.
-                                                            Resets next billing cycle or <span className="underline cursor-pointer" onClick={() => (window.electronAPI as any)?.openExternal?.('https://checkout.dodopayments.com/buy/pdt_0NbFixGmD8CSeawb5qvVl')}>upgrade your plan</span>.
+                                                {companyResearchToast && (
+                                                    <div className={`mb-4 flex items-start gap-2.5 px-3 py-2.5 rounded-xl border text-[11px] leading-relaxed ${
+                                                        companyResearchToast.variant === 'success'
+                                                            ? 'bg-emerald-500/8 border-emerald-500/20 text-emerald-400'
+                                                            : companyResearchToast.variant === 'error'
+                                                                ? 'bg-red-500/8 border-red-500/20 text-red-400'
+                                                                : 'bg-purple-500/8 border-purple-500/20 text-purple-300'
+                                                    }`}>
+                                                        <span className="shrink-0 mt-[1px]">
+                                                            {companyResearchToast.variant === 'success' ? '✓' : companyResearchToast.variant === 'error' ? '!' : '•'}
                                                         </span>
-                                                    </div>
-                                                )}
-
-                                                {/* Dossier Results */}
-                                                {companyDossier && (
-                                                    <div className="space-y-4 border-t border-border-subtle pt-4 mt-2">
-
-                                                        {/* Hiring Strategy */}
-                                                        {companyDossier.hiring_strategy && (
-                                                            <div>
-                                                                <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide mb-1">Hiring Strategy</div>
-                                                                <p className="text-xs text-text-secondary leading-relaxed bg-bg-input p-3 rounded-lg">{companyDossier.hiring_strategy}</p>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Interview Focus + Difficulty badge */}
-                                                        {companyDossier.interview_focus && (
-                                                            <div>
-                                                                <div className="flex items-center gap-2 mb-1">
-                                                                    <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide">Interview Focus</div>
-                                                                    {companyDossier.interview_difficulty && (
-                                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                                                                            companyDossier.interview_difficulty === 'easy' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
-                                                                            companyDossier.interview_difficulty === 'medium' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' :
-                                                                            companyDossier.interview_difficulty === 'hard' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                                                                            'bg-red-500/10 text-red-400 border-red-500/20'
-                                                                        }`}>
-                                                                            {companyDossier.interview_difficulty.replace('_', ' ').toUpperCase()}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <p className="text-xs text-text-secondary leading-relaxed bg-bg-input p-3 rounded-lg">{companyDossier.interview_focus}</p>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Salary Estimates */}
-                                                        {companyDossier.salary_estimates?.length > 0 && (
-                                                            <div>
-                                                                <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide mb-1">Salary Estimates</div>
-                                                                <div className="space-y-2 bg-bg-input p-3 rounded-lg">
-                                                                    {companyDossier.salary_estimates.map((s: any, i: number) => (
-                                                                        <div key={i} className="flex items-center justify-between pb-2 mb-2 border-b border-border-subtle last:border-0 last:pb-0 last:mb-0">
-                                                                            <span className="text-xs text-text-primary font-medium">{s.title} <span className="text-text-tertiary">({s.location})</span></span>
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="text-xs font-bold text-green-400">
-                                                                                    {s.currency} {s.min?.toLocaleString()} – {s.max?.toLocaleString()}
-                                                                                </span>
-                                                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${s.confidence === 'high' ? 'bg-green-500/10 text-green-500 border-green-500/20' : s.confidence === 'medium' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                                                                                    {s.confidence?.toUpperCase()}
-                                                                                </span>
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Work Culture — 5-star ratings */}
-                                                        {companyDossier.culture_ratings && typeof companyDossier.culture_ratings === 'object' &&
-                                                          Object.values(companyDossier.culture_ratings).some(v => typeof v === 'number' && (v as number) > 0) && (
-                                                            <div>
-                                                                <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide mb-2">Work Culture</div>
-                                                                <div className="bg-bg-input p-3 rounded-lg">
-                                                                    {/* Overall score hero */}
-                                                                    <div className="flex items-center justify-between mb-3 pb-3 border-b border-border-subtle">
-                                                                        <div>
-                                                                            <span className="text-2xl font-bold text-text-primary">{companyDossier.culture_ratings.overall.toFixed(1)}</span>
-                                                                            <span className="text-xs text-text-tertiary"> / 5</span>
-                                                                            {companyDossier.culture_ratings.review_count && (
-                                                                                <div className="text-[10px] text-text-tertiary mt-0.5">{companyDossier.culture_ratings.review_count}</div>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="text-right">
-                                                                            <StarRating value={companyDossier.culture_ratings.overall} size={14} />
-                                                                            {companyDossier.culture_ratings.data_sources?.length > 0 && (
-                                                                                <div className="flex gap-1 mt-1 justify-end">
-                                                                                    {companyDossier.culture_ratings.data_sources.map((src: string, i: number) => (
-                                                                                        <span key={i} className="text-[9px] text-text-tertiary bg-bg-input px-1.5 py-0.5 rounded">{src}</span>
-                                                                                    ))}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                    {/* Sub-ratings grid */}
-                                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                                                                        {[
-                                                                            { label: 'Work-Life Balance', key: 'work_life_balance' },
-                                                                            { label: 'Career Growth', key: 'career_growth' },
-                                                                            { label: 'Compensation', key: 'compensation' },
-                                                                            { label: 'Management', key: 'management' },
-                                                                            { label: 'Diversity & Inclusion', key: 'diversity' },
-                                                                        ].map(({ label, key }) => {
-                                                                            const raw = (companyDossier.culture_ratings as any)[key];
-                                                                            const val: number = typeof raw === 'number' ? raw : 0;
-                                                                            return val > 0 ? (
-                                                                                <div key={key} className="flex items-center justify-between gap-2">
-                                                                                    <span className="text-[10px] text-text-tertiary truncate">{label}</span>
-                                                                                    <div className="flex items-center gap-1 shrink-0">
-                                                                                        <StarRating value={val} size={9} />
-                                                                                        <span className="text-[10px] text-text-secondary font-medium">{val.toFixed(1)}</span>
-                                                                                    </div>
-                                                                                </div>
-                                                                            ) : null;
-                                                                        })}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Employee Reviews */}
-                                                        {companyDossier.employee_reviews?.length > 0 && (
-                                                            <div>
-                                                                <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide mb-2">Employee Reviews</div>
-                                                                <div className="space-y-2">
-                                                                    {companyDossier.employee_reviews.map((r: any, i: number) => (
-                                                                        <div key={i} className="bg-bg-input p-3 rounded-lg">
-                                                                            <div className="flex items-start gap-2">
-                                                                                <span className={`mt-0.5 shrink-0 w-2 h-2 rounded-full ${r.sentiment === 'positive' ? 'bg-green-400' : r.sentiment === 'mixed' ? 'bg-yellow-400' : 'bg-red-400'}`} />
-                                                                                <p className="text-xs text-text-secondary leading-relaxed italic">"{r.quote}"</p>
-                                                                            </div>
-                                                                            <div className="flex items-center gap-2 mt-2 ml-4">
-                                                                                {r.role && <span className="text-[10px] text-text-tertiary">{r.role}</span>}
-                                                                                {r.role && r.source && <span className="text-text-tertiary/40 text-[10px]">·</span>}
-                                                                                {r.source && <span className="text-[10px] text-text-tertiary/70 bg-bg-input px-1.5 py-0.5 rounded">{r.source}</span>}
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Critics — common complaints */}
-                                                        {companyDossier.critics?.length > 0 && (
-                                                            <div>
-                                                                <div className="flex items-center gap-1.5 mb-2">
-                                                                    <AlertCircle size={11} className="text-orange-400" />
-                                                                    <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide">Common Complaints</div>
-                                                                </div>
-                                                                <div className="space-y-2">
-                                                                    {companyDossier.critics.map((c: any, i: number) => (
-                                                                        <div key={i} className="bg-bg-input p-3 rounded-lg">
-                                                                            <div className="flex items-center justify-between mb-1">
-                                                                                <span className="text-[10px] font-semibold text-orange-400/90">{c.category}</span>
-                                                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                                                                                    c.frequency === 'widespread' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                                                                    c.frequency === 'frequently' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                                                                                    'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                                                                                }`}>
-                                                                                    {c.frequency?.toUpperCase()}
-                                                                                </span>
-                                                                            </div>
-                                                                            <p className="text-xs text-text-secondary leading-relaxed">{c.complaint}</p>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Benefits */}
-                                                        {companyDossier.benefits?.length > 0 && (
-                                                            <div>
-                                                                <div className="flex items-center gap-1.5 mb-2">
-                                                                    <Gift size={11} className="text-emerald-400" />
-                                                                    <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide">Benefits & Perks</div>
-                                                                </div>
-                                                                <div className="flex flex-wrap gap-1.5">
-                                                                    {companyDossier.benefits.map((b: string, i: number) => (
-                                                                        <span key={i} className="text-[11px] text-emerald-400/90 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">{b}</span>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Core Values */}
-                                                        {companyDossier.core_values?.length > 0 && (
-                                                            <div>
-                                                                <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide mb-2">Core Values</div>
-                                                                <div className="flex flex-wrap gap-1.5">
-                                                                    {companyDossier.core_values.map((v: string, i: number) => (
-                                                                        <span key={i} className="text-[11px] text-purple-400/90 px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/20">{v}</span>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Recent News */}
-                                                        {companyDossier.recent_news && (
-                                                            <div>
-                                                                <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide mb-1">Recent News</div>
-                                                                <p className="text-xs text-text-secondary leading-relaxed bg-bg-input p-3 rounded-lg">{companyDossier.recent_news}</p>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Competitors */}
-                                                        {companyDossier.competitors?.length > 0 && (
-                                                            <div>
-                                                                <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide mb-2">Competitors</div>
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {companyDossier.competitors.map((c: string, i: number) => (
-                                                                        <span key={i} className="text-[11px] text-text-secondary px-2.5 py-1 rounded-full bg-bg-input flex items-center gap-1.5">
-                                                                            <Building2 size={10} className="text-text-tertiary" /> {c}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Sources count */}
-                                                        {companyDossier.sources?.length > 0 && (
-                                                            <div className="text-[10px] text-text-tertiary mt-2">
-                                                                Sources: {companyDossier.sources.filter(Boolean).length} references
-                                                            </div>
-                                                        )}
-
-                                                        {/* Beta disclaimer */}
-                                                        <div className="mt-4 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-purple-500/5 border border-purple-500/15">
-                                                            <span className="text-purple-400/70 mt-px shrink-0">⚠</span>
-                                                            <p className="text-[10px] text-text-tertiary leading-relaxed">
-                                                                <span className="font-semibold text-purple-400/80">Beta feature.</span> Company research is AI-generated and may contain inaccuracies. Verify salary figures and hiring details independently before use.
-                                                            </p>
+                                                        <div>
+                                                            <div className="font-semibold">{companyResearchToast.title}</div>
+                                                            <div className="mt-0.5 opacity-90">{companyResearchToast.description}</div>
                                                         </div>
                                                     </div>
                                                 )}
+
+                                                <ResearchPanel
+                                                    research={profileData?.research ?? null}
+                                                    loading={companyResearching}
+                                                    currentGenerationId={profileData?.generationId}
+                                                />
                                             </div>
                                         </div>
                                     )}
-                                    <ProfileVisualizer profileData={profileData} />
+                                    {profileViewStatus === 'processing' ? (
+                                        <div className="mt-6 rounded-2xl border border-border-subtle bg-bg-item-surface p-5 text-sm text-text-secondary shadow-sm">
+                                            {profileUploading ? 'Processing new profile...' : 'Refreshing role intelligence...'}
+                                        </div>
+                                    ) : profileViewStatus === 'error' ? (
+                                        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-600 shadow-sm">
+                                            <div className="font-medium">Profile generation failed.</div>
+                                            <div className="mt-1 text-red-500/90">
+                                                {profileError || jdError || 'Please try the upload again.'}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => { void retryLastUpload(); }}
+                                                className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-xs font-medium text-white transition-all hover:bg-red-500"
+                                            >
+                                                Retry
+                                            </button>
+                                        </div>
+                                    ) : profileData ? (
+                                        <ProfileVisualizer
+                                            profileData={profileData}
+                                            currentGenerationId={profileData?.generationId}
+                                        />
+                                    ) : (
+                                        <div className="mt-6 rounded-2xl border border-dashed border-border-subtle bg-bg-item-surface p-6 text-sm text-text-secondary shadow-sm">
+                                            Upload a resume to build your candidate profile. Uploading a new resume or JD will automatically replace the previous intelligence state.
+                                        </div>
+                                    )}
 
                                     {/* Salary Negotiation Script */}
                                     {profileData?.hasActiveJD && (
@@ -2702,8 +2703,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                         setNegotiationError('');
                                                                         try {
                                                                             const result = await window.electronAPI?.profileGenerateNegotiation?.(true);
-                                                                            if (result?.success && result.script) {
-                                                                                setNegotiationScript(result.script);
+                                                                            if (result?.success) {
+                                                                                await refreshProfileStateRef.current?.();
                                                                             } else {
                                                                                 setNegotiationError(result?.error || 'Failed to regenerate');
                                                                             }
@@ -2724,8 +2725,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                         setNegotiationError('');
                                                                         try {
                                                                             const result = await window.electronAPI?.profileGenerateNegotiation?.(false);
-                                                                            if (result?.success && result.script) {
-                                                                                setNegotiationScript(result.script);
+                                                                            if (result?.success) {
+                                                                                await refreshProfileStateRef.current?.();
                                                                             } else {
                                                                                 setNegotiationError(result?.error || 'Failed to generate');
                                                                             }

@@ -17,6 +17,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, listener);
   };
+  const { getCurrentUserPlan, hasActiveProPlan } = require('../premium/electron/auth/PlanService');
 
   const showOpenDialogNormalized = async (options: OpenDialogOptions): Promise<OpenDialogReturnValue> => {
     const result = await dialog.showOpenDialog(options as any);
@@ -102,8 +103,9 @@ export function initializeIpcHandlers(appState: AppState): void {
       const { LicenseManager } = require('../premium/electron/services/LicenseManager');
       const result = await LicenseManager.getInstance().activateLicense(key);
       if (result?.success) {
+        const planState = getCurrentUserPlan();
         BrowserWindow.getAllWindows().forEach(win => {
-          if (!win.isDestroyed()) win.webContents.send('license-status-changed', { isPremium: true });
+          if (!win.isDestroyed()) win.webContents.send('license-status-changed', planState);
         });
       }
       return result;
@@ -130,6 +132,18 @@ export function initializeIpcHandlers(appState: AppState): void {
       return LicenseManager.getInstance().getLicenseDetails();
     } catch {
       return { isPremium: false };
+    }
+  });
+
+  safeHandle("get_user_plan", async () => {
+    try {
+      return getCurrentUserPlan();
+    } catch {
+      return {
+        plan: 'free',
+        isActive: false,
+        isPremium: false,
+      };
     }
   });
 
@@ -205,8 +219,9 @@ export function initializeIpcHandlers(appState: AppState): void {
       } catch (e) { /* ignore */ }
       // Notify all windows so the license UI (ProGate, settings) refreshes immediately
       clearActiveModeOnLicenseLoss();
+      const planState = getCurrentUserPlan();
       BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) win.webContents.send('license-status-changed', { isPremium: false });
+        if (!win.isDestroyed()) win.webContents.send('license-status-changed', planState);
       });
     } catch { /* LicenseManager not available */ }
     return { success: true };
@@ -999,8 +1014,9 @@ export function initializeIpcHandlers(appState: AppState): void {
           if (result.success) {
             console.log('[IPC] set-natively-api-key: Pro auto-activated via API plan.');
             // Notify all windows so the license UI refreshes immediately
+            const planState = getCurrentUserPlan();
             BrowserWindow.getAllWindows().forEach(win => {
-              if (!win.isDestroyed()) win.webContents.send('license-status-changed', { isPremium: true });
+              if (!win.isDestroyed()) win.webContents.send('license-status-changed', planState);
             });
           } else if (result.skipped) {
             console.log('[IPC] set-natively-api-key: existing Gumroad/Dodo license preserved — Pro not overwritten.');
@@ -1023,8 +1039,9 @@ export function initializeIpcHandlers(appState: AppState): void {
             await lm.deactivate();
             console.log('[IPC] set-natively-api-key: key cleared — natively_api Pro license deactivated.');
             clearActiveModeOnLicenseLoss();
+            const planState = getCurrentUserPlan();
             BrowserWindow.getAllWindows().forEach(win => {
-              if (!win.isDestroyed()) win.webContents.send('license-status-changed', { isPremium: false });
+              if (!win.isDestroyed()) win.webContents.send('license-status-changed', planState);
             });
           }
         } catch (e: any) {
@@ -1258,9 +1275,10 @@ export function initializeIpcHandlers(appState: AppState): void {
 
       // 7. Notify all windows to refresh license + model state
       clearActiveModeOnLicenseLoss();
+      const planState = getCurrentUserPlan();
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) {
-          win.webContents.send('license-status-changed', { isPremium: false });
+          win.webContents.send('license-status-changed', planState);
           win.webContents.send('trial-ended', { choice: 'byok' });
         }
       });
@@ -2840,6 +2858,29 @@ export function initializeIpcHandlers(appState: AppState): void {
     orchestrator.setCompanyResearchProvider?.(null);
   };
 
+  const getTavilyKey = (): string | null => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const key = CredentialsManager.getInstance().getTavilyApiKey();
+      return typeof key === 'string' && key.trim() ? key.trim() : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const configureExplicitTavilyResearchProvider = (orchestrator: any): string | null => {
+    if (!orchestrator) return null;
+    const tavilyApiKey = getTavilyKey();
+    if (!tavilyApiKey) {
+      orchestrator.setCompanyResearchProvider?.(null);
+      return null;
+    }
+
+    const { TavilySearchProvider } = require('../premium/electron/knowledge/TavilySearchProvider');
+    orchestrator.setCompanyResearchProvider?.(new TavilySearchProvider(tavilyApiKey));
+    return tavilyApiKey;
+  };
+
   safeHandle("profile:upload-resume", async (_, filePath: string) => {
     try {
       // Premium gate: require active license or free trial for profile features
@@ -2904,6 +2945,11 @@ export function initializeIpcHandlers(appState: AppState): void {
 
       const { SettingsManager } = require('./services/SettingsManager');
       SettingsManager.getInstance().set('knowledgeMode', enabled);
+      BrowserWindow.getAllWindows().forEach((win) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('profile-mode-changed', enabled);
+        }
+      });
 
       return { success: true };
     } catch (error: any) {
@@ -2930,6 +2976,12 @@ export function initializeIpcHandlers(appState: AppState): void {
       if (!appState.isBootstrapReady()) {
         await appState.bootstrapPersistentState();
       }
+      if (!hasActiveProPlan()) {
+        return {
+          error: 'PRO_REQUIRED',
+          engineReady: false,
+        };
+      }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) return null;
       configureProfileResearchProviders(orchestrator);
@@ -2940,6 +2992,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     } catch (error: any) {
       return null;
     }
+  });
+
+  safeHandle('get-tavily-key', async () => {
+    return getTavilyKey();
   });
 
   safeHandle("profile:select-file", async () => {
@@ -3009,42 +3065,73 @@ export function initializeIpcHandlers(appState: AppState): void {
       if (!isProOrTrialActive()) {
         return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
       }
+      if (!appState.isBootstrapReady()) {
+        await appState.bootstrapPersistentState();
+      }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) {
         return { success: false, error: 'Knowledge engine not initialized' };
       }
-      configureProfileResearchProviders(orchestrator);
-      const engine = orchestrator.getCompanyResearchEngine();
-
-      // Build full JD context so the dossier is tailored to the exact role
       const profileData = orchestrator.getProfileData();
-      const activeJD = profileData?.activeJD;
-      const jdCtx = activeJD ? {
-        title: activeJD.title,
-        location: activeJD.location,
-        level: activeJD.level,
-        technologies: activeJD.technologies,
-        requirements: activeJD.requirements,
-        keywords: activeJD.keywords,
-        compensation_hint: activeJD.compensation_hint,
-        min_years_experience: activeJD.min_years_experience,
-      } : {};
-      const dossier = await engine.researchCompany(companyName, jdCtx, true);
-      const searchQuotaExhausted = (engine.searchProvider as any)?.quotaExhausted === true;
-      const refreshedProfile = orchestrator.getProfileData?.();
-      const win = appState.getMainWindow();
-      if (refreshedProfile?.research && win && !win.isDestroyed()) {
-        win.webContents.send('profile_research_updated', {
-          company: refreshedProfile.research.company || companyName,
-          role: refreshedProfile.research.role || jdCtx.title || '',
-          updatedAt: refreshedProfile.research.updatedAt || new Date().toISOString(),
-          sourceCount: refreshedProfile.research.sourceCount || 0
-        });
+      const tavilyApiKey = configureExplicitTavilyResearchProvider(orchestrator);
+      if (!tavilyApiKey) {
+        return { success: false, error: 'MISSING_API_KEY' };
       }
-      return { success: true, dossier, searchQuotaExhausted };
+      const result = await orchestrator.runCompanyResearch?.(
+        companyName,
+        profileData?.activeJD?.title || '',
+        { forceRefresh: true }
+      );
+      if (!result) {
+        return { success: false, error: 'Company research flow unavailable' };
+      }
+      return { success: true, status: result.status, research: result.research ?? null };
     } catch (error: any) {
       console.error('[IPC] profile:research-company error:', error);
       return { success: false, error: error.message };
+    }
+  });
+
+  safeHandle('run_company_research', async (_, payload: { company: string; role?: string; forceRefresh?: boolean }) => {
+    try {
+      if (!isProOrTrialActive()) {
+        return { success: false, error: 'LICENSE_REQUIRED' };
+      }
+      if (!appState.isBootstrapReady()) {
+        await appState.bootstrapPersistentState();
+      }
+
+      const orchestrator = appState.getKnowledgeOrchestrator();
+      if (!orchestrator) {
+        return { success: false, error: 'ENGINE_NOT_INITIALIZED' };
+      }
+
+      const tavilyApiKey = configureExplicitTavilyResearchProvider(orchestrator);
+      if (!tavilyApiKey) {
+        return { success: false, error: 'MISSING_API_KEY' };
+      }
+
+      const result = await orchestrator.runCompanyResearch?.(
+        payload?.company || '',
+        payload?.role || '',
+        { forceRefresh: !!payload?.forceRefresh }
+      );
+
+      if (!result) {
+        return { success: false, error: 'RESEARCH_UNAVAILABLE' };
+      }
+
+      return {
+        success: true,
+        status: result.status,
+        research: result.research ?? null,
+      };
+    } catch (error: any) {
+      console.error('[IPC] run_company_research error:', error);
+      return {
+        success: false,
+        error: error?.message || 'UNKNOWN_ERROR',
+      };
     }
   });
 

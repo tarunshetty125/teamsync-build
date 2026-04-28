@@ -1472,7 +1472,7 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ({
                                     <ul className="text-[11px] text-text-secondary space-y-1 list-disc pl-4">
                                         <li><strong>Zero Context Prep:</strong> Model inherits your coding stack, experience, etc.</li>
                                         <li><strong>Resume Parsing:</strong> Upload your PDF Resume for local extraction.</li>
-                                        <li><strong>Global Toggle:</strong> Enable <span className="text-amber-500 font-semibold">Profile Mode</span> via the Star button.</li>
+                                        <li><strong>Global Toggle:</strong> Enable <span className="text-amber-500 font-semibold">Profile Intelligence</span> from the Profile Intelligence settings panel.</li>
                                     </ul>
                                 </div>
 

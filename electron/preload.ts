@@ -280,7 +280,9 @@ interface ElectronAPI {
   // JD & Research API
   profileUploadJD: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   profileDeleteJD: () => Promise<{ success: boolean; error?: string }>;
-  profileResearchCompany: (companyName: string) => Promise<{ success: boolean; dossier?: any; error?: string }>;
+  profileResearchCompany: (companyName: string) => Promise<{ success: boolean; status?: string; research?: any; error?: string }>;
+  runCompanyResearch: (company: string, role: string, forceRefresh?: boolean) => Promise<{ success: boolean; status?: string; research?: any; error?: string }>;
+  getTavilyKey: () => Promise<string | null>;
   profileGenerateNegotiation: (force?: boolean) => Promise<{ success: boolean; script?: any; error?: string }>;
   profileGetNegotiationState: () => Promise<{ success: boolean; state?: any; isActive?: boolean; error?: string }>;
   profileResetNegotiation: () => Promise<{ success: boolean; error?: string }>;
@@ -288,6 +290,8 @@ interface ElectronAPI {
   onNegotiationRegenerated: (callback: (data: { regenerated: boolean }) => void) => () => void;
   onGapAnalysisRestored: (callback: (data: { restored: boolean }) => void) => () => void;
   onQuestionsRestored: (callback: (data: { restored: boolean }) => void) => () => void;
+  onProfileResearchUpdated: (callback: (data: { company: string; role: string; updatedAt: string; sourceCount: number }) => void) => () => void;
+  onCompanyResearchReady: (callback: (data: any) => void) => () => void;
   onKnowledgeEngineReady: (callback: (data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => void) => () => void;
   getStartupState: () => Promise<{
     bootstrapComplete: boolean;
@@ -1182,6 +1186,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   profileUploadJD: (filePath: string) => ipcRenderer.invoke('profile:upload-jd', filePath),
   profileDeleteJD: () => ipcRenderer.invoke('profile:delete-jd'),
   profileResearchCompany: (companyName: string) => ipcRenderer.invoke('profile:research-company', companyName),
+  runCompanyResearch: (company: string, role: string, forceRefresh?: boolean) => ipcRenderer.invoke('run_company_research', { company, role, forceRefresh }),
+  getTavilyKey: () => ipcRenderer.invoke('get-tavily-key'),
   profileGenerateNegotiation: (force?: boolean) => ipcRenderer.invoke('profile:generate-negotiation', force),
   profileGetNegotiationState: () => ipcRenderer.invoke('profile:get-negotiation-state'),
   profileResetNegotiation: () => ipcRenderer.invoke('profile:reset-negotiation'),
@@ -1222,6 +1228,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener('profile_research_updated', subscription);
     };
   },
+  onCompanyResearchReady: (callback: (data: any) => void) => {
+    const subscription = (_: any, data: any) => callback(data);
+    ipcRenderer.on('company_research_ready', subscription);
+    return () => {
+      ipcRenderer.removeListener('company_research_ready', subscription);
+    };
+  },
+  onProfileUpdated: (callback: (data: any) => void) => {
+    const subscription = (_: any, data: any) => callback(data);
+    ipcRenderer.on('profile-updated', subscription);
+    return () => {
+      ipcRenderer.removeListener('profile-updated', subscription);
+    };
+  },
+  onProfileModeChanged: (callback: (enabled: boolean) => void) => {
+    const subscription = (_: any, enabled: boolean) => callback(enabled);
+    ipcRenderer.on('profile-mode-changed', subscription);
+    return () => {
+      ipcRenderer.removeListener('profile-mode-changed', subscription);
+    };
+  },
   onKnowledgeEngineReady: (callback: (data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => void) => {
     const subscription = (_: any, data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => callback(data);
     ipcRenderer.on('knowledge_engine_ready', subscription);
@@ -1241,6 +1268,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   licenseActivate: (key: string) => ipcRenderer.invoke('license:activate', key),
   licenseCheckPremium: () => ipcRenderer.invoke('license:check-premium'),
   licenseGetDetails: () => ipcRenderer.invoke('license:get-details'),
+  getUserPlan: () => ipcRenderer.invoke('get_user_plan'),
   licenseCheckPremiumAsync: () => ipcRenderer.invoke('license:check-premium-async'),
   getStartupState: () => ipcRenderer.invoke('app:get-startup-state'),
   getAOTState: () => ipcRenderer.invoke('app:get-aot-state'),

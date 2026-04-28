@@ -667,12 +667,19 @@ export class AppState {
 
       if (typeof orchestrator.setProfileResearchUpdateListener === 'function') {
         orchestrator.setProfileResearchUpdateListener((research: any) => {
+          this.broadcast('company_research_ready', research);
           this.broadcast('profile_research_updated', {
             company: research?.company || '',
             role: research?.role || '',
             updatedAt: research?.updatedAt || new Date().toISOString(),
             sourceCount: research?.sourceCount || 0
           });
+        });
+      }
+
+      if (typeof orchestrator.setProfileUpdateListener === 'function') {
+        orchestrator.setProfileUpdateListener((profile: any) => {
+          this.broadcast('profile-updated', profile);
         });
       }
 

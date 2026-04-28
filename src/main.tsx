@@ -15,7 +15,7 @@ document.documentElement.setAttribute(
 // Step 1: Apply cached theme synchronously — before React renders.
 // This ensures useResolvedTheme()'s initial useState read sees the correct value.
 const cachedTheme = localStorage.getItem(THEME_CACHE_KEY) as 'light' | 'dark' | null;
-document.documentElement.setAttribute('data-theme', cachedTheme ?? 'dark');
+document.documentElement.setAttribute('data-theme', cachedTheme ?? 'light');
 
 // Step 2: Confirm/correct from main process (authoritative) and keep cache in sync.
 if (window.electronAPI?.getThemeMode) {

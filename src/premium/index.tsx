@@ -70,6 +70,10 @@ const _modesSettings = import.meta.glob<any>(
   '../../premium/src/ModesSettings.tsx',
   { eager: true }
 );
+const _researchPanel = import.meta.glob<any>(
+  '../../premium/src/ResearchPanel.tsx',
+  { eager: true }
+);
 
 // ─── Helper ──────────────────────────────────────────────────────────
 function get<T>(mods: Record<string, any>, name: string, fallback: T): T {
@@ -120,3 +124,6 @@ export const MaxUltraUpgradeToaster: React.FC<any> =
 
 export const ModesSettings: React.FC<any> =
   get(_modesSettings, 'default', NullComponent);
+
+export const ResearchPanel: React.FC<any> =
+  get(_researchPanel, 'ResearchPanel', NullComponent);

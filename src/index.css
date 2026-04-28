@@ -24,43 +24,43 @@
 
   /* --- SEMANTIC TOKEN SYSTEM (DEFAULT: DARK) --- */
   /* Reference Image Matching */
-  --bg-sidebar: #18181B;
+  --bg-sidebar: #ffffff;
   /* User Spec: Side Panel */
-  --bg-main: #1E1E21;
+  --bg-main: #f7f8fb;
   /* User Spec: Main BG */
-  --bg-card: #242429;
+  --bg-card: #ffffff;
   /* User Spec: Detectable Container */
 
-  --bg-toggle-switch: #303033;
+  --bg-toggle-switch: #d1d5db;
   /* User Spec: Toggle Button */
-  --bg-item-surface: #27272A;
+  --bg-item-surface: #f3f4f6;
   /* User Spec: Icons & Input Backgrounds */
-  --bg-item-active: #2C2C2C;
+  --bg-item-active: rgba(99, 102, 241, 0.08);
   /* Selected state */
 
-  --bg-primary: #000000;
+  --bg-primary: #f7f8fb;
   /* Fallback */
-  --bg-secondary: #050505;
+  --bg-secondary: #eef1f7;
   /* Fallback */
-  --bg-elevated: #151515;
+  --bg-elevated: #ffffff;
   /* Fallback */
-  --bg-input: #1A1A1A;
+  --bg-input: #f9fafb;
   /* Fallback */
 
-  --text-primary: #ffffff;
-  --text-secondary: #A0A0A0;
-  --text-tertiary: #606060;
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-tertiary: #9ca3af;
 
-  --border-subtle: transparent;
-  --border-muted: #333333;
+  --border-subtle: rgba(229, 231, 235, 1);
+  --border-muted: rgba(209, 213, 219, 1);
 
   --accent-primary: #3b82f6;
   --accent-muted: rgba(59, 130, 246, 0.15);
 
-  --bg-component: #262626;
+  --bg-component: #ffffff;
   /* Specific legacy value */
 
-  --overlay-bg: rgba(30, 30, 30, 0.65);
+  --overlay-bg: rgba(247, 248, 251, 0.82);
 
   --overlay-opacity: 0.65;
   --overlay-border: rgba(255, 255, 255, 0.12);
@@ -249,7 +249,7 @@ body,
   width: 100%;
   overflow: hidden;
   /* Transparent background to let vibrancy show through */
-  background: transparent !important;
+  background: #f7f8fb !important;
   /* System font */
   font-family: var(--font-system);
   /* Smoother fonts */
@@ -265,6 +265,8 @@ body,
 
 body {
   margin: 0;
+  background: #f7f8fb;
+  color: #111827;
   /* cursor: default; -> Removed to let app dictate cursor */
 }
 
