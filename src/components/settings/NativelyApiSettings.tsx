@@ -322,7 +322,7 @@ export const NativelyApiSettings: React.FC = () => {
                 <div className="flex flex-col gap-2.5 mb-4">
                     <div className="flex items-center justify-between">
                         <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-widest">Choose a Plan</p>
-                        <span className="text-[10px] text-text-tertiary">Pro, Max &amp; Ultra include Natively Pro app</span>
+                        <span className="text-[10px] text-text-tertiary">Pro, Max &amp; Ultra include TeamSync Pro app</span>
                     </div>
                     <div className="w-full flex items-center justify-center py-2 bg-violet-500/10 border border-violet-500/20 rounded-[10px]">
                         <span className="text-[11.5px] font-medium text-violet-400/90">
@@ -443,7 +443,7 @@ export const NativelyApiSettings: React.FC = () => {
             {/* ── Page title ───────────────────────────────────── */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-[15px] font-semibold text-text-primary tracking-[-0.01em]">Natively API</h3>
+                    <h3 className="text-[15px] font-semibold text-text-primary tracking-[-0.01em]">TeamSync API</h3>
                     <p className="text-[12px] text-text-tertiary mt-0.5 leading-snug">
                         Managed transcription, AI &amp; search
                     </p>
@@ -525,7 +525,7 @@ export const NativelyApiSettings: React.FC = () => {
                                 <NativelyLogoMark size={20} className={isClaimed ? "text-text-tertiary" : "text-text-primary drop-shadow-sm"} />
                             </div>
                             
-                            <h3 className="text-[14.5px] font-bold text-text-primary tracking-tight mb-1">Natively API. Try it free.</h3>
+                            <h3 className="text-[14.5px] font-bold text-text-primary tracking-tight mb-1">TeamSync API. Try it free.</h3>
                             <p className="text-[12px] text-text-secondary leading-snug px-4 mb-4">
                                 Experience managed text-to-speech, AI models, and real-time research without a subscription.
                             </p>
@@ -603,7 +603,7 @@ export const NativelyApiSettings: React.FC = () => {
                     <div className="min-w-0">
                         <p className="text-[13px] font-semibold text-text-primary">API Key</p>
                         <p className="text-[11px] text-text-tertiary leading-snug mt-0.5">
-                            Your Natively API key from your subscription email
+                            Your TeamSync API key from your subscription email
                         </p>
                     </div>
                 </div>
@@ -633,7 +633,7 @@ export const NativelyApiSettings: React.FC = () => {
                         value={apiKey}
                         onChange={e => { setApiKey(e.target.value); setIsSaved(false); setError(null); }}
                         onKeyDown={e => e.key === 'Enter' && handleSave()}
-                        placeholder="natively_api_..."
+                        placeholder="teamsync_api_..."
                         spellCheck={false}
                         autoComplete="off"
                         className={`w-full bg-bg-input border rounded-xl px-3.5 py-2.5 text-[13px] font-mono text-text-primary
@@ -782,7 +782,7 @@ export const NativelyApiSettings: React.FC = () => {
                         {[
                             { step: '1', text: 'Subscribe above and complete checkout on Dodo Payments.' },
                             { step: '2', text: 'Your API key is emailed instantly to your inbox.'        },
-                            { step: '3', text: 'Paste it here — Natively handles the rest automatically.' },
+                            { step: '3', text: 'Paste it here — TeamSync handles the rest automatically.' },
                         ].map(({ step, text }) => (
                             <div key={step} className="flex items-start gap-3">
                                 <div className="w-5 h-5 rounded-full bg-bg-input border border-border-subtle flex items-center justify-center text-[10px] font-bold text-text-tertiary shrink-0 mt-[1px]">

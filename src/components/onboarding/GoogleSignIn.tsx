@@ -313,7 +313,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
               <div className="absolute inset-0 w-20 h-20 bg-white/10 rounded-3xl blur-[30px] scale-150" />
               <motion.img
                 src={appIcon}
-                alt="Natively"
+                alt="TeamSync"
                 className="w-20 h-20 object-contain relative z-10"
                 animate={{
                   filter: [
@@ -332,7 +332,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
               className="text-[32px] font-semibold text-white tracking-[-0.02em] mb-2 text-center"
               style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}
             >
-              Welcome to Natively
+              Welcome to TeamSync
             </motion.h1>
 
             <motion.p
@@ -530,7 +530,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
               className="mt-12 flex flex-col items-center gap-2"
             >
               <p className="text-[11px] text-white/15 text-center leading-relaxed">
-                By continuing, you agree to Natively's Terms of Service and Privacy Policy.
+                By continuing, you agree to TeamSync's Terms of Service and Privacy Policy.
               </p>
             </motion.div>
 
@@ -542,7 +542,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
                   onSignInComplete({
                     token: 'dev_token',
                     name: 'Developer',
-                    email: 'dev@natively.app',
+                    email: 'dev@teamsync.app',
                     calendarConnected: false,
                     isNewUser: false,
                   });

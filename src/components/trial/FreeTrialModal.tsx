@@ -227,7 +227,7 @@ function ChooseState({ usage, error, reduced, onPro, onMax, onUltra, onStandard,
       <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
 
         <HeroCard
-          title="Natively Pro" price="$15" period="/mo" icon={Zap}
+          title="TeamSync Pro" price="$15" period="/mo" icon={Zap}
           spec="1,000 AI answers · 500 min live STT · 100 searches · Pro App included"
           accent="violet" reduced={reduced} onClick={onPro}
         />
@@ -502,7 +502,7 @@ function ByokRow({ onClick }: { onClick:()=>void }) {
             <span style={{fontSize:'7.5px',fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:C.t4,border:`1px solid rgba(255,255,255,0.12)`,padding:'1.5px 4px',borderRadius:'3px'}}>free</span>
           </div>
           <div style={{fontSize:'10.5px',color:C.t4,marginTop:'1px'}}>
-            Natively API disabled · No Pro features
+            TeamSync API disabled · No Pro features
           </div>
         </div>
         <ArrowRight size={11} strokeWidth={2} color={hov ? C.t2 : C.t3} style={{flexShrink:0,transition:`color 180ms ${EASE}`}} />

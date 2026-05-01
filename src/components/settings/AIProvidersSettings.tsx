@@ -448,7 +448,7 @@ export const AIProvidersSettings: React.FC = () => {
                             const opts: { id: string; name: string }[] = [];
 
                             if (hasStoredKey.natively) {
-                                opts.push({ id: 'natively', name: 'Natively API' });
+                                opts.push({ id: 'natively', name: 'TeamSync API' });
                             }
 
                             for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
@@ -478,7 +478,7 @@ export const AIProvidersSettings: React.FC = () => {
                 {/* Fast Response Mode */}
                 <div
                     className={`bg-bg-item-surface rounded-xl p-5 border border-border-subtle flex items-center justify-between ${!canUseFastMode ? 'opacity-50 grayscale' : ''}`}
-                    title={!canUseFastMode ? "Requires a Groq API Key or Natively API to be configured" : ""}
+                    title={!canUseFastMode ? "Requires a Groq API Key or TeamSync API to be configured" : ""}
                 >
                     <div>
                         <div className="flex items-center gap-2">
@@ -487,13 +487,13 @@ export const AIProvidersSettings: React.FC = () => {
                         </div>
                         <p className="text-[10px] text-text-secondary mt-0.5">Super fast responses using Groq Llama 3 for text. Multimodal requests still use your Default Model.</p>
                         {!canUseFastMode && (
-                            <p className="text-[10px] text-orange-500 mt-0.5 font-medium">Requires a Groq API Key or Natively API to be configured.</p>
+                            <p className="text-[10px] text-orange-500 mt-0.5 font-medium">Requires a Groq API Key or TeamSync API to be configured.</p>
                         )}
                     </div>
                     <div
                         onClick={async () => {
                             if (!canUseFastMode) {
-                                alert("Please configure a Groq API Key or Natively API first to enable Fast Response Mode.");
+                                alert("Please configure a Groq API Key or TeamSync API first to enable Fast Response Mode.");
                                 return;
                             }
                             const newState = !fastResponseMode;
