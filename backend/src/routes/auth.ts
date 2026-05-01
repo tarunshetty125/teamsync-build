@@ -518,7 +518,7 @@ function getCallbackHTML(
   token?: string,
   user?: { name: string; email: string; picture?: string; calendarConnected: boolean; isNewUser: boolean }
 ): string {
-  const data = success
+    const data = success
     ? JSON.stringify({ success: true, token, user })
     : JSON.stringify({ success: false, error: errorMessage });
 
@@ -527,7 +527,7 @@ function getCallbackHTML(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Natively – ${success ? 'Sign In Successful' : 'Sign In Failed'}</title>
+  <title>TeamSync – ${success ? 'Sign In Successful' : 'Sign In Failed'}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -569,7 +569,7 @@ function getCallbackHTML(
   <div class="container">
     <div class="icon">${success ? '✓' : '✕'}</div>
     <h1>${success ? `Welcome, ${user?.name || 'User'}!` : 'Sign In Failed'}</h1>
-    <p>${success ? 'You can close this window and return to Natively.' : (errorMessage || 'Something went wrong.')}</p>
+    <p>${success ? 'You can close this window and return to TeamSync.' : (errorMessage || 'Something went wrong.')}</p>
   </div>
   <script>
     // Send auth result to Electron via custom protocol or window close
