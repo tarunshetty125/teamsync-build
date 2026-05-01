@@ -897,7 +897,7 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ({
 
             <div className="flex-1 space-y-2">
                 
-                {onNavigate && (
+                {/* {onNavigate && (
                     <div 
                         onClick={() => onNavigate('natively-api')}
                         className="mb-8 group cursor-pointer bg-bg-card hover:bg-bg-item-surface border border-border-subtle hover:border-white transition-all rounded-2xl flex items-center justify-between p-4 px-5 shadow-sm hover:shadow-md"
@@ -917,7 +917,7 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ({
                             Enable Now <ArrowRight size={12} />
                         </div>
                     </div>
-                )}
+                )} */}
 
                 <SetupGuide />
 

@@ -3,7 +3,7 @@ import {
     Github, Twitter, Shield, Cpu, Database,
     Heart, Linkedin, Instagram, Mail, MicOff, Star, Bug, Globe, Sparkles, Zap, Camera, LayoutGrid, User
 } from 'lucide-react';
-import evinProfile from '../assets/evin.png';
+import evinProfile from '../assets/icon.png';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { getPlatformShortcut } from '../utils/platformUtils';
 
@@ -64,7 +64,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
 
             {/* What's New Section */}
             <div>
-                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.5</h4>
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.5 (Upcoming)</h4>
                 <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden">
                     <div className="p-3 border-b border-border-subtle bg-bg-card/50">
                         <div className="flex items-start gap-4">

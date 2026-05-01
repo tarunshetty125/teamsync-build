@@ -14,13 +14,21 @@ interface UpcomingEventsPanelProps {
   isLight?: boolean;
 }
 
-const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, syncing = false, onRefresh, isLight = false }) => {
+const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({
+  events,
+  syncing = false,
+  onRefresh,
+  isLight = false,
+}) => {
   const [isPolling, setIsPolling] = useState(false);
-  const [changeMap, setChangeMap] = useState<Record<string, EventChangeType>>({});
+  const [changeMap, setChangeMap] = useState<Record<string, EventChangeType>>(
+    {},
+  );
   const previousSnapshotRef = useRef<Map<string, string>>(new Map());
 
   const filtered = useMemo(() => getEventsNext8Hours(events), [events]);
   const nextUp = filtered[0] || null;
+  const upcomingCount = filtered.length;
 
   useEffect(() => {
     const nextSnapshot = new Map<string, string>();
@@ -60,21 +68,47 @@ const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, synci
 
   return (
     <motion.div
-      initial={{ opacity: 0, transform: "translateY(20px) scale(0.98)", filter: "blur(6px)" }}
-      animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
+      initial={{
+        opacity: 0,
+        transform: "translateY(20px) scale(0.98)",
+        filter: "blur(6px)",
+      }}
+      animate={{
+        opacity: 1,
+        transform: "translateY(0px) scale(1)",
+        filter: "blur(0px)",
+      }}
       transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
       className="h-auto w-full"
     >
       <GlassCard className="w-full flex flex-col items-stretch bg-white/10 border-white/20 p-0">
         <div className="px-4 pt-4 pb-2 shrink-0">
           <div className="flex items-center justify-between">
-            <h3 className={`text-xs font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>Next Up</h3>
+            <h3
+              className={`text-xs font-semibold ${isLight ? "text-slate-900" : "text-white"}`}
+            >
+              Next Up
+            </h3>
             <div className="flex items-center gap-2">
-              {(syncing || isPolling) && <Loader2 size={14} className="animate-spin text-blue-300" />}
+              <span
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                  isLight
+                    ? "bg-slate-100 text-slate-600 border-slate-200"
+                    : "bg-white/10 text-white/80 border-white/10"
+                }`}
+                title="Upcoming meetings in the next 8 hours"
+              >
+                Upcoming meetings: {upcomingCount}
+              </span>
+              {(syncing || isPolling) && (
+                <Loader2 size={14} className="animate-spin text-blue-300" />
+              )}
               <button
                 onClick={() => onRefresh?.()}
                 className={`p-1.5 rounded-md transition-colors ${
-                  isLight ? "bg-white/80 hover:bg-white text-slate-700" : "bg-white/10 hover:bg-white/20 text-white/90"
+                  isLight
+                    ? "bg-white/80 hover:bg-white text-slate-700"
+                    : "bg-white/10 hover:bg-white/20 text-white/90"
                 }`}
                 title="Refresh events"
               >
@@ -86,11 +120,18 @@ const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, synci
 
         <div className="w-full pb-4">
           {nextUp ? (
-            <EventCard event={nextUp} isNextUp isLight={isLight} changeType={changeMap[nextUp.id] || null} />
+            <EventCard
+              event={nextUp}
+              isNextUp
+              isLight={isLight}
+              changeType={changeMap[nextUp.id] || null}
+            />
           ) : (
             <div
               className={`w-full rounded-xl px-4 py-8 text-center text-sm ${
-                isLight ? "border border-slate-200/80 bg-white/75 text-slate-500" : "border border-white/20 bg-white/10 text-white/80"
+                isLight
+                  ? "border border-slate-200/80 bg-white/75 text-slate-500"
+                  : "border border-white/20 bg-white/10 text-white/80"
               }`}
             >
               No upcoming events in the next 8 hours.

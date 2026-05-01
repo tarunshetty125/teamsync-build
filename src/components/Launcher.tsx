@@ -310,6 +310,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         const diff = new Date(e.startTime).getTime() - Date.now();
         return diff > -5 * 60000 && diff < 60 * 60000; // -5 min to +60 min
     });
+    const upcomingCount = getEventsNext8Hours(upcomingEvents).length;
 
     const handlePrepare = (event: any) => {
         setPreparedEvent(event);
@@ -917,6 +918,14 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                                             <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Up Next</span>
                                                             <span className="text-[11px] text-text-tertiary">• Starts in {Math.max(0, Math.ceil((new Date(nextMeeting.startTime).getTime() - Date.now()) / 60000))} min</span>
+                                                            <span
+                                                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                                                                    isLight ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-white/10 text-white/80 border-white/10'
+                                                                }`}
+                                                                title="Upcoming meetings in the next 8 hours"
+                                                            >
+                                                                Upcoming: {upcomingCount}
+                                                            </span>
                                                         </div>
 
                                                         <h2 className="text-xl font-bold text-text-primary leading-tight mb-1 line-clamp-2">
