@@ -57,6 +57,7 @@ interface Props {
 export const TrialPromoToaster: React.FC<Props> = ({
   isOpen, hasNativelyKey, hasTrialToken, onDismiss, onStartTrial, onManualSetup,
 }) => {
+  return null;
   const [visible,  setVisible]  = useState(false);
   const [starting, setStarting] = useState(false);
   const [error,    setError]    = useState<string | null>(null);
