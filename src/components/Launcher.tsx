@@ -124,6 +124,15 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                     // even when there are zero events in the next window.
                     setIsCalendarConnected(true);
                     return;
+                } else if (result && result.success === false) {
+                    // Backend returned an error, e.g. 'Calendar not connected'
+                    // Do not fallback to legacy, since backend is the source of truth
+                    console.warn("Backend calendar fetch returned error:", result.error);
+                    if (result.error === 'Calendar not connected') {
+                        setIsCalendarConnected(false);
+                    }
+                    applyEvents([]);
+                    return;
                 }
             }
         } catch (err) {
@@ -228,6 +237,16 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         if (window.electronAPI?.onCalendarStatusChanged) {
             removeCalendarStatusListener = window.electronAPI.onCalendarStatusChanged((status) => {
                 if (!mounted) return;
+                
+                const token = localStorage.getItem('natively_auth_token');
+                // If we're authenticated via backend, ignore status broadcasts that don't include an email,
+                // because those come from the legacy CalendarManager which might falsely report 'connected'
+                // based on stale local tokens.
+                if (token && status.email === undefined && status.connected) {
+                    console.log("Ignoring legacy calendar status broadcast because backend auth is active.");
+                    return;
+                }
+                
                 setIsCalendarConnected(Boolean(status.connected));
             });
         }

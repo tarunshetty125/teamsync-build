@@ -14,19 +14,24 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
     useEffect(() => {
         // Check localStorage first (backend auth stores calendarConnected in user data)
         const storedUser = localStorage.getItem('natively_auth_user');
+        const hasToken = !!localStorage.getItem('natively_auth_token');
+        let hasBackendConnected = false;
+
         if (storedUser) {
             try {
                 const userData = JSON.parse(storedUser);
                 if (userData.calendarConnected) {
                     setConnected(true);
+                    hasBackendConnected = true;
                     props.onConnect?.();
                 }
             } catch {}
         }
 
         if (window.electronAPI) {
-            // Also check old CalendarManager as fallback
-            if (!connected) {
+            // Also check old CalendarManager as fallback, but ONLY if not authenticated via backend.
+            // If they have a backend token, the backend is the source of truth.
+            if (!hasBackendConnected && !hasToken) {
                 window.electronAPI.getCalendarStatus().then(status => {
                     if (status.connected) {
                         setConnected(true);

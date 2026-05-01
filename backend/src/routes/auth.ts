@@ -99,6 +99,35 @@ router.get('/google/callback', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// POST /auth/calendar/disconnect
+// Disconnects the calendar for the authenticated user
+// ─────────────────────────────────────────────────────────────
+router.post('/calendar/disconnect', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid token' });
+    }
+    const token = authHeader.split(' ')[1];
+    const userPayload = await verifyAndGetUser(token);
+    if (!userPayload) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const users = await getUsersCollection();
+    await users.updateOne(
+      { email: userPayload.email },
+      { $set: { calendarConnected: false } }
+    );
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[AuthRoutes] Failed to disconnect calendar:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // GET /auth/pending
 // Poll this endpoint to pick up the auth result after callback
 // Returns the result once and clears it (one-time read)

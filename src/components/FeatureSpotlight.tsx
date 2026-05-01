@@ -40,7 +40,7 @@ const FEATURES: FeatureSlide[] = [
         ],
         type: 'support',
         actionLabel: 'Contribute to development',
-        url: 'https://buymeacoffee.com/evinjohnn'
+        url: 'https://buymeacoffee.com/TarunShetty256'
     }
 ];
 

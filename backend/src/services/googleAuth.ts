@@ -30,7 +30,7 @@ export function getGoogleAuthUrl(loginHint?: string): string {
     access_type: 'offline',
     scope: SCOPES_BASIC,
     prompt: 'consent',
-    include_granted_scopes: true,
+    // Removed include_granted_scopes so that base login doesn't auto-re-grant calendar scope
   };
 
   if (loginHint) {
