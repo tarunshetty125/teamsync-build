@@ -943,46 +943,36 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                             ) : (
                                                 <div className="md:col-span-2 h-full">
                                                     <div className="relative h-full overflow-hidden">
-                                                        <motion.div
-                                                            animate={
-                                                                showEvents
-                                                                    ? { opacity: 0, transform: "translateY(-20px) scale(0.95)", filter: "blur(6px)" }
-                                                                    : { opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }
-                                                            }
-                                                            transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
-                                                            className="relative h-full"
-                                                            style={{
-                                                                zIndex: showEvents ? 1 : 2,
-                                                                pointerEvents: showEvents ? "none" : "auto",
-                                                            }}
-                                                        >
-                                                            <FeatureSpotlight />
-                                                        </motion.div>
-
-                                                        <motion.div
-                                                            animate={
-                                                                showEvents
-                                                                    ? { opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }
-                                                                    : { opacity: 0, transform: "translateY(22px) scale(0.98)", filter: "blur(6px)" }
-                                                            }
-                                                            transition={{
-                                                                duration: 0.3,
-                                                                delay: showEvents ? 0.12 : 0,
-                                                                ease: [0.23, 1, 0.32, 1],
-                                                            }}
-                                                            className="absolute inset-0"
-                                                            style={{
-                                                                zIndex: showEvents ? 3 : 0,
-                                                                pointerEvents: showEvents ? "auto" : "none",
-                                                            }}
-                                                        >
-                                                            <UpcomingEventsPanel
-                                                                events={upcomingEvents}
-                                                                syncing={isSyncingCalendar || isRefreshing}
-                                                                onRefresh={handleRefresh}
-                                                                isLight={isLight}
-                                                            />
-                                                        </motion.div>
+                                                        <AnimatePresence mode="wait">
+                                                            {showEvents ? (
+                                                                <motion.div
+                                                                    key="upcoming-events"
+                                                                    initial={{ opacity: 0, transform: "translateY(22px) scale(0.98)", filter: "blur(6px)" }}
+                                                                    animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
+                                                                    exit={{ opacity: 0, transform: "translateY(12px) scale(0.98)", filter: "blur(6px)" }}
+                                                                    transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                                                                    className="h-full"
+                                                                >
+                                                                    <UpcomingEventsPanel
+                                                                        events={upcomingEvents}
+                                                                        syncing={isSyncingCalendar || isRefreshing}
+                                                                        onRefresh={handleRefresh}
+                                                                        isLight={isLight}
+                                                                    />
+                                                                </motion.div>
+                                                            ) : (
+                                                                <motion.div
+                                                                    key="feature-spotlight"
+                                                                    initial={{ opacity: 0, transform: "translateY(-12px) scale(0.98)", filter: "blur(6px)" }}
+                                                                    animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
+                                                                    exit={{ opacity: 0, transform: "translateY(-12px) scale(0.98)", filter: "blur(6px)" }}
+                                                                    transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
+                                                                    className="h-full"
+                                                                >
+                                                                    <FeatureSpotlight />
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
                                                     </div>
                                                 </div>
                                             )
@@ -991,34 +981,36 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
 
                                         {/* Right Secondary Card */}
-                                        <div className="md:col-span-1 rounded-xl overflow-hidden bg-bg-elevated relative group flex flex-col items-center pt-6 text-center">
-                                            {/* Backdrop Image */}
-                                            <div className="absolute inset-0">
-                                                <img src={calender} alt="" className="w-full h-full object-cover opacity-100 transition-opacity duration-500 translate-x--1 translate-y-[1px] scale-105" />
-                                            </div>
+                                        {!isPrepared && (
+                                            <div className="md:col-span-1 rounded-xl overflow-hidden bg-bg-elevated relative group flex flex-col items-center pt-6 text-center">
+                                                {/* Backdrop Image */}
+                                                <div className="absolute inset-0">
+                                                    <img src={calender} alt="" className="w-full h-full object-cover opacity-100 transition-opacity duration-500 translate-x--1 translate-y-[1px] scale-105" />
+                                                </div>
 
-                                            {/* Content Layer */}
-                                            <div className="relative z-10 w-full flex flex-col items-center h-full">
-                                                <h3 className="text-[19px] leading-tight mb-4">
-                                                    {isCalendarConnected ? (
-                                                        <>
-                                                            <span className="block font-semibold text-white">Calendar linked</span>
-                                                            <span className="block font-medium text-white/60 text-[0.95em]">Events synced</span>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <span className="block font-semibold text-white">Link your calendar to</span>
-                                                            <span className="block font-medium text-white/60 text-[0.95em]">see upcoming events</span>
-                                                        </>
-                                                    )}
-                                                </h3>
+                                                {/* Content Layer */}
+                                                <div className="relative z-10 w-full flex flex-col items-center h-full">
+                                                    <h3 className="text-[19px] leading-tight mb-4">
+                                                        {isCalendarConnected ? (
+                                                            <>
+                                                                <span className="block font-semibold text-white">Calendar linked</span>
+                                                                <span className="block font-medium text-white/60 text-[0.95em]">Events synced</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span className="block font-semibold text-white">Link your calendar to</span>
+                                                                <span className="block font-medium text-white/60 text-[0.95em]">see upcoming events</span>
+                                                            </>
+                                                        )}
+                                                    </h3>
 
-                                                <ConnectCalendarButton
-                                                    className="-translate-x-0.5"
-                                                    onConnect={() => setIsCalendarConnected(true)}
-                                                />
+                                                    <ConnectCalendarButton
+                                                        className="-translate-x-0.5"
+                                                        onConnect={() => setIsCalendarConnected(true)}
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
                                 </div>
                             </section>

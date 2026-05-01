@@ -61,7 +61,9 @@ module.exports = {
         shimmer: "shimmer 2s linear infinite",
         "text-gradient-wave": "textGradientWave 2s infinite ease-in-out",
         "fade-in-up": "fadeInUp 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards",
-        "scale-in": "scaleIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards"
+        "scale-in": "scaleIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+        "glow-move": "glowMove 12s ease-in-out infinite",
+        breath: "breath 6s ease-in-out infinite"
       },
       keyframes: {
         textGradientWave: {
@@ -99,6 +101,15 @@ module.exports = {
         scaleIn: {
           "0%": { opacity: 0, transform: "scale(0.95)" },
           "100%": { opacity: 1, transform: "scale(1)" }
+        },
+        glowMove: {
+          "0%": { transform: "translate(0%, 0%) rotate(0deg)" },
+          "50%": { transform: "translate(10%, 10%) rotate(180deg)" },
+          "100%": { transform: "translate(0%, 0%) rotate(360deg)" }
+        },
+        breath: {
+          "0%, 100%": { opacity: 0.2 },
+          "50%": { opacity: 0.4 }
         }
       }
     }

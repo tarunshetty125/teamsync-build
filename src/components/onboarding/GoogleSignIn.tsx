@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, useMotionTemplate, useMotionValue, useSpring } from 'framer-motion';
 import appIcon from '../icon.png';
 
 interface GoogleSignInProps {
@@ -285,12 +285,10 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
   const btnXSpring = useSpring(btnX, { stiffness: 260, damping: 28, mass: 0.9 });
   const btnYSpring = useSpring(btnY, { stiffness: 260, damping: 28, mass: 0.9 });
 
-  const highlight = useTransform([btnXSpring, btnYSpring], ([x, y]) => {
-    return `
-      radial-gradient(240px 180px at ${x}% ${y}%, rgba(255,255,255,0.65), rgba(255,255,255,0.10) 55%, rgba(255,255,255,0) 70%),
-      radial-gradient(220px 140px at ${Math.min(92, x + 10)}% ${Math.min(85, y + 16)}%, rgba(66,133,244,0.16), rgba(66,133,244,0) 65%)
+  const highlight = useMotionTemplate`
+      radial-gradient(240px 180px at ${btnXSpring}% ${btnYSpring}%, rgba(255,255,255,0.65), rgba(255,255,255,0.10) 55%, rgba(255,255,255,0) 70%),
+      radial-gradient(220px 140px at clamp(0%, calc(${btnXSpring}% + 10%), 92%) clamp(0%, calc(${btnYSpring}% + 16%), 85%), rgba(66,133,244,0.16), rgba(66,133,244,0) 65%)
     `;
-  });
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#030303] flex items-center justify-center overflow-hidden">
@@ -537,7 +535,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
             </motion.div>
 
             {/* Skip for dev */}
-            {process.env.NODE_ENV === 'development' && (
+            {import.meta.env.DEV && (
               <motion.button
                 variants={itemVariants}
                 onClick={() => {

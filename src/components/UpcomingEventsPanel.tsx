@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Loader2, RefreshCw } from "lucide-react";
 import EventCard from "./EventCard";
 import { getEventsNext8Hours, GoogleCalendarEventLike } from "../utils/filter";
@@ -20,10 +20,7 @@ const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, synci
   const previousSnapshotRef = useRef<Map<string, string>>(new Map());
 
   const filtered = useMemo(() => getEventsNext8Hours(events), [events]);
-  const interviewCount = filtered.filter((event) => event.isInterview).length;
-  const eventCount = filtered.length;
   const nextUp = filtered[0] || null;
-  const remaining = nextUp ? filtered.slice(1) : filtered;
 
   useEffect(() => {
     const nextSnapshot = new Map<string, string>();
@@ -66,12 +63,12 @@ const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, synci
       initial={{ opacity: 0, transform: "translateY(20px) scale(0.98)", filter: "blur(6px)" }}
       animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
       transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
-      className="h-full"
+      className="h-auto w-full"
     >
-      <GlassCard className="h-full p-4 flex flex-col bg-white/10 border-white/20">
-        <div className="pb-2 shrink-0">
+      <GlassCard className="w-full flex flex-col items-stretch bg-white/10 border-white/20 p-0">
+        <div className="px-4 pt-4 pb-2 shrink-0">
           <div className="flex items-center justify-between">
-            <h3 className={`text-xs font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>Next 8 Hours</h3>
+            <h3 className={`text-xs font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>Next Up</h3>
             <div className="flex items-center gap-2">
               {(syncing || isPolling) && <Loader2 size={14} className="animate-spin text-blue-300" />}
               <button
@@ -87,29 +84,18 @@ const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, synci
           </div>
         </div>
 
-        <div className="space-y-2 overflow-y-auto pr-1 min-h-0 flex-1 custom-scrollbar">
-          {nextUp && <EventCard event={nextUp} isNextUp isLight={isLight} changeType={changeMap[nextUp.id] || null} />}
-
-          <AnimatePresence initial={false}>
-            {remaining.map((event) => (
-              <EventCard key={event.id} event={event} isLight={isLight} changeType={changeMap[event.id] || null} />
-            ))}
-          </AnimatePresence>
-
-          {filtered.length === 0 && (
-            <div className={`rounded-xl px-4 py-8 text-center text-sm ${
-              isLight ? "border border-slate-200/80 bg-white/75 text-slate-500" : "border border-white/20 bg-white/10 text-white/80"
-            }`}>
+        <div className="w-full pb-4">
+          {nextUp ? (
+            <EventCard event={nextUp} isNextUp isLight={isLight} changeType={changeMap[nextUp.id] || null} />
+          ) : (
+            <div
+              className={`w-full rounded-xl px-4 py-8 text-center text-sm ${
+                isLight ? "border border-slate-200/80 bg-white/75 text-slate-500" : "border border-white/20 bg-white/10 text-white/80"
+              }`}
+            >
               No upcoming events in the next 8 hours.
             </div>
           )}
-        </div>
-
-        <div className={`mt-2 pt-2 border-t text-[11px] shrink-0 ${isLight ? "border-slate-200/85 text-slate-600" : "border-white/20 text-white/90"}`}>
-          🤖 You have <span className={`font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>{eventCount}</span> upcoming events in the next 8 hours
-          {eventCount > 0 ? (
-            <> · <span className={`font-semibold ${isLight ? "text-slate-900" : "text-white"}`}>{interviewCount}</span> interview{interviewCount === 1 ? "" : "s"} detected</>
-          ) : null}
         </div>
       </GlassCard>
     </motion.div>
