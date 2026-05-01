@@ -248,8 +248,11 @@ body,
   height: 100%;
   width: 100%;
   overflow: hidden;
-  /* Transparent background to let vibrancy show through */
-  background: #f7f8fb !important;
+  /* Transparent background — critical for Electron overlay transparency.
+     Each window's root React component provides its own background. */
+  background: transparent !important;
+  margin: 0;
+  padding: 0;
   /* System font */
   font-family: var(--font-system);
   /* Smoother fonts */
@@ -265,7 +268,8 @@ body,
 
 body {
   margin: 0;
-  background: #f7f8fb;
+  padding: 0;
+  background: transparent !important;
   color: #111827;
   /* cursor: default; -> Removed to let app dictate cursor */
 }
@@ -615,4 +619,31 @@ html[data-platform="win32"] body,
 html[data-platform="linux"] body {
   border-radius: 8px !important;
   overflow: hidden;
+}
+
+/* ── Suggestion button recommended glow ─────────────────────────────────── */
+@keyframes suggestion-breathe {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.10);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.20);
+  }
+}
+
+.suggestion-glow {
+  animation: suggestion-breathe 2.8s ease-in-out infinite;
+}
+
+[data-theme='light'] .suggestion-glow {
+  animation-name: suggestion-breathe-light;
+}
+
+@keyframes suggestion-breathe-light {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(37, 99, 235, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(37, 99, 235, 0.16);
+  }
 }

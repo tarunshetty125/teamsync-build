@@ -180,30 +180,51 @@ class ZeroShotClassifier {
 // ========================
 
 /**
+ * Normalize text for pattern matching (fix OCR/STT artifacts)
+ */
+function normalizeForDetection(text: string): string {
+    let q = text.toLowerCase().trim();
+    // Fix broken OCR/speech: "polymor. phism" → "polymorphism"
+    q = q.replace(/(\w)\.\s+(\w)/g, '$1$2');
+    // Remove filler words
+    q = q.replace(/\b(yeah|um|uh|uh+m|like|so|okay|ok|well|you know|i mean|basically|actually|right)\b/g, ' ');
+    // Collapse whitespace
+    q = q.replace(/\s+/g, ' ').trim();
+    return q;
+}
+
+/**
  * Pattern-based intent detection (fast, no model call)
  * For common patterns this is sufficient
+ *
+ * PRIORITY ORDER: coding > behavioral > deep_dive > clarification > follow_up > example > summary
  */
 function detectIntentByPattern(lastInterviewerTurn: string): IntentResult | null {
-    const text = lastInterviewerTurn.toLowerCase().trim();
+    const text = normalizeForDetection(lastInterviewerTurn);
+
+    // HIGHEST PRIORITY: Coding patterns (must be checked first so mixed coding+concept → coding)
+    if (/(write code|write a? ?(?:function|program|method|class|script)|program|implement|function for|algorithm|how to code|setup a .* project|using .* library|debug this|snippet|boilerplate|example of .* in .*|optimize|refactor|best practice for .* code|utility method|component for|logic for|reverse|sort|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|recursive|iterate|loop|pointer|two pointer|sliding window|backtrack|greedy|bfs|dfs|matrix|string manipulation|big o|time complexity|space complexity|fibonacci|palindrome|anagram|substring|subarray|merge sort|quick sort|bubble sort|insertion sort|heap|trie|topological|shortest path|factorial|prime|duplicate|remove duplicates|flatten|depth first|breadth first|binary tree|level order|in ?order traversal|pre ?order|post ?order|promise|async await|callback)/i.test(text)) {
+        return { intent: 'coding', confidence: 0.9, answerShape: INTENT_ANSWER_SHAPES.coding };
+    }
+
+    // Behavioral patterns
+    if (/(give me an example|tell me about a time|describe a situation|when have you|share an experience|tell me about|experience|challenge|conflict|pressure|teamwork|strength|weakness|leader(?:ship)?|mentor|mistake|failure|difficult|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment)/i.test(text)) {
+        return { intent: 'behavioral', confidence: 0.9, answerShape: INTENT_ANSWER_SHAPES.behavioral };
+    }
+
+    // Deep dive patterns (includes indirect phrasing)
+    if (/(tell me more|dive deeper|explain further|walk me through|how does that work|can you walk me through|how would you approach|how would you go about|what happens when|what would happen if|talk me through|take me through|step me through)/i.test(text)) {
+        return { intent: 'deep_dive', confidence: 0.85, answerShape: INTENT_ANSWER_SHAPES.deep_dive };
+    }
 
     // Clarification patterns
-    if (/(can you explain|what do you mean|clarify|could you elaborate on that specific)/i.test(text)) {
+    if (/(can you explain|what do you mean|clarify|could you elaborate on that specific|could you explain|what is|what's|what are|explain|define|definition|difference between|compare)/i.test(text)) {
         return { intent: 'clarification', confidence: 0.9, answerShape: INTENT_ANSWER_SHAPES.clarification };
     }
 
     // Follow-up patterns  
     if (/(what happened|then what|and after that|what.s next|how did that go)/i.test(text)) {
         return { intent: 'follow_up', confidence: 0.85, answerShape: INTENT_ANSWER_SHAPES.follow_up };
-    }
-
-    // Deep dive patterns
-    if (/(tell me more|dive deeper|explain further|walk me through|how does that work)/i.test(text)) {
-        return { intent: 'deep_dive', confidence: 0.85, answerShape: INTENT_ANSWER_SHAPES.deep_dive };
-    }
-
-    // Behavioral patterns
-    if (/(give me an example|tell me about a time|describe a situation|when have you|share an experience)/i.test(text)) {
-        return { intent: 'behavioral', confidence: 0.9, answerShape: INTENT_ANSWER_SHAPES.behavioral };
     }
 
     // Example request patterns
@@ -214,11 +235,6 @@ function detectIntentByPattern(lastInterviewerTurn: string): IntentResult | null
     // Summary probe patterns
     if (/(so to summarize|in summary|so basically|so you.re saying|let me make sure)/i.test(text)) {
         return { intent: 'summary_probe', confidence: 0.85, answerShape: INTENT_ANSWER_SHAPES.summary_probe };
-    }
-
-    // Coding patterns (Broad detection for programming/implementation)
-    if (/(write code|program|implement|function for|algorithm|how to code|setup a .* project|using .* library|debug this|snippet|boilerplate|example of .* in .*|optimize|refactor|best practice for .* code|utility method|component for|logic for)/i.test(text)) {
-        return { intent: 'coding', confidence: 0.9, answerShape: INTENT_ANSWER_SHAPES.coding };
     }
 
     return null; // No clear pattern detected

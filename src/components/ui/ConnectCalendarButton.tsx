@@ -12,34 +12,115 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
     const [connected, setConnected] = useState(false);
 
     useEffect(() => {
+        // Check localStorage first (backend auth stores calendarConnected in user data)
+        const storedUser = localStorage.getItem('natively_auth_user');
+        if (storedUser) {
+            try {
+                const userData = JSON.parse(storedUser);
+                if (userData.calendarConnected) {
+                    setConnected(true);
+                    props.onConnect?.();
+                }
+            } catch {}
+        }
+
         if (window.electronAPI) {
-            window.electronAPI.getCalendarStatus().then(status => {
+            // Also check old CalendarManager as fallback
+            if (!connected) {
+                window.electronAPI.getCalendarStatus().then(status => {
+                    if (status.connected) {
+                        setConnected(true);
+                        props.onConnect?.();
+                    }
+                });
+            }
+
+            // Listen for calendar status changes from other views (Settings <-> Launcher sync)
+            const unsubscribe = window.electronAPI.onCalendarStatusChanged?.((status) => {
                 setConnected(status.connected);
+                const storedUser = localStorage.getItem('natively_auth_user');
+                if (storedUser) {
+                    try {
+                        const userData = JSON.parse(storedUser);
+                        userData.calendarConnected = status.connected;
+                        if (status.email) userData.email = status.email;
+                        localStorage.setItem('natively_auth_user', JSON.stringify(userData));
+                    } catch {
+                        // Ignore malformed local storage payload.
+                    }
+                }
                 if (status.connected) {
                     props.onConnect?.();
                 }
             });
+
+            return () => { unsubscribe?.(); };
         }
     }, []);
 
     const handleClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
         if (props.onClick) props.onClick(e);
-        if (connected) return; // For now no disconnect here
+        if (connected) return;
 
         setLoading(true);
         try {
-            const res = await window.electronAPI.calendarConnect();
-            if (res.success) {
-                setConnected(true);
-                props.onConnect?.();
-                // Track calendar connection
-                import('../../lib/analytics/analytics.service').then(({ analytics }) => {
-                    analytics.trackCalendarConnected();
-                });
+            // Use the backend Google OAuth flow for calendar access
+            // Get the logged-in user's email for login hint
+            const storedUser = localStorage.getItem('natively_auth_user');
+            const email = storedUser ? JSON.parse(storedUser)?.email : undefined;
+
+            // Open calendar auth in browser via backend
+            const res = await fetch('http://localhost:3456/auth/google/calendar' + 
+                (email ? `?login_hint=${encodeURIComponent(email)}` : ''));
+            if (!res.ok) throw new Error('Failed to get calendar auth URL');
+            
+            const { url } = await res.json();
+            
+            // Open in external browser
+            if (window.electronAPI?.openExternal) {
+                await window.electronAPI.openExternal(url);
+            } else {
+                window.open(url, '_blank');
             }
+
+            // Poll backend for auth completion
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                if (attempts >= 120) {
+                    clearInterval(pollInterval);
+                    setLoading(false);
+                    return;
+                }
+                try {
+                    const pendingRes = await fetch('http://localhost:3456/auth/pending');
+                    if (!pendingRes.ok) return;
+                    const data = await pendingRes.json();
+                    if (data.pending) return;
+
+                    clearInterval(pollInterval);
+                    if (data.success && data.user?.calendarConnected) {
+                        setConnected(true);
+                        props.onConnect?.();
+                        // Update stored user data with calendar status
+                        if (data.token) {
+                            localStorage.setItem('natively_auth_token', data.token);
+                        }
+                        if (data.user) {
+                            localStorage.setItem('natively_auth_user', JSON.stringify(data.user));
+                        }
+                        // Track calendar connection
+                        import('../../lib/analytics/analytics.service').then(({ analytics }) => {
+                            analytics.trackCalendarConnected();
+                        });
+                    }
+                    setLoading(false);
+                } catch {
+                    // Keep polling
+                }
+            }, 1000);
         } catch (err) {
             console.error(err);
-        } finally {
             setLoading(false);
         }
     };

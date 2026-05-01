@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { NativelyLogoMark } from '../NativelyLogoMark';
 import { FreeTrialModal } from '../trial/FreeTrialModal';
+import GlossyPillButton from '../ui/GlossyPillButton';
 
 // ─── Types ───────────────────────────────────────────────────
 interface QuotaBucket { used: number; limit: number; remaining: number; }
@@ -654,20 +655,28 @@ export const NativelyApiSettings: React.FC = () => {
                     )}
 
                     {/* Save button */}
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving || !isDirty}
-                        className={`w-full py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 select-none
-                            ${isSaving         ? 'bg-button-primary-disabled-bg border border-button-primary-disabled-border text-button-primary-disabled-text cursor-wait'
-                            : justSaved        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-pointer'
-                            : !isDirty         ? 'bg-button-primary-disabled-bg border border-button-primary-disabled-border text-button-primary-disabled-text cursor-default'
-                            :                   'bg-button-primary-bg hover:bg-button-primary-hover text-white shadow-sm active:scale-[0.99] cursor-pointer'
-                            }`}
-                    >
-                        {isSaving   ? <span className="flex items-center justify-center gap-2"><Loader2 size={13} className="animate-spin" />Saving…</span>
-                        : justSaved ? <span className="flex items-center justify-center gap-2"><CheckCircle size={13} />Saved</span>
-                        :             'Save key'}
-                    </button>
+                    {isDirty && !isSaving && !justSaved ? (
+                        <GlossyPillButton
+                            onClick={handleSave}
+                            className="w-full py-2.5 text-[13px] font-medium"
+                        >
+                            Save key
+                        </GlossyPillButton>
+                    ) : (
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving || !isDirty}
+                            className={`w-full py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 select-none
+                                ${isSaving         ? 'bg-button-primary-disabled-bg border border-button-primary-disabled-border text-button-primary-disabled-text cursor-wait'
+                                : justSaved        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-pointer'
+                                :                   'bg-button-primary-disabled-bg border border-button-primary-disabled-border text-button-primary-disabled-text cursor-default'
+                                }`}
+                        >
+                            {isSaving   ? <span className="flex items-center justify-center gap-2"><Loader2 size={13} className="animate-spin" />Saving…</span>
+                            : justSaved ? <span className="flex items-center justify-center gap-2"><CheckCircle size={13} />Saved</span>
+                            :             'Save key'}
+                        </button>
+                    )}
 
                     {/* Hint */}
                     <p className="text-[11px] text-text-secondary leading-relaxed text-center">

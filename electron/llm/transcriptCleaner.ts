@@ -24,11 +24,42 @@ const ACKNOWLEDGEMENTS = new Set([
 ]);
 
 /**
+ * Fix speech-broken words caused by STT mid-word splits.
+ * e.g., "polymor. phism" → "polymorphism", "data. base" → "database"
+ * Handles period, comma, and dash breaks between word fragments.
+ */
+function fixBrokenWords(text: string): string {
+    // Join fragments split by ". ", ", ", or "- " mid-word (lowercase letter before, lowercase after)
+    // e.g., "polymor. phism" → "polymorphism"
+    let result = text.replace(/([a-z])[.,\-]\s+([a-z])/gi, (_, before, after) => {
+        return before + after;
+    });
+
+    // Remove orphaned periods that aren't sentence-ending (not preceded by 2+ word chars)
+    // e.g., "tell me about. the project" → "tell me about the project"
+    result = result.replace(/\.\s+(?=[a-z])/gi, ' ');
+
+    return result;
+}
+
+/**
+ * Strip leading filler words from the beginning of an utterance.
+ * e.g., "yeah so like what is polymorphism" → "what is polymorphism"
+ */
+const LEADING_FILLER_PATTERN = /^(?:(?:yeah|ok|okay|so|like|uh|um|ah|well|right|sure|hmm|actually|basically)\s*[,.]?\s*)+/i;
+
+/**
  * Clean a single turn's text
- * Removes fillers, acknowledgements, and cleans up formatting
+ * Removes fillers, acknowledgements, fixes speech artifacts, and cleans up formatting
  */
 function cleanText(text: string): string {
     let result = text.toLowerCase().trim();
+
+    // Fix speech-broken words before any other processing
+    result = fixBrokenWords(result);
+
+    // Strip leading filler words (e.g., "yeah so like what is..." → "what is...")
+    result = result.replace(LEADING_FILLER_PATTERN, '');
 
     // Remove repeated words (yeah yeah, okay okay)
     result = result.replace(/\b(\w+)(\s+\1)+\b/gi, '$1');

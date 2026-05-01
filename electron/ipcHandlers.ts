@@ -98,7 +98,23 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  // ─── Helper: generate stable device ID from hardware info ───
+  const crypto = require('crypto');
+  const getDeviceId = (): string => {
+    const cpus = os.cpus();
+    const raw = [
+      os.hostname(),
+      os.userInfo().username,
+      os.platform(),
+      os.arch(),
+      cpus.length > 0 ? cpus[0].model : 'unknown',
+      os.totalmem().toString(),
+    ].join('|');
+    return crypto.createHash('sha256').update(raw).digest('hex');
+  };
+
   safeHandle("license:activate", async (event, key: string) => {
+    // Try the existing premium LicenseManager first (Dodo server)
     try {
       const { LicenseManager } = require('../premium/electron/services/LicenseManager');
       const result = await LicenseManager.getInstance().activateLicense(key);
@@ -107,20 +123,55 @@ export function initializeIpcHandlers(appState: AppState): void {
         BrowserWindow.getAllWindows().forEach(win => {
           if (!win.isDestroyed()) win.webContents.send('license-status-changed', planState);
         });
+        return result;
       }
-      return result;
+      // If Dodo fails, fall through to MongoDB
     } catch (err: any) {
-      // Only show generic message if the premium module itself is missing.
-      // activateLicense() returns {success:false, error} for all expected failures
-      // (bad key, network error, etc.) — it should never throw in normal operation.
-      console.error('[IPC] license:activate unexpected error:', err);
-      return { success: false, error: 'Premium features not available in this build.' };
+      console.log('[IPC] LicenseManager not available, trying MongoDB verification...');
+    }
+
+    // Fallback: check key against MongoDB (natively.licenseverify)
+    // New key → register with this device's ID
+    // Existing key + same device → already active, no worries
+    // Existing key + different device → rejected
+    try {
+      const deviceId = getDeviceId();
+      const response = await fetch('http://localhost:3456/auth/license/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ licenseKey: key, deviceId }),
+      });
+
+      const mongoResult = await response.json();
+      if (mongoResult?.success) {
+        BrowserWindow.getAllWindows().forEach(win => {
+          if (!win.isDestroyed()) win.webContents.send('license-status-changed', { isPremium: true, plan: mongoResult.plan || 'pro' });
+        });
+      }
+      return mongoResult;
+    } catch (mongoErr: any) {
+      console.error('[IPC] MongoDB license:activate also failed:', mongoErr);
+      return { success: false, error: 'License verification unavailable. Please ensure the backend server is running.' };
     }
   });
   safeHandle("license:check-premium", async () => {
     try {
       const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      return LicenseManager.getInstance().isPremium();
+      const result = LicenseManager.getInstance().isPremium();
+      if (result) return result;
+    } catch { /* fall through to MongoDB */ }
+
+    // Fallback: check if this device has an active license in MongoDB
+    try {
+      const deviceId = getDeviceId();
+      const response = await fetch('http://localhost:3456/auth/license/check-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId }),
+      });
+      if (!response.ok) return false;
+      const data = await response.json();
+      return data.isPremium === true;
     } catch {
       return false;
     }
@@ -129,7 +180,30 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("license:get-details", async () => {
     try {
       const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      return LicenseManager.getInstance().getLicenseDetails();
+      const details = LicenseManager.getInstance().getLicenseDetails();
+      if (details?.isPremium) return details;
+    } catch { /* fall through */ }
+
+    // Fallback: check MongoDB by deviceId
+    try {
+      const deviceId = getDeviceId();
+      const response = await fetch('http://localhost:3456/auth/license/check-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId }),
+      });
+      if (!response.ok) return { isPremium: false };
+      const data = await response.json();
+      if (data.isPremium) {
+        return {
+          isPremium: true,
+          plan: data.plan || 'pro',
+          key: data.licenseKey,
+          provider: 'mongodb',
+          activatedAt: data.activatedAt,
+        };
+      }
+      return { isPremium: false };
     } catch {
       return { isPremium: false };
     }
@@ -231,7 +305,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       const { LicenseManager } = require('../premium/electron/services/LicenseManager');
       return LicenseManager.getInstance().getHardwareId();
     } catch {
-      return 'unavailable';
+      return getDeviceId();
     }
   });
 
@@ -1662,6 +1736,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setGroqSttApiKey(apiKey);
+
+      // Reconfigure the in-memory audio pipeline so the new key takes effect immediately
+      await appState.reconfigureSttProvider();
+
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) win.webContents.send('credentials-changed');
       });
@@ -1676,6 +1754,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setOpenAiSttApiKey(apiKey);
+
+      // Reconfigure the in-memory audio pipeline so the new key takes effect immediately
+      await appState.reconfigureSttProvider();
+
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) win.webContents.send('credentials-changed');
       });
@@ -1689,7 +1771,19 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("set-deepgram-api-key", async (_, apiKey: string) => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
-      CredentialsManager.getInstance().setDeepgramApiKey(apiKey);
+      const cm = CredentialsManager.getInstance();
+      cm.setDeepgramApiKey(apiKey);
+
+      // Auto-promote STT provider to 'deepgram' if currently 'none' and a key was provided
+      const trimmedKey = apiKey?.trim();
+      if (trimmedKey && cm.getSttProvider() === 'none') {
+        cm.setSttProvider('deepgram');
+        console.log('[IPC] set-deepgram-api-key: Auto-promoted STT provider to deepgram');
+      }
+
+      // Reconfigure the in-memory audio pipeline so the new key takes effect immediately
+      await appState.reconfigureSttProvider();
+
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) win.webContents.send('credentials-changed');
       });
@@ -1719,6 +1813,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setElevenLabsApiKey(apiKey);
+
+      // Reconfigure the in-memory audio pipeline so the new key takes effect immediately
+      await appState.reconfigureSttProvider();
+
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) win.webContents.send('credentials-changed');
       });
@@ -1770,6 +1868,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setSonioxApiKey(apiKey);
+
+      // Reconfigure the in-memory audio pipeline so the new key takes effect immediately
+      await appState.reconfigureSttProvider();
+
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) win.webContents.send('credentials-changed');
       });
@@ -2539,6 +2641,15 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CalendarManager } = require('./services/CalendarManager');
       await CalendarManager.getInstance().startAuthFlow();
+
+      // Broadcast calendar connected to all windows (Launcher <-> Settings sync)
+      const status = CalendarManager.getInstance().getConnectionStatus();
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('calendar-status-changed', status);
+        }
+      });
+
       return { success: true };
     } catch (error: any) {
       console.error("Calendar auth error:", error);
@@ -2549,6 +2660,14 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("calendar-disconnect", async () => {
     const { CalendarManager } = require('./services/CalendarManager');
     await CalendarManager.getInstance().disconnect();
+
+    // Broadcast calendar disconnected to all windows (Launcher <-> Settings sync)
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('calendar-status-changed', { connected: false, email: null });
+      }
+    });
+
     return { success: true };
   });
 

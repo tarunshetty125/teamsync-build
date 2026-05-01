@@ -257,6 +257,7 @@ import { SettingsManager } from "./services/SettingsManager"
 import { setVerboseLoggingFlag } from "./verboseLog"
 import { ReleaseNotesManager } from "./update/ReleaseNotesManager"
 import { OllamaManager } from './services/OllamaManager'
+import { GoogleAuthManager } from './services/GoogleAuthManager'
 
 export class AppState {
   private static instance: AppState | null = null
@@ -532,6 +533,9 @@ export class AppState {
 
     // Initialize Auto-Updater
     this.setupAutoUpdater()
+
+    // Initialize Google Auth Manager (server-side OAuth + MongoDB)
+    GoogleAuthManager.getInstance().setupIpcHandlers();
   }
 
   private broadcast(channel: string, ...args: any[]): void {
@@ -1049,6 +1053,23 @@ export class AppState {
       }
     }
 
+    // Diagnostic logging: show which adapters are available so pipeline issues are easy to trace
+    const available = adapters.filter(a => a.isAvailable()).map(a => a.name);
+    const unavailable = adapters.filter(a => !a.isAvailable()).map(a => a.name);
+    console.log(
+      `[Main] STT adapters for ${speaker}: total=${adapters.length} available=[${available.join(', ')}] unavailable=[${unavailable.join(', ')}]` +
+      (config.deepgramApiKey ? '' : ' (no Deepgram API key)') +
+      (config.googleCredentialsPath ? '' : ' (no Google credentials)')
+    );
+
+    if (available.length === 0 && adapters.length > 0) {
+      console.error(
+        `[Main] ⚠️ All ${adapters.length} STT adapters are unavailable for ${speaker}. ` +
+        `Check that at least one provider has valid credentials configured. ` +
+        `Provider: ${configuredProvider}, Priority: ${config.priorityOrder.join(' -> ')}`
+      );
+    }
+
     const stt = new SttSupervisor({
       sourceLabel: speaker,
       adapters,
@@ -1475,6 +1496,26 @@ export class AppState {
     const { CredentialsManager: CM } = require('./services/CredentialsManager');
     const newProvider = CM.getInstance().getSttProvider();
     this.broadcast('stt-config-changed', { configured: newProvider !== 'none', provider: newProvider });
+
+    // Broadcast initial stt-status for both channels so the overlay UI refreshes immediately
+    // (prevents stale 'reconnecting' labels after a provider switch)
+    for (const ch of ['interviewer', 'user'] as const) {
+      const sttInstance = ch === 'interviewer' ? this.googleSTT : this.googleSTT_User;
+      if (sttInstance) {
+        const activeName = sttInstance.getActiveProviderName();
+        this.broadcast('stt-status', {
+          state: activeName === 'inactive' ? 'reconnecting' : 'connected',
+          provider: activeName === 'inactive' ? newProvider : activeName,
+          channel: ch,
+        } as SttStatusPayload);
+      } else if (newProvider === 'none') {
+        this.broadcast('stt-status', {
+          state: 'connected',
+          provider: 'none',
+          channel: ch,
+        } as SttStatusPayload);
+      }
+    }
   }
 
   /**

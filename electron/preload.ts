@@ -1347,6 +1347,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
   modesUpdateNoteSection: (id: string, updates: { title?: string; description?: string }) => ipcRenderer.invoke('modes:update-note-section', id, updates),
   modesDeleteNoteSection: (id: string) => ipcRenderer.invoke('modes:delete-note-section', id),
   modesRemoveAllNoteSections: (modeId: string) => ipcRenderer.invoke('modes:remove-all-note-sections', modeId),
+
+  // Google Auth (Server-side OAuth + MongoDB)
+  googleSignIn: () => ipcRenderer.invoke('auth:google-signin'),
+  googleVerifyToken: (token: string) => ipcRenderer.invoke('auth:verify-token', token),
+  googleConnectCalendar: (loginHint: string) => ipcRenderer.invoke('auth:connect-calendar', loginHint),
+  googleGetCalendarEvents: (token: string) => ipcRenderer.invoke('auth:calendar-events', token),
+  googleLogout: (token?: string) => ipcRenderer.invoke('auth:logout', token),
+  onAuthResult: (callback: (result: any) => void) => {
+    const subscription = (_: any, result: any) => callback(result);
+    ipcRenderer.on('auth:result', subscription);
+    return () => { ipcRenderer.removeListener('auth:result', subscription); };
+  },
+  onAuthLoggedOut: (callback: () => void) => {
+    const subscription = () => callback();
+    ipcRenderer.on('auth:logged-out', subscription);
+    return () => { ipcRenderer.removeListener('auth:logged-out', subscription); };
+  },
+
+  // Calendar status sync (Launcher <-> Settings)
+  onCalendarStatusChanged: (callback: (status: { connected: boolean; email: string | null }) => void) => {
+    const subscription = (_: any, status: any) => callback(status);
+    ipcRenderer.on('calendar-status-changed', subscription);
+    return () => { ipcRenderer.removeListener('calendar-status-changed', subscription); };
+  },
 } as ElectronAPI)
 
 // Renderer-side console forwarding to main-process log file.

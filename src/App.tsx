@@ -15,6 +15,7 @@ import { FreeTrialBanner }      from "./components/trial/FreeTrialBanner"
 import { FreeTrialModal }       from "./components/trial/FreeTrialModal"
 import { TrialPromoToaster }    from "./components/trial/TrialPromoToaster"
 import { PermissionsToaster }   from "./components/onboarding/PermissionsToaster"
+import GoogleSignIn from "./components/onboarding/GoogleSignIn"
 import { AlertCircle } from "lucide-react"
 import { clampOverlayOpacity, OVERLAY_OPACITY_DEFAULT, getDefaultOverlayOpacity } from "./lib/overlayAppearance"
 import {
@@ -88,6 +89,13 @@ const App: React.FC = () => {
 
   // State
   const [showStartup, setShowStartup] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return !!localStorage.getItem('natively_auth_token');
+  });
+  const [authUser, setAuthUser] = useState<{ name: string; email: string; picture?: string } | null>(() => {
+    const stored = localStorage.getItem('natively_auth_user');
+    return stored ? JSON.parse(stored) : null;
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState('general');
   const [isModesOpen, setIsModesOpen] = useState(false);
@@ -487,6 +495,26 @@ const App: React.FC = () => {
             exit={{ opacity: 0, scale: 1.1, pointerEvents: "none", transition: { duration: 0.6, ease: "easeInOut" } }}
           >
             <StartupSequence isReady={bootstrapUiReady} onComplete={() => setShowStartup(false)} />
+          </motion.div>
+        ) : !isAuthenticated ? (
+          <motion.div
+            key="auth"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 1.05, transition: { duration: 0.5, ease: "easeInOut" } }}
+          >
+            <GoogleSignIn
+              onSignInComplete={(userData) => {
+                localStorage.setItem('natively_auth_token', userData.token);
+                localStorage.setItem('natively_auth_user', JSON.stringify({
+                  name: userData.name,
+                  email: userData.email,
+                  picture: userData.picture,
+                }));
+                setAuthUser({ name: userData.name, email: userData.email, picture: userData.picture });
+                setIsAuthenticated(true);
+              }}
+            />
           </motion.div>
         ) : (
           <motion.div

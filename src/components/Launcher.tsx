@@ -10,11 +10,13 @@ import TopSearchPill from './TopSearchPill';
 import GlobalChatOverlay from './GlobalChatOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FeatureSpotlight } from './FeatureSpotlight';
+import UpcomingEventsPanel from './UpcomingEventsPanel';
 import { analytics } from '../lib/analytics/analytics.service'; // Added analytics import
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { isMac } from '../utils/platformUtils';
 import WindowControls from './WindowControls';
+import { getEventsNext8Hours } from '../utils/filter';
 
 interface Meeting {
     id: string;
@@ -87,6 +89,8 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const [preparedEvent, setPreparedEvent] = useState<any>(null);
     const [isCalendarConnected, setIsCalendarConnected] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [showEvents, setShowEvents] = useState(false);
+    const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
     const [showNotification, setShowNotification] = useState(false);
 
     // Global search state (for AI chat overlay)
@@ -101,30 +105,68 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         }
     };
 
-    const fetchEvents = () => {
-        if (window.electronAPI && window.electronAPI.getUpcomingEvents) {
-            window.electronAPI.getUpcomingEvents().then(setUpcomingEvents).catch(err => console.error("Failed to fetch events:", err));
+    const applyEvents = (events: any[]) => {
+        const safeEvents = Array.isArray(events) ? events : [];
+        setUpcomingEvents(safeEvents);
+        const hasUpcomingInNext8Hours = getEventsNext8Hours(safeEvents).length > 0;
+        setShowEvents(hasUpcomingInNext8Hours);
+    };
+
+    const fetchEvents = async () => {
+        try {
+            // Primary path: backend-auth Google calendar (token-based)
+            const token = localStorage.getItem('natively_auth_token');
+            if (token && window.electronAPI?.googleGetCalendarEvents) {
+                const result = await window.electronAPI.googleGetCalendarEvents(token);
+                if (result?.events && Array.isArray(result.events)) {
+                    applyEvents(result.events);
+                    // Backend responded with events payload => calendar connection is valid,
+                    // even when there are zero events in the next window.
+                    setIsCalendarConnected(true);
+                    return;
+                }
+            }
+        } catch (err) {
+            console.warn("Backend calendar fetch failed, falling back to local calendar manager:", err);
         }
-    }
+
+        // Fallback path: legacy local CalendarManager
+        if (window.electronAPI?.getUpcomingEvents) {
+            window.electronAPI
+                .getUpcomingEvents()
+                .then((events) => applyEvents(events))
+                .catch(err => console.error("Failed to fetch events:", err));
+        }
+    };
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
+        setIsSyncingCalendar(true);
         analytics.trackCommandExecuted('refresh_calendar');
+
         try {
-            if (window.electronAPI && window.electronAPI.calendarRefresh) {
-                setShowNotification(true);
-                await window.electronAPI.calendarRefresh();
-                fetchEvents();
-                fetchMeetings();
-                setTimeout(() => {
-                    setShowNotification(false);
-                }, 3000);
-            } else {
-                console.warn("electronAPI.calendarRefresh not found");
+            setShowNotification(true);
+
+            const token = localStorage.getItem('natively_auth_token');
+            // If backend auth token exists, refresh from backend only.
+            // This avoids noisy legacy CalendarManager "not connected" logs.
+            if (!token && window.electronAPI?.calendarRefresh) {
+                try {
+                    await window.electronAPI.calendarRefresh();
+                } catch {
+                    // Best-effort for legacy path only.
+                }
             }
+
+            await fetchEvents();
+            fetchMeetings();
+            setTimeout(() => {
+                setShowNotification(false);
+            }, 3000);
         } catch (e) {
             console.error("Refresh failed in handleRefresh:", e);
         } finally {
+            setTimeout(() => setIsSyncingCalendar(false), 320);
             // Ensure distinct feedback provided (min 500ms spin)
             setTimeout(() => setIsRefreshing(false), 500);
         }
@@ -167,6 +209,40 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         fetchMeetings();
         fetchEvents();
 
+        const syncCalendarFromLocalStorage = () => {
+            const storedUser = localStorage.getItem('natively_auth_user');
+            if (!storedUser) {
+                if (mounted) setIsCalendarConnected(false);
+                return;
+            }
+            try {
+                const userData = JSON.parse(storedUser);
+                if (mounted) setIsCalendarConnected(Boolean(userData?.calendarConnected));
+            } catch {
+                if (mounted) setIsCalendarConnected(false);
+            }
+        };
+        syncCalendarFromLocalStorage();
+
+        let removeCalendarStatusListener: (() => void) | undefined;
+        if (window.electronAPI?.onCalendarStatusChanged) {
+            removeCalendarStatusListener = window.electronAPI.onCalendarStatusChanged((status) => {
+                if (!mounted) return;
+                setIsCalendarConnected(Boolean(status.connected));
+            });
+        }
+
+        const handleCalendarStatusSync = (event: Event) => {
+            const customEvent = event as CustomEvent<{ connected: boolean }>;
+            if (!mounted) return;
+            if (customEvent.detail && typeof customEvent.detail.connected === 'boolean') {
+                setIsCalendarConnected(customEvent.detail.connected);
+                return;
+            }
+            syncCalendarFromLocalStorage();
+        };
+        window.addEventListener('natively:calendar-status-changed', handleCalendarStatusSync as EventListener);
+
         // Sync initial meeting active state — guarded so unmounted component isn't written to
         if (window.electronAPI?.getMeetingActive) {
             window.electronAPI.getMeetingActive()
@@ -196,6 +272,8 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             if (removeMeetingsListener) removeMeetingsListener();
             if (removeUndetectableListener) removeUndetectableListener();
             if (removeMeetingStateListener) removeMeetingStateListener();
+            if (removeCalendarStatusListener) removeCalendarStatusListener();
+            window.removeEventListener('natively:calendar-status-changed', handleCalendarStatusSync as EventListener);
             clearInterval(interval);
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -604,6 +682,21 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 <RefreshCw size={18} />
                                             </button>
 
+                                            <AnimatePresence initial={false}>
+                                                {isSyncingCalendar && (
+                                                    <motion.div
+                                                        key="calendar-syncing-pill"
+                                                        initial={{ opacity: 0, transform: "translateY(6px) scale(0.98)", filter: "blur(4px)" }}
+                                                        animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
+                                                        exit={{ opacity: 0, transform: "translateY(-6px) scale(0.98)", filter: "blur(4px)" }}
+                                                        transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                                                        className="text-[11px] px-2.5 py-1 rounded-full border border-blue-400/30 bg-blue-500/10 text-blue-300"
+                                                    >
+                                                        🔄 Syncing calendar...
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+
                                             {/* Detectable Toggle Pill */}
                                             <div className={`flex items-center gap-3 border rounded-full px-3 py-1.5 min-w-[140px] transition-colors ${isLight ? 'bg-bg-elevated border-border-muted shadow-sm' : 'bg-[#101011] border-border-muted'}`}>
                                                 {isDetectable ? (
@@ -758,7 +851,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                     </div>
 
                                     {/* 2. Hero Section Cards */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 h-[198px]">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 h-[228px]">
                                         {/* PREPARED STATE CARD */}
                                         {isPrepared && preparedEvent ? (
                                             <div className={`md:col-span-3 relative group rounded-xl overflow-hidden border border-emerald-500/30 ${isLight ? 'bg-bg-elevated' : 'bg-bg-secondary'} flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900/40 ${isLight ? 'via-bg-elevated to-bg-elevated' : 'via-bg-secondary to-bg-secondary'}`}>
@@ -849,7 +942,48 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 </div>
                                             ) : (
                                                 <div className="md:col-span-2 h-full">
-                                                    <FeatureSpotlight />
+                                                    <div className="relative h-full overflow-hidden">
+                                                        <motion.div
+                                                            animate={
+                                                                showEvents
+                                                                    ? { opacity: 0, transform: "translateY(-20px) scale(0.95)", filter: "blur(6px)" }
+                                                                    : { opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }
+                                                            }
+                                                            transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
+                                                            className="relative h-full"
+                                                            style={{
+                                                                zIndex: showEvents ? 1 : 2,
+                                                                pointerEvents: showEvents ? "none" : "auto",
+                                                            }}
+                                                        >
+                                                            <FeatureSpotlight />
+                                                        </motion.div>
+
+                                                        <motion.div
+                                                            animate={
+                                                                showEvents
+                                                                    ? { opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }
+                                                                    : { opacity: 0, transform: "translateY(22px) scale(0.98)", filter: "blur(6px)" }
+                                                            }
+                                                            transition={{
+                                                                duration: 0.3,
+                                                                delay: showEvents ? 0.12 : 0,
+                                                                ease: [0.23, 1, 0.32, 1],
+                                                            }}
+                                                            className="absolute inset-0"
+                                                            style={{
+                                                                zIndex: showEvents ? 3 : 0,
+                                                                pointerEvents: showEvents ? "auto" : "none",
+                                                            }}
+                                                        >
+                                                            <UpcomingEventsPanel
+                                                                events={upcomingEvents}
+                                                                syncing={isSyncingCalendar || isRefreshing}
+                                                                onRefresh={handleRefresh}
+                                                                isLight={isLight}
+                                                            />
+                                                        </motion.div>
+                                                    </div>
                                                 </div>
                                             )
                                         )}

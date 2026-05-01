@@ -1501,10 +1501,45 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             const savedSck = localStorage.getItem('useExperimentalSckBackend') === 'true';
             setUseExperimentalSck(savedSck);
 
-            // Load Calendar Status
-            if (window.electronAPI?.getCalendarStatus) {
+            // Load Calendar Status — check localStorage first (backend auth), fallback to old CalendarManager
+            const storedUser = localStorage.getItem('natively_auth_user');
+            if (storedUser) {
+                try {
+                    const userData = JSON.parse(storedUser);
+                    if (userData.calendarConnected) {
+                        setCalendarStatus({ connected: true, email: userData.email });
+                    } else if (window.electronAPI?.getCalendarStatus) {
+                        window.electronAPI.getCalendarStatus().then(setCalendarStatus);
+                    }
+                } catch {
+                    if (window.electronAPI?.getCalendarStatus) {
+                        window.electronAPI.getCalendarStatus().then(setCalendarStatus);
+                    }
+                }
+            } else if (window.electronAPI?.getCalendarStatus) {
                 window.electronAPI.getCalendarStatus().then(setCalendarStatus);
             }
+
+            // Listen for calendar status changes from other views (Launcher <-> Settings sync)
+            const unsubCalendar = window.electronAPI?.onCalendarStatusChanged?.((status) => {
+                setCalendarStatus({ connected: status.connected, email: status.email || undefined });
+                const storedUser = localStorage.getItem('natively_auth_user');
+                if (storedUser) {
+                    try {
+                        const userData = JSON.parse(storedUser);
+                        userData.calendarConnected = status.connected;
+                        if (status.email) userData.email = status.email;
+                        localStorage.setItem('natively_auth_user', JSON.stringify(userData));
+                    } catch {
+                        // Ignore malformed local storage payload.
+                    }
+                }
+                window.dispatchEvent(
+                    new CustomEvent('natively:calendar-status-changed', { detail: { connected: status.connected } })
+                );
+            });
+
+            return () => { unsubCalendar?.(); };
         }
     }, [isOpen, selectedInput, selectedOutput]); // Re-run if isOpen changes, or if selected devices are cleared
 
@@ -1576,11 +1611,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                         <Monitor size={16} /> General
                                     </button>
                                     <button
-                                        onClick={() => setActiveTab('natively-api')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'natively-api' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        onClick={() => setActiveTab('account')}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'account' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
                                     >
-                                        <Zap size={16} className={activeTab === 'natively-api' ? 'text-blue-500' : 'text-blue-500/70'} />
-                                        <span>Natively API</span>
+                                        <User size={16} /> Account
                                     </button>
                                     <button
                                         onClick={() => {
@@ -1638,8 +1672,31 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
 
                             <div className="mt-auto p-6 border-t border-border-subtle">
                                 <button
+                                    onClick={async () => {
+                                        // Sign out: clear auth tokens, call backend logout, reload to sign-in
+                                        const token = localStorage.getItem('natively_auth_token');
+                                        if (token) {
+                                            try {
+                                                await fetch('http://localhost:3456/auth/logout', {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Authorization': `Bearer ${token}`,
+                                                        'Content-Type': 'application/json',
+                                                    },
+                                                });
+                                            } catch {} // Best effort
+                                        }
+                                        localStorage.removeItem('natively_auth_token');
+                                        localStorage.removeItem('natively_auth_user');
+                                        window.location.reload();
+                                    }}
+                                    className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-orange-400 hover:bg-orange-500/10 transition-colors flex items-center gap-3"
+                                >
+                                    {/* <LogOut size={16} /> Sign Out */}
+                                </button>
+                                <button
                                     onClick={() => window.electronAPI.quitApp()}
-                                    className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3"
+                                    className="w-full text-left px-3 py-2 mt-1 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3"
                                 >
                                     <LogOut size={16} /> Quit Natively
                                 </button>
@@ -2866,8 +2923,66 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                             {activeTab === 'ai-providers' && (
                                 <AIProvidersSettings />
                             )}
-                            {activeTab === 'natively-api' && (
-                                <NativelyApiSettings />
+                            {activeTab === 'account' && (
+                                <div className="space-y-6 animated fadeIn select-text pb-4">
+                                    <div>
+                                        <h3 className="text-lg font-bold text-text-primary mb-1">Account</h3>
+                                        <p className="text-xs text-text-secondary">Manage your signed-in Google account.</p>
+                                    </div>
+
+                                    {(() => {
+                                        const storedUser = localStorage.getItem('natively_auth_user');
+                                        const user = storedUser ? JSON.parse(storedUser) : null;
+                                        return user ? (
+                                            <div className="bg-bg-card rounded-xl border border-border-subtle p-5 space-y-4">
+                                                <div className="flex items-center gap-4">
+                                                    {user.picture ? (
+                                                        <img src={user.picture} alt="" className="w-12 h-12 rounded-full ring-2 ring-border-subtle" referrerPolicy="no-referrer" />
+                                                    ) : (
+                                                        <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-lg font-bold">
+                                                            {(user.name || user.email || '?')[0].toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-semibold text-text-primary truncate">{user.name || 'User'}</p>
+                                                        <p className="text-xs text-text-secondary truncate">{user.email}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="pt-3 border-t border-border-subtle">
+                                                    <button
+                                                        onClick={async () => {
+                                                            const token = localStorage.getItem('natively_auth_token');
+                                                            if (token) {
+                                                                try {
+                                                                    await fetch('http://localhost:3456/auth/logout', {
+                                                                        method: 'POST',
+                                                                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                                                    });
+                                                                } catch {}
+                                                            }
+                                                            localStorage.removeItem('natively_auth_token');
+                                                            localStorage.removeItem('natively_auth_user');
+                                                            window.location.reload();
+                                                        }}
+                                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 transition-all"
+                                                    >
+                                                        <LogOut size={14} /> Sign Out
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-bg-card rounded-xl border border-border-subtle p-5 text-center">
+                                                <p className="text-sm text-text-secondary mb-3">Not signed in</p>
+                                                <button
+                                                    onClick={() => window.location.reload()}
+                                                    className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                                                >
+                                                    Sign In with Google
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
                             )}
                             {activeTab === 'keybinds' && (
                                 <div className="space-y-5 animated fadeIn select-text pb-4">
@@ -3481,7 +3596,22 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                     onClick={async () => {
                                                         setIsCalendarsLoading(true);
                                                         try {
+                                                            const token = localStorage.getItem('natively_auth_token') || undefined;
+                                                            await window.electronAPI.googleLogout?.(token);
                                                             await window.electronAPI.calendarDisconnect();
+                                                            const storedUser = localStorage.getItem('natively_auth_user');
+                                                            if (storedUser) {
+                                                                try {
+                                                                    const userData = JSON.parse(storedUser);
+                                                                    userData.calendarConnected = false;
+                                                                    localStorage.setItem('natively_auth_user', JSON.stringify(userData));
+                                                                } catch {
+                                                                    // Ignore malformed local storage payload.
+                                                                }
+                                                            }
+                                                            window.dispatchEvent(
+                                                                new CustomEvent('natively:calendar-status-changed', { detail: { connected: false } })
+                                                            );
                                                             const status = await window.electronAPI.getCalendarStatus();
                                                             setCalendarStatus(status);
                                                         } catch (e) {
@@ -3508,14 +3638,45 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                     onClick={async () => {
                                                         setIsCalendarsLoading(true);
                                                         try {
-                                                            const res = await window.electronAPI.calendarConnect();
-                                                            if (res.success) {
-                                                                const status = await window.electronAPI.getCalendarStatus();
-                                                                setCalendarStatus(status);
+                                                            // Use backend OAuth flow for calendar
+                                                            const storedUser = localStorage.getItem('natively_auth_user');
+                                                            const email = storedUser ? JSON.parse(storedUser)?.email : undefined;
+                                                            
+                                                            const urlRes = await fetch('http://localhost:3456/auth/google/calendar' + 
+                                                                (email ? `?login_hint=${encodeURIComponent(email)}` : ''));
+                                                            if (!urlRes.ok) throw new Error('Failed to get calendar auth URL');
+                                                            const { url } = await urlRes.json();
+                                                            
+                                                            if (window.electronAPI?.openExternal) {
+                                                                await window.electronAPI.openExternal(url);
                                                             }
+                                                            
+                                                            // Poll for completion
+                                                            const poll = setInterval(async () => {
+                                                                try {
+                                                                    const pendingRes = await fetch('http://localhost:3456/auth/pending');
+                                                                    if (!pendingRes.ok) return;
+                                                                    const data = await pendingRes.json();
+                                                                    if (data.pending) return;
+                                                                    
+                                                                    clearInterval(poll);
+                                                                    if (data.success && data.user?.calendarConnected) {
+                                                                        if (data.token) localStorage.setItem('natively_auth_token', data.token);
+                                                                        if (data.user) localStorage.setItem('natively_auth_user', JSON.stringify(data.user));
+                                                                        window.dispatchEvent(
+                                                                            new CustomEvent('natively:calendar-status-changed', { detail: { connected: true } })
+                                                                        );
+                                                                        const status = await window.electronAPI.getCalendarStatus();
+                                                                        setCalendarStatus({ ...status, connected: true });
+                                                                    }
+                                                                    setIsCalendarsLoading(false);
+                                                                } catch {}
+                                                            }, 1000);
+                                                            
+                                                            // Timeout after 2 minutes
+                                                            setTimeout(() => { clearInterval(poll); setIsCalendarsLoading(false); }, 120000);
                                                         } catch (e) {
                                                             console.error(e);
-                                                        } finally {
                                                             setIsCalendarsLoading(false);
                                                         }
                                                     }}

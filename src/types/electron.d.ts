@@ -429,6 +429,18 @@ export interface ElectronAPI {
 
   // Platform
   platform: NodeJS.Platform;
+
+  // Google Auth (Server-side OAuth + MongoDB)
+  googleSignIn: () => Promise<{ success: boolean; token?: string; user?: { name: string; email: string; picture?: string; calendarConnected: boolean; isNewUser: boolean }; error?: string }>;
+  googleVerifyToken: (token: string) => Promise<{ success: boolean; user?: any; error?: string }>;
+  googleConnectCalendar: (loginHint: string) => Promise<{ success: boolean; error?: string }>;
+  googleGetCalendarEvents: (token: string) => Promise<{ events?: any[]; success?: boolean; error?: string }>;
+  googleLogout: (token?: string) => Promise<{ success: boolean }>;
+  onAuthResult: (callback: (result: any) => void) => () => void;
+  onAuthLoggedOut: (callback: () => void) => () => void;
+
+  // Calendar status sync (Launcher <-> Settings)
+  onCalendarStatusChanged: (callback: (status: { connected: boolean; email: string | null }) => void) => () => void;
 }
 
 declare global {

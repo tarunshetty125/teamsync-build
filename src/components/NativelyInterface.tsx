@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import {
     Sparkles,
     Pencil,
@@ -27,7 +27,9 @@ import {
     Code,
     Copy,
     Check,
-    PointerOff
+    PointerOff,
+    BookOpen,
+    Cpu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -56,6 +58,7 @@ interface Message {
     screenshotPreview?: string;
     isCode?: boolean;
     intent?: string;
+    source?: string;
     isNegotiationCoaching?: boolean;
     negotiationCoachingData?: {
         tacticalNote: string;
@@ -114,8 +117,61 @@ interface NativelyInterfaceProps {
     overlayOpacity?: number;
 }
 
+// ── Context-Aware Question Type Detection (mirrors IntentClassifier patterns) ──
+type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'general';
+
+function detectQuestionType(text: string): DetectedQuestionType {
+    // Normalize: fix OCR/STT artifacts, collapse whitespace
+    let t = text.toLowerCase();
+    t = t.replace(/(\w)\.\s+(\w)/g, '$1$2'); // Fix broken words: "polymor. phism" → "polymorphism"
+    t = t.replace(/\b(yeah|um|uh|uh+m|like|so|okay|ok|well|you know|i mean|basically|actually|right)\b/g, ' ');
+    t = t.replace(/\s+/g, ' ').trim();
+
+    // HIGHEST PRIORITY: Coding — broad detection matching IntentClassifier regex
+    if (/(write code|write a? ?(?:function|program|method|class|script)|implement|function for|algorithm|how to code|debug this|snippet|boilerplate|optimize|refactor|reverse|sort|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|recursive|iterate|loop|pointer|two pointer|sliding window|backtrack|greedy|bfs|dfs|matrix|string manipulation|big o|time complexity|space complexity|fibonacci|palindrome|anagram|substring|subarray|merge sort|quick sort|bubble sort|insertion sort|heap|trie|topological|shortest path|factorial|prime|duplicate|remove duplicates|flatten|depth first|breadth first|binary tree|level order|in ?order traversal|pre ?order|post ?order|promise|async await|callback)/.test(t)) {
+        return 'coding';
+    }
+    // System Design
+    if (/(system design|design a|scalab|architect|microservice|load balanc|database schema|api design|distributed|high availability|caching strategy|caching|cache|cdn|message queue|rate limit|sharding|replication|partition|cap theorem|event driven|monolith|horizontal scal|fault toleran|throughput|latency)/.test(t)) {
+        return 'system_design';
+    }
+    // Behavioral
+    if (/(tell me about a time|describe a situation|give me an example|when have you|share an experience|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|experience|challenge|conflict|pressure|strength|weakness|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment)/.test(t)) {
+        return 'behavioral';
+    }
+    return 'general';
+}
+
 const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, overlayOpacity = OVERLAY_OPACITY_DEFAULT }) => {
     const isLightTheme = useResolvedTheme() === 'light';
+
+    // Source label tracking: set by handlers, read by stream listeners
+    const currentSourceRef = useRef<string | undefined>(undefined);
+
+    const sourceStyleMap: Record<string, { light: string; dark: string }> = {
+        'What to Answer': { light: 'bg-blue-100/80 text-blue-700 border-blue-200/60', dark: 'bg-blue-500/15 text-blue-300 border-blue-400/25' },
+        'Clarify':        { light: 'bg-amber-100/80 text-amber-700 border-amber-200/60', dark: 'bg-amber-500/15 text-amber-300 border-amber-400/25' },
+        'Follow Up':      { light: 'bg-emerald-100/80 text-emerald-700 border-emerald-200/60', dark: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
+        'Recap':          { light: 'bg-teal-100/80 text-teal-700 border-teal-200/60', dark: 'bg-teal-500/15 text-teal-300 border-teal-400/25' },
+        'Follow Up Questions': { light: 'bg-cyan-100/80 text-cyan-700 border-cyan-200/60', dark: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/25' },
+        'Code Hint':      { light: 'bg-purple-100/80 text-purple-700 border-purple-200/60', dark: 'bg-purple-500/15 text-purple-300 border-purple-400/25' },
+        'Brainstorm':     { light: 'bg-pink-100/80 text-pink-700 border-pink-200/60', dark: 'bg-pink-500/15 text-pink-300 border-pink-400/25' },
+        'Answer Now':     { light: 'bg-indigo-100/80 text-indigo-700 border-indigo-200/60', dark: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
+        'Manual Input':   { light: 'bg-slate-100/80 text-slate-600 border-slate-200/60', dark: 'bg-slate-500/15 text-slate-300 border-slate-400/25' },
+    };
+    const defaultSourceStyle = { light: 'bg-violet-100/80 text-violet-700 border-violet-200/60', dark: 'bg-violet-500/15 text-violet-300 border-violet-400/25' };
+
+    const sourceIconMap: Record<string, string> = {
+        'What to Answer': '💡',
+        'Clarify': '❓',
+        'Follow Up': '➡️',
+        'Follow Up Questions': '📌',
+        'Recap': '📝',
+        'Code Hint': '💻',
+        'Brainstorm': '🧠',
+        'Answer Now': '⚡',
+        'Manual Input': '⌨️',
+    };
     const [isExpanded, setIsExpanded] = useState(true);
     const [inputValue, setInputValue] = useState('');
     const { shortcuts, isShortcutPressed } = useShortcuts();
@@ -163,6 +219,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const userHasScrolledRef = useRef(false);
+    const [showJumpButton, setShowJumpButton] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
     // Captures data from onCaptureAndProcess before the React state flush so
     // handleWhatToSay() can access it even in React 18 concurrent mode (where
     // a plain setTimeout(0) may fire before setAttachedContext flushes).
@@ -211,6 +270,25 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         });
         return () => { unsubscribe?.(); };
     }, []);
+
+    // ── Context-Aware Dynamic Buttons ──
+    const [detectedQuestionType, setDetectedQuestionType] = useState<DetectedQuestionType>('general');
+
+    useEffect(() => {
+        // Combine rolling transcript + last few interviewer messages for detection
+        const interviewerMsgs = messages
+            .filter(m => m.role === 'interviewer')
+            .slice(-3)
+            .map(m => m.text)
+            .join(' ');
+        const combined = `${rollingTranscript} ${interviewerMsgs} ${inputValue}`.trim();
+        if (combined.length < 3) return;
+
+        const detected = detectQuestionType(combined);
+        if (detected !== detectedQuestionType) {
+            setDetectedQuestionType(detected);
+        }
+    }, [rollingTranscript, messages, inputValue]);
 
     const codeTheme = isLightTheme ? oneLight : vscDarkPlus;
     const codeLineNumberColor = isLightTheme ? 'rgba(15,23,42,0.35)' : 'rgba(255,255,255,0.2)';
@@ -377,6 +455,33 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             .join('\n');
         setConversationContext(context);
     }, [messages]);
+
+    // Detect manual user scroll to toggle jump-to-latest button
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        const handleScroll = () => {
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            const isNearBottom = scrollHeight - scrollTop - clientHeight < 120;
+            userHasScrolledRef.current = !isNearBottom;
+            setShowJumpButton(!isNearBottom);
+            if (isNearBottom) setUnreadCount(0);
+        };
+
+        container.addEventListener('scroll', handleScroll, { passive: true });
+        return () => container.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    const scrollToBottom = useCallback(() => {
+        const container = scrollContainerRef.current;
+        if (container) {
+            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        }
+        userHasScrolledRef.current = false;
+        setShowJumpButton(false);
+        setUnreadCount(0);
+    }, []);
 
     // Listen for settings window visibility changes
     useEffect(() => {
@@ -621,12 +726,16 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     role: 'system',
                     text: data.token,
                     intent: 'what_to_answer',
+                    source: currentSourceRef.current,
                     isStreaming: true
                 }];
             });
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceSuggestedAnswer((data) => {
+            if (userHasScrolledRef.current) {
+                setUnreadCount(prev => prev + 1);
+            }
             setIsProcessing(false);
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
@@ -648,9 +757,11 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     id: Date.now().toString(),
                     role: 'system',
                     text: data.answer,  // Plain text, no markdown - ready to speak
-                    intent: 'what_to_answer'
+                    intent: 'what_to_answer',
+                    source: currentSourceRef.current
                 }];
             });
+            currentSourceRef.current = undefined;
         }));
 
         // STREAMING: Refinement
@@ -671,6 +782,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     role: 'system',
                     text: data.token,
                     intent: data.intent,
+                    source: currentSourceRef.current,
                     isStreaming: true
                 }];
             });
@@ -693,9 +805,11 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     id: Date.now().toString(),
                     role: 'system',
                     text: data.answer,
-                    intent: data.intent
+                    intent: data.intent,
+                    source: currentSourceRef.current
                 }];
             });
+            currentSourceRef.current = undefined;
         }));
 
         // STREAMING: Recap
@@ -715,6 +829,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     role: 'system',
                     text: data.token,
                     intent: 'recap',
+                    source: currentSourceRef.current,
                     isStreaming: true
                 }];
             });
@@ -737,9 +852,11 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     id: Date.now().toString(),
                     role: 'system',
                     text: data.summary,
-                    intent: 'recap'
+                    intent: 'recap',
+                    source: currentSourceRef.current
                 }];
             });
+            currentSourceRef.current = undefined;
         }));
 
         // STREAMING: Follow-Up Questions (Rendered as message? Or specific UI?)
@@ -770,6 +887,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     role: 'system',
                     text: data.token,
                     intent: 'follow_up_questions',
+                    source: currentSourceRef.current,
                     isStreaming: true
                 }];
             });
@@ -793,9 +911,11 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     id: Date.now().toString(),
                     role: 'system',
                     text: data.questions,
-                    intent: 'follow_up_questions'
+                    intent: 'follow_up_questions',
+                    source: currentSourceRef.current
                 }];
             });
+            currentSourceRef.current = undefined;
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceManualResult((data) => {
@@ -803,8 +923,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'system',
-                text: `🎯 **Answer:**\n\n${data.answer}`
+                text: `🎯 **Answer:**\n\n${data.answer}`,
+                source: currentSourceRef.current
             }]);
+            currentSourceRef.current = undefined;
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceError((data) => {
@@ -853,6 +975,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     role: 'system' as const,
                     text: data.token,
                     intent: 'clarify',
+                    source: currentSourceRef.current,
                     isStreaming: true
                 }];
             });
@@ -871,9 +994,11 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     id: Date.now().toString(),
                     role: 'system' as const,
                     text: data.clarification,
-                    intent: 'clarify'
+                    intent: 'clarify',
+                    source: currentSourceRef.current
                 }];
             });
+            currentSourceRef.current = undefined;
         });
 
         return () => {
@@ -894,6 +1019,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const handleWhatToSay = async () => {
         setIsExpanded(true);
         setIsProcessing(true);
+        currentSourceRef.current = 'What to Answer';
         analytics.trackCommandExecuted('what_to_say');
 
         // Capture and clear attached image context.
@@ -938,6 +1064,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const handleFollowUp = async (intent: string = 'rephrase') => {
         setIsExpanded(true);
         setIsProcessing(true);
+        currentSourceRef.current = 'Follow Up';
         analytics.trackCommandExecuted('follow_up_' + intent);
 
         try {
@@ -956,6 +1083,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const handleRecap = async () => {
         setIsExpanded(true);
         setIsProcessing(true);
+        currentSourceRef.current = 'Recap';
         analytics.trackCommandExecuted('recap');
 
         try {
@@ -974,6 +1102,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const handleFollowUpQuestions = async () => {
         setIsExpanded(true);
         setIsProcessing(true);
+        currentSourceRef.current = 'Follow Up Questions';
         analytics.trackCommandExecuted('suggest_questions');
 
         try {
@@ -992,6 +1121,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const handleClarify = async () => {
         setIsExpanded(true);
         setIsProcessing(true);
+        currentSourceRef.current = 'Clarify';
         analytics.trackCommandExecuted('clarify');
 
         try {
@@ -1010,6 +1140,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const handleCodeHint = async () => {
         setIsExpanded(true);
         setIsProcessing(true);
+        currentSourceRef.current = 'Code Hint';
         analytics.trackCommandExecuted('code_hint');
 
         const currentAttachments = attachedContext;
@@ -1045,6 +1176,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const handleBrainstorm = async () => {
         setIsExpanded(true);
         setIsProcessing(true);
+        currentSourceRef.current = 'Brainstorm';
         analytics.trackCommandExecuted('brainstorm');
 
         const currentAttachments = attachedContext;
@@ -1127,6 +1259,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         // Stream Done
         cleanups.push(window.electronAPI.onGeminiStreamDone(() => {
             setIsProcessing(false);
+            currentSourceRef.current = undefined;
 
             // Calculate latency if we have a start time
             let latency = 0;
@@ -1237,6 +1370,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             cleanups.push(window.electronAPI.onRAGStreamComplete(() => {
                 setIsProcessing(false);
                 requestStartTimeRef.current = null;
+                currentSourceRef.current = undefined;
                 setMessages(prev => {
                     const lastMsg = prev[prev.length - 1];
                     if (lastMsg && lastMsg.isStreaming && lastMsg.role === 'system') {
@@ -1297,6 +1431,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             isRecordingRef.current = false;  // Update ref immediately
             setIsManualRecording(false);
             setManualTranscript('');  // Clear live preview
+            currentSourceRef.current = 'Answer Now';
 
             // Send manual finalization signal to STT Providers
             window.electronAPI.finalizeMicSTT().catch(err => console.error('[NativelyInterface] Failed to send finalizeMicSTT:', err));
@@ -1353,7 +1488,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                 id: Date.now().toString(),
                 role: 'system',
                 text: '',
-                isStreaming: true
+                isStreaming: true,
+                source: currentSourceRef.current
             }]);
 
             setIsProcessing(true);
@@ -1435,6 +1571,7 @@ Provide only the answer, nothing else.`;
 
     const handleManualSubmit = async () => {
         if (!inputValue.trim() && attachedContext.length === 0) return;
+        currentSourceRef.current = 'Manual Input';
 
         const userText = inputValue;
         const currentAttachments = attachedContext;
@@ -1461,7 +1598,8 @@ Provide only the answer, nothing else.`;
             id: Date.now().toString(),
             role: 'system',
             text: '',
-            isStreaming: true
+            isStreaming: true,
+            source: currentSourceRef.current
         }]);
 
         setIsExpanded(true);
@@ -2232,6 +2370,7 @@ Provide only the answer, nothing else.`;
 
                             {/* Chat History - Only show if there are messages OR active states */}
                             {(messages.length > 0 || isManualRecording || isProcessing) && (
+                                <>
                                 <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[clamp(300px,35vh,450px)] no-drag" style={{ scrollbarWidth: 'none' }}>
                                     {messages.map((msg) => (
                                         <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
@@ -2274,6 +2413,20 @@ Provide only the answer, nothing else.`;
                                                         <Copy className="w-3.5 h-3.5" />
                                                     </button>
                                                 )}
+                                                {msg.role === 'system' && msg.source && (() => {
+                                                    const sStyle = sourceStyleMap[msg.source] || defaultSourceStyle;
+                                                    const sIcon = sourceIconMap[msg.source] || '⚡';
+                                                    return (
+                                                        <div className="mb-1.5 flex items-center">
+                                                            <span
+                                                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide border transition-transform duration-150 hover:scale-105 ${isLightTheme ? sStyle.light : sStyle.dark}`}
+                                                            >
+                                                                <span className="text-[10px] leading-none">{sIcon}</span>
+                                                                {msg.source}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })()}
                                                 {renderMessageText(msg)}
                                             </div>
                                         </div>
@@ -2310,43 +2463,130 @@ Provide only the answer, nothing else.`;
                                     )}
                                     <div ref={messagesEndRef} />
                                 </div>
+
+                                {/* Jump to latest button */}
+                                {showJumpButton && (
+                                    <div className="flex justify-center py-1 no-drag">
+                                        <button
+                                            onClick={scrollToBottom}
+                                            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium overlay-chip-surface border border-transparent hover:border-white/10 hover:bg-white/[0.08] transition-all duration-200 overlay-text-muted hover:overlay-text-secondary"
+                                        >
+                                            <ChevronDown className="w-3 h-3" />
+                                            {unreadCount > 0 ? (
+                                                <>
+                                                    <span>{unreadCount} new</span>
+                                                    <span className="flex h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
+                                                </>
+                                            ) : (
+                                                'Latest'
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
+                                </>
                             )}
 
-                            {/* Quick Actions - Minimal & Clean */}
-                            <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`}>
-                                <button onClick={handleWhatToSay} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0 ${quickActionClass}`} style={appearance.chipStyle}>
-                                    <Pencil className="w-3 h-3 opacity-70" /> What to answer?
-                                </button>
-                                <button onClick={handleClarify} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0 ${quickActionClass}`} style={appearance.chipStyle}>
-                                    <MessageSquare className="w-3 h-3 opacity-70" /> Clarify
-                                </button>
-                                <button onClick={actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0 ${quickActionClass}`} style={appearance.chipStyle}>
-                                    {actionButtonMode === 'brainstorm'
-                                        ? <><Lightbulb className="w-3 h-3 opacity-70" /> Brainstorm</>
-                                        : <><RefreshCw className="w-3 h-3 opacity-70" /> Recap</>
-                                    }
-                                </button>
-                                <button onClick={handleFollowUpQuestions} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0 ${quickActionClass}`} style={appearance.chipStyle}>
-                                    <HelpCircle className="w-3 h-3 opacity-70" /> Follow Up Question
-                                </button>
-                                <button
-                                    onClick={handleAnswerNow}
-                                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all active:scale-95 duration-200 interaction-base interaction-press min-w-[74px] whitespace-nowrap shrink-0 ${isManualRecording
-                                        ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/20'
-                                        : 'overlay-chip-surface overlay-text-interactive hover:text-emerald-500 hover:bg-emerald-500/10'
-                                        }`}
-                                    style={isManualRecording ? undefined : appearance.chipStyle}
-                                >
-                                    {isManualRecording ? (
-                                        <>
-                                            <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                                            Stop
-                                        </>
-                                    ) : (
-                                        <><Zap className="w-3 h-3 opacity-70" /> Answer</>
-                                    )}
-                                </button>
-                            </div>
+                            {/* Quick Actions - Dynamic Context-Aware Buttons */}
+                            {(() => {
+                                // ── Action Map ──
+                                type ActionDef = { label: string; icon: string; handler: () => void; isRecommended?: boolean };
+                                const actionSets: Record<DetectedQuestionType, ActionDef[]> = {
+                                    coding: [
+                                        { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
+                                        { label: 'Code Hint', icon: '💻', handler: handleCodeHint, isRecommended: true },
+                                        { label: 'Brainstorm', icon: '🧠', handler: handleBrainstorm },
+                                        { label: 'Clarify', icon: '❓', handler: handleClarify },
+                                    ],
+                                    system_design: [
+                                        { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
+                                        { label: 'Brainstorm', icon: '🧠', handler: handleBrainstorm, isRecommended: true },
+                                        { label: 'Clarify', icon: '❓', handler: handleClarify },
+                                        { label: 'Trade-offs', icon: '⚖️', handler: handleFollowUpQuestions },
+                                    ],
+                                    behavioral: [
+                                        { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
+                                        { label: 'STAR Story', icon: '⭐', handler: handleClarify, isRecommended: true },
+                                        { label: 'Follow Up', icon: '➡️', handler: handleFollowUpQuestions },
+                                        { label: actionButtonMode === 'brainstorm' ? 'Brainstorm' : 'Recap', icon: actionButtonMode === 'brainstorm' ? '🧠' : '📝', handler: actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap },
+                                    ],
+                                    general: [
+                                        { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
+                                        { label: 'Clarify', icon: '❓', handler: handleClarify },
+                                        { label: actionButtonMode === 'brainstorm' ? 'Brainstorm' : 'Recap', icon: actionButtonMode === 'brainstorm' ? '🧠' : '📝', handler: actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap },
+                                        { label: 'Follow Up', icon: '➡️', handler: handleFollowUpQuestions },
+                                    ],
+                                };
+
+                                // Smart recommendation override via keywords
+                                const actions = actionSets[detectedQuestionType] || actionSets.general;
+                                const combined = `${rollingTranscript} ${inputValue}`.toLowerCase();
+                                let recommendedIdx = actions.findIndex(a => a.isRecommended);
+                                if (recommendedIdx < 0) recommendedIdx = 0;
+
+                                // Keyword-based overrides
+                                if (detectedQuestionType === 'coding') {
+                                    if (/(optimiz|improv|faster|efficient|refactor)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label === 'Brainstorm');
+                                    else if (/(explain|why|how does|approach)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label === 'Clarify');
+                                } else if (detectedQuestionType === 'system_design') {
+                                    if (/(tradeoff|trade-off|pros? and cons)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label === 'Trade-offs');
+                                    else if (/(scal|million|billion|traffic)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label === 'Brainstorm');
+                                } else if (detectedQuestionType === 'behavioral') {
+                                    if (/(follow.?up|next|then what)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label === 'Follow Up');
+                                    else if (/(improv|better|stronger)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label.includes('Brainstorm') || a.label.includes('Recap'));
+                                }
+                                if (recommendedIdx < 0) recommendedIdx = 0;
+
+                                return (
+                                    <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`}>
+                                        <AnimatePresence mode="popLayout">
+                                            {actions.map((action, idx) => {
+                                                const isRec = idx === recommendedIdx;
+                                                return (
+                                                    <motion.button
+                                                        key={`${detectedQuestionType}-${action.label}`}
+                                                        layout
+                                                        initial={{ opacity: 0, y: 6, scale: 0.92 }}
+                                                        animate={{ opacity: 1, y: 0, scale: isRec ? 1.03 : 1 }}
+                                                        exit={{ opacity: 0, y: -4, scale: 0.92 }}
+                                                        transition={{ duration: 0.2, delay: idx * 0.04, ease: [0.25, 1, 0.5, 1] }}
+                                                        whileHover={{ scale: isRec ? 1.07 : 1.05, y: -1 }}
+                                                        whileTap={{ scale: 0.95 }}
+                                                        onClick={() => { if (!isProcessing) action.handler(); }}
+                                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-colors duration-150 ease-out whitespace-nowrap shrink-0 no-drag ${
+                                                            isRec
+                                                                ? 'bg-accent-primary/[0.12] hover:bg-accent-primary/[0.18] border-accent-primary/40 overlay-text-primary suggestion-glow'
+                                                                : `${quickActionClass} hover:bg-white/[0.08] hover:border-white/15`
+                                                        }`}
+                                                        style={isRec ? undefined : appearance.chipStyle}
+                                                    >
+                                                        <span className="text-[12px] leading-none">{action.icon}</span>
+                                                        {action.label}
+                                                    </motion.button>
+                                                );
+                                            })}
+                                        </AnimatePresence>
+
+                                        {/* Answer Button — always present */}
+                                        <button
+                                            onClick={handleAnswerNow}
+                                            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all active:scale-95 duration-200 interaction-base interaction-press min-w-[74px] whitespace-nowrap shrink-0 ${isManualRecording
+                                                ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/20'
+                                                : 'overlay-chip-surface overlay-text-interactive hover:text-emerald-500 hover:bg-emerald-500/10'
+                                                }`}
+                                            style={isManualRecording ? undefined : appearance.chipStyle}
+                                        >
+                                            {isManualRecording ? (
+                                                <>
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                                                    Stop
+                                                </>
+                                            ) : (
+                                                <><Zap className="w-3 h-3 opacity-70" /> Answer</>
+                                            )}
+                                        </button>
+                                    </div>
+                                );
+                            })()}
 
                             {/* Input Area */}
                             <div className="p-3 pt-0">
