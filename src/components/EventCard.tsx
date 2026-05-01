@@ -11,6 +11,7 @@ interface EventCardProps {
   changeType?: EventChangeType;
   isNextUp?: boolean;
   isLight?: boolean;
+  embedded?: boolean;
 }
 
 const platformLabel: Record<string, string> = {
@@ -20,7 +21,7 @@ const platformLabel: Record<string, string> = {
   other: "Call",
 };
 
-const EventCard: React.FC<EventCardProps> = ({ event, changeType = null, isNextUp = false, isLight = false }) => {
+const EventCard: React.FC<EventCardProps> = ({ event, changeType = null, isNextUp = false, isLight = false, embedded = false }) => {
   const now = Date.now();
   const startMs = new Date(event.startTime).getTime();
   const endMs = new Date(event.endTime).getTime();
@@ -46,24 +47,30 @@ const EventCard: React.FC<EventCardProps> = ({ event, changeType = null, isNextU
       transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
       whileHover={{ transform: "translateY(0px) scale(1.02)" }}
       className={[
-        "relative group isolate w-full self-stretch overflow-hidden rounded-2xl p-5 transition-all duration-300 ease-out backdrop-blur-2xl",
-        isLight
-          ? "bg-white/55 border border-white/45 shadow-[0_12px_38px_rgba(15,23,42,0.12)] hover:shadow-[0_18px_52px_rgba(15,23,42,0.16)]"
-          : "bg-slate-950/40 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_14px_48px_rgba(0,0,0,0.48)]",
-        "hover:scale-[1.02]",
+        "relative group isolate w-full self-stretch overflow-hidden transition-all duration-300 ease-out",
+        embedded ? "rounded-none p-0 bg-transparent border-0 shadow-none backdrop-blur-0" : "rounded-2xl p-5 backdrop-blur-2xl",
+        embedded
+          ? "hover:scale-[1]"
+          : isLight
+            ? "bg-white/55 border border-white/45 shadow-[0_12px_38px_rgba(15,23,42,0.12)] hover:shadow-[0_18px_52px_rgba(15,23,42,0.16)]"
+            : "bg-slate-950/40 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_14px_48px_rgba(0,0,0,0.48)] hover:scale-[1.02]",
         isNextUp ? "ring-1 ring-blue-400/20" : "",
-        event.isInterview ? "border-blue-500/30 shadow-[0_18px_45px_rgba(59,130,246,0.18)]" : "",
-        isLive ? "border-emerald-400/30" : "",
-        isUrgent ? "border-red-400/40" : "",
+        embedded ? "" : event.isInterview ? "border-blue-500/30 shadow-[0_18px_45px_rgba(59,130,246,0.18)]" : "",
+        embedded ? "" : isLive ? "border-emerald-400/30" : "",
+        embedded ? "" : isUrgent ? "border-red-400/40" : "",
       ].join(" ")}
     >
-      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
-        <div className="absolute w-[200%] h-[200%] -top-1/2 -left-1/2 animate-glow-move bg-gradient-to-r from-blue-400/20 via-emerald-400/20 to-purple-400/20 blur-3xl opacity-40" />
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-400/10 via-emerald-400/10 to-transparent blur-2xl animate-breath" />
-      </div>
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-blue-500/10 via-white/5 to-purple-500/10" />
-      <div className="absolute inset-0 rounded-2xl pointer-events-none border border-white/10" />
-      <div className="absolute inset-0 rounded-2xl pointer-events-none bg-gradient-to-r from-blue-500/20 to-purple-500/20 blur-xl opacity-30" />
+      {!embedded && (
+        <>
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
+            <div className="absolute w-[200%] h-[200%] -top-1/2 -left-1/2 animate-glow-move bg-gradient-to-r from-blue-400/20 via-emerald-400/20 to-purple-400/20 blur-3xl opacity-40" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-400/10 via-emerald-400/10 to-transparent blur-2xl animate-breath" />
+          </div>
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-blue-500/10 via-white/5 to-purple-500/10" />
+          <div className="absolute inset-0 rounded-2xl pointer-events-none border border-white/10" />
+          <div className="absolute inset-0 rounded-2xl pointer-events-none bg-gradient-to-r from-blue-500/20 to-purple-500/20 blur-xl opacity-30" />
+        </>
+      )}
 
       <div className="relative z-10 w-full">
       <div className="flex w-full items-start justify-between gap-3">

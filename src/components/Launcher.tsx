@@ -112,6 +112,39 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         setShowEvents(hasUpcomingInNext8Hours);
     };
 
+    const syncCalendarConnection = async () => {
+        const token = localStorage.getItem('natively_auth_token');
+
+        if (token) {
+            try {
+                const response = await fetch('http://localhost:3456/auth/me', {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+
+                if (response.ok) {
+                    const userData = await response.json();
+                    setIsCalendarConnected(Boolean(userData?.calendarConnected));
+                    return;
+                }
+            } catch {
+                // Fall back to cached state below.
+            }
+        }
+
+        const storedUser = localStorage.getItem('natively_auth_user');
+        if (!storedUser) {
+            setIsCalendarConnected(false);
+            return;
+        }
+
+        try {
+            const userData = JSON.parse(storedUser);
+            setIsCalendarConnected(Boolean(userData?.calendarConnected));
+        } catch {
+            setIsCalendarConnected(false);
+        }
+    };
+
     const fetchEvents = async () => {
         try {
             // Primary path: backend-auth Google calendar (token-based)
@@ -122,7 +155,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                     applyEvents(result.events);
                     // Backend responded with events payload => calendar connection is valid,
                     // even when there are zero events in the next window.
-                    setIsCalendarConnected(false);
+                    setIsCalendarConnected(true);
                     return;
                 } else if (result && result.success === false) {
                     // Backend returned an error, e.g. 'Calendar not connected'
@@ -218,20 +251,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         fetchMeetings();
         fetchEvents();
 
-        const syncCalendarFromLocalStorage = () => {
-            const storedUser = localStorage.getItem('natively_auth_user');
-            if (!storedUser) {
-                if (mounted) setIsCalendarConnected(false);
-                return;
-            }
-            try {
-                const userData = JSON.parse(storedUser);
-                if (mounted) setIsCalendarConnected(Boolean(userData?.calendarConnected));
-            } catch {
-                if (mounted) setIsCalendarConnected(false);
-            }
-        };
-        syncCalendarFromLocalStorage();
+        void syncCalendarConnection();
 
         let removeCalendarStatusListener: (() => void) | undefined;
         if (window.electronAPI?.onCalendarStatusChanged) {
@@ -254,11 +274,14 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         const handleCalendarStatusSync = (event: Event) => {
             const customEvent = event as CustomEvent<{ connected: boolean }>;
             if (!mounted) return;
+            if (localStorage.getItem('natively_auth_token')) {
+                return;
+            }
             if (customEvent.detail && typeof customEvent.detail.connected === 'boolean') {
                 setIsCalendarConnected(customEvent.detail.connected);
                 return;
             }
-            syncCalendarFromLocalStorage();
+            void syncCalendarConnection();
         };
         window.addEventListener('natively:calendar-status-changed', handleCalendarStatusSync as EventListener);
 
@@ -1023,21 +1046,24 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                             <div className="md:col-span-1 rounded-xl overflow-hidden bg-bg-elevated relative group flex flex-col items-center pt-6 text-center">
                                                 {/* Backdrop Image */}
                                                 <div className="absolute inset-0">
-                                                    <img src={calender} alt="" className="w-full h-full object-cover opacity-100 transition-opacity duration-500 translate-x--1 translate-y-[1px] scale-105" />
+                                                    <img src={calender} alt="" className="w-full h-full object-cover opacity-100 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] translate-x--1 translate-y-[1px] scale-105 group-hover:scale-[1.07]" />
+                                                    <div className={`absolute inset-0 ${isLight ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.02))]' : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.24),rgba(2,6,23,0.08))]'}`} />
+                                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(129,140,248,0.28),transparent_34%),radial-gradient(circle_at_50%_70%,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.12),transparent_36%)] opacity-95" />
+                                                    <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16),rgba(255,255,255,0))] opacity-40" />
                                                 </div>
 
                                                 {/* Content Layer */}
                                                 <div className="relative z-10 w-full flex flex-col items-center h-full">
-                                                    <h3 className="text-[19px] leading-tight mb-4">
+                                                    <h3 className="text-[19px] leading-tight mb-4 tracking-[-0.02em]">
                                                         {isCalendarConnected ? (
                                                             <>
                                                                 <span className="block font-semibold text-white">Calendar linked</span>
-                                                                <span className="block font-medium text-white/60 text-[0.95em]">Events synced</span>
+                                                                <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">Events synced</span>
                                                             </>
                                                         ) : (
                                                             <>
                                                                 <span className="block font-semibold text-white">Link your calendar to</span>
-                                                                <span className="block font-medium text-white/60 text-[0.95em]">see upcoming events</span>
+                                                                <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">see upcoming events</span>
                                                             </>
                                                         )}
                                                     </h3>

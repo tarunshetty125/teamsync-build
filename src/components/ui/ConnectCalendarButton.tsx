@@ -12,27 +12,57 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
     const [connected, setConnected] = useState(false);
 
     useEffect(() => {
-        // Check localStorage first (backend auth stores calendarConnected in user data)
-        const storedUser = localStorage.getItem('natively_auth_user');
-        const hasToken = !!localStorage.getItem('natively_auth_token');
-        let hasBackendConnected = false;
+        let cancelled = false;
+        let unsubscribe: (() => void) | undefined;
 
-        if (storedUser) {
-            try {
-                const userData = JSON.parse(storedUser);
-                if (userData.calendarConnected) {
-                    setConnected(true);
-                    hasBackendConnected = true;
-                    props.onConnect?.();
+        const syncConnectionState = async () => {
+            const token = localStorage.getItem('natively_auth_token');
+            const storedUser = localStorage.getItem('natively_auth_user');
+
+            if (token) {
+                try {
+                    const response = await fetch('http://localhost:3456/auth/me', {
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
+
+                    if (response.ok) {
+                        const userData = await response.json();
+                        if (cancelled) return;
+
+                        const isConnected = Boolean(userData?.calendarConnected);
+                        setConnected(isConnected);
+                        if (isConnected) {
+                            props.onConnect?.();
+                        }
+                    }
+                } catch {
+                    // Fall through to cached or legacy state below.
                 }
-            } catch {}
-        }
+            }
 
-        if (window.electronAPI) {
-            // Also check old CalendarManager as fallback, but ONLY if not authenticated via backend.
-            // If they have a backend token, the backend is the source of truth.
-            if (!hasBackendConnected && !hasToken) {
+            if (!token && storedUser) {
+                try {
+                    const userData = JSON.parse(storedUser);
+                    if (cancelled) return;
+
+                    if (userData.calendarConnected) {
+                        setConnected(true);
+                        props.onConnect?.();
+                        return;
+                    }
+                } catch {
+                    // Ignore malformed local storage payload.
+                }
+            }
+
+            if (!window.electronAPI) {
+                return;
+            }
+
+            if (!token) {
                 window.electronAPI.getCalendarStatus().then(status => {
+                    if (cancelled) return;
+
                     if (status.connected) {
                         setConnected(true);
                         props.onConnect?.();
@@ -40,8 +70,13 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
                 });
             }
 
-            // Listen for calendar status changes from other views (Settings <-> Launcher sync)
-            const unsubscribe = window.electronAPI.onCalendarStatusChanged?.((status) => {
+            unsubscribe = window.electronAPI.onCalendarStatusChanged?.((status) => {
+                if (cancelled) return;
+
+                if (token && status.connected && !status.email) {
+                    return;
+                }
+
                 setConnected(status.connected);
                 const storedUser = localStorage.getItem('natively_auth_user');
                 if (storedUser) {
@@ -58,9 +93,14 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
                     props.onConnect?.();
                 }
             });
+        };
 
-            return () => { unsubscribe?.(); };
-        }
+        void syncConnectionState();
+
+        return () => {
+            cancelled = true;
+            unsubscribe?.();
+        };
     }, []);
 
     const handleClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
