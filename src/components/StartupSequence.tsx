@@ -36,7 +36,7 @@ const StartupSequence: React.FC<StartupSequenceProps> = ({ onComplete, isReady }
             <motion.img
                 src={appIcon}
                 alt="App Icon"
-                className="w-24 h-24 object-contain relative z-10"
+                className="w-32 h-32 object-contain relative z-10"
                 initial={{
                     opacity: 0,
                     scale: 0.5,

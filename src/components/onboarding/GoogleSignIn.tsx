@@ -332,7 +332,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
               className="text-[32px] font-semibold text-white tracking-[-0.02em] mb-2 text-center"
               style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}
             >
-              Welcome to TeamSync
+              Cheat on Everything
             </motion.h1>
 
             <motion.p
@@ -527,9 +527,9 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
             {/* Footer */}
             <motion.div
               variants={itemVariants}
-              className="mt-12 flex flex-col items-center gap-2"
+              className="mt-12 flex flex-col items-center gap-2 px-5 py-3.5 border border-white/[0.08] rounded-2xl w-full max-w-[320px]"
             >
-              <p className="text-[11px] text-white/15 text-center leading-relaxed">
+              <p className="text-[11px] text-[#9E9E9E] text-center leading-relaxed">
                 By continuing, you agree to TeamSync's Terms of Service and Privacy Policy.
               </p>
             </motion.div>
