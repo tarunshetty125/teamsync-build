@@ -316,10 +316,26 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         setIsPrepared(true);
     };
 
+    const openMeetingLink = async (link?: string) => {
+        if (!link) return;
+        if (window.electronAPI?.openExternal) {
+            await window.electronAPI.openExternal(link);
+            return;
+        }
+
+        window.open(link, '_blank', 'noopener,noreferrer');
+    };
+
     const handleStartPreparedMeeting = async () => {
         if (!preparedEvent) return;
         analytics.trackCommandExecuted('start_prepared_meeting');
         try {
+            const meetingLink = preparedEvent.link || preparedEvent.meetingLink;
+            if (meetingLink) {
+                await openMeetingLink(meetingLink);
+                setIsPrepared(false);
+                return;
+            }
             const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
             const outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
 
@@ -930,7 +946,9 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                             Prepare
                                                         </button>
                                                         <button
-                                                            onClick={onStartMeeting}
+                                                            onClick={() => {
+                                                                onStartMeeting();
+                                                            }}
                                                             className={`px-4 py-2 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary transition-all ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/5'}`}
                                                         >
                                                             Start now
