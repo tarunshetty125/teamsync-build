@@ -44,7 +44,7 @@ export class SttSupervisor extends EventEmitter {
   private readonly sourceLabel: string;
   private readonly adapters: StreamingSttAdapter[];
   private readonly replayBuffer: ReplayBuffer;
-  private readonly unsubscribeFns: Array<() => void> = [];
+  private unsubscribeFns: Array<() => void> = [];
 
   private activeAdapterIndex = -1;
   private started = false;
@@ -98,10 +98,7 @@ export class SttSupervisor extends EventEmitter {
     this.maxPendingBytes = Math.max(256 * 1024, options.maxPendingBytes ?? Number(process.env.STT_MAX_PENDING_BYTES || 8 * 1024 * 1024));
     this.maintenanceIntervalMs = Math.max(5_000, options.maintenanceIntervalMs ?? Number(process.env.STT_MAINTENANCE_INTERVAL_MS || 60_000));
 
-    this.unsubscribeFns = this.adapters.flatMap((adapter, index) => ([
-      adapter.onTranscript((event) => this.handleTranscript(index, event)),
-      adapter.onFatal((event) => this.handleFatal(index, event)),
-    ]));
+    this.unsubscribeFns = [];
   }
 
   public getActiveProviderName(): string {
@@ -111,10 +108,13 @@ export class SttSupervisor extends EventEmitter {
     return this.adapters[this.activeAdapterIndex]?.name || "inactive";
   }
 
-  public start(): void {
+  public start(sessionId?: string): void {
     if (this.started) {
       return;
     }
+    
+    // Store the session ID to bind emitted events to this specific meeting session lifecycle
+    (this as any)._activeSessionId = sessionId;
 
     this.started = true;
     this.startedAt = Date.now();
@@ -327,6 +327,26 @@ export class SttSupervisor extends EventEmitter {
       adapter.setCredentials?.(this.credentialsPath);
     }
 
+    // Clear previous adapter bindings to prevent duplicate handlers on failover
+    this.unsubscribeFns.forEach(fn => fn());
+    this.unsubscribeFns = [];
+
+    // Capture the current session ID in the closure
+    const activeSessionId = (this as any)._activeSessionId;
+
+    this.unsubscribeFns.push(
+      adapter.onTranscript((event) => {
+        // 🔥 Zero Cross-Contamination Guard: If the supervisor's session ID has changed
+        // since this closure was created, drop the event immediately.
+        if (activeSessionId !== (this as any)._activeSessionId) return;
+        this.handleTranscript(index, event);
+      }),
+      adapter.onFatal((event) => {
+        if (activeSessionId !== (this as any)._activeSessionId) return;
+        this.handleFatal(index, event);
+      })
+    );
+
     this.activeAdapterIndex = index;
     this.getProviderMetric(adapter.name).starts += 1;
     this.logDebug(`active_provider=${adapter.name}`);
@@ -403,6 +423,7 @@ export class SttSupervisor extends EventEmitter {
       ...event,
       provider: providerName,
       sourceLabel: this.sourceLabel,
+      _sessionId: (this as any)._activeSessionId,
     });
     this.emitMetrics();
   }

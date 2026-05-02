@@ -1124,12 +1124,19 @@ export class AppState {
         return;
       }
 
+      // 🚨 Guard against buffered cross-contamination from old STT pipelines
+      const expectedSessionId = this.intelligenceManager.getSessionId();
+      if ((segment as any)._sessionId && (segment as any)._sessionId !== expectedSessionId) {
+        return;
+      }
+
       this.intelligenceManager.handleTranscript({
         speaker: speaker,
         text: segment.text,
         timestamp: Date.now(),
         final: segment.isFinal,
-        confidence: segment.confidence
+        confidence: segment.confidence,
+        _sessionId: (segment as any)._sessionId
       });
 
       // Feed final transcript to JIT RAG indexer
@@ -1137,8 +1144,9 @@ export class AppState {
         this.ragManager.feedLiveTranscript([{
           speaker: speaker,
           text: segment.text,
-          timestamp: Date.now()
-        }]);
+          timestamp: Date.now(),
+          _sessionId: (segment as any)._sessionId
+        }], expectedSessionId);
       }
 
       const helper = this.getWindowHelper();
@@ -1805,25 +1813,44 @@ export class AppState {
     return runSttLoadTest(stt, options);
   }
 
+  private _isStarting = false;
+
   public async startMeeting(metadata?: any): Promise<void> {
-    console.log('[Main] Starting Meeting...', metadata);
-
-    // Clear intelligence session state from any previous meeting
-    this.intelligenceManager.reset();
-
-    // PR #173: Reset audio recovery state for fresh session
-    this._systemAudioRecoveryInProgress = false;
-    this._systemAudioRecoveryAttempts = 0;
-    this._systemAudioConsecutiveFailures = 0;
-    if (this._systemAudioRecoveryTimer) {
-      clearTimeout(this._systemAudioRecoveryTimer);
-      this._systemAudioRecoveryTimer = null;
+    if (this._isStarting) {
+      console.warn('[Main] startMeeting called but already starting. Ignoring.');
+      return;
     }
+    this._isStarting = true;
+    
+    try {
+      console.log('[Main] Starting Meeting...', metadata);
 
-    if (!(await ensureMacMicrophoneAccess('meeting start'))) {
-      const message = 'Microphone access denied. Please allow microphone access in System Settings.';
-      this.broadcast('meeting-audio-error', message);
-      throw new Error(message);
+      // Clear intelligence session state from any previous meeting
+      this.intelligenceManager.reset();
+      
+      // Explicitly wipe the previous meeting's live RAG chunks to prevent memory leaks and payload explosion
+      if (this.ragManager) {
+        await this.ragManager.stopLiveIndexing();
+        this.ragManager.deleteMeetingData('live-meeting-current');
+      }
+
+      // PR #173: Reset audio recovery state for fresh session
+      this._systemAudioRecoveryInProgress = false;
+      this._systemAudioRecoveryAttempts = 0;
+      this._systemAudioConsecutiveFailures = 0;
+      if (this._systemAudioRecoveryTimer) {
+        clearTimeout(this._systemAudioRecoveryTimer);
+        this._systemAudioRecoveryTimer = null;
+      }
+
+      if (!(await ensureMacMicrophoneAccess('meeting start'))) {
+        const message = 'Microphone access denied. Please allow microphone access in System Settings.';
+        this.broadcast('meeting-audio-error', message);
+        throw new Error(message);
+      }
+    } catch (err) {
+      this._isStarting = false;
+      throw err;
     }
 
     // Check Screen Recording permission required for system audio capture
@@ -1886,13 +1913,15 @@ export class AppState {
         // LAZY INIT: Ensure pipeline is ready (if not reconfigured above)
         this.setupSystemAudioPipeline();
 
+        const currentSessionId = this.intelligenceManager.getSessionId();
+
         // Start System Audio
         this.systemAudioCapture?.start();
-        this.googleSTT?.start();
+        this.googleSTT?.start(currentSessionId);
 
         // Start Microphone
         this.microphoneCapture?.start();
-        this.googleSTT_User?.start();
+        this.googleSTT_User?.start(currentSessionId);
 
         // Start JIT RAG live indexing
         if (this.ragManager) {
@@ -1912,6 +1941,8 @@ export class AppState {
         console.error('[Main] Error initializing audio pipeline:', err);
         // Notify UI so user knows microphone/audio failed to start
         this.broadcast('meeting-audio-error', (err as Error).message || 'Audio pipeline failed to start');
+      } finally {
+        this._isStarting = false;
       }
     }, 0); // Defer to next event loop tick — ensures IPC response reaches renderer before audio init
   }

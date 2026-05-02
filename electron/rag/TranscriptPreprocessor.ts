@@ -6,6 +6,7 @@ export interface RawSegment {
     speaker: string;
     text: string;
     timestamp: number;  // ms
+    _sessionId?: string;
 }
 
 export interface CleanedSegment {

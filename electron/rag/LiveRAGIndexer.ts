@@ -63,9 +63,14 @@ export class LiveRAGIndexer {
      * Called by SessionTracker whenever new transcript arrives.
      * This is append-only — segments are never modified after being fed.
      */
-    feedSegments(segments: RawSegment[]): void {
+    feedSegments(segments: RawSegment[], sessionId?: string): void {
         if (!this.isActive || !this.meetingId) return;
-        this.allSegments.push(...segments);
+        
+        // Final ultimate safeguard: drop segments that leaked from old sessions
+        const validSegments = sessionId ? segments.filter(s => !s._sessionId || s._sessionId === sessionId) : segments;
+        if (validSegments.length === 0) return;
+
+        this.allSegments.push(...validSegments);
     }
 
     /**
@@ -125,6 +130,11 @@ export class LiveRAGIndexer {
                 for (let i = 0; i < chunkIds.length; i++) {
                     try {
                         const embedding = await this.embeddingPipeline.getEmbedding(indexedChunks[i].text);
+                        // 🔥 Guard: Abort if the session was cancelled or changed while we were waiting for the LLM API
+                        if (this.meetingId !== meetingId) {
+                            console.log(`[LiveRAGIndexer] Meeting changed during embedding. Dropping chunk.`);
+                            return;
+                        }
                         this.vectorStore.storeEmbedding(chunkIds[i], embedding);
                         embeddedCount++;
                     } catch (err) {
@@ -159,6 +169,17 @@ export class LiveRAGIndexer {
         if (this.timer) {
             clearInterval(this.timer);
             this.timer = null;
+        }
+
+        // Wait for any active background tick to finish before we do the final flush
+        const start = Date.now();
+        while (this.isProcessing) {
+            if (Date.now() - start > 5000) {
+                console.warn("[LiveRAGIndexer] Stop timeout reached while waiting for active tick to finish.");
+                // NOTE: In the future, emit this to the telemetry pipeline so we can alert on it if it happens often.
+                break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
         }
 
         // Final flush — process any remaining segments

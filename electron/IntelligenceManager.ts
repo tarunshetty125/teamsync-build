@@ -108,6 +108,10 @@ export class IntelligenceManager extends EventEmitter {
         return this.session.getLastAssistantMessage();
     }
 
+    getSessionId(): string {
+        return this.session.sessionId;
+    }
+
     getFormattedContext(lastSeconds: number = 120): string {
         return this.session.getFormattedContext(lastSeconds);
     }

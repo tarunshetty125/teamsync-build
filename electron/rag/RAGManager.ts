@@ -287,8 +287,8 @@ export class RAGManager {
      * Feed new transcript segments to the live indexer.
      * Call whenever new transcript arrives during the meeting.
      */
-    feedLiveTranscript(segments: RawSegment[]): void {
-        this.liveIndexer.feedSegments(segments);
+    feedLiveTranscript(segments: RawSegment[], sessionId?: string): void {
+        this.liveIndexer.feedSegments(segments, sessionId);
     }
 
     /**

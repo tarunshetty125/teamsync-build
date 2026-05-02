@@ -12,6 +12,7 @@ export interface TranscriptSegment {
     timestamp: number;
     final: boolean;
     confidence?: number;
+    _sessionId?: string;
 }
 
 export interface SuggestionTrigger {
@@ -38,6 +39,9 @@ export class SessionTracker {
     private contextItems: ContextItem[] = [];
     private readonly contextWindowDuration: number = 120; // 120 seconds
     private readonly maxContextItems: number = 500;
+
+    // Unique ID for the current session to guard against cross-contamination from buffered STT events
+    public sessionId: string = Date.now().toString();
 
     // Last assistant message for follow-up mode
     private lastAssistantMessage: string | null = null;
@@ -78,6 +82,9 @@ export class SessionTracker {
 
     // Reference to RecapLLM for epoch summarization (injected later)
     private recapLLM: RecapLLM | null = null;
+
+    // Guard against duplicate transcript bursts during failover overlap
+    private lastTranscriptHash: string | null = null;
 
     // ============================================
     // Configuration
@@ -189,6 +196,31 @@ export class SessionTracker {
      * Returns { role, isRefinementCandidate } so the engine can decide whether to trigger follow-up.
      */
     addTranscript(segment: TranscriptSegment): { role: 'interviewer' | 'user' | 'assistant' } | null {
+        // 🔥 Double-Layer Guard: ensure segment wasn't emitted by an old pipeline instance
+        if (segment._sessionId && segment._sessionId !== this.sessionId) {
+            console.warn(`[SessionTracker] Dropped stale transcript from old session (${segment._sessionId})`);
+            return null;
+        }
+
+        // 🔥 Chronological Guard: Drop events that were constructed before this session even started
+        // Note: Included a 1000ms clock skew tolerance for early event buffers
+        if (segment.timestamp < this.sessionStartTime - 1000) {
+            console.warn(`[SessionTracker] Dropped chronologically stale transcript (timestamp: ${segment.timestamp} < start: ${this.sessionStartTime - 1000})`);
+            return null;
+        }
+
+        // 🔥 Duplicate Burst Guard: Prevent identical overlap from multi-provider failover
+        // 1. Text normalization (combats provider casing/punctuation drift)
+        const norm = segment.text.trim().replace(/\s+/g, ' ').toLowerCase();
+        // 2. Timestamp bucketing to 10ms (combats precision differences between STT APIs)
+        const ts = Math.round(segment.timestamp / 10) * 10;
+        
+        const hash = `${segment.speaker}|${norm}|${ts}`;
+        if (this.lastTranscriptHash === hash) {
+            return null; // Duplicate dropped silently
+        }
+        this.lastTranscriptHash = hash;
+
         if (!segment.final) return null;
 
         const role = this.mapSpeakerToRole(segment.speaker);
@@ -381,6 +413,13 @@ export class SessionTracker {
     }
 
     /**
+     * Approximate token estimation (1 token ≈ 3.5 chars)
+     */
+    private estimateTokens(text: string): number {
+        return Math.ceil(text.length / 3.5);
+    }
+
+    /**
      * Get full session context from accumulated transcript (User + Interviewer + Assistant)
      */
     getFullSessionContext(): string {
@@ -394,7 +433,20 @@ export class SessionTracker {
 
         // Prepend epoch summaries for full session context preservation
         if (this.transcriptEpochSummaries.length > 0) {
-            const epochContext = this.transcriptEpochSummaries.join('\n---\n');
+            let epochContext = '';
+            let currentTokens = 0;
+            const MAX_SAFE_SUMMARY_TOKENS = 2800; // Increased buffer safety
+            
+            // Iterate backwards to prioritize the most recent summaries
+            for (let i = this.transcriptEpochSummaries.length - 1; i >= 0; i--) {
+                const s = this.transcriptEpochSummaries[i];
+                const sTokens = this.estimateTokens(s);
+                if (currentTokens + sTokens > MAX_SAFE_SUMMARY_TOKENS) {
+                    break;
+                }
+                epochContext = s + (epochContext ? '\n---\n' + epochContext : '');
+                currentTokens += sTokens;
+            }
             return `[SESSION HISTORY - EARLIER DISCUSSION]\n${epochContext}\n\n[RECENT TRANSCRIPT]\n${recentTranscript}`;
         }
 
@@ -468,6 +520,7 @@ export class SessionTracker {
     // ============================================
 
     reset(): void {
+        this.sessionId = Date.now().toString() + Math.random().toString(36).substring(7);
         this.contextItems = [];
         this.fullTranscript = [];
         this.fullUsage = [];
@@ -480,6 +533,7 @@ export class SessionTracker {
         this.codingQuestionSource = null;
         this.codingQuestionSetAt = null;
         this.recentInterviewerBuffer = [];
+        this.lastTranscriptHash = null;
     }
 
     // ============================================
