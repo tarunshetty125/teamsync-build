@@ -56,6 +56,26 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   };
 
+  const broadcastNegotiationStateChanged = (): void => {
+    try {
+      const orchestrator = appState.getKnowledgeOrchestrator();
+      if (!orchestrator) return;
+      const tracker = orchestrator.getNegotiationTracker();
+      const payload = {
+        enabled: orchestrator.isNegotiationContextEnabled?.() ?? tracker.isActive(),
+        isActive: tracker.isActive(),
+        state: tracker.getState(),
+      };
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('negotiation_state_changed', payload);
+        }
+      });
+    } catch (error) {
+      console.warn('[IPC] Failed to broadcast negotiation state change:', error);
+    }
+  };
+
   // Clears the active mode when the pro license is lost so non-general mode prompts
   // and reference files stop being injected into LLM calls.
   const clearActiveModeOnLicenseLoss = (): void => {
@@ -3264,6 +3284,10 @@ export function initializeIpcHandlers(appState: AppState): void {
       if (!script) {
         return { success: false, error: 'Could not generate negotiation script. Ensure a resume and job description are uploaded.' };
       }
+      if (orchestrator.isNegotiationContextEnabled?.()) {
+        orchestrator.setNegotiationContextEnabled(true);
+        broadcastNegotiationStateChanged();
+      }
       if (regenerated && hashChanged) {
         const aotState = appState.getAOTState();
         BrowserWindow.getAllWindows().forEach(win => {
@@ -3291,8 +3315,34 @@ export function initializeIpcHandlers(appState: AppState): void {
       const tracker = orchestrator.getNegotiationTracker();
       return {
         success: true,
+        enabled: orchestrator.isNegotiationContextEnabled?.() ?? tracker.isActive(),
         state: tracker.getState(),
         isActive: tracker.isActive(),
+      };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  safeHandle("profile:set-negotiation-context-enabled", async (_, enabled: boolean) => {
+    try {
+      if (!isProOrTrialActive()) {
+        return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
+      }
+      const orchestrator = appState.getKnowledgeOrchestrator();
+      if (!orchestrator) return { success: false, error: 'Engine not ready' };
+      const hasScript = !!orchestrator.getNegotiationScript?.();
+      if (enabled && !hasScript) {
+        return { success: false, error: 'Generate a negotiation script first.' };
+      }
+      const result = orchestrator.setNegotiationContextEnabled(Boolean(enabled));
+      broadcastNegotiationStateChanged();
+      return {
+        success: true,
+        enabled: result.enabled,
+        isActive: result.state.phase !== 'INACTIVE',
+        state: result.state,
+        hasScript,
       };
     } catch (error: any) {
       return { success: false, error: error.message };
@@ -3304,6 +3354,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) return { success: false };
       orchestrator.resetNegotiationSession();
+      broadcastNegotiationStateChanged();
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };

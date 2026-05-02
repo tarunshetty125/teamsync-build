@@ -338,12 +338,14 @@ export interface ElectronAPI {
   onProfileModeChanged: (callback: (enabled: boolean) => void) => () => void
   getTavilyKey: () => Promise<string | null>
   profileGenerateNegotiation: (force?: boolean) => Promise<{ success: boolean; script?: any; error?: string }>
-  profileGetNegotiationState: () => Promise<{ success: boolean; state?: any; isActive?: boolean; error?: string }>
+  profileGetNegotiationState: () => Promise<{ success: boolean; enabled?: boolean; state?: any; isActive?: boolean; error?: string }>
+  profileSetNegotiationContextEnabled: (enabled: boolean) => Promise<{ success: boolean; enabled?: boolean; state?: any; isActive?: boolean; hasScript?: boolean; error?: string }>
   profileResetNegotiation: () => Promise<{ success: boolean; error?: string }>
   profileGetNotes: () => Promise<{ success: boolean; content: string; error?: string }>
   profileSaveNotes: (content: string) => Promise<{ success: boolean; error?: string }>
   onNegotiationRestored: (callback: (data: { restored: boolean }) => void) => () => void
   onNegotiationRegenerated: (callback: (data: { regenerated: boolean }) => void) => () => void
+  onNegotiationStateChanged: (callback: (data: { enabled: boolean; isActive: boolean; state: any }) => void) => () => void
   onGapAnalysisRestored: (callback: (data: { restored: boolean }) => void) => () => void
   onQuestionsRestored: (callback: (data: { restored: boolean }) => void) => () => void
   onKnowledgeEngineReady: (callback: (data: { isReady: boolean; restoredNodeCount: number; restoredOutputs: { negotiationScript: boolean; gapAnalysis: boolean; questions: boolean } }) => void) => () => void

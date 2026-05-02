@@ -5,7 +5,7 @@
  *   • Company · Role  (gray, from activeJD)
  *   • Resume loaded   (amber, highlighted)
  *   • X YOE · Domain  (gray, from experience)
- *   • Negotiation ON  (amber, highlighted, if negotiation script loaded)
+ *   • Negotiation toggle (amber, inline with the other context chips)
  *
  * Animation: staggered chip entrance using Emil Kowalski's design principles:
  *   - ease-out (cubic-bezier(0.23, 1, 0.32, 1)) for entry
@@ -69,8 +69,14 @@ interface ProfileData {
 interface ProContextBarProps {
     /** Whether the profile intelligence mode is active */
     profileModeEnabled: boolean;
-    /** Whether a negotiation script is loaded */
+    /** Whether live negotiation context is enabled */
     negotiationEnabled?: boolean;
+    /** Whether a negotiation script exists and can be toggled into context */
+    hasNegotiationScript?: boolean;
+    /** Whether the negotiation toggle is updating */
+    negotiationLoading?: boolean;
+    /** Toggle live negotiation context in the orchestrator */
+    onToggleNegotiation?: (enabled: boolean) => void;
 }
 
 // ─── Animation Constants (Emil's principles) ─────────────────────────────────
@@ -124,6 +130,9 @@ const barVariants = {
 const ProContextBar: React.FC<ProContextBarProps> = ({
     profileModeEnabled,
     negotiationEnabled = false,
+    hasNegotiationScript = false,
+    negotiationLoading = false,
+    onToggleNegotiation,
 }) => {
     const [profileData, setProfileData] = useState<ProfileData | null>(null);
 
@@ -191,11 +200,8 @@ const ProContextBar: React.FC<ProContextBarProps> = ({
             result.push({ label, color: 'gold' });
         }
 
-        // Chip 4: Negotiation ON (amber)
-        result.push({ label: 'Negotiation ON', color: 'amber' });
-
         return result;
-    }, [profileData, negotiationEnabled]);
+    }, [profileData]);
 
     // Don't render when profile mode is off
     if (!profileModeEnabled) return null;
@@ -219,14 +225,13 @@ const ProContextBar: React.FC<ProContextBarProps> = ({
                     WebkitBackdropFilter: 'blur(20px) saturate(140%)',
                 }}
             >
-                {/* Title */}
                 <div
+                    className="mb-2"
                     style={{
                         fontSize: '10px',
                         letterSpacing: '0.12em',
                         color: '#F59E0B',
                         fontWeight: 600,
-                        marginBottom: '8px',
                         textTransform: 'uppercase' as const,
                     }}
                 >
@@ -234,7 +239,7 @@ const ProContextBar: React.FC<ProContextBarProps> = ({
                 </div>
 
                 {/* Chips — staggered entry */}
-                <div className="flex flex-nowrap gap-1.5 overflow-hidden">
+                <div className="flex flex-nowrap items-center gap-1.5 overflow-hidden">
                     <AnimatePresence mode="popLayout">
                         {chips.map((chip, i) => (
                             <motion.span
@@ -257,12 +262,82 @@ const ProContextBar: React.FC<ProContextBarProps> = ({
                                     border: CHIP_COLORS[chip.color].border,
                                     cursor: 'default',
                                     whiteSpace: 'nowrap',
-                                    flexShrink: 0,
+                                    flexShrink: chip.color === 'lavender' ? 1 : 0,
+                                    minWidth: 0,
+                                    maxWidth: chip.color === 'lavender' ? '280px' : undefined,
+                                    overflow: chip.color === 'lavender' ? 'hidden' : undefined,
+                                    textOverflow: chip.color === 'lavender' ? 'ellipsis' : undefined,
                                 }}
                             >
                                 {chip.label}
                             </motion.span>
                         ))}
+                        {hasNegotiationScript && (
+                            <motion.button
+                                key="negotiation-toggle"
+                                type="button"
+                                custom={chips.length}
+                                variants={chipVariants}
+                                initial="hidden"
+                                animate="visible"
+                                exit="exit"
+                                layout
+                                disabled={negotiationLoading || !onToggleNegotiation}
+                                onClick={() => onToggleNegotiation?.(!negotiationEnabled)}
+                                className="no-drag transition-all disabled:cursor-wait disabled:opacity-60"
+                                aria-pressed={negotiationEnabled}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '8px',
+                                    minWidth: '118px',
+                                    background: negotiationEnabled ? 'rgba(16, 185, 129, 0.14)' : 'rgba(239, 68, 68, 0.14)',
+                                    padding: '4px 8px 4px 10px',
+                                    borderRadius: '999px',
+                                    fontSize: '11px',
+                                    color: negotiationEnabled ? '#D1FAE5' : '#FCA5A5',
+                                    fontWeight: 600,
+                                    border: negotiationEnabled ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(239, 68, 68, 0.3)',
+                                    boxShadow: negotiationEnabled ? 'inset 0 1px 0 rgba(255,255,255,0.05), 0 6px 18px rgba(16,185,129,0.12)' : 'inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 18px rgba(239,68,68,0.08)',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                <span style={{ letterSpacing: '0.01em' }}>
+                                    {negotiationLoading ? 'Updating negotiation' : 'Negotiation'}
+                                </span>
+                                <span
+                                    aria-hidden="true"
+                                    style={{
+                                        position: 'relative',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        width: '28px',
+                                        height: '18px',
+                                        borderRadius: '999px',
+                                        background: negotiationEnabled ? '#1FD39A' : '#EF4444',
+                                        border: negotiationEnabled ? '1px solid rgba(31, 211, 154, 0.6)' : '1px solid rgba(248, 113, 113, 0.55)',
+                                        transition: 'background 180ms ease, border-color 180ms ease',
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            position: 'absolute',
+                                            top: '1px',
+                                            left: negotiationEnabled ? '11px' : '1px',
+                                            width: '14px',
+                                            height: '14px',
+                                            borderRadius: '999px',
+                                            background: '#050505',
+                                            boxShadow: '0 1px 4px rgba(0,0,0,0.28)',
+                                            transition: 'left 180ms cubic-bezier(0.23, 1, 0.32, 1)',
+                                        }}
+                                    />
+                                </span>
+                            </motion.button>
+                        )}
                     </AnimatePresence>
                 </div>
             </motion.div>

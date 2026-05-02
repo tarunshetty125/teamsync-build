@@ -116,6 +116,7 @@ interface SttMetricsData {
 interface NativelyInterfaceProps {
     onEndMeeting?: () => void;
     overlayOpacity?: number;
+    hasProContextAccess?: boolean;
 }
 
 // ── C1 Fix: Monotonic message ID counter to prevent collisions under rapid updates ──
@@ -284,8 +285,90 @@ function intentReducer(state: IntentState, action: IntentAction): IntentState {
     }
 }
 
-const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, overlayOpacity = OVERLAY_OPACITY_DEFAULT }) => {
+const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
+    onEndMeeting,
+    overlayOpacity = OVERLAY_OPACITY_DEFAULT,
+    hasProContextAccess = false,
+}) => {
     const isLightTheme = useResolvedTheme() === 'light';
+    const [negotiationContextEnabled, setNegotiationContextEnabled] = useState(false);
+    const [negotiationToggleLoading, setNegotiationToggleLoading] = useState(false);
+    const [hasNegotiationScript, setHasNegotiationScript] = useState(false);
+
+    const refreshNegotiationContextState = useCallback(async () => {
+        if (!hasProContextAccess) {
+            setNegotiationContextEnabled(false);
+            setHasNegotiationScript(false);
+            return;
+        }
+
+        try {
+            const [negotiationState, aotState] = await Promise.all([
+                window.electronAPI?.profileGetNegotiationState?.(),
+                window.electronAPI?.getAOTState?.(),
+            ]);
+            setNegotiationContextEnabled(Boolean(negotiationState?.enabled ?? negotiationState?.isActive));
+            setHasNegotiationScript(Boolean(aotState?.negotiation?.exists));
+        } catch {
+            setNegotiationContextEnabled(false);
+        }
+    }, [hasProContextAccess]);
+
+    const handleToggleNegotiationContext = useCallback(async (enabled: boolean) => {
+        if (!hasProContextAccess || !window.electronAPI?.profileSetNegotiationContextEnabled) {
+            return;
+        }
+
+        setNegotiationToggleLoading(true);
+        try {
+            const result = await window.electronAPI.profileSetNegotiationContextEnabled(enabled);
+            if (result?.success) {
+                const nextEnabled = Boolean(result.enabled ?? result.isActive ?? enabled);
+                setNegotiationContextEnabled(nextEnabled);
+                if (typeof result.hasScript === 'boolean') {
+                    setHasNegotiationScript(result.hasScript);
+                }
+                console.log(`[Overlay] Negotiation context ${nextEnabled ? 'on' : 'off'}`);
+            } else if (result?.error) {
+                console.warn('[Overlay] Failed to toggle negotiation context:', result.error);
+            }
+        } catch (error) {
+            console.warn('[Overlay] Failed to toggle negotiation context:', error);
+        } finally {
+            setNegotiationToggleLoading(false);
+        }
+    }, [hasProContextAccess]);
+
+    useEffect(() => {
+        void refreshNegotiationContextState();
+    }, [refreshNegotiationContextState]);
+
+    useEffect(() => {
+        const unsubscribers: Array<() => void> = [];
+        if (window.electronAPI?.onNegotiationStateChanged) {
+            unsubscribers.push(window.electronAPI.onNegotiationStateChanged((data) => {
+                setNegotiationContextEnabled(Boolean(data?.enabled ?? data?.isActive));
+            }));
+        }
+        if (window.electronAPI?.onNegotiationRestored) {
+            unsubscribers.push(window.electronAPI.onNegotiationRestored(() => {
+                void refreshNegotiationContextState();
+            }));
+        }
+        if (window.electronAPI?.onNegotiationRegenerated) {
+            unsubscribers.push(window.electronAPI.onNegotiationRegenerated(() => {
+                void refreshNegotiationContextState();
+            }));
+        }
+        if (window.electronAPI?.onKnowledgeEngineReady) {
+            unsubscribers.push(window.electronAPI.onKnowledgeEngineReady(() => {
+                void refreshNegotiationContextState();
+            }));
+        }
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+        };
+    }, [refreshNegotiationContextState]);
 
     // Source label tracking: set by handlers, read by stream listeners
     const currentSourceRef = useRef<string | undefined>(undefined);
@@ -3127,8 +3210,11 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                         {/* ─── Pro Context Bar ─────────────────────────────── */}
                         <div className="w-[600px] max-w-full">
                             <ProContextBar
-                                profileModeEnabled={true}
-                                negotiationEnabled={messages.some(m => m.isNegotiationCoaching)}
+                                profileModeEnabled={hasProContextAccess}
+                                negotiationEnabled={negotiationContextEnabled}
+                                hasNegotiationScript={hasNegotiationScript}
+                                negotiationLoading={negotiationToggleLoading}
+                                onToggleNegotiation={handleToggleNegotiationContext}
                             />
                         </div>
 

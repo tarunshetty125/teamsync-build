@@ -472,6 +472,7 @@ const App: React.FC = () => {
                 <NativelyInterface
                   onEndMeeting={handleEndMeeting}
                   overlayOpacity={overlayOpacity}
+                  hasProContextAccess={isPremiumActive || !!activeTrial}
                 />
               </div>
               <ToastViewport />

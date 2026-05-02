@@ -284,10 +284,12 @@ interface ElectronAPI {
   runCompanyResearch: (company: string, role: string, forceRefresh?: boolean) => Promise<{ success: boolean; status?: string; research?: any; error?: string }>;
   getTavilyKey: () => Promise<string | null>;
   profileGenerateNegotiation: (force?: boolean) => Promise<{ success: boolean; script?: any; error?: string }>;
-  profileGetNegotiationState: () => Promise<{ success: boolean; state?: any; isActive?: boolean; error?: string }>;
+  profileGetNegotiationState: () => Promise<{ success: boolean; enabled?: boolean; state?: any; isActive?: boolean; error?: string }>;
+  profileSetNegotiationContextEnabled: (enabled: boolean) => Promise<{ success: boolean; enabled?: boolean; state?: any; isActive?: boolean; hasScript?: boolean; error?: string }>;
   profileResetNegotiation: () => Promise<{ success: boolean; error?: string }>;
   onNegotiationRestored: (callback: (data: { restored: boolean }) => void) => () => void;
   onNegotiationRegenerated: (callback: (data: { regenerated: boolean }) => void) => () => void;
+  onNegotiationStateChanged: (callback: (data: { enabled: boolean; isActive: boolean; state: any }) => void) => () => void;
   onGapAnalysisRestored: (callback: (data: { restored: boolean }) => void) => () => void;
   onQuestionsRestored: (callback: (data: { restored: boolean }) => void) => () => void;
   onProfileResearchUpdated: (callback: (data: { company: string; role: string; updatedAt: string; sourceCount: number }) => void) => () => void;
@@ -1190,6 +1192,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getTavilyKey: () => ipcRenderer.invoke('get-tavily-key'),
   profileGenerateNegotiation: (force?: boolean) => ipcRenderer.invoke('profile:generate-negotiation', force),
   profileGetNegotiationState: () => ipcRenderer.invoke('profile:get-negotiation-state'),
+  profileSetNegotiationContextEnabled: (enabled: boolean) => ipcRenderer.invoke('profile:set-negotiation-context-enabled', enabled),
   profileResetNegotiation: () => ipcRenderer.invoke('profile:reset-negotiation'),
   profileGetNotes: () => ipcRenderer.invoke('profile:get-notes'),
   profileSaveNotes: (content: string) => ipcRenderer.invoke('profile:save-notes', content),
@@ -1205,6 +1208,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on('negotiation_regenerated', subscription);
     return () => {
       ipcRenderer.removeListener('negotiation_regenerated', subscription);
+    };
+  },
+  onNegotiationStateChanged: (callback: (data: { enabled: boolean; isActive: boolean; state: any }) => void) => {
+    const subscription = (_: any, data: { enabled: boolean; isActive: boolean; state: any }) => callback(data);
+    ipcRenderer.on('negotiation_state_changed', subscription);
+    return () => {
+      ipcRenderer.removeListener('negotiation_state_changed', subscription);
     };
   },
   onGapAnalysisRestored: (callback: (data: { restored: boolean }) => void) => {
