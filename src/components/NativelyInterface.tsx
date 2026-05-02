@@ -291,6 +291,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     hasProContextAccess = false,
 }) => {
     const isLightTheme = useResolvedTheme() === 'light';
+    const [forceSystemDesignMode, setForceSystemDesignMode] = useState(() => {
+        return localStorage.getItem('natively_force_system_design_mode') === 'true';
+    });
     const [negotiationContextEnabled, setNegotiationContextEnabled] = useState(false);
     const [negotiationToggleLoading, setNegotiationToggleLoading] = useState(false);
     const [hasNegotiationScript, setHasNegotiationScript] = useState(false);
@@ -370,6 +373,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         };
     }, [refreshNegotiationContextState]);
 
+    useEffect(() => {
+        localStorage.setItem('natively_force_system_design_mode', String(forceSystemDesignMode));
+    }, [forceSystemDesignMode]);
+
     // Source label tracking: set by handlers, read by stream listeners
     const currentSourceRef = useRef<string | undefined>(undefined);
 
@@ -381,6 +388,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         'Follow Up Questions': { light: 'bg-cyan-100/80 text-cyan-700 border-cyan-200/60', dark: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/25' },
         'Code Hint':      { light: 'bg-purple-100/80 text-purple-700 border-purple-200/60', dark: 'bg-purple-500/15 text-purple-300 border-purple-400/25' },
         'Brainstorm':     { light: 'bg-pink-100/80 text-pink-700 border-pink-200/60', dark: 'bg-pink-500/15 text-pink-300 border-pink-400/25' },
+        'System Design Trade-offs': { light: 'bg-emerald-100/80 text-emerald-700 border-emerald-200/60', dark: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
         'Answer Now':     { light: 'bg-indigo-100/80 text-indigo-700 border-indigo-200/60', dark: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
         'Manual Input':   { light: 'bg-slate-100/80 text-slate-600 border-slate-200/60', dark: 'bg-slate-500/15 text-slate-300 border-slate-400/25' },
     };
@@ -394,6 +402,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         'Recap': '📝',
         'Code Hint': '💻',
         'Brainstorm': '🧠',
+        'System Design Trade-offs': '⚖️',
         'Answer Now': '⚡',
         'Manual Input': '⌨️',
     };
@@ -510,6 +519,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     });
     
     const detectedQuestionType = intentState.detectedType;
+    const effectiveQuestionType: DetectedQuestionType = forceSystemDesignMode ? 'system_design' : detectedQuestionType;
 
     // Refs for safe synchronous access in visibility listener
     const latestCombinedRef = useRef<string>('');
@@ -1231,6 +1241,52 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             currentSourceRef.current = undefined;
         }));
 
+        cleanups.push(window.electronAPI.onIntelligenceSystemDesignTradeoffsToken((data) => {
+            setMessages(prev => {
+                const lastMsg = prev[prev.length - 1];
+                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'system_design_tradeoffs') {
+                    const updated = [...prev];
+                    updated[prev.length - 1] = {
+                        ...lastMsg,
+                        text: lastMsg.text + data.token
+                    };
+                    return updated;
+                }
+                return [...prev, {
+                    id: nextMsgId(),
+                    role: 'system',
+                    text: data.token,
+                    intent: 'system_design_tradeoffs',
+                    source: currentSourceRef.current,
+                    isStreaming: true
+                }];
+            });
+        }));
+
+        cleanups.push(window.electronAPI.onIntelligenceSystemDesignTradeoffs((data) => {
+            setIsProcessing(false);
+            setMessages(prev => {
+                const lastMsg = prev[prev.length - 1];
+                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'system_design_tradeoffs') {
+                    const updated = [...prev];
+                    updated[prev.length - 1] = {
+                        ...lastMsg,
+                        text: data.answer,
+                        isStreaming: false
+                    };
+                    return updated;
+                }
+                return [...prev, {
+                    id: nextMsgId(),
+                    role: 'system',
+                    text: data.answer,
+                    intent: 'system_design_tradeoffs',
+                    source: currentSourceRef.current
+                }];
+            });
+            currentSourceRef.current = undefined;
+        }));
+
         cleanups.push(window.electronAPI.onIntelligenceManualResult((data) => {
             setIsProcessing(false);
             setMessages(prev => [...prev, {
@@ -1365,7 +1421,30 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
         try {
             // Pass imagePath if attached
-            await window.electronAPI.generateWhatToSay(undefined, currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined);
+            await window.electronAPI.generateWhatToSay(
+                undefined,
+                currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
+                forceSystemDesignMode ? 'system_design' : undefined
+            );
+        } catch (err) {
+            setMessages(prev => [...prev, {
+                id: nextMsgId(),
+                role: 'system',
+                text: `Error: ${err}`
+            }]);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleSystemDesignTradeoffs = async () => {
+        setIsExpanded(true);
+        setIsProcessing(true);
+        currentSourceRef.current = 'System Design Trade-offs';
+        analytics.trackCommandExecuted('system_design_tradeoffs');
+
+        try {
+            await window.electronAPI.generateSystemDesignTradeoffs();
         } catch (err) {
             setMessages(prev => [...prev, {
                 id: nextMsgId(),
@@ -2806,7 +2885,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                         { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
                                         { label: 'Brainstorm', icon: '🧠', handler: handleBrainstorm, isRecommended: true },
                                         { label: 'Clarify', icon: '❓', handler: handleClarify },
-                                        { label: 'Trade-offs', icon: '⚖️', handler: handleFollowUpQuestions },
+                                        { label: 'Trade-offs', icon: '⚖️', handler: handleSystemDesignTradeoffs },
                                     ],
                                     behavioral: [
                                         { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
@@ -2823,22 +2902,22 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                 };
 
                                 // Smart recommendation override via keywords
-                                const actions = actionSets[detectedQuestionType] || actionSets.general;
+                                const actions = actionSets[effectiveQuestionType] || actionSets.general;
                                 const combined = `${rollingTranscript} ${inputValue}`.toLowerCase();
                                 let recommendedIdx = actions.findIndex((a: ActionDef) => a.isRecommended);
                                 if (recommendedIdx < 0) recommendedIdx = 0;
 
                                 // Keyword-based overrides
-                                if (detectedQuestionType === 'coding') {
+                                if (effectiveQuestionType === 'coding') {
                                     if (/(optimiz|improv|faster|efficient|refactor)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Brainstorm');
                                     else if (/(explain|why|how does|approach)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Clarify');
-                                } else if (detectedQuestionType === 'system_design') {
+                                } else if (effectiveQuestionType === 'system_design') {
                                     if (/(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Trade-offs');
                                     else if (/(scal|million|billion|traffic|handle more users)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Brainstorm');
-                                } else if (detectedQuestionType === 'behavioral') {
+                                } else if (effectiveQuestionType === 'behavioral') {
                                     if (/(follow.?up|next|then what)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Follow Up');
                                     else if (/(improv|better|stronger)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label.includes('Brainstorm') || a.label.includes('Recap'));
-                                } else if (detectedQuestionType === 'general') {
+                                } else if (effectiveQuestionType === 'general') {
                                     // Silent general fallback UX boost
                                     recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Clarify');
                                 }
@@ -2866,7 +2945,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                     const colors = buttonColors[action.label] || fallbackColor;
                                                     return (
                                                         <motion.button
-                                                            key={`${detectedQuestionType}-${action.label}`}
+                                                            key={`${effectiveQuestionType}-${action.label}`}
                                                             layout
                                                             initial={{ opacity: 0, y: 6, scale: 0.92 }}
                                                             animate={{ opacity: 1, y: 0, scale: isRec ? 1.03 : 1 }}
@@ -3183,6 +3262,31 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                             </button>
                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
                                                 Overlay Opacity
+                                            </div>
+                                        </div>
+
+                                        <div className="relative group">
+                                            <button
+                                                onClick={() => {
+                                                    setForceSystemDesignMode(prev => {
+                                                        const next = !prev;
+                                                        console.log(`[Overlay] System design mode ${next ? 'on' : 'off'}`);
+                                                        return next;
+                                                    });
+                                                }}
+                                                className={`
+                                                    w-7 h-7 flex items-center justify-center rounded-lg
+                                                    interaction-base interaction-press
+                                                    ${forceSystemDesignMode
+                                                        ? 'overlay-icon-surface overlay-icon-surface-hover text-teal-400 opacity-100'
+                                                        : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
+                                                `}
+                                                style={appearance.iconStyle}
+                                            >
+                                                <Cpu className="w-3.5 h-3.5" />
+                                            </button>
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                System Design Mode
                                             </div>
                                         </div>
 

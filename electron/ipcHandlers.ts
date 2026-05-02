@@ -2444,11 +2444,11 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // MODE 2: What Should I Say (Primary auto-answer)
-  safeHandle("generate-what-to-say", async (_, question?: string, imagePaths?: string[]) => {
+  safeHandle("generate-what-to-say", async (_, question?: string, imagePaths?: string[], forcedIntent?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
       // Question and imagePaths are now optional - IntelligenceManager infers from transcript
-      const answer = await intelligenceManager.runWhatShouldISay(question, 0.8, imagePaths);
+      const answer = await intelligenceManager.runWhatShouldISay(question, 0.8, imagePaths, forcedIntent as any);
       return { answer, question: question || 'inferred from context' };
     } catch (error: any) {
       // Return graceful fallback instead of throwing
@@ -2567,6 +2567,16 @@ export function initializeIpcHandlers(appState: AppState): void {
       const intelligenceManager = appState.getIntelligenceManager();
       const questions = await intelligenceManager.runFollowUpQuestions();
       return { questions };
+    } catch (error: any) {
+      throw error;
+    }
+  });
+
+  safeHandle("generate-system-design-tradeoffs", async () => {
+    try {
+      const intelligenceManager = appState.getIntelligenceManager();
+      const answer = await intelligenceManager.runSystemDesignTradeoffs();
+      return { answer };
     } catch (error: any) {
       throw error;
     }

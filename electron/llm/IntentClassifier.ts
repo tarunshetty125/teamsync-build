@@ -16,6 +16,7 @@ export type ConversationIntent =
     | 'behavioral'         // "Give me an example of..."
     | 'example_request'    // "Can you give a concrete example?"
     | 'summary_probe'      // "So to summarize..."
+    | 'system_design'      // "Design a scalable system" / architecture / tradeoffs
     | 'coding'             // "Write code for X" or implementation questions
     | 'general';           // Default fallback
 
@@ -36,6 +37,7 @@ const INTENT_ANSWER_SHAPES: Record<ConversationIntent, string> = {
     behavioral: 'Lead with a specific example or story. Use the STAR pattern implicitly. Focus on actions and outcomes.',
     example_request: 'Provide ONE concrete, detailed example. Make it realistic and specific.',
     summary_probe: 'Confirm the summary briefly and add one clarifying point if needed.',
+    system_design: 'Answer like a senior engineer in a real system design interview: clarify scale and constraints, outline the architecture, explain core components, highlight tradeoffs, then call out scaling and failure handling.',
     coding: 'Provide a FULL, complete, working and production-ready code implementation (including necessary boilerplate like Java imports/classes). Start with a brief approach description, then the fully runnable code block, then a concise explanation of why this approach works.',
     general: 'Respond naturally based on context. Keep it conversational and direct.'
 };
@@ -55,6 +57,7 @@ const ZERO_SHOT_LABELS: Record<string, ConversationIntent> = {
     'asking for a personal experience or behavioral example': 'behavioral',
     'requesting a concrete example or instance': 'example_request',
     'summarizing or confirming understanding': 'summary_probe',
+    'asking about system design, architecture, scaling, or tradeoffs': 'system_design',
     'asking about code, programming, or implementation': 'coding',
     'general conversation or question': 'general',
 };
@@ -197,7 +200,7 @@ function normalizeForDetection(text: string): string {
  * Pattern-based intent detection (fast, no model call)
  * For common patterns this is sufficient
  *
- * PRIORITY ORDER: coding > behavioral > deep_dive > clarification > follow_up > example > summary
+ * PRIORITY ORDER: coding > system_design > behavioral > deep_dive > clarification > follow_up > example > summary
  */
 function detectIntentByPattern(lastInterviewerTurn: string): IntentResult | null {
     const text = normalizeForDetection(lastInterviewerTurn);
@@ -205,6 +208,11 @@ function detectIntentByPattern(lastInterviewerTurn: string): IntentResult | null
     // HIGHEST PRIORITY: Coding patterns (must be checked first so mixed coding+concept → coding)
     if (/(write code|write a? ?(?:function|program|method|class|script)|program|implement|function for|algorithm|how to code|setup a .* project|using .* library|debug this|snippet|boilerplate|example of .* in .*|optimize|refactor|best practice for .* code|utility method|component for|logic for|reverse|sort|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|recursive|iterate|loop|pointer|two pointer|sliding window|backtrack|greedy|bfs|dfs|matrix|string manipulation|big o|time complexity|space complexity|fibonacci|palindrome|anagram|substring|subarray|merge sort|quick sort|bubble sort|insertion sort|heap|trie|topological|shortest path|factorial|prime|duplicate|remove duplicates|flatten|depth first|breadth first|binary tree|level order|in ?order traversal|pre ?order|post ?order|promise|async await|callback)/i.test(text)) {
         return { intent: 'coding', confidence: 0.9, answerShape: INTENT_ANSWER_SHAPES.coding };
+    }
+
+    // System design / architecture patterns
+    if (/(system design|design (?:a|an|the)|architecture|architect|scalab(?:le|ility)|distributed system|distributed architecture|microservices?|load balanc(?:er|ing)|api gateway|database schema|database design|caching|cache layer|cdn|message queue|event driven|event-driven|pub\/sub|queueing|sharding|partition(?:ing)?|replica(?:tion)?|eventual consistency|strong consistency|consistency|availability|cap theorem|high availability|fault toleran(?:ce|t)|throughput|latency|rate limit(?:ing)?|qps|rps|read write ratio|read\/write ratio|single region|multi region|multi-region|backpressure|fanout|fan-out|leader election|service discovery|how would you scale|handle millions of users|design twitter|design uber|design youtube|design whatsapp|tradeoff|trade-off|pros? and cons|bottleneck|failure mode)/i.test(text)) {
+        return { intent: 'system_design', confidence: 0.92, answerShape: INTENT_ANSWER_SHAPES.system_design };
     }
 
     // Behavioral patterns

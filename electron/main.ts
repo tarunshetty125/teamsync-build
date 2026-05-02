@@ -2137,6 +2137,20 @@ export class AppState {
       }
     })
 
+    this.intelligenceManager.on('system_design_tradeoffs', (answer: string) => {
+      const win = mainWindow()
+      if (win) {
+        win.webContents.send('intelligence-system-design-tradeoffs', { answer })
+      }
+    })
+
+    this.intelligenceManager.on('system_design_tradeoffs_token', (token: string) => {
+      const win = mainWindow()
+      if (win) {
+        win.webContents.send('intelligence-system-design-tradeoffs-token', { token })
+      }
+    })
+
     this.intelligenceManager.on('manual_answer_started', () => {
       const win = mainWindow()
       if (win) {

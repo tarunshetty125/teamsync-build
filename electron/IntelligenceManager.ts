@@ -12,6 +12,7 @@ import { LLMHelper } from './LLMHelper';
 import { SessionTracker } from './SessionTracker';
 import { IntelligenceEngine } from './IntelligenceEngine';
 import { MeetingPersistence } from './MeetingPersistence';
+import type { ConversationIntent } from './llm';
 
 // Re-export types for backward compatibility
 export type { TranscriptSegment, SuggestionTrigger, ContextItem } from './SessionTracker';
@@ -52,6 +53,7 @@ export class IntelligenceManager extends EventEmitter {
             'refined_answer', 'refined_answer_token',
             'recap', 'recap_token', 'clarify', 'clarify_token',
             'follow_up_questions_update', 'follow_up_questions_token',
+            'system_design_tradeoffs', 'system_design_tradeoffs_token',
             'manual_answer_started', 'manual_answer_result',
             'mode_changed', 'error'
         ];
@@ -144,8 +146,8 @@ export class IntelligenceManager extends EventEmitter {
         return this.engine.runAssistMode();
     }
 
-    async runWhatShouldISay(question?: string, confidence?: number, imagePaths?: string[]): Promise<string | null> {
-        return this.engine.runWhatShouldISay(question, confidence, imagePaths);
+    async runWhatShouldISay(question?: string, confidence?: number, imagePaths?: string[], forcedIntent?: ConversationIntent): Promise<string | null> {
+        return this.engine.runWhatShouldISay(question, confidence, imagePaths, forcedIntent);
     }
 
     async runFollowUp(intent: string, userRequest?: string): Promise<string | null> {
@@ -162,6 +164,10 @@ export class IntelligenceManager extends EventEmitter {
 
     async runFollowUpQuestions(): Promise<string | null> {
         return this.engine.runFollowUpQuestions();
+    }
+
+    async runSystemDesignTradeoffs(): Promise<string | null> {
+        return this.engine.runSystemDesignTradeoffs();
     }
 
     async runManualAnswer(question: string): Promise<string | null> {

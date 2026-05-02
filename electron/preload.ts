@@ -123,8 +123,13 @@ interface ElectronAPI {
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
-  generateWhatToSay: (question?: string, imagePaths?: string[]) => Promise<{ answer: string | null; question?: string; error?: string }>
+  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
+  generateClarify: () => Promise<{ clarification: string | null }>
+  generateCodeHint: (imagePaths?: string[], problemStatement?: string) => Promise<{ hint: string | null }>
+  generateBrainstorm: (imagePaths?: string[], problemStatement?: string) => Promise<{ script: string | null }>
   generateFollowUp: (intent: string, userRequest?: string) => Promise<{ refined: string | null; intent: string }>
+  generateFollowUpQuestions: () => Promise<{ questions: string | null }>
+  generateSystemDesignTradeoffs: () => Promise<{ answer: string | null }>
   generateRecap: () => Promise<{ summary: string | null }>
   submitManualQuestion: (question: string) => Promise<{ answer: string | null; question: string }>
   getIntelligenceContext: () => Promise<{ context: string; lastAssistantMessage: string | null; activeMode: string }>
@@ -147,6 +152,13 @@ interface ElectronAPI {
   onIntelligenceRecap: (callback: (data: { summary: string }) => void) => () => void
   onIntelligenceClarify: (callback: (data: { clarification: string }) => void) => () => void
   onIntelligenceClarifyToken: (callback: (data: { token: string }) => void) => () => void
+  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number }) => void) => () => void
+  onIntelligenceRefinedAnswerToken: (callback: (data: { token: string; intent: string }) => void) => () => void
+  onIntelligenceFollowUpQuestionsUpdate: (callback: (data: { questions: string }) => void) => () => void
+  onIntelligenceFollowUpQuestionsToken: (callback: (data: { token: string }) => void) => () => void
+  onIntelligenceRecapToken: (callback: (data: { token: string }) => void) => () => void
+  onIntelligenceSystemDesignTradeoffs: (callback: (data: { answer: string }) => void) => () => void
+  onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string }) => void) => () => void
   onIntelligenceManualStarted: (callback: () => void) => () => void
   onIntelligenceManualResult: (callback: (data: { answer: string; question: string }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
@@ -756,12 +768,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Intelligence Mode IPC
   generateAssist: () => ipcRenderer.invoke("generate-assist"),
-  generateWhatToSay: (question?: string, imagePaths?: string[]) => ipcRenderer.invoke("generate-what-to-say", question, imagePaths),
+  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string) => ipcRenderer.invoke("generate-what-to-say", question, imagePaths, forcedIntent),
   generateClarify: () => ipcRenderer.invoke("generate-clarify"),
   generateCodeHint: (imagePaths?: string[], problemStatement?: string) => ipcRenderer.invoke("generate-code-hint", imagePaths, problemStatement),
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string) => ipcRenderer.invoke("generate-brainstorm", imagePaths, problemStatement),
   generateFollowUp: (intent: string, userRequest?: string) => ipcRenderer.invoke("generate-follow-up", intent, userRequest),
   generateFollowUpQuestions: () => ipcRenderer.invoke("generate-follow-up-questions"),
+  generateSystemDesignTradeoffs: () => ipcRenderer.invoke("generate-system-design-tradeoffs"),
   generateRecap: () => ipcRenderer.invoke("generate-recap"),
   submitManualQuestion: (question: string) => ipcRenderer.invoke("submit-manual-question", question),
   getIntelligenceContext: () => ipcRenderer.invoke("get-intelligence-context"),
@@ -865,6 +878,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("intelligence-clarify", subscription)
     return () => {
       ipcRenderer.removeListener("intelligence-clarify", subscription)
+    }
+  },
+  onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("intelligence-system-design-tradeoffs-token", subscription)
+    return () => {
+      ipcRenderer.removeListener("intelligence-system-design-tradeoffs-token", subscription)
+    }
+  },
+  onIntelligenceSystemDesignTradeoffs: (callback: (data: { answer: string }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("intelligence-system-design-tradeoffs", subscription)
+    return () => {
+      ipcRenderer.removeListener("intelligence-system-design-tradeoffs", subscription)
     }
   },
   onIntelligenceFollowUpQuestionsToken: (callback: (data: { token: string }) => void) => {

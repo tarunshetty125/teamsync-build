@@ -9,6 +9,7 @@ export { CodeHintLLM } from "./CodeHintLLM";
 export { FollowUpLLM } from "./FollowUpLLM";
 export { FollowUpQuestionsLLM } from "./FollowUpQuestionsLLM";
 export { RecapLLM } from "./RecapLLM";
+export { SystemDesignTradeoffsLLM } from "./SystemDesignTradeoffsLLM";
 export { WhatToAnswerLLM } from "./WhatToAnswerLLM";
 export { clampResponse, validateResponse } from "./postProcessor";
 export {
@@ -45,5 +46,6 @@ export {
     GROQ_FOLLOWUP_EMAIL_PROMPT,
     CODE_HINT_PROMPT,
     buildCodeHintMessage,
-    BRAINSTORM_MODE_PROMPT
+    BRAINSTORM_MODE_PROMPT,
+    SYSTEM_DESIGN_TRADEOFFS_PROMPT
 } from "./prompts";

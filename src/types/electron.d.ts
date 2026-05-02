@@ -154,12 +154,13 @@ export interface ElectronAPI {
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
-  generateWhatToSay: (question?: string, imagePaths?: string[]) => Promise<{ answer: string | null; question?: string; error?: string }>
+  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
   generateClarify: () => Promise<{ clarification: string | null }>
   generateCodeHint: (imagePaths?: string[], problemStatement?: string) => Promise<{ hint: string | null }>
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string) => Promise<{ script: string | null }>
   generateFollowUp: (intent: string, userRequest?: string) => Promise<{ refined: string | null; intent: string }>
   generateFollowUpQuestions: () => Promise<{ questions: string | null }>
+  generateSystemDesignTradeoffs: () => Promise<{ answer: string | null }>
   generateRecap: () => Promise<{ summary: string | null }>
   submitManualQuestion: (question: string) => Promise<{ answer: string | null; question: string }>
   getIntelligenceContext: () => Promise<{ context: string; lastAssistantMessage: string | null; activeMode: string }>
@@ -210,6 +211,8 @@ export interface ElectronAPI {
   onIntelligenceRecapToken: (callback: (data: { token: string }) => void) => () => void
   onIntelligenceClarify: (callback: (data: { clarification: string }) => void) => () => void
   onIntelligenceClarifyToken: (callback: (data: { token: string }) => void) => () => void
+  onIntelligenceSystemDesignTradeoffs: (callback: (data: { answer: string }) => void) => () => void
+  onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string }) => void) => () => void
   onIntelligenceManualStarted: (callback: () => void) => () => void
   onIntelligenceManualResult: (callback: (data: { answer: string; question: string }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void

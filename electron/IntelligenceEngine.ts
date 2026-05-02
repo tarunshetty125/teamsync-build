@@ -7,13 +7,14 @@ import { LLMHelper } from './LLMHelper';
 import { SessionTracker, TranscriptSegment, SuggestionTrigger, ContextItem } from './SessionTracker';
 import {
     AnswerLLM, AssistLLM, BrainstormLLM, ClarifyLLM, CodeHintLLM, FollowUpLLM, RecapLLM,
-    FollowUpQuestionsLLM, WhatToAnswerLLM,
+    FollowUpQuestionsLLM, SystemDesignTradeoffsLLM, WhatToAnswerLLM,
     prepareTranscriptForWhatToAnswer, buildTemporalContext,
-    AssistantResponse as LLMAssistantResponse, classifyIntent
+    AssistantResponse as LLMAssistantResponse, classifyIntent, getAnswerShapeGuidance
 } from './llm';
+import type { ConversationIntent } from './llm';
 
 // Mode types
-export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm';
+export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm' | 'system_design_tradeoffs';
 
 // Refinement intent detection (refined to avoid false positives)
 function detectRefinementIntent(userText: string): { isRefinement: boolean; intent: string } {
@@ -50,6 +51,8 @@ export interface IntelligenceModeEvents {
     'clarify_token': (token: string) => void;
     'follow_up_questions_update': (questions: string) => void;
     'follow_up_questions_token': (token: string) => void;
+    'system_design_tradeoffs': (answer: string) => void;
+    'system_design_tradeoffs_token': (token: string) => void;
     'manual_answer_started': () => void;
     'manual_answer_result': (answer: string, question: string) => void;
     'mode_changed': (mode: IntelligenceMode) => void;
@@ -70,6 +73,7 @@ export class IntelligenceEngine extends EventEmitter {
     private whatToAnswerLLM: WhatToAnswerLLM | null = null;
     private codeHintLLM: CodeHintLLM | null = null;
     private brainstormLLM: BrainstormLLM | null = null;
+    private systemDesignTradeoffsLLM: SystemDesignTradeoffsLLM | null = null;
 
     // Concurrency tracking
     private assistCancellationToken: AbortController | null = null;
@@ -120,6 +124,7 @@ export class IntelligenceEngine extends EventEmitter {
         this.whatToAnswerLLM = new WhatToAnswerLLM(this.llmHelper);
         this.codeHintLLM = new CodeHintLLM(this.llmHelper);
         this.brainstormLLM = new BrainstormLLM(this.llmHelper);
+        this.systemDesignTradeoffsLLM = new SystemDesignTradeoffsLLM(this.llmHelper);
 
         // Sync RecapLLM reference to SessionTracker for epoch compaction
         this.session.setRecapLLM(this.recapLLM);
@@ -220,7 +225,7 @@ export class IntelligenceEngine extends EventEmitter {
      * Manual trigger - uses clean transcript pipeline for question inference
      * NEVER returns null - always provides a usable response
      */
-    async runWhatShouldISay(question?: string, confidence: number = 0.8, imagePaths?: string[]): Promise<string | null> {
+    async runWhatShouldISay(question?: string, confidence: number = 0.8, imagePaths?: string[], forcedIntent?: ConversationIntent): Promise<string | null> {
         const now = Date.now();
 
         // Bypass cooldown when the user explicitly attached images (capture-and-process intent).
@@ -290,11 +295,18 @@ export class IntelligenceEngine extends EventEmitter {
             );
 
             const lastInterviewerTurn = this.session.getLastInterviewerTurn();
-            const intentResult = await classifyIntent(
+            const classifiedIntent = await classifyIntent(
                 lastInterviewerTurn,
                 preparedTranscript,
                 this.session.getAssistantResponseHistory().length
             );
+            const intentResult = forcedIntent
+                ? {
+                    intent: forcedIntent,
+                    confidence: 1,
+                    answerShape: getAnswerShapeGuidance(forcedIntent),
+                }
+                : classifiedIntent;
 
             console.log(`[IntelligenceEngine] Temporal RAG: ${temporalContext.previousResponses.length} responses, tone: ${temporalContext.toneSignals[0]?.type || 'neutral'}, intent: ${intentResult.intent}${imagePaths?.length ? `, with ${imagePaths.length} image(s)` : ''}`);
 
@@ -605,6 +617,63 @@ export class IntelligenceEngine extends EventEmitter {
 
         } catch (error) {
             this.emit('error', error as Error, 'follow_up_questions');
+            this.setMode('idle');
+            return null;
+        }
+    }
+
+    async runSystemDesignTradeoffs(): Promise<string | null> {
+        console.log('[IntelligenceEngine] runSystemDesignTradeoffs called');
+        this.setMode('system_design_tradeoffs');
+
+        try {
+            if (!this.systemDesignTradeoffsLLM) {
+                this.setMode('idle');
+                return null;
+            }
+
+            const context = this.session.getFormattedContext(180);
+            if (!context) {
+                this.setMode('idle');
+                return null;
+            }
+
+            const generationId = ++this.currentGenerationId;
+            let fullAnswer = '';
+            const stream = this.systemDesignTradeoffsLLM.generateStream(context);
+            let streamAborted = false;
+
+            for await (const token of stream) {
+                if (this.currentGenerationId !== generationId) {
+                    console.log('[GENERATION_DISCARDED] system_design_tradeoffs stream aborted by new generation');
+                    await stream.return(undefined);
+                    streamAborted = true;
+                    break;
+                }
+                this.emit('system_design_tradeoffs_token', token);
+                fullAnswer += token;
+            }
+
+            if (streamAborted) {
+                this.setMode('idle');
+                return null;
+            }
+
+            if (fullAnswer) {
+                this.session.addAssistantMessage(fullAnswer);
+                this.session.pushUsage({
+                    type: 'assist',
+                    timestamp: Date.now(),
+                    question: 'System Design Trade-offs',
+                    answer: fullAnswer
+                });
+                this.emit('system_design_tradeoffs', fullAnswer);
+            }
+
+            this.setMode('idle');
+            return fullAnswer;
+        } catch (error) {
+            this.emit('error', error as Error, 'system_design_tradeoffs');
             this.setMode('idle');
             return null;
         }

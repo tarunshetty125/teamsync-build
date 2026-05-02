@@ -79,6 +79,28 @@ Before responding, internally verify:
 If NOT, rewrite the answer until it includes a proper code block.
 Never send a response without code.`;
 
+const SYSTEM_DESIGN_ENFORCEMENT = `
+STRICT SYSTEM DESIGN FORMAT (MANDATORY):
+Answer exactly like a strong senior engineer in a real system design interview.
+
+FORMAT:
+1. Start with 1 short sentence clarifying the most important scale or constraint assumption if it is not already explicit.
+2. Then give a clear architecture answer in natural spoken prose.
+3. Cover these dimensions in order:
+   - high-level design
+   - core components and data flow
+   - trade-offs
+   - scale, reliability, and bottlenecks
+4. End with 1 short sentence on what you would optimize next at larger scale.
+
+RULES:
+* Sound spoken, direct, and interview-ready
+* Use concrete system design language: cache, queue, read/write path, partitioning, replicas, consistency, latency, failure handling
+* Do NOT answer like a textbook definition
+* Do NOT write code
+* Do NOT skip trade-offs or failure modes
+* Prefer pragmatic assumptions over vague theory`;
+
 // ---------------------------------------------------------------------------
 // 5. Correction Prompt — used for retry when code block is missing
 // ---------------------------------------------------------------------------
@@ -167,11 +189,17 @@ ANSWER SHAPE: ${intentResult.answerShape}
 
             // Detect if this is a coding question
             const isCodingIntent = intentResult?.intent === 'coding';
+            const isSystemDesignIntent = intentResult?.intent === 'system_design';
 
             // Inject strict coding enforcement when coding is detected
             if (isCodingIntent) {
                 contextParts.push(CODING_ENFORCEMENT);
                 console.log('[WhatToAnswerLLM] Coding intent detected — injecting strict format enforcement');
+            }
+
+            if (isSystemDesignIntent) {
+                contextParts.push(SYSTEM_DESIGN_ENFORCEMENT);
+                console.log('[WhatToAnswerLLM] System design intent detected — injecting architecture format enforcement');
             }
 
             const extraContext = contextParts.join('\n\n');
@@ -199,6 +227,7 @@ ANSWER SHAPE: ${intentResult.answerShape}
                 detectedType: intentResult?.intent || 'unknown',
                 finalQuestion: finalQuestion.slice(0, 120),
                 isCoding: isCodingIntent,
+                isSystemDesign: isSystemDesignIntent,
                 isVague: vague
             });
 

@@ -21,26 +21,26 @@ interface FeatureSlide {
 
 const FEATURES: FeatureSlide[] = [
     {
-        id: 'tailored_answers',
-        headline: 'Upcoming features',
-        subtitle: 'Answers, tailored to you',
-        bullets: ['Repo aware explanations', 'System design interview specialization'],
-        footer: 'Designed to work silently during live interviews.',
+        id: 'teamsync_features',
+        headline: 'TeamSync Intelligence 💥',
+        subtitle: 'Elevate your team collaboration',
+        bullets: ['Context-aware meeting insights', 'Seamless workflow integrations'],
+        footer: 'Designed to keep your team perfectly synchronized.',
         type: 'premium',
     },
 
     {
-        id: 'support_natively',
-        headline: 'Support development',
-        subtitle: 'Built openly and sustained by users',
+        id: 'support_teamsync',
+        headline: 'Key Features 🔥',
+        subtitle: 'AI-powered assistance for smarter conversations',
         bullets: [
-            'Development driven by real users',
-            'Faster iteration on features that matter',
-
+            'Real-time audio transcription',
+            'Resume & job-based context awareness',
+            'Adaptive support (behavioral, coding, system design)'
         ],
         type: 'support',
-        actionLabel: 'Contribute to development',
-        url: 'https://buymeacoffee.com/TarunShetty256'
+        actionLabel: 'Support on GitHub',
+        url: 'https://github.com/TarunShetty256'
     }
 ];
 
@@ -308,7 +308,7 @@ export const FeatureSpotlight: React.FC = () => {
                                                         : (isSupport ? (
                                                             <span className="flex items-center gap-2">
                                                                 <Rocket size={14} className="text-[#1C1C1E]" strokeWidth={2.5} />
-                                                                Fund development
+                                                                {currentFeature.actionLabel || 'Support on GitHub'}
                                                             </span>
                                                         ) : (currentFeature.actionLabel || 'Mark interest'))
                                                     }
