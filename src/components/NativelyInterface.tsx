@@ -574,10 +574,17 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
 
     // Mouse Passthrough State
     const [isMousePassthrough, setIsMousePassthrough] = useState(false);
+    const [localOpacity, setLocalOpacity] = useState(overlayOpacity);
     useEffect(() => {
         window.electronAPI?.getOverlayMousePassthrough?.().then(setIsMousePassthrough).catch(() => {});
         const unsub = window.electronAPI?.onOverlayMousePassthroughChanged?.((v) => setIsMousePassthrough(v));
-        return () => unsub?.();
+        
+        const unsubOpacity = window.electronAPI?.onOverlayOpacityChanged?.((val) => setLocalOpacity(val));
+
+        return () => {
+            unsub?.();
+            unsubOpacity?.();
+        };
     }, []);
 
     // Screen Recording Permission Warning Banner
@@ -2989,7 +2996,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
 
                                         <div className="w-px h-3 mx-1" style={appearance.dividerStyle} />
 
-                                        <div className="relative">
+                                        <div className="relative group">
                                             <button
                                                 onClick={(e) => {
                                                     if (isSettingsOpen) {
@@ -3026,12 +3033,15 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                             >
                                                 <SlidersHorizontal className="w-3.5 h-3.5" />
                                             </button>
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                Settings
+                                            </div>
                                         </div>
 
 
 
                                         {/* Mouse Passthrough Toggle */}
-                                        <div className="relative">
+                                        <div className="relative group">
                                             <button
                                                 onClick={() => {
                                                     setIsMousePassthrough(prev => {
@@ -3052,6 +3062,45 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                             >
                                                 <PointerOff className="w-3.5 h-3.5" />
                                             </button>
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                Mouse Passthrough
+                                            </div>
+                                        </div>
+
+                                        {/* Stealth Mode (Opacity) Toggle */}
+                                        <div className="relative group">
+                                            <button
+                                                onClick={() => {
+                                                    setLocalOpacity(prev => {
+                                                        // Fallback to 1.0 if prev is NaN or undefined somehow
+                                                        if (!prev || isNaN(prev)) prev = 1.0;
+                                                        
+                                                        const rounded = Math.round(prev * 100);
+                                                        let nextOpacity = 1.0;
+                                                        
+                                                        if (rounded >= 90) nextOpacity = 0.6;
+                                                        else if (rounded >= 50) nextOpacity = 0.2;
+                                                        else nextOpacity = 1.0;
+
+                                                        window.electronAPI?.setOverlayOpacity?.(nextOpacity);
+                                                        return nextOpacity;
+                                                    });
+                                                }}
+                                                className={`
+                                                    w-7 h-7 flex items-center justify-center rounded-lg
+                                                    interaction-base interaction-press
+                                                    ${localOpacity < 1.0
+                                                        ? 'overlay-icon-surface overlay-icon-surface-hover text-purple-400 opacity-100'
+                                                        : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
+                                                `}
+
+                                                style={appearance.iconStyle}
+                                            >
+                                                <Ghost className="w-3.5 h-3.5" />
+                                            </button>
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                Overlay Opacity
+                                            </div>
                                         </div>
 
                                     </div>
