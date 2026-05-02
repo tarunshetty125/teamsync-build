@@ -117,32 +117,39 @@ interface NativelyInterfaceProps {
     overlayOpacity?: number;
 }
 
+// ── C1 Fix: Monotonic message ID counter to prevent collisions under rapid updates ──
+let msgIdCounter = 0;
+function nextMsgId(): string {
+    return `${Date.now()}-${++msgIdCounter}`;
+}
+
 // ── Context-Aware Question Type Detection (mirrors IntentClassifier patterns) ──
 type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'general';
 
-const REGEX_NORMALIZE_BROKEN = /(\w)\.\s+(\w)/g;
-const REGEX_NORMALIZE_FILLER = /\b(yeah|um|uh|uh+m|like|so|okay|ok|well|you know|i mean|basically|actually|right)\b/g;
-const REGEX_NORMALIZE_SPACE = /\s+/g;
+// M3 Fix: Removed /g flags — these are always wrapped in new RegExp(..., 'gi') via cap()
+const REGEX_NORMALIZE_BROKEN = /(\w)\.\s+(\w)/;
+const REGEX_NORMALIZE_FILLER = /\b(yeah|um|uh|uh+m|like|so|okay|ok|well|you know|i mean|basically|actually|right)\b/;
+const REGEX_NORMALIZE_SPACE = /\s+/;
 
-const REGEX_CODING_CORE = /(write code|write a? ?(?:function|program|method|class|script)|implement|how to code)/g;
-const REGEX_SYSTEM_CORE = /(system design|design a|architecture|database schema|api design)/g;
-const REGEX_BEHAVIORAL_CORE = /(tell me about a time|describe a situation|give me an example|share an experience)/g;
+const REGEX_CODING_CORE = /(write code|write a? ?(?:function|program|method|class|script)|implement|how to code)/;
+const REGEX_SYSTEM_CORE = /(system design|design a|architecture|database schema|api design)/;
+const REGEX_BEHAVIORAL_CORE = /(tell me about a time|describe a situation|give me an example|share an experience)/;
 
-const REGEX_CODING_STRONG = /(algorithm|debug this|snippet|boilerplate|optimize|refactor|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|time complexity|space complexity)/g;
-const REGEX_SYSTEM_STRONG = /(scalab|microservice|load balanc|distributed|high availability|caching strategy|caching|cache|cdn|message queue|rate limit|sharding|replication|partition|cap theorem|event driven|monolith|horizontal scal|fault toleran|throughput|latency|handle more users|high traffic|load)/g;
-const REGEX_BEHAVIORAL_STRONG = /(when have you|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|experience|challenge|conflict|pressure|strength|weakness|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment|introduce yourself|background|resume)/g;
+const REGEX_CODING_STRONG = /(algorithm|debug this|snippet|boilerplate|optimize|refactor|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|time complexity|space complexity)/;
+const REGEX_SYSTEM_STRONG = /(scalab|microservice|load balanc|distributed|high availability|caching strategy|caching|cache|cdn|message queue|rate limit|sharding|replication|partition|cap theorem|event driven|monolith|horizontal scal|fault toleran|throughput|latency|handle more users|high traffic|load)/;
+const REGEX_BEHAVIORAL_STRONG = /(when have you|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|experience|challenge|conflict|pressure|strength|weakness|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment|introduce yourself|background|resume)/;
 
-const REGEX_CODING_BOOST = /(faster|efficient)/g;
-const REGEX_SYSTEM_BOOST = /(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/g;
+const REGEX_CODING_BOOST = /(faster|efficient)/;
+const REGEX_SYSTEM_BOOST = /(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/;
 
 function normalizeTranscript(text: string) {
     let t = text.toLowerCase();
-    t = t.replace(REGEX_NORMALIZE_BROKEN, '$1$2'); // Fix broken words: "polymor. phism" → "polymorphism"
-    t = t.replace(/[“”‘’]/g, '"');
-    t = t.replace(/[–—]/g, '-');
+    t = t.replace(new RegExp(REGEX_NORMALIZE_BROKEN.source, 'g'), '$1$2'); // Fix broken words
+    t = t.replace(/[\u201C\u201D\u2018\u2019]/g, '"');
+    t = t.replace(/[\u2013\u2014]/g, '-');
     t = t.replace(/[^a-z0-9\s\-?:/]/g, ' '); // Keep semantic hints (?, :, /)
-    t = t.replace(REGEX_NORMALIZE_FILLER, ' ');
-    t = t.replace(REGEX_NORMALIZE_SPACE, ' ').trim();
+    t = t.replace(new RegExp(REGEX_NORMALIZE_FILLER.source, 'gi'), ' ');
+    t = t.replace(new RegExp(REGEX_NORMALIZE_SPACE.source, 'g'), ' ').trim();
     return t;
 }
 
@@ -320,8 +327,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     const [sttTelemetry, setSttTelemetry] = useState<{ user: SttTelemetryData | null; interviewer: SttTelemetryData | null }>({ user: null, interviewer: null });
     const [sttMetrics, setSttMetrics] = useState<{ user: SttMetricsData | null; interviewer: SttMetricsData | null }>({ user: null, interviewer: null });
     const [isProcessing, setIsProcessing] = useState(false);
+    const isProcessingRef = useRef(false); // H4 Fix: Ref mirror for double-submit guard in async handlers
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [conversationContext, setConversationContext] = useState<string>('');
     const [isManualRecording, setIsManualRecording] = useState(false);
     const isRecordingRef = useRef(false);  // Ref to track recording state (avoids stale closure)
     const [manualTranscript, setManualTranscript] = useState('');
@@ -345,7 +352,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     }, []);
 
     const [rollingTranscript, setRollingTranscript] = useState('');  // For interviewer rolling text bar
+    const finalizedTranscriptRef = useRef(''); // C6 Fix: Tracks finalized transcript separately from partials
     const [isInterviewerSpeaking, setIsInterviewerSpeaking] = useState(false);  // Track if actively speaking
+    const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // H6 Fix: Prevents timer stacking
     const [voiceInput, setVoiceInput] = useState('');  // Accumulated user voice input
     const voiceInputRef = useRef<string>('');  // Ref for capturing in async handlers
     const textInputRef = useRef<HTMLInputElement>(null); // Ref for input focus
@@ -363,6 +372,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
 
     // Latent Context State (Screenshots attached but not sent)
     const [attachedContext, setAttachedContext] = useState<Array<{ path: string, preview: string }>>([]);
+    const attachedContextRef = useRef<Array<{ path: string, preview: string }>>([]); // C4 Fix: Ref mirror for stable access
 
     // Settings State with Persistence
     const [isUndetectable, setIsUndetectable] = useState(false);
@@ -388,9 +398,11 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
 
     // Model Selection State
     const [currentModel, setCurrentModel] = useState<string>('gemini-3-flash-preview');
+    const currentModelRef = useRef(currentModel); // C3 Fix: Ref for analytics in mount-only streaming effect
 
     // Dynamic Action Button Mode (Recap vs Brainstorm)
     const [actionButtonMode, setActionButtonMode] = useState<'recap' | 'brainstorm'>('recap');
+    const actionButtonModeRef = useRef(actionButtonMode); // M6 Fix: Ref for stale closure in onGlobalShortcut
 
     useEffect(() => {
         // Load persisted mode
@@ -647,15 +659,20 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         return () => clearTimeout(timer);
     }, []);
 
-    // Build conversation context from messages
-    useEffect(() => {
-        const context = messages
+    // H2 Fix: useMemo instead of useEffect+state — eliminates one-render-behind lag
+    const conversationContext = useMemo(() => {
+        return messages
             .filter(m => m.role !== 'user' || !m.hasScreenshot)
             .map(m => `${m.role === 'interviewer' ? 'Interviewer' : m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
             .slice(-20)
             .join('\n');
-        setConversationContext(context);
     }, [messages]);
+
+    // Keep refs in sync with state for async handler access
+    isProcessingRef.current = isProcessing;
+    attachedContextRef.current = attachedContext;
+    currentModelRef.current = currentModel;
+    actionButtonModeRef.current = actionButtonMode;
 
     // Detect manual user scroll to toggle jump-to-latest button
     useEffect(() => {
@@ -859,24 +876,26 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             setIsInterviewerSpeaking(!transcript.final);
 
             if (transcript.final) {
-                // Append finalized text to accumulated transcript
-                setRollingTranscript(prev => {
-                    const separator = prev ? '  ·  ' : '';
-                    return prev + separator + transcript.text;
-                });
+                // C6 Fix: Append to finalized ref for correct partial handling
+                finalizedTranscriptRef.current += (finalizedTranscriptRef.current ? '  ·  ' : '') + transcript.text;
+                // C5 Fix: Cap transcript to prevent unbounded memory growth in long sessions
+                if (finalizedTranscriptRef.current.length > 8000) {
+                    finalizedTranscriptRef.current = finalizedTranscriptRef.current.slice(-8000);
+                }
+                setRollingTranscript(finalizedTranscriptRef.current);
 
-                // Clear speaking indicator after pause
-                setTimeout(() => {
+                // H6 Fix: Clear previous timer to prevent stacking
+                if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
+                speakingTimerRef.current = setTimeout(() => {
                     setIsInterviewerSpeaking(false);
                 }, 3000);
             } else {
-                // For partial transcripts, show current segment appended to accumulated
-                setRollingTranscript(prev => {
-                    // Find where previous finalized content ends (look for last separator)
-                    const lastSeparator = prev.lastIndexOf('  ·  ');
-                    const accumulated = lastSeparator >= 0 ? prev.substring(0, lastSeparator + 5) : '';
-                    return accumulated + transcript.text;
-                });
+                // C6 Fix: Partial transcripts appended to finalized ref — no data loss
+                setRollingTranscript(
+                    finalizedTranscriptRef.current
+                        + (finalizedTranscriptRef.current ? '  ·  ' : '')
+                        + transcript.text
+                );
             }
         }));
 
@@ -889,7 +908,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         cleanups.push(window.electronAPI.onSuggestionGenerated((data) => {
             setIsProcessing(false);
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: data.suggestion
             }]);
@@ -898,7 +917,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         cleanups.push(window.electronAPI.onSuggestionError((err) => {
             setIsProcessing(false);
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: `Error: ${err.error}`
             }]);
@@ -923,7 +942,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
 
                 // Otherwise, start a new one (First token)
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system',
                     text: data.token,
                     intent: 'what_to_answer',
@@ -955,7 +974,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
 
                 // If we missed the stream (or not streaming), append fresh
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system',
                     text: data.answer,  // Plain text, no markdown - ready to speak
                     intent: 'what_to_answer',
@@ -979,7 +998,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                 }
                 // New stream start (e.g. user clicked Shorten)
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system',
                     text: data.token,
                     intent: data.intent,
@@ -1003,7 +1022,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     return updated;
                 }
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system',
                     text: data.answer,
                     intent: data.intent,
@@ -1026,7 +1045,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     return updated;
                 }
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system',
                     text: data.token,
                     intent: 'recap',
@@ -1050,7 +1069,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     return updated;
                 }
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system',
                     text: data.summary,
                     intent: 'recap',
@@ -1084,7 +1103,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     return updated;
                 }
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system',
                     text: data.token,
                     intent: 'follow_up_questions',
@@ -1109,7 +1128,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     return updated;
                 }
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system',
                     text: data.questions,
                     intent: 'follow_up_questions',
@@ -1122,7 +1141,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         cleanups.push(window.electronAPI.onIntelligenceManualResult((data) => {
             setIsProcessing(false);
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: `🎯 **Answer:**\n\n${data.answer}`,
                 source: currentSourceRef.current
@@ -1133,13 +1152,14 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         cleanups.push(window.electronAPI.onIntelligenceError((data) => {
             setIsProcessing(false);
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: `❌ Error (${data.mode}): ${data.error}`
             }]);
         }));
         return () => cleanups.forEach(fn => fn());
-    }, [isExpanded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // C2 Fix: mount-only — listeners must survive expand/collapse to prevent dropped tokens
 
     // Stable mount-only effect for screenshot listeners.
     // These MUST NOT be inside the [isExpanded] effect — when a screenshot is
@@ -1172,7 +1192,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     return updated;
                 }
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system' as const,
                     text: data.token,
                     intent: 'clarify',
@@ -1192,7 +1212,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     return updated;
                 }
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system' as const,
                     text: data.clarification,
                     intent: 'clarify',
@@ -1218,6 +1238,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     };
 
     const handleWhatToSay = async () => {
+        if (isProcessingRef.current) return; // H4 Fix: prevent double-submit
         setIsExpanded(true);
         setIsProcessing(true);
         currentSourceRef.current = 'What to Answer';
@@ -1227,7 +1248,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         // Also merge in any screenshot from the capture-and-process shortcut that
         // arrived via pendingCaptureRef before the React state flush (React 18 fix).
         const pending = pendingCaptureRef.current;
-        let currentAttachments = attachedContext;
+        // C4 Fix: Use ref for stable access instead of potentially stale closure
+        let currentAttachments = attachedContextRef.current;
         if (pending && !currentAttachments.some(s => s.path === pending.path)) {
             currentAttachments = [...currentAttachments, pending].slice(-5);
         }
@@ -1236,7 +1258,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             setAttachedContext([]);
             // Show the attached image in chat
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'user',
                 text: 'What should I say about this?',
                 hasScreenshot: true,
@@ -1253,7 +1275,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             await window.electronAPI.generateWhatToSay(undefined, currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined);
         } catch (err) {
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: `Error: ${err}`
             }]);
@@ -1272,7 +1294,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             await window.electronAPI.generateFollowUp(intent);
         } catch (err) {
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: `Error: ${err}`
             }]);
@@ -1291,7 +1313,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             await window.electronAPI.generateRecap();
         } catch (err) {
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: `Error: ${err}`
             }]);
@@ -1310,7 +1332,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             await window.electronAPI.generateFollowUpQuestions();
         } catch (err) {
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: `Error: ${err}`
             }]);
@@ -1329,7 +1351,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             await window.electronAPI.generateClarify();
         } catch (err) {
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: `Error: ${err}`
             }]);
@@ -1349,7 +1371,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             setAttachedContext([]);
             // Show the attached image in chat
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'user',
                 text: 'Give me a code hint for this',
                 hasScreenshot: true,
@@ -1365,7 +1387,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             await window.electronAPI.generateCodeHint(currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined);
         } catch (err) {
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: `Error: ${err}`
             }]);
@@ -1385,7 +1407,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             setAttachedContext([]);
             // Show the attached image in chat
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'user',
                 text: 'Brainstorm with this context',
                 hasScreenshot: true,
@@ -1401,7 +1423,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             await window.electronAPI.generateBrainstorm(currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined);
         } catch (err) {
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: `Error: ${err}`
             }]);
@@ -1448,8 +1470,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     updated[prev.length - 1] = {
                         ...lastMsg,
                         text: lastMsg.text + token,
-                        // re-check code status on every token? Expensive but needed for progressive highlighting
-                        isCode: (lastMsg.text + token).includes('```') || (lastMsg.text + token).includes('def ') || (lastMsg.text + token).includes('function ')
+                        // H3 Fix: Only check for triple-backtick fences — 'def '/'function ' caused false positives
+                        isCode: (lastMsg.text + token).includes('```')
                     };
                     return updated;
                 }
@@ -1469,10 +1491,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                 requestStartTimeRef.current = null;
             }
 
-            // Track Usage
+            // C3 Fix: Use ref to capture correct model without re-registering listeners
             analytics.trackModelUsed({
-                model_name: currentModel,
-                provider_type: detectProviderType(currentModel),
+                model_name: currentModelRef.current,
+                provider_type: detectProviderType(currentModelRef.current),
                 latency_ms: latency
             });
 
@@ -1520,7 +1542,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                     return updated;
                 }
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system',
                     text: `❌ Error: ${error}`
                 }];
@@ -1623,7 +1645,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
         }
 
         return () => cleanups.forEach(fn => fn());
-    }, [currentModel]); // Ensure tracking captures correct model
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // C3 Fix: mount-only — model captured via ref, prevents listener teardown mid-stream
 
 
     const handleAnswerNow = async () => {
@@ -1650,19 +1673,19 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
                 // No voice input and no image — show real STT error if available
                 if (sttUserStatus === 'failed' && sttUserError) {
                     setMessages(prev => [...prev, {
-                        id: Date.now().toString(),
+                        id: nextMsgId(),
                         role: 'system',
                         text: `❌ STT Error: ${sttUserError}`
                     }]);
                 } else if (sttUserStatus === 'reconnecting') {
                     setMessages(prev => [...prev, {
-                        id: Date.now().toString(),
+                        id: nextMsgId(),
                         role: 'system',
                         text: '⏳ STT is reconnecting, try again in a moment.'
                     }]);
                 } else {
                     setMessages(prev => [...prev, {
-                        id: Date.now().toString(),
+                        id: nextMsgId(),
                         role: 'system',
                         text: '⚠️ No speech detected. Try speaking closer to your microphone.'
                     }]);
@@ -1672,7 +1695,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
 
             // Show user's spoken question
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'user',
                 text: question,
                 hasScreenshot: currentAttachments.length > 0,
@@ -1686,7 +1709,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
 
             // Add placeholder for streaming response
             setMessages(prev => [...prev, {
-                id: Date.now().toString(),
+                id: nextMsgId(),
                 role: 'system',
                 text: '',
                 isStreaming: true,
@@ -1739,13 +1762,13 @@ Provide only the answer, nothing else.`;
                     // If we just added the empty streaming placeholder, remove it or fill it with error
                     if (last && last.isStreaming && last.text === '') {
                         return prev.slice(0, -1).concat({
-                            id: Date.now().toString(),
+                            id: nextMsgId(),
                             role: 'system',
                             text: `❌ Error starting stream: ${err}`
                         });
                     }
                     return [...prev, {
-                        id: Date.now().toString(),
+                        id: nextMsgId(),
                         role: 'system',
                         text: `❌ Error: ${err}`
                     }];
@@ -1758,19 +1781,12 @@ Provide only the answer, nothing else.`;
             setManualTranscript('');
             isRecordingRef.current = true;  // Update ref immediately
             setIsManualRecording(true);
-
-
-            // Ensure native audio is connected
-            try {
-                // Native audio is now managed by main process
-                // await window.electronAPI.invoke('native-audio-connect');
-            } catch (err) {
-                // Already connected, that's fine
-            }
+            // O3 Fix: Removed dead try/catch — native audio is managed by main process
         }
     };
 
     const handleManualSubmit = async () => {
+        if (isProcessingRef.current) return; // H4 Fix: prevent double-submit
         if (!inputValue.trim() && attachedContext.length === 0) return;
         currentSourceRef.current = 'Manual Input';
 
@@ -1782,7 +1798,7 @@ Provide only the answer, nothing else.`;
         setAttachedContext([]);
 
         setMessages(prev => [...prev, {
-            id: Date.now().toString(),
+            id: nextMsgId(),
             role: 'user',
             text: userText || (currentAttachments.length > 0 ? 'Analyze this screenshot' : ''),
             hasScreenshot: currentAttachments.length > 0,
@@ -1796,7 +1812,7 @@ Provide only the answer, nothing else.`;
 
         // Add placeholder for streaming response
         setMessages(prev => [...prev, {
-            id: Date.now().toString(),
+            id: nextMsgId(),
             role: 'system',
             text: '',
             isStreaming: true,
@@ -1830,13 +1846,13 @@ Provide only the answer, nothing else.`;
                 if (last && last.isStreaming && last.text === '') {
                     // remove the empty placeholder
                     return prev.slice(0, -1).concat({
-                        id: Date.now().toString(),
+                        id: nextMsgId(),
                         role: 'system',
                         text: `❌ Error starting stream: ${err}`
                     });
                 }
                 return [...prev, {
-                    id: Date.now().toString(),
+                    id: nextMsgId(),
                     role: 'system',
                     text: `❌ Error: ${err}`
                 }];
@@ -2172,9 +2188,6 @@ Provide only the answer, nothing else.`;
             } else if (isShortcutPressed(e, 'answer')) {
                 e.preventDefault();
                 handleAnswerNow();
-            } else if (isShortcutPressed(e, 'clarify')) {
-                e.preventDefault();
-                handleClarify();
             } else if (isShortcutPressed(e, 'codeHint')) {
                 e.preventDefault();
                 handleCodeHint();
@@ -2207,47 +2220,17 @@ Provide only the answer, nothing else.`;
     // 'toggle-visibility' is NOT Global in default config (isGlobal: false), so it depends on focus.
     // So we MUST listen for them here.
 
-    const generalHandlersRef = useRef({
-        toggleVisibility: () => window.electronAPI.toggleWindow(),
-        processScreenshots: handleWhatToSay,
-        resetCancel: async () => {
-            if (isProcessing) {
-                setIsProcessing(false);
-            } else {
-                await window.electronAPI.resetIntelligence();
-                setMessages([]);
-                setAttachedContext([]);
-                setInputValue('');
-            }
-        },
-        toggleMousePassthrough: () => {
-            const newState = !isMousePassthrough;
-            setIsMousePassthrough(newState);
-            window.electronAPI?.setOverlayMousePassthrough?.(newState);
-        },
-        takeScreenshot: async () => {
-            try {
-                const data = await window.electronAPI.takeScreenshot();
-                if (data && data.path) {
-                    handleScreenshotAttach(data as { path: string; preview: string });
-                }
-            } catch (err) {
-                console.error("Error triggering screenshot:", err);
-            }
-        },
-        selectiveScreenshot: async () => {
-            try {
-                const data = await window.electronAPI.takeSelectiveScreenshot();
-                if (data && !data.cancelled && data.path) {
-                    handleScreenshotAttach(data as { path: string; preview: string });
-                }
-            } catch (err) {
-                console.error("Error triggering selective screenshot:", err);
-            }
-        }
+    // A2 Fix: Single definition — useRef initializer is just the first value, update on every render below
+    const generalHandlersRef = useRef({} as {
+        toggleVisibility: () => void;
+        processScreenshots: () => void;
+        resetCancel: () => Promise<void>;
+        toggleMousePassthrough: () => void;
+        takeScreenshot: () => Promise<void>;
+        selectiveScreenshot: () => Promise<void>;
     });
 
-    // Update ref
+    // Update ref on every render so event listeners always access latest state/props
     generalHandlersRef.current = {
         toggleVisibility: () => window.electronAPI.toggleWindow(),
         processScreenshots: handleWhatToSay,
@@ -2261,10 +2244,13 @@ Provide only the answer, nothing else.`;
                 setInputValue('');
             }
         },
+        // C7 Fix: Use functional update to prevent stale isMousePassthrough
         toggleMousePassthrough: () => {
-            const newState = !isMousePassthrough;
-            setIsMousePassthrough(newState);
-            window.electronAPI?.setOverlayMousePassthrough?.(newState);
+            setIsMousePassthrough(prev => {
+                const newState = !prev;
+                window.electronAPI?.setOverlayMousePassthrough?.(newState);
+                return newState;
+            });
         },
         takeScreenshot: async () => {
             try {
@@ -2373,7 +2359,8 @@ Provide only the answer, nothing else.`;
             else if (action === 'followUp') handlers.handleFollowUpQuestions();
             else if (action === 'recap') handlers.handleRecap();
             else if (action === 'dynamicAction4') {
-                if (actionButtonMode === 'brainstorm') handlers.handleBrainstorm();
+                // M6 Fix: Use ref to avoid stale closure from [] deps
+                if (actionButtonModeRef.current === 'brainstorm') handlers.handleBrainstorm();
                 else handlers.handleRecap();
             }
             else if (action === 'answer') handlers.handleAnswerNow();
@@ -2954,9 +2941,11 @@ Provide only the answer, nothing else.`;
                                         <div className="relative">
                                             <button
                                                 onClick={() => {
-                                                    const newState = !isMousePassthrough;
-                                                    setIsMousePassthrough(newState);
-                                                    window.electronAPI?.setOverlayMousePassthrough?.(newState);
+                                                    setIsMousePassthrough(prev => {
+                                                        const newState = !prev;
+                                                        window.electronAPI?.setOverlayMousePassthrough?.(newState);
+                                                        return newState;
+                                                    });
                                                 }}
                                                 className={`
                                                     w-7 h-7 flex items-center justify-center rounded-lg
