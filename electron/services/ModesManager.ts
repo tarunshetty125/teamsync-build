@@ -7,6 +7,13 @@ import {
     MODE_TEAM_MEET_PROMPT,
     MODE_LECTURE_PROMPT,
     MODE_TECHNICAL_INTERVIEW_PROMPT,
+    MODE_GENERAL_SUFFIX,
+    MODE_LOOKING_FOR_WORK_SUFFIX,
+    MODE_SALES_SUFFIX,
+    MODE_RECRUITING_SUFFIX,
+    MODE_TEAM_MEET_SUFFIX,
+    MODE_LECTURE_SUFFIX,
+    MODE_TECHNICAL_INTERVIEW_SUFFIX,
 } from '../llm/prompts';
 
 export type ModeTemplateType =
@@ -118,6 +125,19 @@ const TEMPLATE_SYSTEM_PROMPTS: Record<ModeTemplateType, string> = {
     'team-meet': MODE_TEAM_MEET_PROMPT,
     lecture: MODE_LECTURE_PROMPT,
 };
+
+// Deduped mode suffixes — mode-specific body WITHOUT shared blocks (CORE_IDENTITY etc.)
+// Used by LLMHelper when stacking with BASE_SYSTEM_PROMPT to avoid duplication.
+const TEMPLATE_SUFFIX_PROMPTS: Record<ModeTemplateType, string> = {
+    general: MODE_GENERAL_SUFFIX,
+    'technical-interview': MODE_TECHNICAL_INTERVIEW_SUFFIX,
+    'looking-for-work': MODE_LOOKING_FOR_WORK_SUFFIX,
+    sales: MODE_SALES_SUFFIX,
+    recruiting: MODE_RECRUITING_SUFFIX,
+    'team-meet': MODE_TEAM_MEET_SUFFIX,
+    lecture: MODE_LECTURE_SUFFIX,
+};
+
 
 function rowToMode(row: any): Mode {
     return {
@@ -307,6 +327,24 @@ export class ModesManager {
         const mode = this.getActiveMode();
         if (!mode) return '';
         return TEMPLATE_SYSTEM_PROMPTS[mode.templateType] ?? '';
+    }
+
+    /**
+     * Returns the DEDUPED mode suffix (without shared blocks) for the active mode.
+     * Used by LLMHelper.streamChat to avoid sending CORE_IDENTITY etc. twice.
+     * Returns empty string for 'general' mode (handled by base prompt already).
+     */
+    public getActiveModeDeduped(): { suffix: string; templateType: ModeTemplateType | null } {
+        const mode = this.getActiveMode();
+        if (!mode) return { suffix: '', templateType: null };
+        // General mode: skip suffix entirely — BASE_SYSTEM_PROMPT covers it
+        if (mode.templateType === 'general') {
+            return { suffix: '', templateType: 'general' };
+        }
+        return {
+            suffix: TEMPLATE_SUFFIX_PROMPTS[mode.templateType] ?? '',
+            templateType: mode.templateType,
+        };
     }
 
     /**

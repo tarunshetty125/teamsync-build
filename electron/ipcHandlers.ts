@@ -601,14 +601,15 @@ export function initializeIpcHandlers(appState: AppState): void {
       let fullResponse = "";
 
       // Context Injection for "Answer" button (100s rolling window)
+      // TOKEN-OPT: Only inject auto-context if it contains meaningful conversation
+      // (multiple speaker turns, >200 chars). This preserves the lightweight first-request
+      // path in streamChat when the user sends a simple standalone question.
       if (!context) {
-        // User requested 100 seconds of context for the answer button
-        // Logic: If no explicit context provided (like from manual override), auto-inject from IntelligenceManager
         try {
           const autoContext = intelligenceManager.getFormattedContext(100);
-          if (autoContext && autoContext.trim().length > 0) {
+          if (autoContext && autoContext.trim().length > 200) {
             context = autoContext;
-            console.log(`[IPC] Auto - injected 100s context for gemini - chat - stream(${context.length} chars)`);
+            console.log(`[IPC] Auto-injected 100s context for gemini-chat-stream (${context.length} chars)`);
           }
         } catch (ctxErr) {
           console.warn("[IPC] Failed to auto-inject context:", ctxErr);

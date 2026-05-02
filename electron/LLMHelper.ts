@@ -7,6 +7,7 @@ import sharp from "sharp"
 import { ModelVersionManager, ModelFamily, TextModelFamily } from './services/ModelVersionManager'
 import {
   HARD_SYSTEM_PROMPT, GROQ_SYSTEM_PROMPT, OPENAI_SYSTEM_PROMPT, CLAUDE_SYSTEM_PROMPT,
+  BASE_SYSTEM_PROMPT, LIGHTWEIGHT_SYSTEM_PROMPT,
   UNIVERSAL_SYSTEM_PROMPT, UNIVERSAL_ANSWER_PROMPT, UNIVERSAL_WHAT_TO_ANSWER_PROMPT,
   UNIVERSAL_RECAP_PROMPT, UNIVERSAL_FOLLOWUP_PROMPT, UNIVERSAL_FOLLOW_UP_QUESTIONS_PROMPT, UNIVERSAL_ASSIST_PROMPT,
   CUSTOM_SYSTEM_PROMPT, CUSTOM_ANSWER_PROMPT, CUSTOM_WHAT_TO_ANSWER_PROMPT,
@@ -701,12 +702,16 @@ CRITICAL RULES:
    */
   public async generateSuggestion(context: string, lastQuestion: string): Promise<string> {
     // Load active mode system prompt and context block (reference files + custom context)
-    let activeModePrompt = '';
+    // TOKEN-OPT: Use deduped suffix to avoid sending shared blocks twice.
+    let activeModePromptSuffix = '';
+    let activeTemplateType: string | null = null;
     let modeContextBlock = '';
     try {
       const { ModesManager } = require('./services/ModesManager');
       const modesMgr = ModesManager.getInstance();
-      activeModePrompt = modesMgr.getActiveModeSystemPromptSuffix() ?? '';
+      const deduped = modesMgr.getActiveModeDeduped();
+      activeModePromptSuffix = deduped.suffix ?? '';
+      activeTemplateType = deduped.templateType;
       modeContextBlock = modesMgr.buildActiveModeContextBlock() ?? '';
     } catch (_modeErr: any) {
       console.warn('[LLMHelper] ModesManager load failed in generateSuggestion (non-fatal):', _modeErr?.message);
@@ -722,9 +727,16 @@ CRITICAL RULES:
       ? `\n\n<user_context>\n${this.customNotes.trim()}\n</user_context>\nUse this context naturally if relevant. Never quote it verbatim.`
       : '';
 
-    const basePrompt = activeModePrompt
-      ? `${HARD_SYSTEM_PROMPT}\n\n## ACTIVE MODE\n${activeModePrompt}${customNotesBlock}`
-      : `You are an expert conversation coach. Based on the transcript, provide a concise, natural response the user could say.
+    // TOKEN-OPT: For General mode, suffix is empty (base prompt covers it).
+    // For non-General modes, stack BASE_SYSTEM_PROMPT + deduped suffix.
+    // Fallback: if no mode at all, use a minimal coaching prompt.
+    let basePrompt: string;
+    if (activeModePromptSuffix && activeTemplateType !== 'general') {
+      basePrompt = `${BASE_SYSTEM_PROMPT}\n\n## ACTIVE MODE\n${activeModePromptSuffix}${customNotesBlock}`;
+    } else if (activeTemplateType === 'general') {
+      basePrompt = `${BASE_SYSTEM_PROMPT}${customNotesBlock}\n\nCONVERSATION SO FAR:\n${enrichedContext}\n\nLATEST QUESTION:\n${lastQuestion}\n\nANSWER DIRECTLY:`;
+    } else {
+      basePrompt = `You are an expert conversation coach. Based on the transcript, provide a concise, natural response the user could say.
 
 RULES:
 - Be direct and conversational
@@ -742,6 +754,7 @@ LATEST QUESTION:
 ${lastQuestion}
 
 ANSWER DIRECTLY:`;
+    }
 
     // Apply language instruction so this path honours the user's language setting
     const systemPrompt = this.injectLanguageInstruction(basePrompt);
@@ -816,13 +829,9 @@ ANSWER DIRECTLY:`;
     // language. Supports seamless code-switching across turns (e.g. the user can
     // switch from English to Hindi mid-conversation and the AI follows).
     if (!this.aiResponseLanguage || this.aiResponseLanguage === 'auto') {
-      const autoHeader = `[LANGUAGE INSTRUCTION — HIGHEST PRIORITY]
-Detect the language of the user's most recent message and ALWAYS respond in that exact same language.
-If the user writes in Hindi, respond in Hindi. If in Spanish, respond in Spanish. If in English, respond in English.
-If the language is ambiguous, default to English.
-You may mix scripts naturally (e.g. code stays in English even when the explanation is in another language).
-[END LANGUAGE INSTRUCTION]\n\n`;
-      return `${autoHeader}${systemPrompt}`;
+      // TOKEN-OPT: Skip language header for 'auto' — LLMs naturally match user language.
+      // Saves ~63 tokens per request.
+      return systemPrompt;
     }
 
     // ── FIXED language mode ────────────────────────────────────────────────────
@@ -877,11 +886,16 @@ This rule overrides ALL other instructions including formatting, brevity, or out
             // Inject knowledge system prompt and context
             if (!skipSystemPrompt && knowledgeResult.systemPromptInjection) {
               skipSystemPrompt = false; // ensure we use the knowledge prompt
-              // Prepend knowledge context to existing context
+              // Prepend knowledge context — TOKEN-OPT: only for profile-relevant queries
               if (knowledgeResult.contextBlock) {
-                context = context
-                  ? `${knowledgeResult.contextBlock}\n\n${context}`
-                  : knowledgeResult.contextBlock;
+                const isProfileQuery = /experience|project|salary|behavior|introduce|background|resume|role|team|company|about yourself|why (this|us|here)|tell me about/i.test(message);
+                if (isProfileQuery || knowledgeResult.systemPromptInjection) {
+                  context = context
+                    ? `${knowledgeResult.contextBlock}\n\n${context}`
+                    : knowledgeResult.contextBlock;
+                } else {
+                  console.log('[LLMHelper] TOKEN-OPT: Skipping profile context for non-profile query (chatWithGemini)');
+                }
               }
             }
           }
@@ -2154,11 +2168,16 @@ This rule overrides ALL other instructions including formatting, brevity, or out
           if (knowledgeResult.systemPromptInjection) {
             systemPromptOverride = knowledgeResult.systemPromptInjection;
           }
-          // Inject knowledge context
+          // Inject knowledge context — TOKEN-OPT: only for profile-relevant queries
           if (knowledgeResult.contextBlock) {
-            context = context
-              ? `${knowledgeResult.contextBlock}\n\n${context}`
-              : knowledgeResult.contextBlock;
+            const isProfileQuery = /experience|project|salary|behavior|introduce|background|resume|role|team|company|about yourself|why (this|us|here)|tell me about/i.test(message);
+            if (isProfileQuery || knowledgeResult.systemPromptInjection) {
+              context = context
+                ? `${knowledgeResult.contextBlock}\n\n${context}`
+                : knowledgeResult.contextBlock;
+            } else {
+              console.log('[LLMHelper] TOKEN-OPT: Skipping profile context for non-profile query');
+            }
           }
         }
       } catch (knowledgeError: any) {
@@ -2168,17 +2187,20 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 
     // ============================================================
     // ACTIVE MODE INJECTION (Context + System Prompt Suffix)
+    // TOKEN-OPT: Uses deduped suffixes to avoid sending shared blocks twice.
+    //            Skips suffix entirely for General mode (base prompt covers it).
     // ============================================================
     try {
       const { ModesManager } = require('./services/ModesManager');
       const modesMgr = ModesManager.getInstance();
-      const modePromptSuffix = modesMgr.getActiveModeSystemPromptSuffix();
+      const { suffix: modeSuffix, templateType: activeTemplateType } = modesMgr.getActiveModeDeduped();
       const modeContextBlock = modesMgr.buildActiveModeContextBlock();
 
-      if (modePromptSuffix) {
-        // Mode prompt supplements the base prompt — preserves KO profile intelligence if already set
-        const baseForMode = systemPromptOverride || HARD_SYSTEM_PROMPT;
-        systemPromptOverride = `${baseForMode}\n\n## ACTIVE MODE\n${modePromptSuffix}`;
+      if (modeSuffix && activeTemplateType !== 'general') {
+        // TOKEN-OPT: Use BASE_SYSTEM_PROMPT + deduped suffix instead of stacking full prompts.
+        // This avoids sending CORE_IDENTITY, EXECUTION_CONTRACT, etc. twice.
+        const baseForMode = systemPromptOverride || BASE_SYSTEM_PROMPT;
+        systemPromptOverride = `${baseForMode}\n\n## ACTIVE MODE\n${modeSuffix}`;
       }
 
       const totalText = (context || '') + (modeContextBlock || '');
@@ -2284,12 +2306,25 @@ Return only the final answer. No meta commentary.
     const CODE_BOOST = `\n\nFocus on preserving exact code logic.\nDo not simplify critical parts.`;
     const VISION_BOOST = `\n\nFocus on accurately interpreting the visual content.\nExtract relevant details and ignore noise.`;
 
+    // ============================================================
+    // LIGHTWEIGHT FIRST-REQUEST MODE
+    // TOKEN-OPT: If this is a fresh session with no context, no overrides,
+    // and no images, use a minimal ~200-token prompt instead of ~5000 tokens.
+    // ============================================================
+    const isLightweightEligible = !systemPromptOverride && !context && !isMultimodal && !isCodeHeavy;
+
     // Determine the system prompt to use
-    let universalBase = FINAL_SYSTEM_PROMPT;
-    if (isCodeHeavy) {
-      universalBase += CODE_BOOST;
-    } else if (isMultimodal) {
-      universalBase += VISION_BOOST;
+    let universalBase: string;
+    if (isLightweightEligible) {
+      universalBase = LIGHTWEIGHT_SYSTEM_PROMPT;
+      console.log('[LLMHelper] ⚡ Lightweight first-request mode: ~200 tokens instead of ~5000');
+    } else {
+      universalBase = FINAL_SYSTEM_PROMPT;
+      if (isCodeHeavy) {
+        universalBase += CODE_BOOST;
+      } else if (isMultimodal) {
+        universalBase += VISION_BOOST;
+      }
     }
 
     const baseSystemPrompt = systemPromptOverride || universalBase;
