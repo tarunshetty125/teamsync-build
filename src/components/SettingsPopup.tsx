@@ -104,6 +104,29 @@ const SettingsPopup = () => {
         return stored !== 'false'; // Default to true if not set
     });
 
+    // Profile Intelligence state — synced with Settings panel via IPC
+    const [profileModeOn, setProfileModeOn] = useState(false);
+    const [profileAvailable, setProfileAvailable] = useState(false);
+
+    // Load profile status on mount
+    useEffect(() => {
+        window.electronAPI?.profileGetStatus?.().then((status) => {
+            if (status) {
+                setProfileModeOn(status.profileMode ?? false);
+                setProfileAvailable(status.hasProfile ?? false);
+            }
+        }).catch(() => {});
+    }, []);
+
+    // Bi-directional sync: listen for profile mode changes from Settings panel
+    useEffect(() => {
+        if (!window.electronAPI?.onProfileModeChanged) return;
+        const unsubscribe = window.electronAPI.onProfileModeChanged((enabled: boolean) => {
+            setProfileModeOn(enabled);
+        });
+        return () => unsubscribe();
+    }, []);
+
     useEffect(() => {
         const handleStorage = () => {
             const stored = localStorage.getItem('natively_interviewer_transcript');
@@ -278,6 +301,41 @@ const SettingsPopup = () => {
                             <div className={`w-[15px] h-[15px] rounded-full transition-transform duration-300 ease-spring ${toggleKnobClass} ${actionButtonMode === 'brainstorm' ? 'translate-x-[12px]' : 'translate-x-0'}`} />
                         </button>
                     </div>
+
+                    {/* Profile Intelligence Toggle */}
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group ${!profileAvailable ? 'opacity-50 grayscale cursor-not-allowed' : `${itemHoverClass} cursor-default`}`} title={!profileAvailable ? 'Upload resume & JD in Settings first' : ''}>
+                        <div className="flex items-center gap-3">
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className={`w-3.5 h-3.5 transition-colors ${profileModeOn ? 'text-blue-400' : iconInactiveClass}`}
+                            >
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
+                            <span className={`text-[12px] font-medium transition-colors ${profileModeOn ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Profile Intel</span>
+                        </div>
+                        <button
+                            onClick={async () => {
+                                if (!profileAvailable) return;
+                                const newState = !profileModeOn;
+                                setProfileModeOn(newState);
+                                try {
+                                    await window.electronAPI?.profileSetMode?.(newState);
+                                } catch (e) { console.error('Failed to toggle profile intelligence:', e); }
+                            }}
+                            className={`w-[30px] h-[18px] rounded-full p-[1.5px] transition-all duration-300 ease-spring active:scale-[0.92] ${profileModeOn ? 'bg-blue-500 shadow-[0_2px_10px_rgba(59,130,246,0.3)]' : defaultToggleTrackClass}`}
+                            disabled={!profileAvailable}
+                        >
+                            <div className={`w-[15px] h-[15px] rounded-full transition-transform duration-300 ease-spring ${toggleKnobClass} ${profileModeOn ? 'translate-x-[12px]' : 'translate-x-0'}`} />
+                        </button>
+                    </div>
+
                     <div className={`h-px my-0.5 mx-2 ${dividerClass}`} />
 
                     {/* Show/Hide Natively */}
