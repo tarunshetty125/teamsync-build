@@ -1,4 +1,5 @@
 import { EventEmitter } from "events";
+import * as crypto from "crypto";
 import { ReplayBuffer, ReplayBufferEntry } from "./ReplayBuffer";
 import { SttMetricsSnapshot, SttProviderMetrics, StreamingSttAdapter, SttFatalEvent, SttTelemetryEvent, SttTranscriptEvent } from "./SttAdapter";
 
@@ -43,12 +44,13 @@ interface ProviderMetricState {
 export class SttSupervisor extends EventEmitter {
   private readonly sourceLabel: string;
   private readonly adapters: StreamingSttAdapter[];
+  private readonly providers: StreamingSttAdapter[];
   private readonly replayBuffer: ReplayBuffer;
   private unsubscribeFns: Array<() => void> = [];
 
   private activeAdapterIndex = -1;
   private started = false;
-  private switching = false;
+  private isTransitioning = false;
   private replayInProgress = false;
   private pendingWrites: QueuedWrite[] = [];
   private pendingWriteBytes = 0;
@@ -80,10 +82,17 @@ export class SttSupervisor extends EventEmitter {
   private startedAt: number | null = null;
   private lastReplayStats: { entries: number; durationMs: number } = { entries: 0, durationMs: 0 };
 
+  private currentGenerationId: string = crypto.randomUUID();
+  private cutoverTimestamp: number = 0;
+  private lastStallTriggerTime: number = 0;
+  private lastInterimText: string = "";
+  private lastTranscriptTimestamp: number = Date.now();
+
   constructor(options: SttSupervisorOptions) {
     super();
     this.sourceLabel = options.sourceLabel;
     this.adapters = options.adapters;
+    this.providers = options.adapters;
     this.replayBuffer = new ReplayBuffer({
       maxDurationMs: options.replayBufferDurationMs ?? 12_000,
       maxEntries: Number(process.env.STT_REPLAY_MAX_ENTRIES || 4_096),
@@ -101,6 +110,13 @@ export class SttSupervisor extends EventEmitter {
     this.unsubscribeFns = [];
   }
 
+  private async acquireTransitionLock(): Promise<void> {
+    while (this.isTransitioning) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    this.isTransitioning = true;
+  }
+
   public getActiveProviderName(): string {
     if (this.activeAdapterIndex < 0) {
       return "inactive";
@@ -115,7 +131,6 @@ export class SttSupervisor extends EventEmitter {
     
     console.log(`[SESSION_START] ${sessionId}`);
     
-    // Store the session ID to bind emitted events to this specific meeting session lifecycle
     (this as any)._activeSessionId = sessionId;
 
     this.replayBuffer.clear();
@@ -128,20 +143,28 @@ export class SttSupervisor extends EventEmitter {
       return;
     }
 
-    void this.activateAdapter(nextIndex);
+    void (async () => {
+      await this.acquireTransitionLock();
+      try {
+        await this.activateAdapter(nextIndex);
+      } finally {
+        this.isTransitioning = false;
+      }
+    })();
   }
 
   public stop(): void {
     console.log(`[SESSION_STOP] ${(this as any)._activeSessionId}`);
     this.started = false;
     (this as any)._activeSessionId = null;
-    this.switching = false;
+    this.isTransitioning = false;
     this.replayInProgress = false;
     this.pendingWrites = [];
     this.pendingWriteBytes = 0;
     this.replayBuffer.clear();
     this.lastFinalTranscript = null;
     this.lastReplayStats = { entries: 0, durationMs: 0 };
+    this.lastInterimText = "";
     this.stopMaintenanceTimer();
 
     const active = this.getActiveAdapter();
@@ -177,9 +200,33 @@ export class SttSupervisor extends EventEmitter {
     const MAX_BUFFER_SIZE = 1000;
     if (this.replayBuffer.getEntryCount() > MAX_BUFFER_SIZE) {
       this.replayBuffer.dropOldestChunk();
+      this.emitTelemetry({
+        type: "stt.buffer_drop",
+        provider: this.getActiveProviderName(),
+        sourceLabel: this.sourceLabel,
+        timestamp: Date.now()
+      } as any);
     }
 
-    if (this.replayInProgress || this.switching || this.activeAdapterIndex < 0) {
+    const now = Date.now();
+
+    if (
+      !this.isTransitioning &&
+      this.lastInterimText &&
+      now - this.lastTranscriptTimestamp > 2000 &&
+      now - this.lastStallTriggerTime > 2000
+    ) {
+      this.lastStallTriggerTime = now;
+
+      this.handleFatal(this.activeAdapterIndex, {
+        error: new Error("Interim stall"),
+        provider: this.getActiveProviderName(),
+        sourceLabel: this.sourceLabel,
+        retryable: true
+      });
+    }
+
+    if (this.replayInProgress || this.isTransitioning || this.activeAdapterIndex < 0) {
       this.enqueuePendingWrite(chunk, timestamp);
       return;
     }
@@ -339,17 +386,13 @@ export class SttSupervisor extends EventEmitter {
       adapter.setCredentials?.(this.credentialsPath);
     }
 
-    // Clear previous adapter bindings to prevent duplicate handlers on failover
     this.unsubscribeFns.forEach(fn => fn());
     this.unsubscribeFns = [];
 
-    // Capture the current session ID in the closure
     const activeSessionId = (this as any)._activeSessionId;
 
     this.unsubscribeFns.push(
       adapter.onTranscript((event) => {
-        // 🔥 Zero Cross-Contamination Guard: If the supervisor's session ID has changed
-        // since this closure was created, drop the event immediately.
         if (activeSessionId !== (this as any)._activeSessionId) return;
         this.handleTranscript(index, event);
       }),
@@ -368,7 +411,18 @@ export class SttSupervisor extends EventEmitter {
       sourceLabel: this.sourceLabel,
       timestamp: Date.now(),
     });
-    await Promise.resolve(adapter.start());
+
+    try {
+        await Promise.resolve(adapter.start());
+    } catch (error) {
+        this.handleFatal(index, {
+            error: error instanceof Error ? error : new Error(String(error)),
+            provider: adapter.name,
+            sourceLabel: this.sourceLabel,
+            retryable: true
+        });
+        return;
+    }
 
     if (replaySnapshot && replaySnapshot.length > 0) {
       this.replayInProgress = true;
@@ -387,6 +441,17 @@ export class SttSupervisor extends EventEmitter {
   private handleTranscript(adapterIndex: number, event: SttTranscriptEvent): void {
     if (!this.started || adapterIndex !== this.activeAdapterIndex) {
       return;
+    }
+    const eventTime = (event as any).timestamp ?? Date.now();
+    if (eventTime < this.cutoverTimestamp) {
+      return;
+    }
+
+    this.lastTranscriptTimestamp = Date.now();
+    if (!event.isFinal) {
+      this.lastInterimText = event.text;
+    } else {
+      this.lastInterimText = "";
     }
 
     const providerName = this.adapters[adapterIndex]?.name || event.provider || "unknown";
@@ -431,57 +496,93 @@ export class SttSupervisor extends EventEmitter {
     this.logDebug(
       `transcript provider=${providerName} final=${event.isFinal} latency=${event.latencyMs ?? "n/a"}ms text="${event.text.slice(0, 80)}"`
     );
+    
+    const emitGenerationId = this.currentGenerationId;
+    
     this.emit("transcript", {
       ...event,
       provider: providerName,
       sourceLabel: this.sourceLabel,
       _sessionId: (this as any)._activeSessionId,
+      generationId: emitGenerationId,
     });
+
+    if (event.isFinal) {
+        this.currentGenerationId = crypto.randomUUID();
+    }
+    
     this.emitMetrics();
   }
 
   private handleFatal(adapterIndex: number, event: SttFatalEvent): void {
-    if (!this.started || adapterIndex !== this.activeAdapterIndex || this.switching) {
+    if (!this.started || adapterIndex !== this.activeAdapterIndex) {
       return;
     }
 
-    const health = this.registerFailure(adapterIndex);
-    const providerMetric = this.getProviderMetric(event.provider);
-    console.log(`[PIPELINE_ERROR] provider=${event.provider} error="${event.error.message}"`);
-    providerMetric.failures += 1;
-    providerMetric.failureTimestamps.push(Date.now());
-    this.pruneProviderWindows(providerMetric, Date.now());
-    this.emitTelemetry({
-      type: "provider_failed",
-      provider: event.provider,
-      sourceLabel: this.sourceLabel,
-      timestamp: Date.now(),
-      reason: event.error.message,
-      consecutiveFailures: health.consecutiveFailures,
-      disabledUntil: health.disabledUntil,
-    });
-    this.logDebug(
-      `provider_failed provider=${event.provider} reason="${event.error.message}" consecutive=${health.consecutiveFailures} cooldownUntil=${health.disabledUntil ?? "none"}`
-    );
-    this.emit("error", new Error(`[${event.provider}] ${event.error.message}`));
-    this.switching = true;
-    void this.failover(event);
+    void (async () => {
+      await this.acquireTransitionLock();
+      try {
+        if (!this.started || adapterIndex !== this.activeAdapterIndex) return;
+
+        const health = this.registerFailure(adapterIndex);
+        const providerMetric = this.getProviderMetric(event.provider);
+        console.log(`[PIPELINE_ERROR] provider=${event.provider} error="${event.error.message}"`);
+        providerMetric.failures += 1;
+        providerMetric.failureTimestamps.push(Date.now());
+        this.pruneProviderWindows(providerMetric, Date.now());
+        this.emitTelemetry({
+          type: "provider_failed",
+          provider: event.provider,
+          sourceLabel: this.sourceLabel,
+          timestamp: Date.now(),
+          reason: event.error.message,
+          consecutiveFailures: health.consecutiveFailures,
+          disabledUntil: health.disabledUntil,
+        });
+        this.logDebug(
+          `provider_failed provider=${event.provider} reason="${event.error.message}" consecutive=${health.consecutiveFailures} cooldownUntil=${health.disabledUntil ?? "none"}`
+        );
+        this.emit("error", new Error(`[${event.provider}] ${event.error.message}`));
+        
+        await this.failover(event);
+      } finally {
+        this.isTransitioning = false;
+        this.emitMetrics();
+      }
+    })();
   }
 
   private async failover(event: SttFatalEvent): Promise<void> {
+    this.cutoverTimestamp = Date.now();
+    this.currentGenerationId = crypto.randomUUID();
     console.log(`[FAILOVER_TRIGGERED] from ${event.provider}`);
     const previousAdapter = this.getActiveAdapter();
     const previousProvider = this.getActiveProviderName();
     const replaySnapshot = this.replayBuffer.snapshot();
     
+    this.unsubscribeFns.forEach(fn => fn());
+    this.unsubscribeFns = [];
+
+    if (this.lastInterimText) {
+      this.emit("transcript", {
+        text: this.lastInterimText + "...",
+        isFinal: true,
+        confidence: 1.0,
+        provider: previousProvider,
+        sourceLabel: this.sourceLabel,
+        _sessionId: (this as any)._activeSessionId,
+        generationId: this.currentGenerationId,
+      });
+      this.currentGenerationId = crypto.randomUUID();
+      this.lastInterimText = "";
+    }
+
     const nextIndex = this.findNextAvailableAdapterIndex(this.activeAdapterIndex);
     const isSelfRestart = (nextIndex !== -1 && nextIndex === this.activeAdapterIndex);
 
     if (!isSelfRestart && !this.canAttemptFailover()) {
       this.activeAdapterIndex = -1;
-      this.switching = false;
       this.emit("error", new Error(`[SttSupervisor/${this.sourceLabel}] Failover loop guard triggered after ${previousProvider}`));
-      this.emitMetrics();
       return;
     }
 
@@ -501,16 +602,13 @@ export class SttSupervisor extends EventEmitter {
         return;
       }
 
-      // If we are failing over to the exact same adapter (e.g. only 1 provider available),
-      // add a small delay to prevent a tight crash loop.
       if (isSelfRestart) {
           const health = this.providerHealth.get(nextIndex);
           const failures = health ? health.consecutiveFailures : 1;
-          const delayMs = Math.min(1000 * Math.pow(2, failures - 1), 15000); // Max 15s delay
+          const delayMs = Math.min(1000 * Math.pow(2, failures - 1), 15000); 
           this.logDebug(`self_failover provider=${previousProvider} delay=${delayMs}ms`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
       } else {
-          // It's a real failover to a different provider
           this.failoverCount += 1;
           this.getProviderMetric(previousProvider).failovers += 1;
       }
@@ -519,6 +617,15 @@ export class SttSupervisor extends EventEmitter {
       this.logDebug(
         `failover provider=${previousProvider} next=${nextProvider} replayDuration=${this.getReplayDurationMs(replaySnapshot)}ms entries=${replaySnapshot.length} reason="${event.error.message}"`
       );
+      
+      this.emitTelemetry({
+        type: "stt.transition",
+        from: event.provider,
+        to: this.getActiveProviderName(),
+        sourceLabel: this.sourceLabel,
+        timestamp: Date.now()
+      } as any);
+
       this.emitTelemetry({
         type: "failover_triggered",
         provider: previousProvider,
@@ -529,6 +636,7 @@ export class SttSupervisor extends EventEmitter {
         replayBufferEntries: replaySnapshot.length,
         replayBufferDurationMs: this.getReplayDurationMs(replaySnapshot),
       });
+
       await this.activateAdapter(nextIndex, replaySnapshot);
     } catch (error) {
       this.activeAdapterIndex = -1;
@@ -539,9 +647,6 @@ export class SttSupervisor extends EventEmitter {
           `[SttSupervisor/${this.sourceLabel}] Failover from ${previousProvider} failed: ${failure.message}`
         )
       );
-    } finally {
-      this.switching = false;
-      this.emitMetrics();
     }
   }
 
@@ -756,6 +861,14 @@ export class SttSupervisor extends EventEmitter {
       this.pendingWriteBytes = Math.max(0, this.pendingWriteBytes - dropped.chunk.length);
       this.droppedPendingWrites += 1;
       this.backpressureEvents += 1;
+      this.emitTelemetry({
+        type: "stt.buffer_drop",
+        provider: this.getActiveProviderName(),
+        sourceLabel: this.sourceLabel,
+        timestamp: Date.now(),
+        droppedBytes: dropped.chunk.length,
+        queueLength: this.pendingWrites.length,
+      } as any);
       this.logDebug(`backpressure_drop oldestChunkBytes=${dropped.chunk.length} queueLength=${this.pendingWrites.length}`);
     }
   }
