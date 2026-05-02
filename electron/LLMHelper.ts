@@ -1296,7 +1296,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 
     // Signal fast mode so the server routes to Groq Llama 3.3 (text-only, key-rotated).
     // Only sent for text-only requests — server ignores it when images are present.
-    if (this.groqFastTextMode) body.fast_mode = true;
+    if (this.groqFastTextMode && (!imagePaths || imagePaths.length === 0)) body.fast_mode = true;
 
     // Send images as a structured array so the server can build proper Gemini inlineData parts.
     // Embedding base64 in the text content would be truncated at 4000 chars and treated as text.
@@ -2125,6 +2125,10 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     ignoreKnowledgeMode: boolean = false
   ): AsyncGenerator<string, void, unknown> {
 
+    // Preparation
+    const isMultimodal = !!(imagePaths?.length);
+    let isCodeHeavy = false;
+    
     // ============================================================
     // KNOWLEDGE MODE INTERCEPT (Streaming)
     // ============================================================
@@ -2177,35 +2181,123 @@ This rule overrides ALL other instructions including formatting, brevity, or out
         systemPromptOverride = `${baseForMode}\n\n## ACTIVE MODE\n${modePromptSuffix}`;
       }
 
+      const totalText = (context || '') + (modeContextBlock || '');
+      const codeChars = (totalText.match(/[{}[\]();=<>"'`:\/\\,\n]/g) || []).length;
+      isCodeHeavy = totalText.length > 800 && (codeChars > 500 || (codeChars / totalText.length) > 0.05);
+
+      const willUseGroq = (!isMultimodal && this.groqFastTextMode) || this.isGroqModel(this.currentModelId);
+      
+      let COMBINED_CTX_CAP = 60_000;
+      if (willUseGroq) {
+        if (totalText.length > 20_000) {
+          COMBINED_CTX_CAP = 6_000;  // Hard safety ceiling against extreme tokenizer spikes
+        } else if (isCodeHeavy) {
+          COMBINED_CTX_CAP = 6_000;  // Strict cap for dense tokenizers
+        } else {
+          COMBINED_CTX_CAP = 15_000; // Safe for normal text (~4k tokens)
+        }
+
+        if (process.env.DEBUG_CONTEXT === 'true') {
+          console.log('[LLMHelper] Context Density:', {
+            length: totalText.length,
+            codeChars,
+            ratio: (codeChars / totalText.length).toFixed(3),
+            isCodeHeavy,
+            cap: COMBINED_CTX_CAP
+          });
+        }
+      }
+
+      // Clamp the primary transcript context if it's too large, to leave room for the mode block
+      if (context && context.length > COMBINED_CTX_CAP) {
+        // Attempt to preserve whole speaker turns instead of cutting mid-sentence
+        const parts = context.split(/\n(?=[^\n]{1,40}: )/);
+        let out = '';
+        for (let i = parts.length - 1; i >= 0; i--) {
+          if (parts[i].length > COMBINED_CTX_CAP) {
+            out = parts[i].slice(-COMBINED_CTX_CAP);
+            break;
+          }
+          if (out.length + parts[i].length > COMBINED_CTX_CAP) break;
+          out = parts[i] + (out ? '\n' + out : '');
+        }
+        context = '[...transcript truncated]\n' + (out.trim() || context.slice(-COMBINED_CTX_CAP));
+        console.warn(`[LLMHelper] Transcript context clamped to ${COMBINED_CTX_CAP} chars (Groq=${willUseGroq}, codeHeavy=${COMBINED_CTX_CAP === 6_000})`);
+      }
+
       if (modeContextBlock) {
-        // Guard combined context size: KO block + mode block must not exceed 60KB to protect
-        // the token budget for the actual user question.
+        // Guard combined context size: KO block + mode block must not exceed max tokens.
         const existingLen = context?.length ?? 0;
-        const COMBINED_CTX_CAP = 60_000;
         if (existingLen + modeContextBlock.length > COMBINED_CTX_CAP) {
           const available = Math.max(0, COMBINED_CTX_CAP - existingLen);
           const trimmed = available > 0 ? modeContextBlock.slice(0, available) + '\n[...mode context truncated]' : '';
-          console.warn(`[LLMHelper] Combined context exceeded ${COMBINED_CTX_CAP} chars — mode context trimmed`);
+          console.warn(`[LLMHelper] Combined context exceeded ${COMBINED_CTX_CAP} chars (Groq=${willUseGroq}) — mode context trimmed`);
           if (trimmed) context = context ? `${trimmed}\n\n${context}` : trimmed;
         } else {
           context = context ? `${modeContextBlock}\n\n${context}` : modeContextBlock;
         }
       }
+
+      // Final absolute safety net: ensure no upstream mutations bypass the limits
+      if (willUseGroq && context && context.length > COMBINED_CTX_CAP) {
+        context = context.slice(-COMBINED_CTX_CAP);
+      }
     } catch (_modeErr: any) {
       console.warn('[LLMHelper] ModesManager injection failed (non-fatal):', _modeErr?.message);
     }
 
-    // Preparation
-    const isMultimodal = !!(imagePaths?.length);
+    const FINAL_SYSTEM_PROMPT = `
+You are a highly capable AI assistant for real-time interview support and technical problem solving.
+
+GOAL:
+Provide accurate, concise, and useful answers.
+
+RULES:
+- Be direct and avoid unnecessary explanation.
+- Focus only on what helps answer the question.
+- Do not repeat context unless needed.
+- If context is incomplete, make the best logical assumption and answer confidently.
+- Always prioritize the user's latest question over background context.
+- Answer the USER QUESTION first before considering additional context.
+
+FOR TECHNICAL QUESTIONS:
+- Be clear and logically structured.
+- Use step-by-step only when necessary.
+
+FOR CODE:
+- Preserve exact logic.
+- Do not remove important steps.
+- Keep explanations minimal.
+
+FOR INTERVIEW RESPONSES:
+- Sound natural and confident.
+- Avoid filler phrases like "it depends" or "maybe".
+
+CONTEXT:
+- Prioritize relevant information.
+- Ignore redundancy.
+
+OUTPUT:
+Return only the final answer. No meta commentary.
+`.trim();
+
+    const CODE_BOOST = `\n\nFocus on preserving exact code logic.\nDo not simplify critical parts.`;
+    const VISION_BOOST = `\n\nFocus on accurately interpreting the visual content.\nExtract relevant details and ignore noise.`;
 
     // Determine the system prompt to use
-    // logic: if override provided, use it. otherwise use HARD_SYSTEM_PROMPT (which is the universal base)
-    const baseSystemPrompt = systemPromptOverride || HARD_SYSTEM_PROMPT;
+    let universalBase = FINAL_SYSTEM_PROMPT;
+    if (isCodeHeavy) {
+      universalBase += CODE_BOOST;
+    } else if (isMultimodal) {
+      universalBase += VISION_BOOST;
+    }
+
+    const baseSystemPrompt = systemPromptOverride || universalBase;
     const finalSystemPrompt = this.injectLanguageInstruction(baseSystemPrompt);
 
     // Helper to build combined user message
     const userContent = context
-      ? `CONTEXT:\n${context}\n\nUSER QUESTION:\n${message}`
+      ? `USER QUESTION:\n${message}\n\nCONTEXT:\n${context}`
       : message;
 
     // GROQ FAST TEXT OVERRIDE (Text-Only)
@@ -2215,7 +2307,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       if (this.groqClient) {
         console.log(`[LLMHelper] ⚡️ Groq Fast Text Mode Active (Streaming). Routing to local Groq...`);
         try {
-          const groqSystem = systemPromptOverride || GROQ_SYSTEM_PROMPT;
+          const groqSystem = systemPromptOverride || universalBase;
           const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
           const groqFullMessage = `${finalGroqSystem}\n\n${userContent}`;
           yield* this.streamWithGroq(groqFullMessage, this.currentModelId);
@@ -2299,7 +2391,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
         return;
       }
       // Text-only Groq
-      const groqSystem = systemPromptOverride ? baseSystemPrompt : GROQ_SYSTEM_PROMPT;
+      const groqSystem = systemPromptOverride ? baseSystemPrompt : universalBase;
       const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
       const groqFullMessage = `${finalGroqSystem}\n\n${userContent}`;
       yield* this.streamWithGroq(groqFullMessage, this.currentModelId);
@@ -2325,7 +2417,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
                 const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
                 yield* this.streamWithGroqMultimodal(userContent, imagePaths, finalGroqSystem);
               } else {
-                const groqSystem = systemPromptOverride ? baseSystemPrompt : GROQ_SYSTEM_PROMPT;
+                const groqSystem = systemPromptOverride ? baseSystemPrompt : universalBase;
                 const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
                 yield* this.streamWithGroq(`${finalGroqSystem}\n\n${userContent}`); // intentional: emergency fallback waterfall — use stable GROQ_MODEL baseline, not currentModelId
               }
@@ -2390,7 +2482,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       messages: [{ role: 'user', content: userContent }],
       stream:   true,
     };
-    if (this.groqFastTextMode)                                  body.fast_mode = true;
+    if (this.groqFastTextMode && (!imagePaths || imagePaths.length === 0))      body.fast_mode = true;
     if (systemPrompt)                                           body.system    = systemPrompt;
     if (this.aiResponseLanguage && this.aiResponseLanguage !== 'English') {
       body.language = this.aiResponseLanguage; // 'auto' is forwarded — server handles it
