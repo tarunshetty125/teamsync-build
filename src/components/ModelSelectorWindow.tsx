@@ -77,14 +77,48 @@ const ModelSelectorWindow = () => {
                     models.push({ id: 'natively', name: 'TeamSync API', type: 'cloud', provider: 'natively' });
                 }
 
-                // Cloud Models — standard models + unique preferred models
+                // Fetch dynamic models
+                const dynamicModels: Record<string, any[]> = {};
+                const providers: ('gemini' | 'groq' | 'openai' | 'claude')[] = ['gemini', 'groq', 'openai', 'claude'];
+                for (const prov of providers) {
+                    const hasKey = prov === 'gemini' ? creds?.hasGeminiKey :
+                                   prov === 'groq' ? creds?.hasGroqKey :
+                                   prov === 'openai' ? creds?.hasOpenaiKey :
+                                   prov === 'claude' ? creds?.hasClaudeKey : false;
+                                   
+                    if (hasKey) {
+                        try {
+                            const result = await window.electronAPI?.fetchProviderModels?.(prov, '');
+                            if (result?.success && result.models) {
+                                dynamicModels[prov] = result.models;
+                            }
+                        } catch (e) {
+                            console.error(`Failed to fetch models for ${prov}:`, e);
+                        }
+                    }
+                }
+
+                // Cloud Models — standard models + unique preferred models + dynamic models
                 for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
                     if (!cfg.hasKeyCheck(creds)) continue;
-                    cfg.ids.forEach((id, i) => {
-                        models.push({ id, name: cfg.names[i], type: 'cloud', provider: prov });
-                    });
+                    
+                    if (dynamicModels[prov] && dynamicModels[prov].length > 0) {
+                        const providerName = prov === 'openai' ? 'OpenAI' : prov === 'claude' ? 'Claude' : prov === 'groq' ? 'Groq' : 'Gemini';
+                        dynamicModels[prov].forEach(m => {
+                            if (!models.find(x => x.id === m.id)) {
+                                models.push({ id: m.id, name: `${providerName} ${prettifyModelId(m.label || m.id)}`, type: 'cloud', provider: prov });
+                            }
+                        });
+                    } else {
+                        cfg.ids.forEach((id, i) => {
+                            if (!models.find(x => x.id === id)) {
+                                models.push({ id, name: cfg.names[i], type: 'cloud', provider: prov });
+                            }
+                        });
+                    }
+                    
                     const pm = creds?.[cfg.pmKey];
-                    if (pm && !cfg.ids.includes(pm)) {
+                    if (pm && !models.find(x => x.id === pm)) {
                         models.push({ id: pm, name: prettifyModelId(pm), type: 'cloud', provider: prov });
                     }
                 }

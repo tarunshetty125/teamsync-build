@@ -115,6 +115,7 @@ export const AIProvidersSettings: React.FC = () => {
 
     // --- Dynamic Model Discovery ---
     const [preferredModels, setPreferredModels] = useState<Record<string, string>>({});
+    const [dynamicModels, setDynamicModels] = useState<Record<string, { id: string, name: string }[]>>({});
 
     // Load Initial Data
     useEffect(() => {
@@ -198,6 +199,34 @@ export const AIProvidersSettings: React.FC = () => {
             window.electronAPI?.setGroqFastTextMode(false);
         }
     }, [credentialsLoaded, canUseFastMode, fastResponseMode]);
+
+    // Fetch dynamic models for providers that have stored keys
+    useEffect(() => {
+        if (!credentialsLoaded) return;
+        
+        const providers: ('gemini' | 'groq' | 'openai' | 'claude')[] = ['gemini', 'groq', 'openai', 'claude'];
+        
+        providers.forEach(async (prov) => {
+            if (hasStoredKey[prov] && !dynamicModels[prov]) {
+                try {
+                    // @ts-ignore
+                    const result = await window.electronAPI?.fetchProviderModels(prov, '');
+                    if (result?.success && result.models) {
+                        const providerName = prov === 'openai' ? 'OpenAI' : prov === 'claude' ? 'Claude' : prov === 'groq' ? 'Groq' : 'Gemini';
+                        setDynamicModels(prev => ({
+                            ...prev,
+                            [prov]: result.models!.map((m: any) => ({
+                                id: m.id,
+                                name: `${providerName} ${prettifyModelId(m.label || m.id)}`
+                            }))
+                        }));
+                    }
+                } catch (e) {
+                    console.error(`Failed to fetch models for ${prov}:`, e);
+                }
+            }
+        });
+    }, [hasStoredKey, credentialsLoaded]);
 
     // Poll for Ollama status every 3 seconds requesting smart start on mount
     useEffect(() => {
@@ -453,9 +482,24 @@ export const AIProvidersSettings: React.FC = () => {
 
                             for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
                                 if (!hasStoredKey[prov as keyof typeof hasStoredKey]) continue;
-                                cfg.ids.forEach((id, i) => opts.push({ id, name: cfg.names[i] }));
+                                
+                                // Use dynamic models if available, otherwise fallback to static
+                                if (dynamicModels[prov] && dynamicModels[prov].length > 0) {
+                                    dynamicModels[prov].forEach(m => {
+                                        if (!opts.find(o => o.id === m.id)) {
+                                            opts.push({ id: m.id, name: m.name });
+                                        }
+                                    });
+                                } else {
+                                    cfg.ids.forEach((id, i) => {
+                                        if (!opts.find(o => o.id === id)) {
+                                            opts.push({ id, name: cfg.names[i] });
+                                        }
+                                    });
+                                }
+                                
                                 const pm = preferredModels[prov as keyof typeof preferredModels];
-                                if (pm && !cfg.ids.includes(pm)) {
+                                if (pm && !opts.find(o => o.id === pm)) {
                                     opts.push({ id: pm, name: prettifyModelId(pm) });
                                 }
                             }

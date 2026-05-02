@@ -376,21 +376,33 @@ export class AppState {
           // Adapted from public PR #113 — verify premium interaction
           this.toggleOverlayMousePassthrough();
         } else if (actionId === 'general:take-screenshot') {
-          // Route to renderer via global-shortcut so the renderer handles the
-          // screenshot through the IPC invoke path (request/response guarantee).
-          // The old pattern — main takes screenshot → fires screenshot-taken event →
-          // renderer listener catches it — was unreliable in overlay mode because the
-          // fire-and-forget event could be missed if the listener registration had any
-          // timing gap. The invoke path used by generalHandlers.takeScreenshot() is
-          // already proven to work for UI-button screenshots; reuse it here.
-          const mainWindow = this.getMainWindow();
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('global-shortcut', { action: 'takeScreenshot' });
+          try {
+            const screenshotPath = await this.takeScreenshot(false);
+            const preview = await this.getImagePreview(screenshotPath);
+            const mainWindow = this.getMainWindow();
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send("screenshot-taken", {
+                path: screenshotPath,
+                preview
+              });
+            }
+          } catch (error) {
+            console.error("Error taking global screenshot:", error);
           }
         } else if (actionId === 'general:selective-screenshot') {
-          const mainWindow = this.getMainWindow();
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('global-shortcut', { action: 'selectiveScreenshot' });
+          try {
+            const screenshotPath = await this.takeSelectiveScreenshot(false);
+            const preview = await this.getImagePreview(screenshotPath);
+            const mainWindow = this.getMainWindow();
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send("screenshot-taken", {
+                path: screenshotPath,
+                preview
+              });
+            }
+          } catch (error) {
+            // selective screenshot throws "Selection cancelled" if user aborts
+            console.error("Error taking global selective screenshot:", error);
           }
         } else if (actionId === 'general:capture-and-process') {
           // Single-trigger: capture current screen then immediately request AI analysis
