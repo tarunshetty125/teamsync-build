@@ -206,6 +206,7 @@ export class IntelligenceManager extends EventEmitter {
     // ============================================
 
     async stopMeeting(): Promise<string | null> {
+        await this.session.finalize();
         return this.persistence.stopMeeting();
     }
 

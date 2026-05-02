@@ -67,6 +67,15 @@ export class ReplayBuffer {
     this.prune(now);
   }
 
+  public dropOldestChunk(): void {
+    if (this.entries.length > 0) {
+      const oldest = this.entries.shift();
+      if (oldest) {
+        this.totalBytes = Math.max(0, this.totalBytes - oldest.chunk.length);
+      }
+    }
+  }
+
   private prune(now: number): void {
     const cutoff = now - this.maxDurationMs;
     while (this.entries.length > 0) {

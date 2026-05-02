@@ -113,9 +113,12 @@ export class SttSupervisor extends EventEmitter {
       return;
     }
     
+    console.log(`[SESSION_START] ${sessionId}`);
+    
     // Store the session ID to bind emitted events to this specific meeting session lifecycle
     (this as any)._activeSessionId = sessionId;
 
+    this.replayBuffer.clear();
     this.started = true;
     this.startedAt = Date.now();
     this.startMaintenanceTimer();
@@ -129,7 +132,9 @@ export class SttSupervisor extends EventEmitter {
   }
 
   public stop(): void {
+    console.log(`[SESSION_STOP] ${(this as any)._activeSessionId}`);
     this.started = false;
+    (this as any)._activeSessionId = null;
     this.switching = false;
     this.replayInProgress = false;
     this.pendingWrites = [];
@@ -144,6 +149,8 @@ export class SttSupervisor extends EventEmitter {
       active.stop();
     }
     this.activeAdapterIndex = -1;
+    this.unsubscribeFns.forEach(fn => fn());
+    this.unsubscribeFns = [];
     this.logDebug(`cleanup_complete pendingWrites=0 replayEntries=0 droppedPendingWrites=${this.droppedPendingWrites}`);
     this.emitMetrics();
   }
@@ -160,11 +167,16 @@ export class SttSupervisor extends EventEmitter {
   }
 
   public write(chunk: Buffer): void {
+    if (!this.started || !(this as any)._activeSessionId) {
+      return;
+    }
+
     const timestamp = Date.now();
     this.replayBuffer.push(chunk, timestamp);
 
-    if (!this.started) {
-      return;
+    const MAX_BUFFER_SIZE = 1000;
+    if (this.replayBuffer.getEntryCount() > MAX_BUFFER_SIZE) {
+      this.replayBuffer.dropOldestChunk();
     }
 
     if (this.replayInProgress || this.switching || this.activeAdapterIndex < 0) {
@@ -435,6 +447,7 @@ export class SttSupervisor extends EventEmitter {
 
     const health = this.registerFailure(adapterIndex);
     const providerMetric = this.getProviderMetric(event.provider);
+    console.log(`[PIPELINE_ERROR] provider=${event.provider} error="${event.error.message}"`);
     providerMetric.failures += 1;
     providerMetric.failureTimestamps.push(Date.now());
     this.pruneProviderWindows(providerMetric, Date.now());
@@ -456,6 +469,7 @@ export class SttSupervisor extends EventEmitter {
   }
 
   private async failover(event: SttFatalEvent): Promise<void> {
+    console.log(`[FAILOVER_TRIGGERED] from ${event.provider}`);
     const previousAdapter = this.getActiveAdapter();
     const previousProvider = this.getActiveProviderName();
     const replaySnapshot = this.replayBuffer.snapshot();
@@ -473,6 +487,8 @@ export class SttSupervisor extends EventEmitter {
 
     try {
       await Promise.resolve(previousAdapter?.stop());
+
+      if (!this.started || !(this as any)._activeSessionId) return;
 
       if (nextIndex === -1) {
         this.activeAdapterIndex = -1;

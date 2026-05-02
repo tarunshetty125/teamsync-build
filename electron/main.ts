@@ -1985,17 +1985,9 @@ export class AppState {
       console.error('[Main] Failed to revert model:', e);
     }
 
-    // ─── Background post-processing ──────────────────────────────────────────
-    // These are the previously blocking operations that caused the stop-button
-    // delay. They are pure background tasks with no UI dependency:
-    //   • stopLiveIndexing flushes the JIT RAG live stream
-    //   • processCompletedMeetingForRAG embeds the full meeting into the vector store
-    //   • deleteMeetingData cleans up provisional JIT chunks
-    // Chain them sequentially in the background so ordering is preserved,
-    // but the IPC call returns immediately and the UI transitions without delay.
+    // ─── Post-processing ──────────────────────────────────────────
     const ragManager = this.ragManager;
     if (meetingId) {
-      (async () => {
         try {
           if (ragManager) {
             await ragManager.stopLiveIndexing();
@@ -2012,13 +2004,12 @@ export class AppState {
             console.log('[Main] New meeting started during cleanup — skipping live-meeting-current deletion.');
           }
         } catch (err) {
-          console.error('[Main] Background post-meeting RAG processing failed:', err);
+          console.error('[Main] Post-meeting RAG processing failed:', err);
         }
-      })();
     } else {
       // Meeting was too short — still flush the live indexer and clean up
       if (ragManager) {
-        ragManager.stopLiveIndexing().catch(() => {});
+        await ragManager.stopLiveIndexing().catch(() => {});
         if (!this.isMeetingActive) ragManager.deleteMeetingData('live-meeting-current');
       }
     }

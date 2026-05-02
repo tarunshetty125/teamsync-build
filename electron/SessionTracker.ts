@@ -45,6 +45,8 @@ export class SessionTracker {
 
     // Last assistant message for follow-up mode
     private lastAssistantMessage: string | null = null;
+    private isCompacting = false;
+    private currentGenerationId = 0;
 
     // Temporal RAG: Track all assistant responses in session for anti-repetition
     private assistantResponseHistory: AssistantResponse[] = [];
@@ -64,7 +66,7 @@ export class SessionTracker {
     // Rolling summarization: epoch summaries preserve early context when arrays are compacted
     private static readonly MAX_EPOCH_SUMMARIES = 5;
     private transcriptEpochSummaries: string[] = [];
-    private isCompacting: boolean = false;
+
 
     // Track interim interviewer segment
     private lastInterimInterviewer: TranscriptSegment | null = null;
@@ -197,8 +199,8 @@ export class SessionTracker {
      */
     addTranscript(segment: TranscriptSegment): { role: 'interviewer' | 'user' | 'assistant' } | null {
         // 🔥 Double-Layer Guard: ensure segment wasn't emitted by an old pipeline instance
-        if (segment._sessionId && segment._sessionId !== this.sessionId) {
-            console.warn(`[SessionTracker] Dropped stale transcript from old session (${segment._sessionId})`);
+        if (segment._sessionId !== this.sessionId) {
+            console.warn(`[STALE_REJECTED] [SessionTracker] Dropped stale transcript from old session (${segment._sessionId})`);
             return null;
         }
 
@@ -326,6 +328,10 @@ export class SessionTracker {
      * Handle incoming transcript from native audio service
      */
     handleTranscript(segment: TranscriptSegment): { role: 'interviewer' | 'user' | 'assistant' } | null {
+        if (segment._sessionId !== this.sessionId) {
+            return null;
+        }
+
         // Track interim segments for interviewer to prevent data loss on stop
         if (segment.speaker === 'user') {
             if (isVerboseLogging() && (Math.random() < 0.05 || segment.final)) {
@@ -392,12 +398,25 @@ export class SessionTracker {
      */
     getFormattedContext(lastSeconds: number = 120): string {
         const items = this.getContext(lastSeconds);
-        return items.map(item => {
+        let tokens = 0;
+        const MAX_SAFE_TOKENS = 1500;
+        const recent: string[] = [];
+
+        for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i];
             const label = item.role === 'interviewer' ? 'INTERVIEWER' :
                 item.role === 'user' ? 'ME' :
                     'ASSISTANT (PREVIOUS SUGGESTION)';
-            return `[${label}]: ${item.text}`;
-        }).join('\n');
+            const textStr = `[${label}]: ${item.text}`;
+            const t = this.estimateTokens(textStr);
+
+            if (tokens + t > MAX_SAFE_TOKENS) break;
+
+            recent.unshift(textStr);
+            tokens += t;
+        }
+
+        return recent.join('\n');
     }
 
     /**
@@ -423,13 +442,25 @@ export class SessionTracker {
      * Get full session context from accumulated transcript (User + Interviewer + Assistant)
      */
     getFullSessionContext(): string {
-        const recentTranscript = this.fullTranscript.map(segment => {
+        let tokens = 0;
+        const MAX_SAFE_TOKENS = 2800;
+        const recent: string[] = [];
+
+        for (let i = this.fullTranscript.length - 1; i >= 0; i--) {
+            const segment = this.fullTranscript[i];
             const role = this.mapSpeakerToRole(segment.speaker);
             const label = role === 'interviewer' ? 'INTERVIEWER' :
                 role === 'user' ? 'ME' :
                     'ASSISTANT';
-            return `[${label}]: ${segment.text}`;
-        }).join('\n');
+            const textStr = `[${label}]: ${segment.text}`;
+            const t = this.estimateTokens(textStr);
+
+            if (tokens + t > MAX_SAFE_TOKENS) break;
+
+            recent.unshift(textStr);
+            tokens += t;
+        }
+        const recentTranscript = recent.join('\n');
 
         // Prepend epoch summaries for full session context preservation
         if (this.transcriptEpochSummaries.length > 0) {
@@ -519,8 +550,15 @@ export class SessionTracker {
     // Reset
     // ============================================
 
+    async finalize(): Promise<void> {
+        while (this.isCompacting) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    }
+
     reset(): void {
         this.sessionId = Date.now().toString() + Math.random().toString(36).substring(7);
+        this.currentGenerationId++;
         this.contextItems = [];
         this.fullTranscript = [];
         this.fullUsage = [];
@@ -577,10 +615,21 @@ export class SessionTracker {
 
             // Fire-and-forget LLM summarization (non-blocking)
             if (this.recapLLM) {
+                this.currentGenerationId++;
+                const generationId = this.currentGenerationId;
+                
                 try {
-                    const epochSummary = await this.recapLLM.generate(
+                    const timeoutPromise = new Promise<string>((_, reject): void => { setTimeout((): void => reject(new Error("LLM timeout")), 15000); });
+                    const generatePromise = this.recapLLM.generate(
                         `Summarize this conversation segment into 3-5 concise bullet points preserving key topics, decisions, and questions:\n\n${summaryInput}`
                     );
+                    const epochSummary = await Promise.race([generatePromise, timeoutPromise]);
+                    
+                    if (generationId !== this.currentGenerationId) {
+                        console.log(`[GENERATION_DISCARDED] [SessionTracker] generationId mismatched during compaction`);
+                        return;
+                    }
+
                     if (epochSummary && epochSummary.trim().length > 0) {
                         this.transcriptEpochSummaries.push(epochSummary.trim());
                         console.log(`[SessionTracker] Epoch summary created (${this.transcriptEpochSummaries.length} total)`);

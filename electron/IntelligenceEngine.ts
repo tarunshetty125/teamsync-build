@@ -192,7 +192,8 @@ export class IntelligenceEngine extends EventEmitter {
                 return null;
             }
 
-            const insight = await this.assistLLM.generate(context);
+            const timeoutPromise = new Promise<string | null>((_, reject) => { setTimeout(() => reject(new Error("LLM timeout")), 15000); });
+            const insight = await Promise.race([this.assistLLM.generate(context), timeoutPromise]).catch((): any => null);
 
             if (this.assistCancellationToken?.signal.aborted) {
                 return null;
@@ -244,7 +245,8 @@ export class IntelligenceEngine extends EventEmitter {
                     return "Please configure your API Keys in Settings to use this feature.";
                 }
                 const context = this.session.getFormattedContext(180);
-                const answer = await this.answerLLM.generate(question || '', context);
+                const timeoutPromise = new Promise<string | null>((_, reject) => { setTimeout(() => reject(new Error("LLM timeout")), 15000); });
+                const answer = await Promise.race([this.answerLLM.generate(question || '', context), timeoutPromise]).catch((): any => null);
                 if (answer) {
                     this.session.addAssistantMessage(answer);
                     this.emit('suggested_answer', answer, question || 'inferred', confidence);
@@ -305,7 +307,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
-                    console.log('[IntelligenceEngine] _what_to_say stream aborted by new generation');
+                    console.log('[GENERATION_DISCARDED] _what_to_say stream aborted by new generation');
                     // RC-03 fix: .return() signals the generator to clean up and stops
                     // the underlying network request (SDK generators honour this).
                     await stream.return(undefined);
@@ -384,7 +386,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
-                    console.log('[IntelligenceEngine] _follow_up stream aborted by new generation');
+                    console.log('[GENERATION_DISCARDED] _follow_up stream aborted by new generation');
                     await stream.return(undefined);
                     streamAborted = true;
                     break;
@@ -456,7 +458,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
-                    console.log('[IntelligenceEngine] _recap stream aborted by new generation');
+                    console.log('[GENERATION_DISCARDED] _recap stream aborted by new generation');
                     await stream.return(undefined);
                     streamAborted = true;
                     break;
@@ -514,7 +516,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
-                    console.log('[IntelligenceEngine] _clarify stream aborted by new generation');
+                    console.log('[GENERATION_DISCARDED] _clarify stream aborted by new generation');
                     await stream.return(undefined);
                     streamAborted = true;
                     break;
@@ -580,7 +582,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
-                    console.log('[IntelligenceEngine] _follow_up_questions stream aborted by new generation');
+                    console.log('[GENERATION_DISCARDED] _follow_up_questions stream aborted by new generation');
                     break;
                 }
                 this.emit('follow_up_questions_token', token);
@@ -623,7 +625,8 @@ export class IntelligenceEngine extends EventEmitter {
             }
 
             const context = this.session.getFormattedContext(120);
-            const answer = await this.answerLLM.generate(question, context);
+            const timeoutPromise = new Promise<string | null>((_, reject) => { setTimeout(() => reject(new Error("LLM timeout")), 15000); });
+            const answer = await Promise.race([this.answerLLM.generate(question, context), timeoutPromise]).catch((): any => null);
 
             if (answer) {
                 this.session.addAssistantMessage(answer);
@@ -694,7 +697,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
-                    console.log('[IntelligenceEngine] code_hint stream aborted by new generation');
+                    console.log('[GENERATION_DISCARDED] code_hint stream aborted by new generation');
                     break;
                 }
                 this.emit('suggested_answer_token', token, 'Code Hint', 1.0);
@@ -765,7 +768,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
-                    console.log('[IntelligenceEngine] brainstorm stream aborted by new generation');
+                    console.log('[GENERATION_DISCARDED] brainstorm stream aborted by new generation');
                     await stream.return(undefined);
                     streamAborted = true;
                     break;

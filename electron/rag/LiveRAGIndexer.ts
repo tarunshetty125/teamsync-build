@@ -67,7 +67,13 @@ export class LiveRAGIndexer {
         if (!this.isActive || !this.meetingId) return;
         
         // Final ultimate safeguard: drop segments that leaked from old sessions
-        const validSegments = sessionId ? segments.filter(s => !s._sessionId || s._sessionId === sessionId) : segments;
+        const validSegments = sessionId ? segments.filter(s => {
+            if (s._sessionId !== sessionId) {
+                console.log(`[STALE_REJECTED] [LiveRAGIndexer] Dropped leaked segment from old session (${s._sessionId})`);
+                return false;
+            }
+            return true;
+        }) : segments;
         if (validSegments.length === 0) return;
 
         this.allSegments.push(...validSegments);
@@ -84,12 +90,12 @@ export class LiveRAGIndexer {
      * 5. Embed each chunk via Gemini API
      * 6. Advance high-water mark
      */
-    private async tick(): Promise<void> {
+    private async tick(forceFlush = false): Promise<void> {
         if (!this.isActive || !this.meetingId) return;
         if (this.isProcessing) return;  // Skip if previous tick still running
 
         const newSegmentCount = this.allSegments.length - this.indexedSegmentCount;
-        if (newSegmentCount < MIN_NEW_SEGMENTS) return;  // Not enough new content
+        if (!forceFlush && newSegmentCount < MIN_NEW_SEGMENTS) return;  // Not enough new content
 
         this.isProcessing = true;
         const meetingId = this.meetingId;
@@ -183,7 +189,7 @@ export class LiveRAGIndexer {
         }
 
         // Final flush — process any remaining segments
-        await this.tick();
+        await this.tick(true);
 
         const meetingId = this.meetingId;
         this.isActive = false;
