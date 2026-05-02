@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback, useReducer } from 'react';
 import {
     Sparkles,
     Pencil,
@@ -120,26 +120,160 @@ interface NativelyInterfaceProps {
 // ── Context-Aware Question Type Detection (mirrors IntentClassifier patterns) ──
 type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'general';
 
-function detectQuestionType(text: string): DetectedQuestionType {
-    // Normalize: fix OCR/STT artifacts, collapse whitespace
-    let t = text.toLowerCase();
-    t = t.replace(/(\w)\.\s+(\w)/g, '$1$2'); // Fix broken words: "polymor. phism" → "polymorphism"
-    t = t.replace(/\b(yeah|um|uh|uh+m|like|so|okay|ok|well|you know|i mean|basically|actually|right)\b/g, ' ');
-    t = t.replace(/\s+/g, ' ').trim();
+const REGEX_NORMALIZE_BROKEN = /(\w)\.\s+(\w)/g;
+const REGEX_NORMALIZE_FILLER = /\b(yeah|um|uh|uh+m|like|so|okay|ok|well|you know|i mean|basically|actually|right)\b/g;
+const REGEX_NORMALIZE_SPACE = /\s+/g;
 
-    // HIGHEST PRIORITY: Coding — broad detection matching IntentClassifier regex
-    if (/(write code|write a? ?(?:function|program|method|class|script)|implement|function for|algorithm|how to code|debug this|snippet|boilerplate|optimize|refactor|reverse|sort|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|recursive|iterate|loop|pointer|two pointer|sliding window|backtrack|greedy|bfs|dfs|matrix|string manipulation|big o|time complexity|space complexity|fibonacci|palindrome|anagram|substring|subarray|merge sort|quick sort|bubble sort|insertion sort|heap|trie|topological|shortest path|factorial|prime|duplicate|remove duplicates|flatten|depth first|breadth first|binary tree|level order|in ?order traversal|pre ?order|post ?order|promise|async await|callback)/.test(t)) {
-        return 'coding';
+const REGEX_CODING_CORE = /(write code|write a? ?(?:function|program|method|class|script)|implement|how to code)/g;
+const REGEX_SYSTEM_CORE = /(system design|design a|architecture|database schema|api design)/g;
+const REGEX_BEHAVIORAL_CORE = /(tell me about a time|describe a situation|give me an example|share an experience)/g;
+
+const REGEX_CODING_STRONG = /(algorithm|debug this|snippet|boilerplate|optimize|refactor|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|time complexity|space complexity)/g;
+const REGEX_SYSTEM_STRONG = /(scalab|microservice|load balanc|distributed|high availability|caching strategy|caching|cache|cdn|message queue|rate limit|sharding|replication|partition|cap theorem|event driven|monolith|horizontal scal|fault toleran|throughput|latency|handle more users|high traffic|load)/g;
+const REGEX_BEHAVIORAL_STRONG = /(when have you|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|experience|challenge|conflict|pressure|strength|weakness|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment|introduce yourself|background|resume)/g;
+
+const REGEX_CODING_BOOST = /(faster|efficient)/g;
+const REGEX_SYSTEM_BOOST = /(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/g;
+
+function normalizeTranscript(text: string) {
+    let t = text.toLowerCase();
+    t = t.replace(REGEX_NORMALIZE_BROKEN, '$1$2'); // Fix broken words: "polymor. phism" → "polymorphism"
+    t = t.replace(/[“”‘’]/g, '"');
+    t = t.replace(/[–—]/g, '-');
+    t = t.replace(/[^a-z0-9\s\-?:/]/g, ' '); // Keep semantic hints (?, :, /)
+    t = t.replace(REGEX_NORMALIZE_FILLER, ' ');
+    t = t.replace(REGEX_NORMALIZE_SPACE, ' ').trim();
+    return t;
+}
+
+function detectQuestionType(
+    text: string, 
+    currentType: DetectedQuestionType,
+    lastStrongType: DetectedQuestionType
+): { nextType: DetectedQuestionType; nextStrong?: DetectedQuestionType } {
+    // Normalize: fix OCR/STT artifacts, collapse whitespace
+    let t = normalizeTranscript(text);
+
+    const scores = {
+        coding: 0,
+        system_design: 0,
+        behavioral: 0,
+        general: 0
+    };
+
+    // Helper to count regex matches with a cap to prevent inflation from repeated words
+    const cap = (regex: RegExp) => {
+        let count = 0;
+        for (const _ of t.matchAll(new RegExp(regex.source, 'gi'))) {
+            if (++count >= 3) break;
+        }
+        return count;
+    };
+
+    // --- PRIORITY WEIGHTING ---
+    // Core Signals (+3)
+    scores.coding += cap(REGEX_CODING_CORE) * 3;
+    scores.system_design += cap(REGEX_SYSTEM_CORE) * 3;
+    scores.behavioral += cap(REGEX_BEHAVIORAL_CORE) * 3;
+
+    // Strong Signals (+2)
+    scores.coding += cap(REGEX_CODING_STRONG) * 2;
+    scores.system_design += cap(REGEX_SYSTEM_STRONG) * 2;
+    scores.behavioral += cap(REGEX_BEHAVIORAL_STRONG) * 2;
+    
+    // Cross-pollination boosts for mixed queries (+1)
+    scores.coding += cap(REGEX_CODING_BOOST);
+    scores.system_design += cap(REGEX_SYSTEM_BOOST);
+
+    // Weighted persistence (memory of previous intent)
+    if (currentType !== 'general') {
+        scores[currentType] += 0.5;
     }
-    // System Design
-    if (/(system design|design a|scalab|architect|microservice|load balanc|database schema|api design|distributed|high availability|caching strategy|caching|cache|cdn|message queue|rate limit|sharding|replication|partition|cap theorem|event driven|monolith|horizontal scal|fault toleran|throughput|latency)/.test(t)) {
-        return 'system_design';
+
+    const entries = (Object.entries(scores) as [DetectedQuestionType, number][])
+        .filter(([type]) => type !== 'general') // Evaluate active intents only
+        .sort((a, b) => b[1] - a[1]);
+
+    const [primary, primaryScore] = entries[0];
+    const [, secondScore] = entries[1] || [null, 0];
+
+    // Confidence fallback: if signal is too weak, use memory of last strong intent
+    if (primaryScore < 2) {
+        return { nextType: lastStrongType };
     }
-    // Behavioral
-    if (/(tell me about a time|describe a situation|give me an example|when have you|share an experience|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|experience|challenge|conflict|pressure|strength|weakness|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment)/.test(t)) {
-        return 'behavioral';
+
+    const nextStrong = primaryScore >= 3 ? primary : undefined;
+
+    // Hysteresis: only switch if the primary intent beats the secondary intent cleanly
+    const SWITCH_THRESHOLD = 2;
+    if (primary !== currentType && currentType !== 'general' && (primaryScore - secondScore) < SWITCH_THRESHOLD) {
+        return { nextType: currentType, nextStrong };
     }
-    return 'general';
+
+    return { nextType: primary, nextStrong };
+}
+
+type IntentState = {
+    detectedType: DetectedQuestionType;
+    lastStrongType: DetectedQuestionType;
+    lastStrongAt: number;
+    seq: number;
+};
+
+type IntentAction = { type: 'EVALUATE'; combinedText: string; now: number; seq: number };
+
+function intentReducer(state: IntentState, action: IntentAction): IntentState {
+    switch (action.type) {
+        case 'EVALUATE': {
+            if (action.seq < state.seq) return state; // ignore stale updates
+            
+            // Protect against empty / degenerate STT glitch resets
+            if (!action.combinedText || action.combinedText.length < 5) return state;
+
+            const { nextType, nextStrong } = detectQuestionType(
+                action.combinedText, 
+                state.detectedType, 
+                state.lastStrongType
+            );
+
+            let newLastStrongType = nextStrong ?? state.lastStrongType;
+            let newLastStrongAt = nextStrong ? action.now : state.lastStrongAt;
+
+            // Handle Topic Memory Decay (Time-based, monotonic)
+            if (!nextStrong) {
+                const elapsed = action.now - state.lastStrongAt;
+                if (elapsed > 6000 && state.lastStrongType !== 'general') { // ~6 seconds of ambiguous speech
+                    newLastStrongType = 'general';
+                }
+            }
+
+            // Optimization: avoid re-rendering if absolutely nothing changed
+            if (
+                state.detectedType === nextType && 
+                state.lastStrongType === newLastStrongType && 
+                state.lastStrongAt === newLastStrongAt
+            ) {
+                return { ...state, seq: action.seq }; // keep seq updated
+            }
+
+            if (process.env.NODE_ENV === 'development') {
+                console.log('[INTENT]', {
+                    type: nextType,
+                    strong: nextStrong,
+                    seq: action.seq
+                });
+            }
+
+            return {
+                detectedType: nextType,
+                lastStrongType: newLastStrongType,
+                lastStrongAt: newLastStrongAt,
+                seq: action.seq
+            };
+        }
+        default:
+            return state;
+    }
 }
 
 const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, overlayOpacity = OVERLAY_OPACITY_DEFAULT }) => {
@@ -272,22 +406,89 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
     }, []);
 
     // ── Context-Aware Dynamic Buttons ──
-    const [detectedQuestionType, setDetectedQuestionType] = useState<DetectedQuestionType>('general');
+    const [intentState, dispatchIntent] = useReducer(intentReducer, {
+        detectedType: 'general',
+        lastStrongType: 'general',
+        lastStrongAt: performance.now(),
+        seq: 0
+    });
+    
+    const detectedQuestionType = intentState.detectedType;
+
+    // Refs for safe synchronous access in visibility listener
+    const latestCombinedRef = useRef<string>('');
+    const requestIdRef = useRef(0);
+    const timeoutRef = useRef<number | NodeJS.Timeout | null>(null);
+    const seqRef = useRef(0);
+    const scheduledSeqRef = useRef(0);
+    const pendingRef = useRef(false);
+
+    // Visibility recovery listener
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible' && pendingRef.current) {
+                pendingRef.current = false;
+                requestIdRef.current++; // invalidate stale work
+                dispatchIntent({ 
+                    type: 'EVALUATE', 
+                    combinedText: latestCombinedRef.current, 
+                    now: performance.now(),
+                    seq: ++seqRef.current
+                });
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, []);
 
     useEffect(() => {
-        // Combine rolling transcript + last few interviewer messages for detection
-        const interviewerMsgs = messages
-            .filter(m => m.role === 'interviewer')
-            .slice(-3)
-            .map(m => m.text)
-            .join(' ');
-        const combined = `${rollingTranscript} ${interviewerMsgs} ${inputValue}`.trim();
-        if (combined.length < 3) return;
-
-        const detected = detectQuestionType(combined);
-        if (detected !== detectedQuestionType) {
-            setDetectedQuestionType(detected);
+        if (document.visibilityState !== 'visible') {
+            pendingRef.current = true;
+            return; // Prevent stale updates from background execution, but queue one flush
         }
+
+        if (timeoutRef.current) clearTimeout(timeoutRef.current as any);
+        
+        const nextSeq = seqRef.current + 1;
+        scheduledSeqRef.current = nextSeq;
+        
+        timeoutRef.current = setTimeout(() => {
+            // Prevent double-invocation strict mode execution races
+            if (scheduledSeqRef.current !== nextSeq) return; 
+            
+            // Combine rolling transcript + last few interviewer messages for detection
+            const interviewerMsgs = messages
+                .filter(m => m.role === 'interviewer')
+                .slice(-3)
+                .map(m => m.text)
+                .join(' ');
+            
+            // Ignore weak user input
+            const userWeight = inputValue.length > 10 ? inputValue : '';
+            
+            // Weight recent context higher by repeating interviewer messages
+            latestCombinedRef.current = `
+                ${interviewerMsgs}
+                ${interviewerMsgs}
+                ${rollingTranscript.slice(-1500)}
+                ${userWeight}
+            `.trim();
+            if (latestCombinedRef.current.length < 3) return;
+
+            const seq = (seqRef.current = nextSeq);
+
+            dispatchIntent({ 
+                type: 'EVALUATE', 
+                combinedText: latestCombinedRef.current, 
+                now: performance.now(),
+                seq
+            });
+        }, 300);
+
+        return () => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current as any);
+        };
     }, [rollingTranscript, messages, inputValue]);
 
     const codeTheme = isLightTheme ? oneLight : vscDarkPlus;
@@ -2520,26 +2721,29 @@ Provide only the answer, nothing else.`;
                                 // Smart recommendation override via keywords
                                 const actions = actionSets[detectedQuestionType] || actionSets.general;
                                 const combined = `${rollingTranscript} ${inputValue}`.toLowerCase();
-                                let recommendedIdx = actions.findIndex(a => a.isRecommended);
+                                let recommendedIdx = actions.findIndex((a: ActionDef) => a.isRecommended);
                                 if (recommendedIdx < 0) recommendedIdx = 0;
 
                                 // Keyword-based overrides
                                 if (detectedQuestionType === 'coding') {
-                                    if (/(optimiz|improv|faster|efficient|refactor)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label === 'Brainstorm');
-                                    else if (/(explain|why|how does|approach)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label === 'Clarify');
+                                    if (/(optimiz|improv|faster|efficient|refactor)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Brainstorm');
+                                    else if (/(explain|why|how does|approach)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Clarify');
                                 } else if (detectedQuestionType === 'system_design') {
-                                    if (/(tradeoff|trade-off|pros? and cons)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label === 'Trade-offs');
-                                    else if (/(scal|million|billion|traffic)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label === 'Brainstorm');
+                                    if (/(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Trade-offs');
+                                    else if (/(scal|million|billion|traffic|handle more users)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Brainstorm');
                                 } else if (detectedQuestionType === 'behavioral') {
-                                    if (/(follow.?up|next|then what)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label === 'Follow Up');
-                                    else if (/(improv|better|stronger)/.test(combined)) recommendedIdx = actions.findIndex(a => a.label.includes('Brainstorm') || a.label.includes('Recap'));
+                                    if (/(follow.?up|next|then what)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Follow Up');
+                                    else if (/(improv|better|stronger)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label.includes('Brainstorm') || a.label.includes('Recap'));
+                                } else if (detectedQuestionType === 'general') {
+                                    // Silent general fallback UX boost
+                                    recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Clarify');
                                 }
                                 if (recommendedIdx < 0) recommendedIdx = 0;
 
                                 return (
                                     <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`}>
                                         <AnimatePresence mode="popLayout">
-                                            {actions.map((action, idx) => {
+                                            {actions.map((action: ActionDef, idx: number) => {
                                                 const isRec = idx === recommendedIdx;
                                                 return (
                                                     <motion.button
