@@ -876,7 +876,7 @@ const SetupGuide = () => {
         </div>
     );
 };
-export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigate }) => {
+export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = () => {
     const { shortcuts } = useShortcuts();
     const isLight = useResolvedTheme() === 'light';
     

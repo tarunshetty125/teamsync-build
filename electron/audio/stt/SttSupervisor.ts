@@ -438,14 +438,17 @@ export class SttSupervisor extends EventEmitter {
     const previousAdapter = this.getActiveAdapter();
     const previousProvider = this.getActiveProviderName();
     const replaySnapshot = this.replayBuffer.snapshot();
-    if (!this.canAttemptFailover()) {
+    
+    const nextIndex = this.findNextAvailableAdapterIndex(this.activeAdapterIndex);
+    const isSelfRestart = (nextIndex !== -1 && nextIndex === this.activeAdapterIndex);
+
+    if (!isSelfRestart && !this.canAttemptFailover()) {
       this.activeAdapterIndex = -1;
       this.switching = false;
       this.emit("error", new Error(`[SttSupervisor/${this.sourceLabel}] Failover loop guard triggered after ${previousProvider}`));
       this.emitMetrics();
       return;
     }
-    const nextIndex = this.findNextAvailableAdapterIndex(this.activeAdapterIndex);
 
     try {
       await Promise.resolve(previousAdapter?.stop());
@@ -461,9 +464,21 @@ export class SttSupervisor extends EventEmitter {
         return;
       }
 
+      // If we are failing over to the exact same adapter (e.g. only 1 provider available),
+      // add a small delay to prevent a tight crash loop.
+      if (isSelfRestart) {
+          const health = this.providerHealth.get(nextIndex);
+          const failures = health ? health.consecutiveFailures : 1;
+          const delayMs = Math.min(1000 * Math.pow(2, failures - 1), 15000); // Max 15s delay
+          this.logDebug(`self_failover provider=${previousProvider} delay=${delayMs}ms`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+          // It's a real failover to a different provider
+          this.failoverCount += 1;
+          this.getProviderMetric(previousProvider).failovers += 1;
+      }
+
       const nextProvider = this.adapters[nextIndex].name;
-      this.failoverCount += 1;
-      this.getProviderMetric(previousProvider).failovers += 1;
       this.logDebug(
         `failover provider=${previousProvider} next=${nextProvider} replayDuration=${this.getReplayDurationMs(replaySnapshot)}ms entries=${replaySnapshot.length} reason="${event.error.message}"`
       );
@@ -560,6 +575,13 @@ export class SttSupervisor extends EventEmitter {
 
     const health = this.providerHealth.get(index);
     if (!health?.disabledUntil) {
+      return true;
+    }
+
+    // If this is the only available adapter, do not disable it
+    // so we can at least attempt to recover.
+    const availableCount = this.adapters.filter(a => a.isAvailable()).length;
+    if (availableCount === 1) {
       return true;
     }
 

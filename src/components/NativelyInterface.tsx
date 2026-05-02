@@ -756,6 +756,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             setManualTranscript('');
             setVoiceInput('');
             setIsProcessing(false);
+            setRollingTranscript('');
+            finalizedTranscriptRef.current = '';
             // Optionally reset connection status if needed, but connection persists
 
             // Track new conversation/session if applicable?

@@ -1808,6 +1808,9 @@ export class AppState {
   public async startMeeting(metadata?: any): Promise<void> {
     console.log('[Main] Starting Meeting...', metadata);
 
+    // Clear intelligence session state from any previous meeting
+    this.intelligenceManager.reset();
+
     // PR #173: Reset audio recovery state for fresh session
     this._systemAudioRecoveryInProgress = false;
     this._systemAudioRecoveryAttempts = 0;
