@@ -1740,8 +1740,13 @@ Instructions:
                         return;
                     }
 
-                    // Voice Only — direct answer, no extra context
-                    prompt = `Answer the user's question directly and concisely. No preamble, no meta-commentary. If it's a coding question, include code. Keep it natural and brief.`;
+                    // Voice Only — direct answer, adaptive formatting
+                    prompt = `Answer directly. Adapt your format to the question type:
+- **Coding**: Clean code block with language tag. Add 1-2 line explanation above if needed.
+- **Concept/Definition**: Bold key term, then 2-4 bullet points covering what, why, and key aspects.
+- **How-to/Steps**: Numbered list, each step concise.
+- **Short factual**: 1-2 sentences max.
+No preamble like "Sure!" or "Great question". No meta-commentary. Start with the answer immediately.`;
                 }
 
                 // Call Streaming API: message = question, context = instructions
