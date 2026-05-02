@@ -2450,9 +2450,34 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                             onLogoClick={() => window.electronAPI?.setWindowMode?.('launcher')}
                         />
                         <div
-                            className={`relative w-[600px] max-w-full backdrop-blur-2xl border rounded-[24px] overflow-hidden flex flex-col draggable-area overlay-shell-surface ${overlayPanelClass}`}
-                            style={appearance.shellStyle}
+                            className={`relative w-[600px] max-w-full backdrop-blur-2xl border-l border-r border-b rounded-[24px] overflow-hidden flex flex-col draggable-area overlay-shell-surface ${overlayPanelClass}`}
+                            style={{ 
+                                ...appearance.shellStyle, 
+                                borderLeftColor: 'rgba(245, 158, 11, 0.2)',
+                                borderRightColor: 'rgba(245, 158, 11, 0.2)',
+                                borderBottomColor: 'rgba(245, 158, 11, 0.2)'
+                            }}
                         >
+                            {/* Constant Amber Line with Colliding Shines */}
+                            <div className="absolute top-0 left-0 w-full h-[3px] bg-[#F59E0B]/30 z-[100] rounded-t-[24px] overflow-hidden">
+                                {/* Left Shine */}
+                                <motion.div 
+                                    key="left-shine-slow"
+                                    animate={{ left: ['-50%', '30%', '-50%'] }}
+                                    transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+                                    className="absolute top-0 h-full w-[40%] bg-gradient-to-r from-transparent via-[#F59E0B] to-transparent"
+                                    style={{ boxShadow: '0 0 10px rgba(245,158,11,0.8)' }}
+                                />
+                                {/* Right Shine */}
+                                <motion.div 
+                                    key="right-shine-slow"
+                                    animate={{ right: ['-50%', '30%', '-50%'] }}
+                                    transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+                                    className="absolute top-0 h-full w-[40%] bg-gradient-to-l from-transparent via-[#F59E0B] to-transparent"
+                                    style={{ boxShadow: '0 0 10px rgba(245,158,11,0.8)' }}
+                                />
+                            </div>
+
 
 
 
@@ -2561,24 +2586,12 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                 <>
                                 <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[clamp(300px,35vh,450px)] no-drag" style={{ scrollbarWidth: 'none' }}>
                                     {messages.map((msg) => (
-                                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
+                                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up w-full`}>
                                             <div className={`
-                      ${msg.role === 'user' ? 'max-w-[72.25%] px-[13.6px] py-[10.2px]' : 'max-w-[85%] px-4 py-3'} text-[14px] leading-relaxed relative group whitespace-pre-wrap
-                      ${msg.role === 'user'
-                                                    ? (isLightTheme
-                                                        ? 'bg-blue-500/10 backdrop-blur-md border border-blue-500/20 text-blue-900 rounded-[20px] rounded-tr-[4px] shadow-sm font-medium'
-                                                        : 'bg-blue-600/20 backdrop-blur-md border border-blue-500/30 text-blue-100 rounded-[20px] rounded-tr-[4px] shadow-sm font-medium')
-                                                    : ''
-                                                }
-                      ${msg.role === 'system'
-                                                    ? 'overlay-text-primary font-normal'
-                                                    : ''
-                                                }
-                      ${msg.role === 'interviewer'
-                                                    ? 'overlay-text-muted italic pl-0 text-[13px]'
-                                                    : ''
-                                                }
-                    `}>
+                                                ${msg.role === 'user' ? 'max-w-[72.25%] px-[13.6px] py-[10.2px] bg-blue-500/10 backdrop-blur-md border border-blue-500/20 text-blue-100 rounded-[20px] rounded-tr-[4px] shadow-sm font-medium' : msg.role === 'system' ? 'w-[85%]' : 'w-full'} 
+                                                text-[14px] leading-relaxed relative group whitespace-pre-wrap
+                                                ${msg.role === 'interviewer' ? 'overlay-text-muted italic pl-0 text-[13px] max-w-[85%]' : ''}
+                                            `}>
                                                 {msg.role === 'interviewer' && (
                                                     <div className="flex items-center gap-1.5 mb-1 text-[10px] font-medium uppercase tracking-wider overlay-text-muted">
                                                         Interviewer
@@ -2586,36 +2599,50 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                     </div>
                                                 )}
                                                 {msg.role === 'user' && msg.hasScreenshot && (
-                                                    <div className={`flex items-center gap-1 text-[10px] opacity-70 mb-1 border-b pb-1 ${isLightTheme ? 'border-black/10' : 'border-white/10'}`}>
+                                                    <div className="flex items-center gap-1 text-[10px] opacity-70 mb-1 border-b pb-1 border-white/10">
                                                         <Image className="w-2.5 h-2.5" />
                                                         <span>Screenshot attached</span>
                                                     </div>
                                                 )}
-                                                {msg.role === 'system' && !msg.isStreaming && (
-                                                    <button
-                                                        onClick={() => handleCopy(msg.text)}
-                                                        className="absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive"
-                                                        title="Copy to clipboard"
-                                                        style={appearance.iconStyle}
-                                                    >
-                                                        <Copy className="w-3.5 h-3.5" />
-                                                    </button>
-                                                )}
-                                                {msg.role === 'system' && msg.source && (() => {
-                                                    const sStyle = sourceStyleMap[msg.source] || defaultSourceStyle;
-                                                    const sIcon = sourceIconMap[msg.source] || '⚡';
-                                                    return (
-                                                        <div className="mb-1.5 flex items-center">
-                                                            <span
-                                                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide border transition-transform duration-150 hover:scale-105 ${isLightTheme ? sStyle.light : sStyle.dark}`}
-                                                            >
-                                                                <span className="text-[10px] leading-none">{sIcon}</span>
-                                                                {msg.source}
-                                                            </span>
+                                                
+                                                {/* User & Interviewer Text Render */}
+                                                {msg.role !== 'system' && renderMessageText(msg)}
+
+                                                {/* Premium System Response Card */}
+                                                {msg.role === 'system' && (
+                                                    <div className="w-full relative group rounded-xl overflow-hidden bg-[#1A1512]/90 border border-[#F59E0B]/30 shadow-[0_4px_24px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+                                                        {/* Header */}
+                                                        {msg.source && (
+                                                            <div className="flex items-center justify-between px-4 py-2 border-b border-[#F59E0B]/15 bg-[#F59E0B]/5 relative z-10">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-[11px] font-bold text-[#F59E0B] tracking-[0.08em] uppercase">
+                                                                        {sourceIconMap[msg.source] || '⚡'} {msg.source}
+                                                                    </span>
+                                                                </div>
+                                                                {msg.isStreaming ? (
+                                                                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#F59E0B]/10 border border-[#F59E0B]/20">
+                                                                        <div className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-pulse"></div>
+                                                                        <span className="text-[9px] font-bold text-[#F59E0B] tracking-wider uppercase">Live</span>
+                                                                    </div>
+                                                                ) : null}
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {/* Body */}
+                                                        <div className="p-4 text-[#F3F4F6] text-[14px] leading-relaxed relative z-10">
+                                                            {!msg.isStreaming && (
+                                                                <button
+                                                                    onClick={() => handleCopy(msg.text)}
+                                                                    className="absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/90 border border-white/5"
+                                                                    title="Copy to clipboard"
+                                                                >
+                                                                    <Copy className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            )}
+                                                            {renderMessageText(msg)}
                                                         </div>
-                                                    );
-                                                })()}
-                                                {renderMessageText(msg)}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
@@ -2892,20 +2919,19 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                         value={inputValue}
                                         onChange={(e) => setInputValue(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
-
-                                        className={`w-full border focus:ring-1 rounded-xl pl-3 pr-10 py-2.5 focus:outline-none transition-all duration-200 ease-sculpted text-[13px] leading-relaxed ${inputClass}`}
-                                        style={appearance.inputStyle}
+                                        className={`w-full bg-black/[0.15] border border-white/[0.08] hover:border-white/[0.15] focus:border-white/20 focus:ring-2 focus:ring-white/10 rounded-[12px] pl-3.5 pr-10 py-2.5 focus:outline-none transition-all duration-200 backdrop-blur-3xl shadow-sm text-[13px] placeholder-[#FDE68A]/40 ${inputClass}`}
+                                        style={{ ...appearance.inputStyle, color: '#FDE68A' }}
                                     />
 
                                     {/* Custom Rich Placeholder */}
                                     {!inputValue && (
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] overlay-text-muted">
+                                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] text-[#FDE68A]/60">
                                             <span>Ask anything on screen or conversation, or</span>
                                             <div className="flex items-center gap-1 opacity-80">
                                                 {(shortcuts.selectiveScreenshot || ['⌘', 'Shift', 'H']).map((key, i) => (
                                                     <React.Fragment key={i}>
                                                         {i > 0 && <span className="text-[10px]">+</span>}
-                                                        <kbd className="px-1.5 py-0.5 rounded border text-[10px] font-sans min-w-[20px] text-center overlay-control-surface overlay-text-secondary" style={appearance.controlStyle}>{key}</kbd>
+                                                        <kbd className="px-1.5 py-0.5 rounded border border-[#FDE68A]/20 bg-black/20 text-[10px] font-sans min-w-[20px] text-center text-[#FDE68A]/90">{key}</kbd>
                                                     </React.Fragment>
                                                 ))}
                                             </div>
@@ -2937,13 +2963,14 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                 window.electronAPI.toggleModelSelector({ x, y });
                                             }}
                                             className={`
-                                                flex items-center gap-2 px-3 py-1.5
-                                                border rounded-lg transition-colors
-                                                text-xs font-medium w-[140px]
+                                                flex items-center justify-between px-3 py-1.5
+                                                bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.05]
+                                                rounded-[10px] transition-colors duration-150 shadow-sm
+                                                text-[12px] font-medium w-[140px] backdrop-blur-3xl
                                                 interaction-base interaction-press
                                                 ${controlSurfaceClass}
                                             `}
-                                            style={appearance.controlStyle}
+                                            style={{ ...appearance.controlStyle, color: '#FDE68A' }}
                                         >
                                             <span className="truncate min-w-0 flex-1">
                                                 {(() => {
@@ -3033,11 +3060,11 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                         onClick={handleManualSubmit}
                                         disabled={!inputValue.trim()}
                                     className={`
-                                    w-7 h-7 rounded-full flex items-center justify-center
+                                    w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200
                                     interaction-base interaction-press
                                     ${inputValue.trim()
-                                                ? 'bg-[#007AFF] text-white shadow-lg shadow-blue-500/20 hover:bg-[#0071E3]'
-                                                : 'overlay-icon-surface overlay-text-muted cursor-not-allowed'
+                                                ? 'bg-[#007AFF] text-white shadow-[0_2px_8px_rgba(0,122,255,0.4)] hover:bg-[#007AFF]/90 border border-white/10'
+                                                : 'bg-white/[0.08] border border-white/[0.05] text-white/40 cursor-not-allowed'
                                             }
                                 `}
                                     style={inputValue.trim() ? undefined : appearance.iconStyle}
