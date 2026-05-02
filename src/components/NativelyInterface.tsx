@@ -38,6 +38,7 @@ import { oneLight, vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/
 import TopPill from './ui/TopPill';
 import RollingTranscript from './ui/RollingTranscript';
 import SttRuntimePanel from './ui/SttRuntimePanel';
+import ProContextBar from './ui/ProContextBar';
 import { NegotiationCoachingCard } from '../premium';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -2729,51 +2730,117 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                 return (
                                     <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`}>
                                         <AnimatePresence mode="popLayout">
-                                            {actions.map((action: ActionDef, idx: number) => {
-                                                const isRec = idx === recommendedIdx;
-                                                return (
-                                                    <motion.button
-                                                        key={`${detectedQuestionType}-${action.label}`}
-                                                        layout
-                                                        initial={{ opacity: 0, y: 6, scale: 0.92 }}
-                                                        animate={{ opacity: 1, y: 0, scale: isRec ? 1.03 : 1 }}
-                                                        exit={{ opacity: 0, y: -4, scale: 0.92 }}
-                                                        transition={{ duration: 0.2, delay: idx * 0.04, ease: [0.25, 1, 0.5, 1] }}
-                                                        whileHover={{ scale: isRec ? 1.07 : 1.05, y: -1 }}
-                                                        whileTap={{ scale: 0.95 }}
-                                                        onClick={() => { if (!isProcessing) action.handler(); }}
-                                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-colors duration-150 ease-out whitespace-nowrap shrink-0 no-drag ${
-                                                            isRec
-                                                                ? 'bg-accent-primary/[0.12] hover:bg-accent-primary/[0.18] border-accent-primary/40 overlay-text-primary suggestion-glow'
-                                                                : `${quickActionClass} hover:bg-white/[0.08] hover:border-white/15`
-                                                        }`}
-                                                        style={isRec ? undefined : appearance.chipStyle}
-                                                    >
-                                                        <span className="text-[12px] leading-none">{action.icon}</span>
-                                                        {action.label}
-                                                    </motion.button>
-                                                );
-                                            })}
+                                            {(() => {
+                                                // Unique color per button label
+                                                const buttonColors: Record<string, { gradient: string; glow: string }> = {
+                                                    'What to answer?': { gradient: 'from-sky-400 via-sky-500 to-blue-600', glow: 'rgba(56,189,248,0.35)' },
+                                                    'Code Hint':       { gradient: 'from-violet-400 via-violet-500 to-purple-600', glow: 'rgba(139,92,246,0.35)' },
+                                                    'Brainstorm':      { gradient: 'from-amber-400 via-orange-500 to-orange-600', glow: 'rgba(251,146,60,0.35)' },
+                                                    'Clarify':         { gradient: 'from-cyan-400 via-cyan-500 to-teal-600', glow: 'rgba(34,211,238,0.35)' },
+                                                    'STAR Story':      { gradient: 'from-pink-400 via-pink-500 to-rose-600', glow: 'rgba(244,114,182,0.35)' },
+                                                    'Follow Up':       { gradient: 'from-amber-400 via-yellow-500 to-amber-600', glow: 'rgba(245,158,11,0.35)' },
+                                                    'Trade-offs':      { gradient: 'from-teal-400 via-teal-500 to-emerald-600', glow: 'rgba(20,184,166,0.35)' },
+                                                    'Recap':           { gradient: 'from-slate-400 via-slate-500 to-gray-600', glow: 'rgba(148,163,184,0.3)' },
+                                                };
+                                                const fallbackColor = { gradient: 'from-indigo-400 via-indigo-500 to-blue-600', glow: 'rgba(99,102,241,0.35)' };
+
+                                                return actions.map((action: ActionDef, idx: number) => {
+                                                    const isRec = idx === recommendedIdx;
+                                                    const colors = buttonColors[action.label] || fallbackColor;
+                                                    return (
+                                                        <motion.button
+                                                            key={`${detectedQuestionType}-${action.label}`}
+                                                            layout
+                                                            initial={{ opacity: 0, y: 6, scale: 0.92 }}
+                                                            animate={{ opacity: 1, y: 0, scale: isRec ? 1.03 : 1 }}
+                                                            exit={{ opacity: 0, y: -4, scale: 0.92 }}
+                                                            transition={{ duration: 0.2, delay: idx * 0.04, ease: [0.25, 1, 0.5, 1] }}
+                                                            whileHover={{ scale: isRec ? 1.07 : 1.05, y: -1, filter: 'brightness(1.12)' }}
+                                                            whileTap={{ scale: 0.95 }}
+                                                            onClick={() => { if (!isProcessing) action.handler(); }}
+                                                            className={`group relative overflow-hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap shrink-0 no-drag text-white`}
+                                                            style={{
+                                                                boxShadow: `inset 0 1px 1px rgba(255,255,255,${isRec ? '0.5' : '0.3'}), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px ${colors.glow}, 0 0 0 1px rgba(255,255,255,${isRec ? '0.1' : '0.06'})`,
+                                                            }}
+                                                        >
+                                                            {/* Unique gradient per button */}
+                                                            <div className={`absolute inset-0 bg-gradient-to-b ${colors.gradient}`} />
+                                                            {/* Top highlight band */}
+                                                            <div className="absolute inset-x-2 top-0 h-[40%] bg-gradient-to-b from-white/30 to-transparent blur-[1.5px] rounded-b-lg pointer-events-none z-10" style={{ opacity: isRec ? 0.7 : 0.5 }} />
+                                                            {/* Hover glow */}
+                                                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-10" />
+                                                            {/* Content */}
+                                                            <span className="relative z-20 text-[12px] leading-none">{action.icon}</span>
+                                                            <span className="relative z-20 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)]">{action.label}</span>
+                                                        </motion.button>
+                                                    );
+                                                });
+                                            })()}
                                         </AnimatePresence>
 
-                                        {/* Answer Button — always present */}
-                                        <button
+                                        {/* Answer Button — jelly pill design */}
+                                        <motion.button
                                             onClick={handleAnswerNow}
-                                            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all active:scale-95 duration-200 interaction-base interaction-press min-w-[74px] whitespace-nowrap shrink-0 ${isManualRecording
-                                                ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/20'
-                                                : 'overlay-chip-surface overlay-text-interactive hover:text-emerald-500 hover:bg-emerald-500/10'
-                                                }`}
-                                            style={isManualRecording ? undefined : appearance.chipStyle}
+                                            whileHover={{ scale: 1.04, filter: 'brightness(1.12)' }}
+                                            whileTap={{ scale: 0.96 }}
+                                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                                            className="group relative overflow-hidden text-white px-4 py-1.5 rounded-full font-medium tracking-normal flex items-center justify-center gap-1.5 shrink-0 min-w-[74px] whitespace-nowrap no-drag text-[11px]"
+                                            style={{
+                                                boxShadow: isManualRecording
+                                                    ? 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px rgba(239,68,68,0.4), 0 0 0 1px rgba(255,255,255,0.1)'
+                                                    : 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px rgba(16,185,129,0.35), 0 0 0 1px rgba(255,255,255,0.1)',
+                                                transition: 'box-shadow 0.4s ease-out',
+                                            }}
                                         >
-                                            {isManualRecording ? (
-                                                <>
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                                                    Stop
-                                                </>
-                                            ) : (
-                                                <><Zap className="w-3 h-3 opacity-70" /> Answer</>
-                                            )}
-                                        </button>
+                                            {/* Emerald gradient (Answer state) */}
+                                            <div
+                                                className="absolute inset-0 bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-600 transition-opacity duration-400 ease-out"
+                                                style={{ opacity: isManualRecording ? 0 : 1 }}
+                                            />
+                                            {/* Red gradient (Stop state) */}
+                                            <div
+                                                className="absolute inset-0 bg-gradient-to-b from-red-400 via-red-500 to-red-600 transition-opacity duration-400 ease-out"
+                                                style={{ opacity: isManualRecording ? 1 : 0 }}
+                                            />
+                                            {/* Top highlight band */}
+                                            <div className="absolute inset-x-2 top-0 h-[40%] bg-gradient-to-b from-white/35 to-transparent blur-[1.5px] rounded-b-lg opacity-70 pointer-events-none z-10" />
+                                            {/* Hover glow */}
+                                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-10" />
+
+                                            {/* Content */}
+                                            <div className="relative z-20 flex items-center gap-1.5">
+                                                <AnimatePresence mode="wait" initial={false}>
+                                                    {isManualRecording ? (
+                                                        <motion.div
+                                                            key="stop"
+                                                            initial={{ opacity: 0, y: 4 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            exit={{ opacity: 0, y: -4 }}
+                                                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                            className="flex items-center gap-1.5"
+                                                        >
+                                                            <span className="relative flex h-[5px] w-[5px]">
+                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
+                                                                <span className="relative inline-flex rounded-full h-[5px] w-[5px] bg-white" />
+                                                            </span>
+                                                            Stop
+                                                        </motion.div>
+                                                    ) : (
+                                                        <motion.div
+                                                            key="answer"
+                                                            initial={{ opacity: 0, y: 4 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            exit={{ opacity: 0, y: -4 }}
+                                                            transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                            className="flex items-center gap-1.5"
+                                                        >
+                                                            <Zap className="w-3 h-3 opacity-90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)]" />
+                                                            Answer
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        </motion.button>
                                     </div>
                                 );
                             })()}
@@ -2980,6 +3047,13 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                 </div>
                             </div>
                         </div>
+
+                        {/* ─── Pro Context Bar ─────────────────────────────── */}
+                        <ProContextBar
+                            profileModeEnabled={true}
+                            negotiationEnabled={messages.some(m => m.isNegotiationCoaching)}
+                        />
+
                     </motion.div>
                 )}
             </AnimatePresence>
