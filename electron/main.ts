@@ -1051,10 +1051,12 @@ export class AppState {
           sourceLabel: speaker,
         }));
       } else if (provider === "google") {
-        const googleAdapter = new GoogleStreamingSttAdapter({ sourceLabel: speaker });
-        if (config.googleCredentialsPath) {
-          googleAdapter.setCredentials(config.googleCredentialsPath);
+        if (!config.googleCredentialsPath) {
+          console.warn(`[Main] Skipping Google STT for ${speaker}: No credentials configured. Prevents dead adapter in fallback chain.`);
+          continue;
         }
+        const googleAdapter = new GoogleStreamingSttAdapter({ sourceLabel: speaker });
+        googleAdapter.setCredentials(config.googleCredentialsPath);
         adapters.push(googleAdapter);
       } else if (provider === "whisper" && config.whisperEnabled) {
         adapters.push(new WhisperFallbackSttAdapter({
@@ -1276,7 +1278,8 @@ export class AppState {
         this.systemAudioCapture.on('data', (chunk: Buffer) => {
           _sysChunkCount++;
           if (_sysChunkCount <= 3 || _sysChunkCount % 500 === 0) {
-            console.log(`[Main] SystemAudio->STT: chunk #${_sysChunkCount}, ${chunk.length}B, googleSTT=${this.googleSTT ? 'active' : 'NULL'}`);
+            const activeProvider = this.googleSTT?.getActiveProviderName() || 'none';
+            console.log(`[Main] [STT] source=system_audio provider=${activeProvider} status=active chunk_size=${chunk.length}B`);
           }
           this.googleSTT?.write(chunk);
         });
@@ -1372,7 +1375,8 @@ export class AppState {
       this.systemAudioCapture.on('data', (chunk: Buffer) => {
         _rcfgSysChunkCount++;
         if (_rcfgSysChunkCount <= 3 || _rcfgSysChunkCount % 500 === 0) {
-          console.log(`[Main] (Reconfigured) SystemAudio->STT: chunk #${_rcfgSysChunkCount}, ${chunk.length}B, googleSTT=${this.googleSTT ? 'active' : 'NULL'}`);
+          const activeProvider = this.googleSTT?.getActiveProviderName() || 'none';
+          console.log(`[Main] [STT] source=system_audio (reconfigured) provider=${activeProvider} status=active chunk_size=${chunk.length}B`);
         }
         this.googleSTT?.write(chunk);
       });
@@ -1399,7 +1403,8 @@ export class AppState {
         this.systemAudioCapture.on('data', (chunk: Buffer) => {
           _dfltSysChunkCount++;
           if (_dfltSysChunkCount <= 3 || _dfltSysChunkCount % 500 === 0) {
-            console.log(`[Main] (Default) SystemAudio->STT: chunk #${_dfltSysChunkCount}, ${chunk.length}B, googleSTT=${this.googleSTT ? 'active' : 'NULL'}`);
+            const activeProvider = this.googleSTT?.getActiveProviderName() || 'none';
+            console.log(`[Main] [STT] source=system_audio (default) provider=${activeProvider} status=active chunk_size=${chunk.length}B`);
           }
           this.googleSTT?.write(chunk);
         });
