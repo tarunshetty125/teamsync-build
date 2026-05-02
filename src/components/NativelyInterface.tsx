@@ -1740,21 +1740,13 @@ Instructions:
                         return;
                     }
 
-                    // Voice Only (Smart Extract) — fallback
-                    prompt = `You are a real-time interview assistant. The user just repeated or paraphrased a question from their interviewer.
-Instructions:
-1. Extract the core question being asked
-2. Provide a clear, concise, and professional answer that the user can say out loud
-3. Keep the answer conversational but informative (2-4 sentences ideal)
-4. Do NOT include phrases like "The question is..." - just give the answer directly
-5. Format for speaking out loud, not for reading
-
-Provide only the answer, nothing else.`;
+                    // Voice Only — direct answer, no extra context
+                    prompt = `Answer the user's question directly and concisely. No preamble, no meta-commentary. If it's a coding question, include code. Keep it natural and brief.`;
                 }
 
                 // Call Streaming API: message = question, context = instructions
                 requestStartTimeRef.current = Date.now();
-                await window.electronAPI.streamGeminiChat(question, currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined, prompt, { skipSystemPrompt: true });
+                await window.electronAPI.streamGeminiChat(question, currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined, prompt, { skipSystemPrompt: true, ignoreKnowledgeMode: true });
 
             } catch (err) {
                 // Initial invocation failing (e.g. IPC error before stream starts)

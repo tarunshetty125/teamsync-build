@@ -2429,8 +2429,13 @@ Return only the final answer. No meta commentary.
       const groqSystem = systemPromptOverride ? baseSystemPrompt : universalBase;
       const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
       const groqFullMessage = `${finalGroqSystem}\n\n${userContent}`;
-      yield* this.streamWithGroq(groqFullMessage, this.currentModelId);
-      return;
+      try {
+        yield* this.streamWithGroq(groqFullMessage, this.currentModelId);
+        return;
+      } catch (groqTextErr: any) {
+        console.warn(`[LLMHelper] ⚠️ Groq text-only failed (${groqTextErr.message}), falling through to Gemini...`);
+        // Fall through to Gemini routing below
+      }
     }
 
     // 3b. Natively API
