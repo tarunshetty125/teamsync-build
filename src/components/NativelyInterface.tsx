@@ -3125,10 +3125,12 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                         </div>
 
                         {/* ─── Pro Context Bar ─────────────────────────────── */}
-                        <ProContextBar
-                            profileModeEnabled={true}
-                            negotiationEnabled={messages.some(m => m.isNegotiationCoaching)}
-                        />
+                        <div className="w-[600px] max-w-full">
+                            <ProContextBar
+                                profileModeEnabled={true}
+                                negotiationEnabled={messages.some(m => m.isNegotiationCoaching)}
+                            />
+                        </div>
 
                     </motion.div>
                 )}
