@@ -3030,7 +3030,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                 if (recommendedIdx < 0) recommendedIdx = 0;
 
                                 return (
-                                    <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`}>
+                                    <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity }}>
                                         <AnimatePresence mode="popLayout">
                                             {(() => {
                                                 // Unique color per button label
