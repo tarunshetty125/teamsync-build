@@ -461,6 +461,17 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     const [rollingTranscript, setRollingTranscript] = useState('');  // For interviewer rolling text bar
     const finalizedTranscriptRef = useRef(''); // C6 Fix: Tracks finalized transcript separately from partials
+    // Holds ONLY the last finalized STT sentence — shown in the transcript pill.
+    // Updated exclusively when transcript.final === true so interim partials never appear.
+    const [lastFinalSentence, setLastFinalSentence] = useState('');
+    const lastFinalSentenceRef = useRef(''); // stable ref for session-reset without stale closure
+    // Sentence-scoped dot state: currentSentenceId increments on every final STT segment.
+    // lastResponseSentenceId is set when isProcessing falls to false (AI finished).
+    // Dot is green when they differ (new unanswered question) and grey when they match.
+    const [currentSentenceId, setCurrentSentenceId] = useState(0);
+    const currentSentenceIdRef = useRef(0); // stable read in isProcessing effect
+    const [lastResponseSentenceId, setLastResponseSentenceId] = useState(0);
+    const prevIsProcessingRef = useRef(false); // tracks isProcessing transition for dot state
     const [isInterviewerSpeaking, setIsInterviewerSpeaking] = useState(false);  // Track if actively speaking
     const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // H6 Fix: Prevents timer stacking
     const [voiceInput, setVoiceInput] = useState('');  // Accumulated user voice input
@@ -797,6 +808,17 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     currentModelRef.current = currentModel;
     actionButtonModeRef.current = actionButtonMode;
 
+    // DOT STATE FIX: When isProcessing transitions true → false the AI has finished.
+    // Stamp lastResponseSentenceId with the current sentence counter so the dot
+    // turns grey for exactly the question that was just answered.
+    // currentSentenceIdRef is read (not state) to avoid stale-closure issues.
+    useEffect(() => {
+        if (prevIsProcessingRef.current === true && isProcessing === false) {
+            setLastResponseSentenceId(currentSentenceIdRef.current);
+        }
+        prevIsProcessingRef.current = isProcessing;
+    }, [isProcessing]);
+
     // Detect manual user scroll to toggle jump-to-latest button
     useEffect(() => {
         const container = scrollContainerRef.current;
@@ -881,6 +903,13 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             setIsProcessing(false);
             setRollingTranscript('');
             finalizedTranscriptRef.current = '';
+            // Reset last-sentence pill so old question never leaks into new session
+            setLastFinalSentence('');
+            lastFinalSentenceRef.current = '';
+            // Reset sentence-response mapping so dot starts green in the new session
+            setCurrentSentenceId(0);
+            currentSentenceIdRef.current = 0;
+            setLastResponseSentenceId(0);
 
             // SESSION ISOLATION FIX: Reset intentReducer so no button mode from
             // the previous session leaks into the new one. seqRef/scheduledSeqRef
@@ -1015,6 +1044,15 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                     finalizedTranscriptRef.current = finalizedTranscriptRef.current.slice(-8000);
                 }
                 setRollingTranscript(finalizedTranscriptRef.current);
+                // Update pill to show ONLY this final sentence (no accumulation)
+                lastFinalSentenceRef.current = transcript.text;
+                setLastFinalSentence(transcript.text);
+                // Increment sentence ID so dot immediately resets to green for this new question
+                setCurrentSentenceId(prev => {
+                    const next = prev + 1;
+                    currentSentenceIdRef.current = next;
+                    return next;
+                });
 
                 // H6 Fix: Clear previous timer to prevent stacking
                 if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
@@ -2751,8 +2789,9 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                             {(showTranscript && rollingTranscript) || interviewerSttIndicatorStatus !== 'connected' || sttUserStatus !== 'connected' ? (
                                 <>
                                     <RollingTranscript
-                                        text={showTranscript ? rollingTranscript : ''}
+                                        text={showTranscript ? lastFinalSentence : ''}
                                         isActive={isInterviewerSpeaking}
+                                        aiHasResponded={lastResponseSentenceId === currentSentenceId && currentSentenceId > 0}
                                         surfaceStyle={showTranscript ? appearance.transcriptStyle : undefined}
                                         interviewerChannel={{
                                             status: interviewerSttIndicatorStatus,

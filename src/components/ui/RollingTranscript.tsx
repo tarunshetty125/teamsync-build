@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { categorizeSttError, type SttErrorCategory } from '../../lib/sttErrorMapper';
-
 import ChannelCard from './ChannelCard';
 
 interface ChannelStatus {
@@ -11,8 +10,14 @@ interface ChannelStatus {
 }
 
 interface RollingTranscriptProps {
+    /** The LAST finalized sentence only (not the full cumulative text) */
     text: string;
     isActive?: boolean;
+    /**
+     * True while the AI is still processing/streaming a response.
+     * Dot = green+blinking when false (waiting), grey+static when true (answered).
+     */
+    aiHasResponded?: boolean;
     surfaceStyle?: React.CSSProperties;
     /** System audio (interviewer) channel */
     interviewerChannel?: ChannelStatus;
@@ -22,11 +27,10 @@ interface RollingTranscriptProps {
 }
 
 const RollingTranscript: React.FC<RollingTranscriptProps> = ({
-    text, isActive = true, surfaceStyle,
+    text, isActive = true, aiHasResponded = false, surfaceStyle,
     interviewerChannel, microphoneChannel,
     onCopyDiagnostics
 }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
 
@@ -48,17 +52,9 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
         ? categorizeSttError(micError)
         : null;
 
-    // Collapse expanded panel when all channels are healthy
     useEffect(() => {
         if (intStatus === 'connected' && micStatus === 'connected') setExpanded(false);
     }, [intStatus, micStatus]);
-
-    useEffect(() => {
-        // Only auto-scroll for normal transcript, not for error/reconnecting states
-        if (containerRef.current && isNormal && text) {
-            containerRef.current.scrollLeft = containerRef.current.scrollWidth;
-        }
-    }, [text, isNormal]);
 
     const handleCopy = () => {
         if (onCopyDiagnostics) {
@@ -74,56 +70,93 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
             ? { background: 'linear-gradient(180deg, rgba(202,138,4,0.10) 0%, rgba(202,138,4,0.025) 50%, transparent 100%)' }
             : {};
 
+    // Trim and quote the sentence for display
+    const displayText = text?.trim() ?? '';
+    const quoted = displayText ? `"${displayText}"` : '';
+
     return (
         <div className="relative w-full">
-            {/* Masked container — transcript + error row */}
             <div
                 className="relative w-full overflow-hidden"
-                style={{
-                    ...stateSurface,
-                    maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)',
-                    WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)',
-                }}
+                style={stateSurface}
             >
                 {anyFailed && <div className="absolute inset-0 bg-red-500/10 stt-pulse-red" />}
                 {anyReconnecting && !anyFailed && <div className="absolute inset-0 bg-amber-500/10 stt-pulse-amber" />}
-                {/* 90% centered content */}
-                <div className="w-[90%] mx-auto pt-2">
-                    <div
-                        ref={containerRef}
-                        className="overflow-hidden whitespace-nowrap scroll-smooth overlay-transcript-surface transition-all duration-500 text-right"
-                        style={{
-                            ...surfaceStyle,
-                            maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
-                        }}
-                    >
-                        {isNormal && (
-                            <span className="inline-flex items-center text-[13px] italic leading-7 text-[var(--overlay-text-muted)] transition-all duration-300">
-                                {text || 'Listening…'}
-                                {isActive && (
-                                    <span className="inline-flex items-center ml-2">
-                                        <span className="w-[3px] h-[3px] bg-emerald-400/70 rounded-full animate-pulse" />
+
+                <div className="w-[90%] mx-auto pt-2 pb-1">
+
+                    {/* ── Normal transcript pill ── */}
+                    {isNormal && (
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={displayText || 'empty'}
+                                initial={{ opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -4 }}
+                                transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
+                                className="flex items-center gap-2 min-h-[28px]"
+                            >
+                                {/* Status dot: green+pulse when waiting, grey when AI responded */}
+                                <motion.span
+                                    animate={{
+                                        backgroundColor: aiHasResponded
+                                            ? 'rgba(148, 163, 184, 0.6)'   // slate-400/60 — answered
+                                            : 'rgba(52, 211, 153, 0.85)',   // emerald-400/85 — waiting
+                                        scale: aiHasResponded ? 1 : [1, 1.35, 1],
+                                        opacity: aiHasResponded ? 0.55 : 1,
+                                    }}
+                                    transition={
+                                        aiHasResponded
+                                            ? { duration: 0.6, ease: [0.4, 0, 0.2, 1] }
+                                            : { scale: { repeat: Infinity, duration: 1.1, ease: 'easeInOut' }, backgroundColor: { duration: 0.6 } }
+                                    }
+                                    style={{
+                                        display: 'inline-block',
+                                        width: 7,
+                                        height: 7,
+                                        borderRadius: '50%',
+                                        flexShrink: 0,
+                                    }}
+                                />
+
+                                {/* Sentence text */}
+                                {quoted ? (
+                                    <span
+                                        className="text-[13px] italic leading-snug overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+                                        style={{
+                                            color: aiHasResponded
+                                                ? 'var(--overlay-text-muted)'
+                                                : 'var(--overlay-text-primary)',
+                                            transition: 'color 0.5s ease',
+                                            maxWidth: '100%',
+                                        }}
+                                        title={displayText}
+                                    >
+                                        {quoted}
+                                    </span>
+                                ) : (
+                                    <span className="text-[13px] italic leading-snug text-[var(--overlay-text-muted)] opacity-40">
+                                        Listening…
                                     </span>
                                 )}
-                            </span>
-                        )}
+                            </motion.div>
+                        </AnimatePresence>
+                    )}
 
-                        {anyReconnecting && !anyFailed && (
-                            <span className="flex items-center justify-center w-full text-[12px] leading-7 stt-state-enter">
-                                <span className="text-amber-400/70 font-medium tracking-wide">
-                                    Reconnecting
-                                </span>
+                    {/* Reconnecting state */}
+                    {anyReconnecting && !anyFailed && (
+                        <span className="flex items-center justify-center w-full text-[12px] leading-7 stt-state-enter">
+                            <span className="text-amber-400/70 font-medium tracking-wide">
+                                Reconnecting
                             </span>
-                        )}
-
-                        </div>
+                        </span>
+                    )}
                 </div>
 
-                {/* Error chips row — both channels visible */}
+                {/* Error chips row */}
                 {(anyFailed || anyReconnecting) && (
                     <div className="relative w-[90%] mx-auto">
                         <span className="flex items-center justify-center w-full text-[12px] leading-7 pl-3 stt-state-enter gap-3">
-                            {/* Interviewer chip */}
                             {intStatus === 'failed' && intErrorCategory && (
                                 <span className="flex items-center gap-1.5 text-red-400 font-medium tracking-wide truncate max-w-[44%]">
                                     <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -135,12 +168,10 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                 </span>
                             )}
 
-                            {/* Separator */}
                             {intStatus === 'failed' && micStatus === 'failed' && (
                                 <span className="text-red-400/40 font-light">/</span>
                             )}
 
-                            {/* Microphone chip */}
                             {micStatus === 'failed' && micErrorCategory && (
                                 <span className="flex items-center gap-1.5 text-red-400 font-medium tracking-wide truncate max-w-[44%]">
                                     <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -152,7 +183,6 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                 </span>
                             )}
 
-                            {/* Expand/collapse chevron */}
                             <button
                                 aria-label={expanded ? 'Collapse error details' : 'Expand error details'}
                                 onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
@@ -179,10 +209,9 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                         </span>
                     </div>
                 )}
+            </div>
 
-                        </div>
-
-            {/* Expanded panel — technical diagnostics (neutral style) */}
+            {/* Expanded diagnostics panel */}
             {expanded && (
                 <motion.div
                     initial={{ opacity: 0, height: 0, scale: 0.98 }}
@@ -192,11 +221,8 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                     className="mt-4 mb-6 w-[92%] mx-auto overflow-hidden"
                 >
                     <div className="relative rounded-2xl overflow-hidden backdrop-blur-xl border border-white/10 shadow-lg shadow-black/10">
-                        {/* Subtle ambient gradient */}
                         <div className="absolute inset-0 bg-gradient-to-br from-white/3 via-transparent to-white/2 pointer-events-none" />
-
                         <div className="relative p-4 space-y-3">
-                            {/* Section header */}
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <div className="relative flex items-center justify-center w-5 h-5">
@@ -218,9 +244,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                 </span>
                             </div>
 
-                            {/* Channel status cards — self-contained with tech details */}
                             <div className="grid grid-cols-2 gap-2.5">
-                                {/* System Audio */}
                                 <ChannelCard
                                     name="System Audio"
                                     status={intStatus}
@@ -247,8 +271,6 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                         </svg>
                                     }
                                 />
-
-                                {/* Microphone */}
                                 <ChannelCard
                                     name="Microphone"
                                     status={micStatus}
@@ -270,14 +292,13 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                             <line x1="1" y1="1" x2="23" y2="23"/>
                                             <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
                                             <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
-                                            <line x1="12" y1="19" x2="12" y2="23"/>
+                                            <line x1="12" y1="19" x2="12" y2="22"/>
                                             <line x1="8" y1="23" x2="16" y2="23"/>
                                         </svg>
                                     }
                                 />
                             </div>
 
-                            {/* Global copy action */}
                             {onCopyDiagnostics && (
                                 <div className="flex items-center justify-center pt-2 border-t border-white/5">
                                     <button
