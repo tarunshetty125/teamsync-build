@@ -1227,21 +1227,25 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 // If we were streaming, finalize it
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'what_to_answer') {
                     const updated = [...prev];
+                    const chips = generateResponseChips(data.answer, 'what_to_answer');
                     updated[prev.length - 1] = {
                         ...lastMsg,
-                        text: data.answer, // Ensure final consistency
-                        isStreaming: false
+                        text: data.answer,
+                        isStreaming: false,
+                        chips: chips.length > 0 ? chips : undefined
                     };
                     return updated;
                 }
 
                 // If we missed the stream (or not streaming), append fresh
+                const chips0 = generateResponseChips(data.answer, 'what_to_answer');
                 return [...prev, {
                     id: nextMsgId(),
                     role: 'system',
-                    text: data.answer,  // Plain text, no markdown - ready to speak
+                    text: data.answer,
                     intent: 'what_to_answer',
-                    source: currentSourceRef.current
+                    source: currentSourceRef.current,
+                    chips: chips0.length > 0 ? chips0 : undefined
                 }];
             });
             currentSourceRef.current = undefined;
@@ -1281,19 +1285,23 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === data.intent) {
                     const updated = [...prev];
+                    const chips = generateResponseChips(data.answer, data.intent);
                     updated[prev.length - 1] = {
                         ...lastMsg,
                         text: data.answer,
-                        isStreaming: false
+                        isStreaming: false,
+                        chips: chips.length > 0 ? chips : undefined
                     };
                     return updated;
                 }
+                const chips1 = generateResponseChips(data.answer, data.intent);
                 return [...prev, {
                     id: nextMsgId(),
                     role: 'system',
                     text: data.answer,
                     intent: data.intent,
-                    source: currentSourceRef.current
+                    source: currentSourceRef.current,
+                    chips: chips1.length > 0 ? chips1 : undefined
                 }];
             });
             currentSourceRef.current = undefined;
@@ -1332,19 +1340,23 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'recap') {
                     const updated = [...prev];
+                    const chips = generateResponseChips(data.summary, 'recap');
                     updated[prev.length - 1] = {
                         ...lastMsg,
                         text: data.summary,
-                        isStreaming: false
+                        isStreaming: false,
+                        chips: chips.length > 0 ? chips : undefined
                     };
                     return updated;
                 }
+                const chips2 = generateResponseChips(data.summary, 'recap');
                 return [...prev, {
                     id: nextMsgId(),
                     role: 'system',
                     text: data.summary,
                     intent: 'recap',
-                    source: currentSourceRef.current
+                    source: currentSourceRef.current,
+                    chips: chips2.length > 0 ? chips2 : undefined
                 }];
             });
             currentSourceRef.current = undefined;
@@ -1382,19 +1394,23 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'follow_up_questions') {
                     const updated = [...prev];
+                    const chips = generateResponseChips(data.questions, 'follow_up_questions');
                     updated[prev.length - 1] = {
                         ...lastMsg,
                         text: data.questions,
-                        isStreaming: false
+                        isStreaming: false,
+                        chips: chips.length > 0 ? chips : undefined
                     };
                     return updated;
                 }
+                const chips3 = generateResponseChips(data.questions, 'follow_up_questions');
                 return [...prev, {
                     id: nextMsgId(),
                     role: 'system',
                     text: data.questions,
                     intent: 'follow_up_questions',
-                    source: currentSourceRef.current
+                    source: currentSourceRef.current,
+                    chips: chips3.length > 0 ? chips3 : undefined
                 }];
             });
             currentSourceRef.current = undefined;
@@ -1432,10 +1448,12 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'system_design_tradeoffs') {
                     const updated = [...prev];
+                    const chips = generateResponseChips(data.answer, 'system_design_tradeoffs');
                     updated[prev.length - 1] = {
                         ...lastMsg,
                         text: data.answer,
-                        isStreaming: false
+                        isStreaming: false,
+                        chips: chips.length > 0 ? chips : undefined
                     };
                     return updated;
                 }
@@ -1528,15 +1546,23 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'clarify') {
                     const updated = [...prev];
-                    updated[prev.length - 1] = { ...lastMsg, text: data.clarification, isStreaming: false };
+                    const chips = generateResponseChips(data.clarification, 'clarify');
+                    updated[prev.length - 1] = { 
+                        ...lastMsg, 
+                        text: data.clarification, 
+                        isStreaming: false,
+                        chips: chips.length > 0 ? chips : undefined
+                    };
                     return updated;
                 }
+                const chips4 = generateResponseChips(data.clarification, 'clarify');
                 return [...prev, {
                     id: nextMsgId(),
                     role: 'system' as const,
                     text: data.clarification,
                     intent: 'clarify',
-                    source: currentSourceRef.current
+                    source: currentSourceRef.current,
+                    chips: chips4.length > 0 ? chips4 : undefined
                 }];
             });
             currentSourceRef.current = undefined;
