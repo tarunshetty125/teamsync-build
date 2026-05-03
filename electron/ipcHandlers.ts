@@ -632,6 +632,13 @@ export function initializeIpcHandlers(appState: AppState): void {
     return { success: true };
   });
 
+  // Targeted per-request cancellation — does NOT reset the entire engine
+  safeHandle("cancel-intelligence-by-request", async (_, requestId: string) => {
+    if (!requestId) return { success: false, error: 'Missing requestId' };
+    appState.getIntelligenceManager().getEngine()?.cancelRequest(requestId);
+    return { success: true };
+  });
+
   safeHandle("gemini-chat-stream", async (
     event,
     message: string,
@@ -669,18 +676,23 @@ export function initializeIpcHandlers(appState: AppState): void {
         try {
           const autoContext = intelligenceManager.getFormattedContext(60);
           if (autoContext && autoContext.trim().length > 200) {
-            context = autoContext.length > 1200
-              ? `[...conversation truncated]\n${autoContext.slice(-1200)}`
-              : autoContext;
-            console.log(`[IPC] Auto-injected short context for gemini-chat-stream (${context.length} chars)`);
+            // Block-based: include or drop entirely (no slicing)
+            if (autoContext.length <= 1500) {
+              context = autoContext;
+              console.log(`[IPC] Auto-injected context for gemini-chat-stream (${context.length} chars)`);
+            } else {
+              console.log(`[IPC] Auto-context too large (${autoContext.length} chars), dropped (block-based)`);
+            }
           }
         } catch (ctxErr) {
           console.warn("[IPC] Failed to auto-inject context:", ctxErr);
         }
       }
 
-      if (context && context.length > 1800) {
-        context = `[...conversation truncated]\n${context.slice(-1800)}`;
+      // Block-based overflow: drop context entirely if over limit (no string slicing)
+      if (context && context.length > 2000) {
+        console.warn(`[IPC] Context too large (${context.length} chars), dropped entirely`);
+        context = undefined;
       }
 
       try {

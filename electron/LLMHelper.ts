@@ -13,6 +13,7 @@ import {
   CUSTOM_SYSTEM_PROMPT, CUSTOM_ANSWER_PROMPT, CUSTOM_WHAT_TO_ANSWER_PROMPT,
   CUSTOM_RECAP_PROMPT, CUSTOM_FOLLOWUP_PROMPT, CUSTOM_FOLLOW_UP_QUESTIONS_PROMPT, CUSTOM_ASSIST_PROMPT
 } from "./llm/prompts"
+import { enforceTokenCap, estimateTokens, TOKEN_CAP } from './llm/TokenBudget';
 import { deepVariableReplacer, getByPath, injectImageIntoMessages } from './utils/curlUtils';
 import curl2Json from "@bany/curl-to-json";
 import { CustomProvider, CurlProvider } from './services/CredentialsManager';
@@ -923,6 +924,15 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       }
 
       const isMultimodal = !!(imagePaths?.length);
+
+      // GLOBAL TOKEN GUARD: enforce cap on non-streaming path too
+      if (context) {
+        const testTotal = estimateTokens(context) + estimateTokens(message);
+        if (testTotal > TOKEN_CAP) {
+          context = undefined; // drop context block entirely
+          console.warn(`[TokenBudget] chatWithGemini: dropped context (${testTotal} tok > ${TOKEN_CAP} cap)`);
+        }
+      }
 
       // Helper to build combined prompts for Groq/Gemini
       const buildMessage = (systemPrompt: string) => {
@@ -2314,7 +2324,6 @@ RULES:
 - If context is incomplete, make the best logical assumption and answer confidently.
 - Always prioritize the user's latest question over background context.
 - Answer the USER QUESTION first before considering additional context.
-- Default to 3-5 short bullets or 1-4 short sentences.
 - Keep answers under 120 words unless code is required.
 - When code is required, return the smallest complete solution and no more than 2 short notes.
 
@@ -2379,10 +2388,15 @@ Return only the final answer. No meta commentary.
     let userContent = context
       ? `USER QUESTION:\n${message}\n\nCONTEXT:\n${context}`
       : message;
-    const MAX_USER_CONTENT_CHARS = 7_500;
-    if (userContent.length > MAX_USER_CONTENT_CHARS) {
-      userContent = `[...input truncated]\n${userContent.slice(-MAX_USER_CONTENT_CHARS)}`;
-    }
+    // No string slicing — enforceTokenCap below handles overflow via block-based context drop
+
+    // ============================================================
+    // PRE-FLIGHT TOKEN BUDGET (MANDATORY)
+    // Enforce hard cap of 9000 tokens across system + user content.
+    // Never allow overflow. No fallback bypass.
+    // ============================================================
+    userContent = enforceTokenCap(finalSystemPrompt, userContent, TOKEN_CAP);
+    console.log(`[TokenBudget] Pre-flight: system=${estimateTokens(finalSystemPrompt)} + user=${estimateTokens(userContent)} = ${estimateTokens(finalSystemPrompt) + estimateTokens(userContent)} tok (cap=${TOKEN_CAP})`);
 
     // GROQ FAST TEXT OVERRIDE (Text-Only)
     // Two paths: local Groq key → call Groq directly; Natively API only → send fast_mode:true

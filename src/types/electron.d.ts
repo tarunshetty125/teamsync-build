@@ -166,6 +166,7 @@ export interface ElectronAPI {
   getIntelligenceContext: () => Promise<{ context: string; lastAssistantMessage: string | null; activeMode: string }>
   resetIntelligence: () => Promise<{ success: boolean; error?: string }>
   cancelIntelligenceRequest: () => Promise<{ success: boolean; error?: string }>
+  cancelIntelligenceByRequest: (requestId: string) => Promise<{ success: boolean; error?: string }>
 
   // Dynamic Action Button Mode
   getActionButtonMode: () => Promise<'recap' | 'brainstorm'>

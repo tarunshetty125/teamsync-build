@@ -30,6 +30,16 @@ export {
     warmupIntentClassifier
 } from "./IntentClassifier";
 export type { ConversationIntent, IntentResult } from "./IntentClassifier";
+export {
+    estimateTokens,
+    enforceTokenCap,
+    trimContextToTokenBudget,
+    buildPromptWithBudget,
+    buildBoundedRecapContext,
+    TOKEN_CAP,
+    CONTEXT_PRIORITY
+} from "./TokenBudget";
+export type { ContextSlot } from "./TokenBudget";
 export { MODE_CONFIGS } from "./types";
 export type { GenerationConfig, GeminiContent, LLMClient } from "./types";
 export {

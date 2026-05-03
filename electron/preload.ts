@@ -951,6 +951,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }) => ipcRenderer.invoke("gemini-chat-stream", message, imagePaths, context, options),
   cancelGeminiChatStream: () => ipcRenderer.invoke("cancel-gemini-chat-stream"),
   cancelIntelligenceRequest: () => ipcRenderer.invoke("cancel-intelligence-request"),
+  cancelIntelligenceByRequest: (requestId: string) => ipcRenderer.invoke("cancel-intelligence-by-request", requestId),
 
   onGeminiStreamToken: (callback: (data: { token: string; requestId?: string } | string) => void) => {
     const subscription = (_: any, data: any) => callback(data)

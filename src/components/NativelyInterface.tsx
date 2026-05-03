@@ -216,7 +216,7 @@ function getSuggestedAnswerIntent(question: string): string {
 }
 
 // ── Context-Aware Question Type Detection (mirrors IntentClassifier patterns) ──
-type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'general';
+type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'follow_up' | 'general';
 
 // M3 Fix: Removed /g flags — these are always wrapped in new RegExp(..., 'gi') via cap()
 const REGEX_NORMALIZE_BROKEN = /(\w)\.\s+(\w)/;
@@ -230,6 +230,8 @@ const REGEX_BEHAVIORAL_CORE = /(tell me about a time|describe a situation|give m
 const REGEX_CODING_STRONG = /(algorithm|debug this|snippet|boilerplate|optimize|refactor|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|time complexity|space complexity)/;
 const REGEX_SYSTEM_STRONG = /(scalab|microservice|load balanc|distributed|high availability|caching strategy|caching|cache|cdn|message queue|rate limit|sharding|replication|partition|cap theorem|event driven|monolith|horizontal scal|fault toleran|throughput|latency|handle more users|high traffic|load)/;
 const REGEX_BEHAVIORAL_STRONG = /(when have you|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|experience|challenge|conflict|pressure|strength|weakness|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment|introduce yourself|background|resume)/;
+const REGEX_FOLLOW_UP_CORE = /(what happened next|then what|and after that|what.s next|how did that go|can you elaborate|tell me more|go deeper|expand on)/;
+const REGEX_FOLLOW_UP_STRONG = /(follow.?up|continuation|building on|going back to|earlier you said|you mentioned)/;
 
 const REGEX_CODING_BOOST = /(faster|efficient)/;
 const REGEX_SYSTEM_BOOST = /(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/;
@@ -257,6 +259,7 @@ function detectQuestionType(
         coding: 0,
         system_design: 0,
         behavioral: 0,
+        follow_up: 0,
         general: 0
     };
 
@@ -283,6 +286,18 @@ function detectQuestionType(
     // Cross-pollination boosts for mixed queries (+1)
     scores.coding += cap(REGEX_CODING_BOOST);
     scores.system_design += cap(REGEX_SYSTEM_BOOST);
+
+    // Follow-up signals
+    scores.follow_up += cap(REGEX_FOLLOW_UP_CORE) * 3;
+    scores.follow_up += cap(REGEX_FOLLOW_UP_STRONG) * 2;
+
+    // FOLLOW-UP FALLBACK: if general + short question + previous answer exists
+    // This catches "what about X?" / "and Y?" style follow-ups
+    const wordCount = t.split(/\s+/).filter((w: string) => w.length > 0).length;
+    if (scores.general >= scores.follow_up && wordCount <= 8 && wordCount >= 2) {
+        // Short ambiguous question → likely a follow-up
+        scores.follow_up = Math.max(scores.follow_up, 2);
+    }
 
     // Weighted persistence (memory of previous intent)
     if (currentType !== 'general') {
@@ -809,19 +824,17 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const seqRef = useRef(0);
 
     const recomputeIntentFromFinalTranscript = useCallback((questionTurnId: string) => {
-        latestCombinedRef.current = [
-            lastFinalSentenceRef.current,
-            finalizedTranscriptRef.current.slice(-1200),
-        ].filter(Boolean).join('\n').trim();
+        // STRICT: use ONLY the last finalized sentence, not rolling transcript
+        const finalOnly = lastFinalSentenceRef.current?.trim() || '';
+        if (finalOnly.length < 3) return;
 
-        if (latestCombinedRef.current.length < 3) return;
-
+        latestCombinedRef.current = finalOnly;
         currentQuestionTurnIdRef.current = questionTurnId;
         setCurrentQuestionTurnId(questionTurnId);
         const seq = ++seqRef.current;
         dispatchIntent({
             type: 'EVALUATE',
-            combinedText: latestCombinedRef.current,
+            combinedText: finalOnly,
             now: performance.now(),
             seq
         });
@@ -3141,6 +3154,12 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                         { label: actionButtonMode === 'brainstorm' ? 'Brainstorm' : 'Recap', icon: actionButtonMode === 'brainstorm' ? '🧠' : '📝', handler: actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap },
                                         { label: 'Follow Up', icon: '➡️', handler: handleFollowUpQuestions },
                                     ],
+                                    follow_up: [
+                                        { label: 'What to answer?', icon: '💡', handler: handleWhatToSay, isRecommended: true },
+                                        { label: 'Follow Up', icon: '➡️', handler: handleFollowUpQuestions },
+                                        { label: 'Clarify', icon: '❓', handler: handleClarify },
+                                        { label: actionButtonMode === 'brainstorm' ? 'Brainstorm' : 'Recap', icon: actionButtonMode === 'brainstorm' ? '🧠' : '📝', handler: actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap },
+                                    ],
                                 };
 
                                 // Smart recommendation override via keywords
@@ -3162,6 +3181,9 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                 } else if (effectiveQuestionType === 'general') {
                                     // Silent general fallback UX boost
                                     recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Clarify');
+                                } else if (effectiveQuestionType === 'follow_up') {
+                                    if (/(elaborate|more detail|expand)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Clarify');
+                                    else if (/(example|instance|case)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Follow Up');
                                 }
                                 if (recommendedIdx < 0) recommendedIdx = 0;
 

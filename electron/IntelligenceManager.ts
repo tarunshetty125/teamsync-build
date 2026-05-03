@@ -114,6 +114,14 @@ export class IntelligenceManager extends EventEmitter {
         return this.engine.getCurrentRequestId();
     }
 
+    /**
+     * Expose the engine for targeted per-request cancellation.
+     * Prefer using facade methods; this is only for cancel-intelligence-by-request IPC.
+     */
+    getEngine(): IntelligenceEngine {
+        return this.engine;
+    }
+
     getSessionId(): string {
         return this.session.sessionId;
     }

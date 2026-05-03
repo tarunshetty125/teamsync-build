@@ -9,7 +9,8 @@ import {
     AnswerLLM, AssistLLM, BrainstormLLM, ClarifyLLM, CodeHintLLM, FollowUpLLM, RecapLLM,
     FollowUpQuestionsLLM, SystemDesignTradeoffsLLM, WhatToAnswerLLM,
     prepareTranscriptForWhatToAnswer, buildTemporalContext,
-    AssistantResponse as LLMAssistantResponse, classifyIntent, getAnswerShapeGuidance
+    AssistantResponse as LLMAssistantResponse, classifyIntent, getAnswerShapeGuidance,
+    buildBoundedRecapContext
 } from './llm';
 import type { ConversationIntent } from './llm';
 
@@ -80,6 +81,9 @@ export class IntelligenceEngine extends EventEmitter {
     private currentGenerationId: number = 0;
     private currentClientRequestId: string | null = null;
 
+    // Per-request AbortController map — cancel(requestId) only cancels that request
+    private requestAbortControllers = new Map<string, AbortController>();
+
     // Keep reference to LLMHelper for client access
     private llmHelper: LLMHelper;
 
@@ -104,6 +108,40 @@ export class IntelligenceEngine extends EventEmitter {
 
     getCurrentRequestId(): string | null {
         return this.currentClientRequestId;
+    }
+
+    /**
+     * Cancel a specific request by its requestId.
+     * Only aborts that request — no global abort.
+     */
+    cancelRequest(requestId: string): void {
+        const controller = this.requestAbortControllers.get(requestId);
+        if (controller) {
+            controller.abort();
+            this.requestAbortControllers.delete(requestId);
+            console.log(`[IntelligenceEngine] Cancelled request: ${requestId}`);
+        }
+    }
+
+    /**
+     * Create an AbortController for a request and register it.
+     * Returns the AbortController for signal checking.
+     */
+    private registerRequestAbort(requestId: string): AbortController {
+        // Clean up any existing controller for this request
+        this.requestAbortControllers.get(requestId)?.abort();
+        const controller = new AbortController();
+        this.requestAbortControllers.set(requestId, controller);
+        return controller;
+    }
+
+    /**
+     * Clean up AbortController after request completes.
+     */
+    private cleanupRequestAbort(requestId: string | null): void {
+        if (requestId) {
+            this.requestAbortControllers.delete(requestId);
+        }
     }
 
     getRecapLLM(): RecapLLM | null {
@@ -175,6 +213,39 @@ export class IntelligenceEngine extends EventEmitter {
     // ============================================
 
     /**
+     * Global LLM entry point. All NEW LLM invocations MUST use this wrapper.
+     * Handles: abort registration, generation tracking, cleanup.
+     * Existing modes use inline abort patterns (equivalent safety).
+     */
+    protected async runLLMGuarded<T>(
+        requestId: string | null,
+        mode: IntelligenceMode,
+        fn: (signal: AbortSignal | undefined, generationId: number) => Promise<T>
+    ): Promise<T | null> {
+        this.currentClientRequestId = requestId;
+        this.setMode(mode);
+
+        const controller = requestId ? this.registerRequestAbort(requestId) : null;
+        const signal = controller?.signal;
+        const generationId = ++this.currentGenerationId;
+
+        try {
+            const result = await fn(signal, generationId);
+            if (signal?.aborted) return null;
+            return result;
+        } catch (error) {
+            if (signal?.aborted || (error as Error).name === 'AbortError') return null;
+            this.emit('error', error as Error, mode, requestId);
+            return null;
+        } finally {
+            this.cleanupRequestAbort(requestId);
+            if (this.currentGenerationId === generationId) {
+                this.setMode('idle');
+            }
+        }
+    }
+
+    /**
      * MODE 1: Assist (Passive)
      * Low-priority observational insights
      */
@@ -215,7 +286,7 @@ export class IntelligenceEngine extends EventEmitter {
             }
 
             if (insight) {
-                this.emit('assist_update', insight);
+                this.emit('assist_update', insight, null);
             }
             this.setMode('idle');
             return insight;
@@ -224,7 +295,7 @@ export class IntelligenceEngine extends EventEmitter {
             if ((error as Error).name === 'AbortError') {
                 return null;
             }
-            this.emit('error', error as Error, 'assist');
+            this.emit('error', error as Error, 'assist', null);
             this.setMode('idle');
             return null;
         }
@@ -254,6 +325,10 @@ export class IntelligenceEngine extends EventEmitter {
 
         this.setMode('what_to_say');
         this.lastTriggerTime = now;
+
+        // Register per-request AbortController
+        const _abortWTS = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
+        const _signalWTS = _abortWTS?.signal;
 
         try {
             if (!this.whatToAnswerLLM) {
@@ -330,7 +405,7 @@ export class IntelligenceEngine extends EventEmitter {
             let streamAborted = false;
 
             for await (const token of stream) {
-                if (this.currentGenerationId !== generationId) {
+                if (_signalWTS?.aborted || this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] _what_to_say stream aborted by new generation');
                     // RC-03 fix: .return() signals the generator to clean up and stops
                     // the underlying network request (SDK generators honour this).
@@ -362,13 +437,20 @@ export class IntelligenceEngine extends EventEmitter {
             });
 
             // CQ-05 fix: only emit the "complete" event after a non-aborted stream.
+            if (_signalWTS?.aborted) {
+                this.cleanupRequestAbort(activeRequestId);
+                this.setMode('idle');
+                return null;
+            }
             // The renderer already has all tokens — this is for metadata only (e.g. copying, history).
             this.emit('suggested_answer', fullAnswer, question || 'What to Answer', confidence, activeRequestId);
 
+            this.cleanupRequestAbort(activeRequestId);
             this.setMode('idle');
             return fullAnswer;
 
         } catch (error) {
+            this.cleanupRequestAbort(activeRequestId);
             this.emit('error', error as Error, 'what_to_say', activeRequestId);
             this.setMode('idle');
             return "Could you repeat that? I want to make sure I address your question properly.";
@@ -390,6 +472,8 @@ export class IntelligenceEngine extends EventEmitter {
         }
 
         this.setMode('follow_up');
+        const _abortFU = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
+        const _signalFU = _abortFU?.signal;
 
         try {
             if (!this.followUpLLM) {
@@ -411,7 +495,7 @@ export class IntelligenceEngine extends EventEmitter {
             let streamAborted = false;
 
             for await (const token of stream) {
-                if (this.currentGenerationId !== generationId) {
+                if (_signalFU?.aborted || this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] _follow_up stream aborted by new generation');
                     await stream.return(undefined);
                     streamAborted = true;
@@ -421,7 +505,7 @@ export class IntelligenceEngine extends EventEmitter {
                 fullRefined += token;
             }
 
-            if (!streamAborted && fullRefined) {
+            if (!streamAborted && !_signalFU?.aborted && fullRefined) {
                 this.session.addAssistantMessage(fullRefined);
                 this.emit('refined_answer', fullRefined, intent, activeRequestId);
 
@@ -449,6 +533,7 @@ export class IntelligenceEngine extends EventEmitter {
             return fullRefined;
 
         } catch (error) {
+            this.cleanupRequestAbort(activeRequestId);
             this.emit('error', error as Error, 'follow_up', activeRequestId);
             this.setMode('idle');
             return null;
@@ -465,6 +550,10 @@ export class IntelligenceEngine extends EventEmitter {
         this.currentClientRequestId = activeRequestId;
         this.setMode('recap');
 
+        // Register per-request AbortController
+        const _abortRecap = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
+        const _signalRecap = _abortRecap?.signal;
+
         try {
             if (!this.recapLLM) {
                 console.error('[IntelligenceEngine] RecapLLM not initialized');
@@ -479,13 +568,17 @@ export class IntelligenceEngine extends EventEmitter {
                 return null;
             }
 
+            // CONTEXT STRATEGY: Recap uses bounded reverse accumulation (max 3000 tokens)
+            // Never sends full transcript — only most recent content within budget
+            const boundedContext = buildBoundedRecapContext(context, 3000);
+
             const generationId = ++this.currentGenerationId;
             let fullSummary = "";
-            const stream = this.recapLLM.generateStream(context);
+            const stream = this.recapLLM.generateStream(boundedContext);
             let streamAborted = false;
 
             for await (const token of stream) {
-                if (this.currentGenerationId !== generationId) {
+                if (_signalRecap?.aborted || this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] _recap stream aborted by new generation');
                     await stream.return(undefined);
                     streamAborted = true;
@@ -496,7 +589,7 @@ export class IntelligenceEngine extends EventEmitter {
             }
 
             // Only emit final if not aborted
-            if (!streamAborted && fullSummary && this.currentGenerationId === generationId) {
+            if (!streamAborted && !_signalRecap?.aborted && fullSummary && this.currentGenerationId === generationId) {
                 this.emit('recap', fullSummary, activeRequestId);
 
                 this.session.pushUsage({
@@ -507,11 +600,13 @@ export class IntelligenceEngine extends EventEmitter {
                 });
             }
             if (this.currentGenerationId === generationId) {
+                this.cleanupRequestAbort(activeRequestId);
                 this.setMode('idle');
             }
             return fullSummary;
 
         } catch (error) {
+            this.cleanupRequestAbort(activeRequestId);
             this.emit('error', error as Error, 'recap', activeRequestId);
             this.setMode('idle');
             return null;
@@ -527,6 +622,8 @@ export class IntelligenceEngine extends EventEmitter {
         const activeRequestId = requestId ?? null;
         this.currentClientRequestId = activeRequestId;
         this.setMode('clarify');
+        const _abortClarify = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
+        const _signalClarify = _abortClarify?.signal;
 
         try {
             if (!this.clarifyLLM) {
@@ -545,7 +642,7 @@ export class IntelligenceEngine extends EventEmitter {
             let streamAborted = false;
 
             for await (const token of stream) {
-                if (this.currentGenerationId !== generationId) {
+                if (_signalClarify?.aborted || this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] _clarify stream aborted by new generation');
                     await stream.return(undefined);
                     streamAborted = true;
@@ -561,7 +658,7 @@ export class IntelligenceEngine extends EventEmitter {
             }
 
             // Only update history and emit final if not aborted
-            if (fullClarification && this.currentGenerationId === generationId) {
+            if (fullClarification && !_signalClarify?.aborted && this.currentGenerationId === generationId) {
                 this.emit('clarify', fullClarification, activeRequestId);
                 this.session.addAssistantMessage(fullClarification);
 
@@ -578,6 +675,7 @@ export class IntelligenceEngine extends EventEmitter {
             return fullClarification;
 
         } catch (error) {
+            this.cleanupRequestAbort(activeRequestId);
             this.emit('error', error as Error, 'clarify', activeRequestId);
             this.setMode('idle');
             return null;
@@ -593,6 +691,8 @@ export class IntelligenceEngine extends EventEmitter {
         const activeRequestId = requestId ?? null;
         this.currentClientRequestId = activeRequestId;
         this.setMode('follow_up_questions');
+        const _abortFUQ = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
+        const _signalFUQ = _abortFUQ?.signal;
 
         try {
             if (!this.followUpQuestionsLLM) {
@@ -613,7 +713,7 @@ export class IntelligenceEngine extends EventEmitter {
             const stream = this.followUpQuestionsLLM.generateStream(context);
 
             for await (const token of stream) {
-                if (this.currentGenerationId !== generationId) {
+                if (_signalFUQ?.aborted || this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] _follow_up_questions stream aborted by new generation');
                     await stream.return(undefined); // FIX §3.6: cancel underlying request immediately
                     break;
@@ -622,7 +722,7 @@ export class IntelligenceEngine extends EventEmitter {
                 fullQuestions += token;
             }
 
-            if (fullQuestions && this.currentGenerationId === generationId) {
+            if (fullQuestions && !_signalFUQ?.aborted && this.currentGenerationId === generationId) {
                 this.emit('follow_up_questions_update', fullQuestions, activeRequestId);
                 this.session.pushUsage({
                     type: 'followup_questions',
@@ -637,6 +737,7 @@ export class IntelligenceEngine extends EventEmitter {
             return fullQuestions;
 
         } catch (error) {
+            this.cleanupRequestAbort(activeRequestId);
             this.emit('error', error as Error, 'follow_up_questions', activeRequestId);
             this.setMode('idle');
             return null;
@@ -648,6 +749,8 @@ export class IntelligenceEngine extends EventEmitter {
         const activeRequestId = requestId ?? null;
         this.currentClientRequestId = activeRequestId;
         this.setMode('system_design_tradeoffs');
+        const _abortSDT = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
+        const _signalSDT = _abortSDT?.signal;
 
         try {
             if (!this.systemDesignTradeoffsLLM) {
@@ -667,7 +770,7 @@ export class IntelligenceEngine extends EventEmitter {
             let streamAborted = false;
 
             for await (const token of stream) {
-                if (this.currentGenerationId !== generationId) {
+                if (_signalSDT?.aborted || this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] system_design_tradeoffs stream aborted by new generation');
                     await stream.return(undefined);
                     streamAborted = true;
@@ -682,7 +785,7 @@ export class IntelligenceEngine extends EventEmitter {
                 return null;
             }
 
-            if (fullAnswer) {
+            if (fullAnswer && !_signalSDT?.aborted) {
                 this.session.addAssistantMessage(fullAnswer);
                 this.session.pushUsage({
                     type: 'assist',
@@ -696,6 +799,7 @@ export class IntelligenceEngine extends EventEmitter {
             this.setMode('idle');
             return fullAnswer;
         } catch (error) {
+            this.cleanupRequestAbort(activeRequestId);
             this.emit('error', error as Error, 'system_design_tradeoffs', activeRequestId);
             this.setMode('idle');
             return null;
@@ -768,6 +872,8 @@ export class IntelligenceEngine extends EventEmitter {
         const activeRequestId = requestId ?? null;
         this.currentClientRequestId = activeRequestId;
         this.setMode('code_hint');
+        const _abortCH = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
+        const _signalCH = _abortCH?.signal;
 
         try {
             if (!this.codeHintLLM) {
@@ -800,7 +906,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             let streamAborted = false;
             for await (const token of stream) {
-                if (this.currentGenerationId !== generationId) {
+                if (_signalCH?.aborted || this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] code_hint stream aborted by new generation');
                     await stream.return(undefined);
                     streamAborted = true;
@@ -833,6 +939,7 @@ export class IntelligenceEngine extends EventEmitter {
             return fullHint;
 
         } catch (error) {
+            this.cleanupRequestAbort(activeRequestId);
             this.emit('error', error as Error, 'code_hint', activeRequestId);
             this.setMode('idle');
             return null;
@@ -852,6 +959,8 @@ export class IntelligenceEngine extends EventEmitter {
         const activeRequestId = requestId ?? null;
         this.currentClientRequestId = activeRequestId;
         this.setMode('brainstorm');
+        const _abortBS = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
+        const _signalBS = _abortBS?.signal;
 
         try {
             if (!this.brainstormLLM) {
@@ -881,7 +990,7 @@ export class IntelligenceEngine extends EventEmitter {
             let streamAborted = false;
 
             for await (const token of stream) {
-                if (this.currentGenerationId !== generationId) {
+                if (_signalBS?.aborted || this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] brainstorm stream aborted by new generation');
                     await stream.return(undefined);
                     streamAborted = true;
@@ -945,5 +1054,10 @@ export class IntelligenceEngine extends EventEmitter {
             this.assistCancellationToken.abort();
             this.assistCancellationToken = null;
         }
+        // Abort all per-request controllers
+        for (const [requestId, controller] of this.requestAbortControllers) {
+            controller.abort();
+        }
+        this.requestAbortControllers.clear();
     }
 }
