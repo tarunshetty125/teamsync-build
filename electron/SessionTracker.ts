@@ -572,6 +572,9 @@ export class SessionTracker {
         this.codingQuestionSetAt = null;
         this.recentInterviewerBuffer = [];
         this.lastTranscriptHash = null;
+        // FIX §3.4: Clear the compaction lock so the new session is never blocked
+        // by an in-flight epoch summarization that was running when reset() fired.
+        this.isCompacting = false;
     }
 
     // ============================================

@@ -595,6 +595,7 @@ export class IntelligenceEngine extends EventEmitter {
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] _follow_up_questions stream aborted by new generation');
+                    await stream.return(undefined); // FIX §3.6: cancel underlying request immediately
                     break;
                 }
                 this.emit('follow_up_questions_token', token);
@@ -767,6 +768,7 @@ export class IntelligenceEngine extends EventEmitter {
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] code_hint stream aborted by new generation');
+                    await stream.return(undefined); // FIX §3.6: cancel underlying request immediately
                     break;
                 }
                 this.emit('suggested_answer_token', token, 'Code Hint', 1.0);

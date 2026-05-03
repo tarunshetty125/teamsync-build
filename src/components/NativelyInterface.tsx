@@ -229,10 +229,25 @@ type IntentState = {
     seq: number;
 };
 
-type IntentAction = { type: 'EVALUATE'; combinedText: string; now: number; seq: number };
+type IntentAction =
+    | { type: 'EVALUATE'; combinedText: string; now: number; seq: number }
+    | { type: 'RESET' };
 
 function intentReducer(state: IntentState, action: IntentAction): IntentState {
     switch (action.type) {
+        case 'RESET':
+            // Session isolation fix: wipe all classification state so no intent
+            // from the previous meeting leaks into the next session.
+            // lastStrongAt = 0 ensures the 6-second decay window fires immediately
+            // on the first EVALUATE of the new session, preventing lastStrongType
+            // from acting as a ghost signal.
+            return {
+                detectedType: 'general',
+                lastStrongType: 'general',
+                lastStrongAt: 0,
+                seq: 0,
+            };
+
         case 'EVALUATE': {
             if (action.seq < state.seq) return state; // ignore stale updates
             
@@ -563,7 +578,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             // Prevent double-invocation strict mode execution races
             if (scheduledSeqRef.current !== nextSeq) return; 
             
-            // Combine rolling transcript + last few interviewer messages for detection
+            // Combine finalized transcript + last few interviewer messages for detection.
+            // FIX §3.3: Use finalizedTranscriptRef (only updated on transcript.final === true)
+            // instead of rollingTranscript (updated on every interim partial).
+            // This ensures classification only runs on fully-committed STT output.
             const interviewerMsgs = messages
                 .filter(m => m.role === 'interviewer')
                 .slice(-3)
@@ -573,11 +591,12 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             // Ignore weak user input
             const userWeight = inputValue.length > 10 ? inputValue : '';
             
-            // Weight recent context higher by repeating interviewer messages
+            // Weight recent context higher by repeating interviewer messages.
+            // finalizedTranscriptRef.current holds only final segments — no interim noise.
             latestCombinedRef.current = `
                 ${interviewerMsgs}
                 ${interviewerMsgs}
-                ${rollingTranscript.slice(-1500)}
+                ${finalizedTranscriptRef.current.slice(-1500)}
                 ${userWeight}
             `.trim();
             if (latestCombinedRef.current.length < 3) return;
@@ -595,7 +614,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         return () => {
             if (timeoutRef.current) clearTimeout(timeoutRef.current as any);
         };
-    }, [rollingTranscript, messages, inputValue]);
+    // FIX §3.3: `rollingTranscript` removed — it updates on every interim STT partial.
+    // `messages` changes only when a final interviewer segment is committed to the chat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [messages, inputValue]);
 
     const codeTheme = isLightTheme ? oneLight : vscDarkPlus;
     const codeLineNumberColor = isLightTheme ? 'rgba(15,23,42,0.35)' : 'rgba(255,255,255,0.2)';
@@ -859,7 +881,14 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             setIsProcessing(false);
             setRollingTranscript('');
             finalizedTranscriptRef.current = '';
-            // Optionally reset connection status if needed, but connection persists
+
+            // SESSION ISOLATION FIX: Reset intentReducer so no button mode from
+            // the previous session leaks into the new one. seqRef/scheduledSeqRef
+            // are also zeroed so any in-flight debounce timer is invalidated
+            // (scheduledSeqRef !== nextSeq guard in the useEffect will drop it).
+            dispatchIntent({ type: 'RESET' });
+            seqRef.current = 0;
+            scheduledSeqRef.current = 0;
 
             // Track new conversation/session if applicable?
             // Actually 'app_opened' is global, 'assistant_started' is overlay.

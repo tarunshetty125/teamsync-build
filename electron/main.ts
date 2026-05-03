@@ -1918,6 +1918,11 @@ export class AppState {
         // LAZY INIT: Ensure pipeline is ready (if not reconfigured above)
         this.setupSystemAudioPipeline();
 
+        // FIX §3.1: Read sessionId here (inside the callback), NOT before setTimeout.
+        // If intelligenceManager.reset() ran again before this callback fires (rapid
+        // start→stop→start), reading outside would capture the OLD sessionId, causing
+        // the STT supervisor to bind to a stale session while IntelligenceManager has
+        // already rotated to a new one. Reading here always reflects the live session.
         const currentSessionId = this.intelligenceManager.getSessionId();
 
         // Start System Audio
