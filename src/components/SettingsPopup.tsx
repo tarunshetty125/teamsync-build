@@ -182,8 +182,8 @@ const SettingsPopup = () => {
         ? 'bg-[#F3F4F6]/92 border-black/10 shadow-black/10'
         : 'bg-[#1E1E1E]/80 border-white/10 shadow-black/40';
     const itemHoverClass = isLightTheme ? 'hover:bg-black/[0.04]' : 'hover:bg-white/5';
-    const labelInactiveClass = isLightTheme ? 'text-slate-700 group-hover:text-slate-900' : 'text-slate-400 group-hover:text-slate-200';
-    const iconInactiveClass = isLightTheme ? 'text-slate-500 group-hover:text-slate-700' : 'text-slate-500 group-hover:text-slate-300';
+    const labelInactiveClass = isLightTheme ? 'text-[#B76E79] group-hover:text-[#9E5A65]' : 'text-[#D4A0A0] group-hover:text-[#E8B4B8]';
+    const iconInactiveClass = isLightTheme ? 'text-[#C4868F] group-hover:text-[#A8646E]' : 'text-[#C9A0A0] group-hover:text-[#DEB8B8]';
     const dividerClass = isLightTheme ? 'bg-black/[0.06]' : 'bg-white/[0.04]';
     const shortcutKeyClass = isLightTheme
         ? 'border-black/10 bg-black/[0.04] text-slate-600'
