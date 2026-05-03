@@ -178,9 +178,8 @@ const SettingsPopup = () => {
         return () => observer.disconnect();
     }, []);
 
-    const popupPanelClass = isLightTheme
-        ? 'bg-[#F3F4F6]/92 border-black/10 shadow-black/10'
-        : 'bg-[#1E1E1E]/80 border-white/10 shadow-black/40';
+    // Use global liquid-glass class for frosted effect
+    const popupPanelClass = 'liquid-glass';
     const itemHoverClass = isLightTheme ? 'hover:bg-black/[0.04]' : 'hover:bg-white/5';
     const labelInactiveClass = isLightTheme ? 'text-[#B76E79] group-hover:text-[#9E5A65]' : 'text-[#D4A0A0] group-hover:text-[#E8B4B8]';
     const iconInactiveClass = isLightTheme ? 'text-[#C4868F] group-hover:text-[#A8646E]' : 'text-[#C9A0A0] group-hover:text-[#DEB8B8]';
@@ -193,7 +192,7 @@ const SettingsPopup = () => {
 
     return (
         <div className="w-fit h-fit bg-transparent flex flex-col">
-            <div ref={contentRef} className={`w-[200px] max-h-[280px] backdrop-blur-md border rounded-[16px] overflow-hidden shadow-2xl p-2 flex flex-col animate-scale-in origin-top-left ${popupPanelClass}`}>
+            <div ref={contentRef} className={`w-[200px] max-h-[280px] p-2 flex flex-col animate-scale-in origin-top-left ${popupPanelClass}`}>
                 <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col min-h-0">
 
                     {/* Undetectability */}
