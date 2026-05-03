@@ -1989,7 +1989,12 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                     }
                     if (lastMsg && lastMsg.isStreaming) {
                         const updated = [...prev];
-                        updated[prev.length - 1] = { ...lastMsg, isStreaming: false };
+                        const chips = generateResponseChips(lastMsg.text, lastMsg.intent);
+                        updated[prev.length - 1] = { 
+                            ...lastMsg, 
+                            isStreaming: false,
+                            chips: chips.length > 0 ? chips : undefined
+                        };
                         return updated;
                     }
                     return prev;
