@@ -1223,6 +1223,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   profileResetNegotiation: () => ipcRenderer.invoke('profile:reset-negotiation'),
   profileGetNotes: () => ipcRenderer.invoke('profile:get-notes'),
   profileSaveNotes: (content: string) => ipcRenderer.invoke('profile:save-notes', content),
+  setCustomNotesEnabled: (enabled: boolean) => ipcRenderer.invoke('set-custom-notes-enabled', enabled),
+  getCustomNotesEnabled: () => ipcRenderer.invoke('get-custom-notes-enabled'),
   onNegotiationRestored: (callback: (data: { restored: boolean }) => void) => {
     const subscription = (_: any, data: { restored: boolean }) => callback(data);
     ipcRenderer.on('negotiation_restored', subscription);

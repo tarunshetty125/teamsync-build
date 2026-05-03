@@ -346,6 +346,8 @@ export interface ElectronAPI {
   profileResetNegotiation: () => Promise<{ success: boolean; error?: string }>
   profileGetNotes: () => Promise<{ success: boolean; content: string; error?: string }>
   profileSaveNotes: (content: string) => Promise<{ success: boolean; error?: string }>
+  setCustomNotesEnabled: (enabled: boolean) => Promise<{ success: boolean; error?: string }>
+  getCustomNotesEnabled: () => Promise<{ success: boolean; enabled: boolean; error?: string }>
   onNegotiationRestored: (callback: (data: { restored: boolean }) => void) => () => void
   onNegotiationRegenerated: (callback: (data: { regenerated: boolean }) => void) => () => void
   onNegotiationStateChanged: (callback: (data: { enabled: boolean; isActive: boolean; state: any }) => void) => () => void

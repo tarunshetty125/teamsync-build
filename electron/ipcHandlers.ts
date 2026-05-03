@@ -3404,6 +3404,31 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // ==========================================
+  // Custom Context Toggle (overlay real-time control)
+  // ==========================================
+
+  safeHandle("set-custom-notes-enabled", async (_, enabled: boolean) => {
+    try {
+      const llmHelper = appState.processingHelper?.getLLMHelper?.();
+      if (llmHelper?.setCustomNotesEnabled) {
+        llmHelper.setCustomNotesEnabled(!!enabled);
+      }
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  safeHandle("get-custom-notes-enabled", async () => {
+    try {
+      const llmHelper = appState.processingHelper?.getLLMHelper?.();
+      return { success: true, enabled: llmHelper?.getCustomNotesEnabled?.() ?? true };
+    } catch (error: any) {
+      return { success: false, enabled: true, error: error.message };
+    }
+  });
+
+  // ==========================================
   // Tavily Search API Credentials
   // ==========================================
 

@@ -2502,7 +2502,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                         </div>
                                     </div>
 
-                                    {/* Custom Context Card */}
+                                    {/* Custom Context Card — Pro only */}
+                                    {hasProfileAccess && (
                                     <div className="mt-5">
                                         <div className="bg-bg-item-surface rounded-xl border border-border-subtle">
                                             <div className="p-5">
@@ -2557,6 +2558,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                             </div>
                                         </div>
                                     </div>
+                                    )}
 
                                     {/* Google Search API Card */}
                                     <div className="mt-5">

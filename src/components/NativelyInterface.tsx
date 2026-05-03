@@ -29,7 +29,8 @@ import {
     Check,
     PointerOff,
     BookOpen,
-    Cpu
+    Cpu,
+    FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -312,6 +313,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const [negotiationContextEnabled, setNegotiationContextEnabled] = useState(false);
     const [negotiationToggleLoading, setNegotiationToggleLoading] = useState(false);
     const [hasNegotiationScript, setHasNegotiationScript] = useState(false);
+    const [customNotesEnabled, setCustomNotesEnabled] = useState(true);
 
     const refreshNegotiationContextState = useCallback(async () => {
         if (!hasProContextAccess) {
@@ -354,6 +356,15 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             console.warn('[Overlay] Failed to toggle negotiation context:', error);
         } finally {
             setNegotiationToggleLoading(false);
+        }
+    }, [hasProContextAccess]);
+
+    // Load custom context enabled state on mount
+    useEffect(() => {
+        if (hasProContextAccess) {
+            window.electronAPI?.getCustomNotesEnabled?.().then(res => {
+                if (res?.success) setCustomNotesEnabled(res.enabled);
+            }).catch(() => {});
         }
     }, [hasProContextAccess]);
 
@@ -3384,6 +3395,33 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                 System Design Mode
                                             </div>
                                         </div>
+
+                                        {/* Custom Context Toggle — Pro only */}
+                                        {hasProContextAccess && (
+                                            <div className="relative group">
+                                                <button
+                                                    onClick={async () => {
+                                                        const next = !customNotesEnabled;
+                                                        setCustomNotesEnabled(next);
+                                                        console.log(`[Overlay] Custom context ${next ? 'on' : 'off'}`);
+                                                        await window.electronAPI?.setCustomNotesEnabled?.(next);
+                                                    }}
+                                                    className={`
+                                                        w-7 h-7 flex items-center justify-center rounded-lg
+                                                        interaction-base interaction-press
+                                                        ${customNotesEnabled
+                                                            ? 'overlay-icon-surface overlay-icon-surface-hover text-amber-400 opacity-100'
+                                                            : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
+                                                    `}
+                                                    style={appearance.iconStyle}
+                                                >
+                                                    <FileText className="w-3.5 h-3.5" />
+                                                </button>
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                    {customNotesEnabled ? 'Custom Context: ON' : 'Custom Context: OFF'}
+                                                </div>
+                                            </div>
+                                        )}
 
                                     </div>
 

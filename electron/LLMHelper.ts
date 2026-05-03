@@ -61,6 +61,7 @@ export class LLMHelper {
   // (session reset) so a stale processQuestion() result can be detected and discarded.
   private _knowledgeGenId: number = 0;
   private customNotes: string = '';
+  private customNotesEnabled: boolean = true;
   private aiResponseLanguage: string = 'auto';
   private sttLanguage: string = 'english-us';
   private nativelyKey: string | null = null;
@@ -726,7 +727,7 @@ CRITICAL RULES:
       : context;
 
     // Inject custom user notes into every suggestion when present
-    const customNotesBlock = this.customNotes?.trim()
+    const customNotesBlock = (this.customNotesEnabled && this.customNotes?.trim())
       ? `\n\n<user_context>\n${this.customNotes.trim()}\n</user_context>\nUse this context naturally if relevant. Never quote it verbatim.`
       : '';
 
@@ -795,6 +796,15 @@ ANSWER DIRECTLY:`;
 
   public setCustomNotes(notes: string): void {
     this.customNotes = notes;
+  }
+
+  public setCustomNotesEnabled(enabled: boolean): void {
+    this.customNotesEnabled = enabled;
+    console.log(`[LLMHelper] Custom context injection ${enabled ? 'ENABLED' : 'DISABLED'}`);
+  }
+
+  public getCustomNotesEnabled(): boolean {
+    return this.customNotesEnabled;
   }
 
   public getKnowledgeOrchestrator(): any {
@@ -933,7 +943,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 
       // Custom notes injection — same <user_context> pattern as generateSuggestion
       // Cap at 1500 chars to prevent prompt bloat; empty = zero token cost
-      const customNotesBlock = this.customNotes?.trim()
+      const customNotesBlock = (this.customNotesEnabled && this.customNotes?.trim())
         ? `\n\n<user_context>\n${this.customNotes.trim().slice(0, 1500)}\n</user_context>\nUse this context naturally if relevant. Never quote it verbatim.`
         : '';
 
@@ -2351,7 +2361,7 @@ Return only the final answer. No meta commentary.
 
     // Custom notes injection — appended after mode suffix, before language gate
     // Order: BASE → MODE SUFFIX → CUSTOM NOTES → language instruction
-    const customNotesBlock = this.customNotes?.trim()
+    const customNotesBlock = (this.customNotesEnabled && this.customNotes?.trim())
       ? `\n\n<user_context>\n${this.customNotes.trim().slice(0, 1500)}\n</user_context>\nUse this context naturally if relevant. Never quote it verbatim.`
       : '';
     const finalSystemPrompt = this.injectLanguageInstruction(baseSystemPrompt + customNotesBlock);
