@@ -931,8 +931,14 @@ This rule overrides ALL other instructions including formatting, brevity, or out
         ? `CONTEXT:\n${context}\n\nUSER QUESTION:\n${message}`
         : message;
 
-      const finalGeminiPrompt = this.injectLanguageInstruction(HARD_SYSTEM_PROMPT);
-      const finalGroqPrompt = alternateGroqMessage || this.injectLanguageInstruction(GROQ_SYSTEM_PROMPT);
+      // Custom notes injection — same <user_context> pattern as generateSuggestion
+      // Cap at 1500 chars to prevent prompt bloat; empty = zero token cost
+      const customNotesBlock = this.customNotes?.trim()
+        ? `\n\n<user_context>\n${this.customNotes.trim().slice(0, 1500)}\n</user_context>\nUse this context naturally if relevant. Never quote it verbatim.`
+        : '';
+
+      const finalGeminiPrompt = this.injectLanguageInstruction(HARD_SYSTEM_PROMPT + customNotesBlock);
+      const finalGroqPrompt = alternateGroqMessage || this.injectLanguageInstruction(GROQ_SYSTEM_PROMPT + customNotesBlock);
 
       const combinedMessages = {
         gemini: buildMessage(finalGeminiPrompt),
@@ -2342,7 +2348,13 @@ Return only the final answer. No meta commentary.
     }
 
     const baseSystemPrompt = systemPromptOverride || universalBase;
-    const finalSystemPrompt = this.injectLanguageInstruction(baseSystemPrompt);
+
+    // Custom notes injection — appended after mode suffix, before language gate
+    // Order: BASE → MODE SUFFIX → CUSTOM NOTES → language instruction
+    const customNotesBlock = this.customNotes?.trim()
+      ? `\n\n<user_context>\n${this.customNotes.trim().slice(0, 1500)}\n</user_context>\nUse this context naturally if relevant. Never quote it verbatim.`
+      : '';
+    const finalSystemPrompt = this.injectLanguageInstruction(baseSystemPrompt + customNotesBlock);
 
     // Helper to build combined user message
     const userContent = context
