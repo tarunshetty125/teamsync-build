@@ -181,8 +181,8 @@ const SettingsPopup = () => {
     // Use global liquid-glass class for frosted effect
     const popupPanelClass = 'liquid-glass';
     const itemHoverClass = isLightTheme ? 'hover:bg-black/[0.04]' : 'hover:bg-white/5';
-    const labelInactiveClass = isLightTheme ? 'text-[#B76E79] group-hover:text-[#9E5A65]' : 'text-[#D4A0A0] group-hover:text-[#E8B4B8]';
-    const iconInactiveClass = isLightTheme ? 'text-[#C4868F] group-hover:text-[#A8646E]' : 'text-[#C9A0A0] group-hover:text-[#DEB8B8]';
+    const labelInactiveClass = isLightTheme ? 'text-orange-600/80 group-hover:text-orange-700' : 'text-orange-300/80 group-hover:text-orange-200';
+    const iconInactiveClass = isLightTheme ? 'text-orange-500/80 group-hover:text-orange-600' : 'text-orange-400/80 group-hover:text-orange-300';
     const dividerClass = isLightTheme ? 'bg-black/[0.06]' : 'bg-white/[0.04]';
     const shortcutKeyClass = isLightTheme
         ? 'border-black/10 bg-black/[0.04] text-slate-600'
