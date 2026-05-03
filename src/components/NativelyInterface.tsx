@@ -3328,7 +3328,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
 
                                                 style={appearance.iconStyle}
                                             >
-                                                <PointerOff className="w-3.5 h-3.5" />
+                                                <PointerOff className={`w-3.5 h-3.5 ${isMousePassthrough ? 'animate-flame' : ''}`} />
                                             </button>
                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
                                                 Mouse Passthrough
@@ -3364,7 +3364,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
 
                                                 style={appearance.iconStyle}
                                             >
-                                                <Ghost className="w-3.5 h-3.5" />
+                                                <Ghost className={`w-3.5 h-3.5 ${localOpacity < 1.0 ? 'animate-flame' : ''}`} />
                                             </button>
                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
                                                 Overlay Opacity
@@ -3389,7 +3389,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                 `}
                                                 style={appearance.iconStyle}
                                             >
-                                                <Cpu className="w-3.5 h-3.5" />
+                                                <Cpu className={`w-3.5 h-3.5 ${forceSystemDesignMode ? 'animate-flame' : ''}`} />
                                             </button>
                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
                                                 System Design Mode
@@ -3415,7 +3415,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                     `}
                                                     style={appearance.iconStyle}
                                                 >
-                                                    <FileText className="w-3.5 h-3.5" />
+                                                    <FileText className={`w-3.5 h-3.5 ${customNotesEnabled ? 'animate-flame' : ''}`} />
                                                 </button>
                                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
                                                     {customNotesEnabled ? 'Custom Context: ON' : 'Custom Context: OFF'}

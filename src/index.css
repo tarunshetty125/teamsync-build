@@ -448,6 +448,29 @@ body {
 .stt-wave-dot:nth-child(3) { animation-delay: 0.3s; }
 .stt-wave-dot:nth-child(4) { animation-delay: 0.45s; }
 
+/* ─── Overlay Icon Active Glow (Flame/Orbit) ── */
+@keyframes flame-glow {
+  0% {
+    filter: drop-shadow(0 0 1px currentColor) drop-shadow(0 -2px 3px currentColor);
+  }
+  25% {
+    filter: drop-shadow(0 0 1px currentColor) drop-shadow(2px -1px 3px currentColor);
+  }
+  50% {
+    filter: drop-shadow(0 0 1px currentColor) drop-shadow(0 2px 3px currentColor);
+  }
+  75% {
+    filter: drop-shadow(0 0 1px currentColor) drop-shadow(-2px -1px 3px currentColor);
+  }
+  100% {
+    filter: drop-shadow(0 0 1px currentColor) drop-shadow(0 -2px 3px currentColor);
+  }
+}
+
+.animate-flame {
+  animation: flame-glow 2s linear infinite;
+}
+
 /* ─── STT Error Panel — matches overlay surface pattern with red accent ── */
 .stt-error-surface {
     background: var(--overlay-panel-bg);
