@@ -599,15 +599,56 @@ export function initializeIpcHandlers(appState: AppState): void {
   // SECURITY FIX (P0-1): Monotonic stream ID prevents interleaved tokens from concurrent stream requests.
   // Each new invocation increments the ID; any in-flight iteration bails as soon as it detects
   // that a newer stream has taken over.
-  let _chatStreamId = 0;
+  const activeChatStreams = new Map<number, { streamId: number; requestId?: string; stream: AsyncGenerator<string, void, unknown> | null }>();
 
-  safeHandle("gemini-chat-stream", async (event, message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean }) => {
+  const cancelActiveChatStream = async (senderId?: number): Promise<void> => {
+    const targets = senderId !== undefined
+      ? [[senderId, activeChatStreams.get(senderId)] as const]
+      : Array.from(activeChatStreams.entries());
+
+    for (const [targetSenderId, active] of targets) {
+      if (!active) continue;
+      activeChatStreams.set(targetSenderId, {
+        streamId: active.streamId + 1,
+        requestId: active.requestId,
+        stream: null,
+      });
+      if (!active.stream?.return) continue;
+      try {
+        await active.stream.return(undefined);
+      } catch (error) {
+        console.warn('[IPC] Failed to cancel active gemini-chat-stream cleanly:', error);
+      }
+    }
+  };
+
+  safeHandle("cancel-gemini-chat-stream", async (event) => {
+    await cancelActiveChatStream(event.sender.id);
+    return { success: true };
+  });
+
+  safeHandle("cancel-intelligence-request", async () => {
+    appState.getIntelligenceManager().resetEngine();
+    return { success: true };
+  });
+
+  safeHandle("gemini-chat-stream", async (
+    event,
+    message: string,
+    imagePaths?: string[],
+    context?: string,
+    options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }
+  ) => {
     try {
       console.log("[IPC] gemini-chat-stream started using LLMHelper.streamChat");
       const llmHelper = appState.processingHelper.getLLMHelper();
+      const senderId = event.sender.id;
 
-      // Claim a new stream ID — any prior stream will detect this and stop emitting.
-      const myStreamId = ++_chatStreamId;
+      await cancelActiveChatStream(senderId);
+      const currentStreamState = activeChatStreams.get(senderId);
+      const myStreamId = (currentStreamState?.streamId ?? 0) + 1;
+      const requestId = options?.requestId;
+      activeChatStreams.set(senderId, { streamId: myStreamId, requestId, stream: null });
 
       // Update IntelligenceManager with USER message immediately
       const intelligenceManager = appState.getIntelligenceManager();
@@ -620,39 +661,48 @@ export function initializeIpcHandlers(appState: AppState): void {
 
       let fullResponse = "";
 
-      // Context Injection for "Answer" button (100s rolling window)
+      // Context Injection for "Answer" button (short rolling window)
       // TOKEN-OPT: Only inject auto-context if it contains meaningful conversation
       // (multiple speaker turns, >200 chars). This preserves the lightweight first-request
       // path in streamChat when the user sends a simple standalone question.
       if (!context) {
         try {
-          const autoContext = intelligenceManager.getFormattedContext(100);
+          const autoContext = intelligenceManager.getFormattedContext(60);
           if (autoContext && autoContext.trim().length > 200) {
-            context = autoContext;
-            console.log(`[IPC] Auto-injected 100s context for gemini-chat-stream (${context.length} chars)`);
+            context = autoContext.length > 1200
+              ? `[...conversation truncated]\n${autoContext.slice(-1200)}`
+              : autoContext;
+            console.log(`[IPC] Auto-injected short context for gemini-chat-stream (${context.length} chars)`);
           }
         } catch (ctxErr) {
           console.warn("[IPC] Failed to auto-inject context:", ctxErr);
         }
       }
 
+      if (context && context.length > 1800) {
+        context = `[...conversation truncated]\n${context.slice(-1800)}`;
+      }
+
       try {
         // USE streamChat which handles routing
         const stream = llmHelper.streamChat(message, imagePaths, context, options?.skipSystemPrompt ? "" : undefined, options?.ignoreKnowledgeMode);
+        activeChatStreams.set(senderId, { streamId: myStreamId, requestId, stream });
 
         for await (const token of stream) {
           // Bail if a newer stream has taken over (user triggered a new request)
-          if (_chatStreamId !== myStreamId) {
-            console.log(`[IPC] gemini-chat-stream ${myStreamId} superseded by ${_chatStreamId}, stopping.`);
+          const liveState = activeChatStreams.get(senderId);
+          if (!liveState || liveState.streamId !== myStreamId) {
+            console.log(`[IPC] gemini-chat-stream ${myStreamId} superseded for sender ${senderId}, stopping.`);
+            await stream.return?.(undefined);
             return null;
           }
-          event.sender.send("gemini-stream-token", token);
+          event.sender.send("gemini-stream-token", { token, requestId });
           fullResponse += token;
         }
 
         // Final check: only send done if we are still the active stream
-        if (_chatStreamId === myStreamId) {
-          event.sender.send("gemini-stream-done");
+        if (activeChatStreams.get(senderId)?.streamId === myStreamId) {
+          event.sender.send("gemini-stream-done", { requestId });
 
           // Update IntelligenceManager with ASSISTANT message after completion
           if (fullResponse.trim().length > 0) {
@@ -664,8 +714,12 @@ export function initializeIpcHandlers(appState: AppState): void {
 
       } catch (streamError: any) {
         console.error("[IPC] Streaming error:", streamError);
-        if (_chatStreamId === myStreamId) {
-          event.sender.send("gemini-stream-error", streamError.message || "Unknown streaming error");
+        if (activeChatStreams.get(senderId)?.streamId === myStreamId) {
+          event.sender.send("gemini-stream-error", { error: streamError.message || "Unknown streaming error", requestId });
+        }
+      } finally {
+        if (activeChatStreams.get(senderId)?.streamId === myStreamId) {
+          activeChatStreams.set(senderId, { streamId: myStreamId, requestId, stream: null });
         }
       }
 
@@ -2444,11 +2498,11 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // MODE 2: What Should I Say (Primary auto-answer)
-  safeHandle("generate-what-to-say", async (_, question?: string, imagePaths?: string[], forcedIntent?: string) => {
+  safeHandle("generate-what-to-say", async (_, question?: string, imagePaths?: string[], forcedIntent?: string, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
       // Question and imagePaths are now optional - IntelligenceManager infers from transcript
-      const answer = await intelligenceManager.runWhatShouldISay(question, 0.8, imagePaths, forcedIntent as any);
+      const answer = await intelligenceManager.runWhatShouldISay(question, 0.8, imagePaths, forcedIntent as any, requestId);
       return { answer, question: question || 'inferred from context' };
     } catch (error: any) {
       // Return graceful fallback instead of throwing
@@ -2458,15 +2512,19 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("generate-clarify", async () => {
+  safeHandle("generate-clarify", async (_, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      const clarification = await intelligenceManager.runClarify();
+      const clarification = await intelligenceManager.runClarify(requestId);
       // If null returned without throwing, the engine already set mode to idle.
       // We must still ensure the frontend un-sticks — emit an error so onIntelligenceError fires.
       if (clarification === null) {
         const win = appState.getMainWindow();
-        win?.webContents.send('intelligence-error', { error: 'Could not generate a clarifying question. Try again after some audio context is available.', mode: 'clarify' });
+        win?.webContents.send('intelligence-error', {
+          error: 'Could not generate a clarifying question. Try again after some audio context is available.',
+          mode: 'clarify',
+          requestId,
+        });
       }
       return { clarification };
     } catch (error: any) {
@@ -2474,7 +2532,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("generate-code-hint", async (_, imagePaths?: string[], problemStatement?: string) => {
+  safeHandle("generate-code-hint", async (_, imagePaths?: string[], problemStatement?: string, requestId?: string) => {
     try {
       // If no explicit images were passed from the frontend, fall back to the
       // screenshot queue so the AI can always "see" the user's screen.
@@ -2488,7 +2546,8 @@ export function initializeIpcHandlers(appState: AppState): void {
       const intelligenceManager = appState.getIntelligenceManager();
       const hint = await intelligenceManager.runCodeHint(
         resolvedImagePaths.length > 0 ? resolvedImagePaths : undefined,
-        problemStatement
+        problemStatement,
+        requestId
       );
       return { hint };
     } catch (error: any) {
@@ -2496,7 +2555,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("generate-brainstorm", async (_, imagePaths?: string[], problemStatement?: string) => {
+  safeHandle("generate-brainstorm", async (_, imagePaths?: string[], problemStatement?: string, requestId?: string) => {
     try {
       // If no explicit images were passed from the frontend, fall back to the
       // screenshot queue so the AI can always "see" the user's screen.
@@ -2510,7 +2569,8 @@ export function initializeIpcHandlers(appState: AppState): void {
       const intelligenceManager = appState.getIntelligenceManager();
       const script = await intelligenceManager.runBrainstorm(
         resolvedImagePaths.length > 0 ? resolvedImagePaths : undefined,
-        problemStatement
+        problemStatement,
+        requestId
       );
       return { script };
     } catch (error: any) {
@@ -2540,10 +2600,10 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // MODE 3: Follow-Up (Refinement)
-  safeHandle("generate-follow-up", async (_, intent: string, userRequest?: string) => {
+  safeHandle("generate-follow-up", async (_, intent: string, userRequest?: string, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      const refined = await intelligenceManager.runFollowUp(intent, userRequest);
+      const refined = await intelligenceManager.runFollowUp(intent, userRequest, requestId);
       return { refined, intent };
     } catch (error: any) {
       throw error;
@@ -2551,10 +2611,10 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // MODE 4: Recap (Summary)
-  safeHandle("generate-recap", async () => {
+  safeHandle("generate-recap", async (_, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      const summary = await intelligenceManager.runRecap();
+      const summary = await intelligenceManager.runRecap(requestId);
       return { summary };
     } catch (error: any) {
       throw error;
@@ -2562,20 +2622,20 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // MODE 6: Follow-Up Questions
-  safeHandle("generate-follow-up-questions", async () => {
+  safeHandle("generate-follow-up-questions", async (_, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      const questions = await intelligenceManager.runFollowUpQuestions();
+      const questions = await intelligenceManager.runFollowUpQuestions(requestId);
       return { questions };
     } catch (error: any) {
       throw error;
     }
   });
 
-  safeHandle("generate-system-design-tradeoffs", async () => {
+  safeHandle("generate-system-design-tradeoffs", async (_, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      const answer = await intelligenceManager.runSystemDesignTradeoffs();
+      const answer = await intelligenceManager.runSystemDesignTradeoffs(requestId);
       return { answer };
     } catch (error: any) {
       throw error;
@@ -2583,10 +2643,10 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // MODE 5: Manual Answer (Fallback)
-  safeHandle("submit-manual-question", async (_, question: string) => {
+  safeHandle("submit-manual-question", async (_, question: string, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      const answer = await intelligenceManager.runManualAnswer(question);
+      const answer = await intelligenceManager.runManualAnswer(question, requestId);
       return { answer, question };
     } catch (error: any) {
       throw error;
@@ -2797,6 +2857,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   // Store active query abort controllers for cancellation
   const activeRAGQueries = new Map<string, AbortController>();
+  const activeLiveRagQueriesBySender = new Map<number, { queryKey: string; controller: AbortController; requestId?: string }>();
 
   // Query meeting with RAG (meeting-scoped)
   safeHandle("rag:query-meeting", async (event, { meetingId, query }: { meetingId: string; query: string }) => {
@@ -2849,8 +2910,9 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // Query live meeting with JIT RAG
-  safeHandle("rag:query-live", async (event, { query }: { query: string }) => {
+  safeHandle("rag:query-live", async (event, { query, requestId }: { query: string; requestId?: string }) => {
     const ragManager = appState.getRAGManager();
+    const senderId = event.sender.id;
 
     if (!ragManager || !ragManager.isReady()) {
       return { fallback: true };
@@ -2861,19 +2923,27 @@ export function initializeIpcHandlers(appState: AppState): void {
       return { fallback: true };
     }
 
+    const priorLiveQuery = activeLiveRagQueriesBySender.get(senderId);
+    if (priorLiveQuery) {
+      priorLiveQuery.controller.abort();
+      activeRAGQueries.delete(priorLiveQuery.queryKey);
+      activeLiveRagQueriesBySender.delete(senderId);
+    }
+
     const abortController = new AbortController();
     const queryKey = `live-${Date.now()}`;
     activeRAGQueries.set(queryKey, abortController);
+    activeLiveRagQueriesBySender.set(senderId, { queryKey, controller: abortController, requestId });
 
     try {
       const stream = ragManager.queryMeeting('live-meeting-current', query, abortController.signal);
 
       for await (const chunk of stream) {
         if (abortController.signal.aborted) break;
-        event.sender.send("rag:stream-chunk", { live: true, chunk });
+        event.sender.send("rag:stream-chunk", { live: true, chunk, requestId });
       }
 
-      event.sender.send("rag:stream-complete", { live: true });
+      event.sender.send("rag:stream-complete", { live: true, requestId });
       return { success: true };
 
     } catch (error: any) {
@@ -2885,11 +2955,14 @@ export function initializeIpcHandlers(appState: AppState): void {
           return { fallback: true };
         }
         console.error("[RAG] Live query error:", error);
-        event.sender.send("rag:stream-error", { live: true, error: msg });
+        event.sender.send("rag:stream-error", { live: true, error: msg, requestId });
       }
       return { success: false, error: error.message };
     } finally {
       activeRAGQueries.delete(queryKey);
+      if (activeLiveRagQueriesBySender.get(senderId)?.queryKey === queryKey) {
+        activeLiveRagQueriesBySender.delete(senderId);
+      }
     }
   });
 

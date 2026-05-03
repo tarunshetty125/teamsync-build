@@ -98,7 +98,8 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
     const cleanups: (() => void)[] = [];
 
     // Stream Token
-    cleanups.push(window.electronAPI.onGeminiStreamToken((token) => {
+    cleanups.push(window.electronAPI.onGeminiStreamToken((payload) => {
+      const token = typeof payload === 'string' ? payload : payload.token;
       setChatMessages(prev => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg && lastMsg.role === 'gemini' && lastMsg.text.endsWith("...")) {
@@ -131,7 +132,8 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
     }));
 
     // Stream Error
-    cleanups.push(window.electronAPI.onGeminiStreamError((error) => {
+    cleanups.push(window.electronAPI.onGeminiStreamError((payload) => {
+      const error = typeof payload === 'string' ? payload : payload.error;
       setChatLoading(false);
       setChatMessages((msgs) => [...msgs, { role: "gemini", text: "Error: " + String(error) }]);
     }));

@@ -54,6 +54,8 @@ interface Message {
     id: string;
     role: 'user' | 'system' | 'interviewer';
     text: string;
+    requestId?: string;
+    questionTurnId?: string;
     isStreaming?: boolean;
     hasScreenshot?: boolean;
     screenshotPreview?: string;
@@ -76,7 +78,18 @@ interface Message {
 type ChipVariant = 'green' | 'amber' | 'red' | 'blue' | 'purple' | 'gray';
 interface ResponseChip { label: string; variant: ChipVariant; }
 
-function generateResponseChips(text: string, intent?: string): ResponseChip[] {
+type RequestLifecycleStatus = 'streaming' | 'completed' | 'failed' | 'cancelled';
+
+interface RequestLifecycle {
+    requestId: string;
+    messageId: string;
+    status: RequestLifecycleStatus;
+    intent?: string;
+    questionTurnId?: string | null;
+    startedAt: number;
+}
+
+function generateResponseChips(text: string, _intent?: string): ResponseChip[] {
     if (!text || text.length < 40) return [];
     const chips: ResponseChip[] = [];
     const seen = new Set<string>();
@@ -189,6 +202,17 @@ interface NativelyInterfaceProps {
 let msgIdCounter = 0;
 function nextMsgId(): string {
     return `${Date.now()}-${++msgIdCounter}`;
+}
+
+let requestIdCounter = 0;
+function nextRequestId(prefix: string = 'req'): string {
+    return `${prefix}-${Date.now()}-${++requestIdCounter}`;
+}
+
+function getSuggestedAnswerIntent(question: string): string {
+    if (question === 'Code Hint') return 'code_hint';
+    if (question === 'Brainstorming Approaches') return 'brainstorm';
+    return 'what_to_answer';
 }
 
 // ── Context-Aware Question Type Detection (mirrors IntentClassifier patterns) ──
@@ -527,6 +551,161 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     // Analytics State
     const requestStartTimeRef = useRef<number | null>(null);
+    const activeIntentRequestIdsRef = useRef<Record<string, string>>({});
+    const activeChatRequestIdRef = useRef<string | null>(null);
+    const activeRagRequestIdRef = useRef<string | null>(null);
+    const activeUiRequestIdRef = useRef<string | null>(null);
+    const requestRegistryRef = useRef<Record<string, RequestLifecycle>>({});
+    const currentQuestionTurnIdRef = useRef<string | null>(null);
+    const [currentQuestionTurnId, setCurrentQuestionTurnId] = useState<string>('question-init');
+
+    const rememberIntentRequest = useCallback((intent: string, requestId: string | null) => {
+        if (!requestId) {
+            delete activeIntentRequestIdsRef.current[intent];
+            return;
+        }
+        activeIntentRequestIdsRef.current[intent] = requestId;
+    }, []);
+
+    const resolveIntentRequestId = useCallback((intent: string, requestId?: string | null) => {
+        return requestId || activeIntentRequestIdsRef.current[intent] || null;
+    }, []);
+
+    const updateRequestLifecycle = useCallback((requestId: string, patch: Partial<RequestLifecycle>) => {
+        const current = requestRegistryRef.current[requestId];
+        if (!current) return;
+        requestRegistryRef.current[requestId] = { ...current, ...patch };
+    }, []);
+
+    const markRequestProcessing = useCallback((requestId: string) => {
+        activeUiRequestIdRef.current = requestId;
+        setIsProcessing(true);
+    }, []);
+
+    const clearProcessingForRequest = useCallback((requestId?: string | null) => {
+        if (!requestId) return;
+        if (activeUiRequestIdRef.current === requestId) {
+            activeUiRequestIdRef.current = null;
+            setIsProcessing(false);
+        }
+    }, []);
+
+    const beginStreamingMessage = useCallback((requestId: string, message: Omit<Message, 'id'>) => {
+        setMessages(prev => {
+            const idx = prev.findIndex(msg => msg.requestId === requestId);
+            const messageId = idx >= 0 ? prev[idx].id : nextMsgId();
+            const nextMessage: Message = {
+                id: messageId,
+                requestId,
+                questionTurnId: message.questionTurnId ?? currentQuestionTurnIdRef.current ?? undefined,
+                ...message
+            };
+            requestRegistryRef.current[requestId] = {
+                requestId,
+                messageId,
+                status: 'streaming',
+                intent: nextMessage.intent,
+                questionTurnId: nextMessage.questionTurnId ?? null,
+                startedAt: requestRegistryRef.current[requestId]?.startedAt ?? Date.now(),
+            };
+            if (idx >= 0) {
+                const updated = [...prev];
+                updated[idx] = { ...updated[idx], ...nextMessage };
+                return updated;
+            }
+            return [...prev, nextMessage];
+        });
+    }, []);
+
+    const appendTokenToRequest = useCallback((requestId: string, token: string) => {
+        const lifecycle = requestRegistryRef.current[requestId];
+        if (!lifecycle || lifecycle.status !== 'streaming') return;
+        setMessages(prev => {
+            const idx = prev.findIndex(msg => msg.requestId === requestId);
+            if (idx < 0) return prev;
+            const updated = [...prev];
+            const nextText = updated[idx].text + token;
+            updated[idx] = {
+                ...updated[idx],
+                text: nextText,
+                isCode: nextText.includes('```'),
+            };
+            return updated;
+        });
+    }, []);
+
+    const finalizeRequestMessage = useCallback((requestId: string, finalText: string, extra?: Partial<Message>) => {
+        const lifecycle = requestRegistryRef.current[requestId];
+        if (!lifecycle || lifecycle.status !== 'streaming') return;
+        updateRequestLifecycle(requestId, { status: 'completed' });
+        setMessages(prev => {
+            const idx = prev.findIndex(msg => msg.requestId === requestId);
+            if (idx < 0) return prev;
+            const updated = [...prev];
+            const current = updated[idx];
+            updated[idx] = {
+                ...current,
+                ...extra,
+                text: finalText,
+                isStreaming: false,
+            };
+            return updated;
+        });
+    }, []);
+
+    const failRequestMessage = useCallback((requestId: string, errorText: string) => {
+        const lifecycle = requestRegistryRef.current[requestId];
+        if (lifecycle?.status === 'completed' || lifecycle?.status === 'cancelled') return;
+        if (lifecycle) {
+            updateRequestLifecycle(requestId, { status: 'failed' });
+        }
+        setMessages(prev => {
+            const idx = prev.findIndex(msg => msg.requestId === requestId);
+            if (idx < 0) {
+                const messageId = nextMsgId();
+                requestRegistryRef.current[requestId] = {
+                    requestId,
+                    messageId,
+                    status: 'failed',
+                    startedAt: Date.now(),
+                };
+                return [...prev, {
+                    id: messageId,
+                    requestId,
+                    role: 'system',
+                    text: errorText,
+                }];
+            }
+            const updated = [...prev];
+            const current = updated[idx];
+            updated[idx] = {
+                ...current,
+                isStreaming: false,
+                text: current.text
+                    ? `${current.text}\n\n${errorText}`
+                    : errorText,
+            };
+            return updated;
+        });
+    }, [updateRequestLifecycle]);
+
+    const cancelRequestMessage = useCallback((requestId: string, reason?: string) => {
+        const lifecycle = requestRegistryRef.current[requestId];
+        if (!lifecycle || lifecycle.status !== 'streaming') return;
+        updateRequestLifecycle(requestId, { status: 'cancelled' });
+        setMessages(prev => {
+            const idx = prev.findIndex(msg => msg.requestId === requestId);
+            if (idx < 0) return prev;
+            const updated = [...prev];
+            const current = updated[idx];
+            updated[idx] = {
+                ...current,
+                isStreaming: false,
+                text: current.text || reason || '',
+            };
+            return updated;
+        });
+    }, [updateRequestLifecycle]);
 
     // Sync transcript setting
     useEffect(() => {
@@ -626,88 +805,62 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const detectedQuestionType = intentState.detectedType;
     const effectiveQuestionType: DetectedQuestionType = forceSystemDesignMode ? 'system_design' : detectedQuestionType;
 
-    // Refs for safe synchronous access in visibility listener
     const latestCombinedRef = useRef<string>('');
-    const requestIdRef = useRef(0);
-    const timeoutRef = useRef<number | NodeJS.Timeout | null>(null);
     const seqRef = useRef(0);
-    const scheduledSeqRef = useRef(0);
-    const pendingRef = useRef(false);
 
-    // Visibility recovery listener
-    useEffect(() => {
-        const handleVisibility = () => {
-            if (document.visibilityState === 'visible' && pendingRef.current) {
-                pendingRef.current = false;
-                requestIdRef.current++; // invalidate stale work
-                dispatchIntent({ 
-                    type: 'EVALUATE', 
-                    combinedText: latestCombinedRef.current, 
-                    now: performance.now(),
-                    seq: ++seqRef.current
-                });
-            }
-        };
+    const recomputeIntentFromFinalTranscript = useCallback((questionTurnId: string) => {
+        latestCombinedRef.current = [
+            lastFinalSentenceRef.current,
+            finalizedTranscriptRef.current.slice(-1200),
+        ].filter(Boolean).join('\n').trim();
 
-        document.addEventListener('visibilitychange', handleVisibility);
-        return () => document.removeEventListener('visibilitychange', handleVisibility);
+        if (latestCombinedRef.current.length < 3) return;
+
+        currentQuestionTurnIdRef.current = questionTurnId;
+        setCurrentQuestionTurnId(questionTurnId);
+        const seq = ++seqRef.current;
+        dispatchIntent({
+            type: 'EVALUATE',
+            combinedText: latestCombinedRef.current,
+            now: performance.now(),
+            seq
+        });
     }, []);
 
-    useEffect(() => {
-        if (document.visibilityState !== 'visible') {
-            pendingRef.current = true;
-            return; // Prevent stale updates from background execution, but queue one flush
+    const cancelInFlightOverlayRequests = useCallback(async (nextRequestId?: string) => {
+        const streamingRequestIds = Object.values(requestRegistryRef.current)
+            .filter((request) => request.status === 'streaming' && request.requestId !== nextRequestId)
+            .map((request) => request.requestId);
+
+        streamingRequestIds.forEach((requestId) => cancelRequestMessage(requestId));
+
+        Object.entries(activeIntentRequestIdsRef.current).forEach(([intent, requestId]) => {
+            if (!requestId || requestId === nextRequestId) return;
+            const lifecycle = requestRegistryRef.current[requestId];
+            if (lifecycle?.status !== 'completed') {
+                delete activeIntentRequestIdsRef.current[intent];
+            }
+        });
+
+        await Promise.allSettled([
+            window.electronAPI.cancelGeminiChatStream?.(),
+            window.electronAPI.cancelIntelligenceRequest?.(),
+            window.electronAPI.ragCancelQuery?.({ meetingId: 'live-meeting-current' }),
+        ]);
+
+        if (!nextRequestId || activeChatRequestIdRef.current !== nextRequestId) {
+            activeChatRequestIdRef.current = null;
         }
-
-        if (timeoutRef.current) clearTimeout(timeoutRef.current as any);
-        
-        const nextSeq = seqRef.current + 1;
-        scheduledSeqRef.current = nextSeq;
-        
-        timeoutRef.current = setTimeout(() => {
-            // Prevent double-invocation strict mode execution races
-            if (scheduledSeqRef.current !== nextSeq) return; 
-            
-            // Combine finalized transcript + last few interviewer messages for detection.
-            // FIX §3.3: Use finalizedTranscriptRef (only updated on transcript.final === true)
-            // instead of rollingTranscript (updated on every interim partial).
-            // This ensures classification only runs on fully-committed STT output.
-            const interviewerMsgs = messages
-                .filter(m => m.role === 'interviewer')
-                .slice(-3)
-                .map(m => m.text)
-                .join(' ');
-            
-            // Ignore weak user input
-            const userWeight = inputValue.length > 10 ? inputValue : '';
-            
-            // Weight recent context higher by repeating interviewer messages.
-            // finalizedTranscriptRef.current holds only final segments — no interim noise.
-            latestCombinedRef.current = `
-                ${interviewerMsgs}
-                ${interviewerMsgs}
-                ${finalizedTranscriptRef.current.slice(-1500)}
-                ${userWeight}
-            `.trim();
-            if (latestCombinedRef.current.length < 3) return;
-
-            const seq = (seqRef.current = nextSeq);
-
-            dispatchIntent({ 
-                type: 'EVALUATE', 
-                combinedText: latestCombinedRef.current, 
-                now: performance.now(),
-                seq
-            });
-        }, 300);
-
-        return () => {
-            if (timeoutRef.current) clearTimeout(timeoutRef.current as any);
-        };
-    // FIX §3.3: `rollingTranscript` removed — it updates on every interim STT partial.
-    // `messages` changes only when a final interviewer segment is committed to the chat.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [messages, inputValue]);
+        if (!nextRequestId || activeRagRequestIdRef.current !== nextRequestId) {
+            activeRagRequestIdRef.current = null;
+        }
+        if (!nextRequestId || activeUiRequestIdRef.current !== nextRequestId) {
+            activeUiRequestIdRef.current = null;
+            setIsProcessing(false);
+        }
+        requestStartTimeRef.current = null;
+        currentSourceRef.current = undefined;
+    }, [cancelRequestMessage]);
 
     const codeTheme = isLightTheme ? oneLight : vscDarkPlus;
     const codeLineNumberColor = isLightTheme ? 'rgba(15,23,42,0.35)' : 'rgba(255,255,255,0.2)';
@@ -874,11 +1027,30 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     // H2 Fix: useMemo instead of useEffect+state — eliminates one-render-behind lag
     const conversationContext = useMemo(() => {
-        return messages
-            .filter(m => m.role !== 'user' || !m.hasScreenshot)
-            .map(m => `${m.role === 'interviewer' ? 'Interviewer' : m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
-            .slice(-20)
+        const MAX_CONTEXT_MESSAGES = 8;
+        const MAX_CONTEXT_CHARS = 1400;
+        const MAX_MESSAGE_CHARS = 180;
+
+        const normalized = messages
+            .filter((message) => (message.role !== 'user' || !message.hasScreenshot) && message.text.trim().length > 0)
+            .slice(-MAX_CONTEXT_MESSAGES)
+            .map((message) => {
+                const speaker = message.role === 'interviewer' ? 'Interviewer' : message.role === 'user' ? 'User' : 'Assistant';
+                const rawText = message.isNegotiationCoaching
+                    ? '[negotiation coaching card]'
+                    : message.isCode
+                        ? '[code response omitted]'
+                        : message.text.replace(/\s+/g, ' ').trim();
+                const trimmedText = rawText.length > MAX_MESSAGE_CHARS
+                    ? `${rawText.slice(0, MAX_MESSAGE_CHARS).trimEnd()}...`
+                    : rawText;
+                return `${speaker}: ${trimmedText}`;
+            })
             .join('\n');
+
+        return normalized.length > MAX_CONTEXT_CHARS
+            ? `[...conversation truncated]\n${normalized.slice(-MAX_CONTEXT_CHARS)}`
+            : normalized;
     }, [messages]);
 
     // Keep refs in sync with state for async handler access
@@ -974,6 +1146,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         if (!window.electronAPI?.onSessionReset) return;
         const unsubscribe = window.electronAPI.onSessionReset((payload) => {
             console.log('[NativelyInterface] Resetting session state...');
+            void window.electronAPI.cancelGeminiChatStream?.().catch(() => {});
+            void window.electronAPI.cancelIntelligenceRequest?.().catch(() => {});
+            void window.electronAPI.ragCancelQuery?.({ meetingId: 'live-meeting-current' }).catch(() => {});
             setMessages([]);
             setInputValue('');
             setAttachedContext([]);
@@ -985,6 +1160,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             // Reset last-sentence pill so old question never leaks into new session
             setLastFinalSentence('');
             lastFinalSentenceRef.current = '';
+            currentQuestionTurnIdRef.current = null;
+            setCurrentQuestionTurnId('question-init');
             // Reset sentence-response mapping so dot starts green in the new session
             setCurrentSentenceId(0);
             currentSentenceIdRef.current = 0;
@@ -993,14 +1170,17 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             if (payload?.sessionId) {
                 activeSessionIdRef.current = payload.sessionId;
             }
+            activeIntentRequestIdsRef.current = {};
+            activeChatRequestIdRef.current = null;
+            activeRagRequestIdRef.current = null;
+            activeUiRequestIdRef.current = null;
+            requestRegistryRef.current = {};
 
             // SESSION ISOLATION FIX: Reset intentReducer so no button mode from
             // the previous session leaks into the new one. seqRef/scheduledSeqRef
-            // are also zeroed so any in-flight debounce timer is invalidated
-            // (scheduledSeqRef !== nextSeq guard in the useEffect will drop it).
+            // are also zeroed so any in-flight intent sequence is invalidated.
             dispatchIntent({ type: 'RESET' });
             seqRef.current = 0;
-            scheduledSeqRef.current = 0;
 
             // Track new conversation/session if applicable?
             // Actually 'app_opened' is global, 'assistant_started' is overlay.
@@ -1129,19 +1309,23 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 // C6 Fix: Append to finalized ref for correct partial handling
                 finalizedTranscriptRef.current += (finalizedTranscriptRef.current ? '  ·  ' : '') + transcript.text;
                 // C5 Fix: Cap transcript to prevent unbounded memory growth in long sessions
-                if (finalizedTranscriptRef.current.length > 8000) {
-                    finalizedTranscriptRef.current = finalizedTranscriptRef.current.slice(-8000);
+                if (finalizedTranscriptRef.current.length > 5000) {
+                    finalizedTranscriptRef.current = finalizedTranscriptRef.current.slice(-5000);
                 }
                 setRollingTranscript(finalizedTranscriptRef.current);
                 // Update pill to show ONLY this final sentence (no accumulation)
                 lastFinalSentenceRef.current = transcript.text;
                 setLastFinalSentence(transcript.text);
+                const questionTurnId = nextRequestId('question-turn');
+                currentQuestionTurnIdRef.current = questionTurnId;
+                setCurrentQuestionTurnId(questionTurnId);
                 // Increment sentence ID so dot immediately resets to green for this new question
                 setCurrentSentenceId(prev => {
                     const next = prev + 1;
                     currentSentenceIdRef.current = next;
                     return next;
                 });
+                recomputeIntentFromFinalTranscript(questionTurnId);
 
                 // H6 Fix: Clear previous timer to prevent stacking
                 if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
@@ -1187,30 +1371,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         cleanups.push(window.electronAPI.onIntelligenceSuggestedAnswerToken((data) => {
             // V2 Guard: drop tokens from a previous session
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            // Progressive update for 'what_to_answer' mode
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-
-                // If we already have a streaming message for this intent, append
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'what_to_answer') {
-                    const updated = [...prev];
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: lastMsg.text + data.token
-                    };
-                    return updated;
-                }
-
-                // Otherwise, start a new one (First token)
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: data.token,
-                    intent: 'what_to_answer',
-                    source: currentSourceRef.current,
-                    isStreaming: true
-                }];
-            });
+            const intent = getSuggestedAnswerIntent(data.question);
+            const requestId = resolveIntentRequestId(intent, data.requestId);
+            if (!requestId) return;
+            appendTokenToRequest(requestId, data.token);
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceSuggestedAnswer((data) => {
@@ -1219,34 +1383,15 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             if (userHasScrolledRef.current) {
                 setUnreadCount(prev => prev + 1);
             }
-            setIsProcessing(false);
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-
-                // If we were streaming, finalize it
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'what_to_answer') {
-                    const updated = [...prev];
-                    const chips = generateResponseChips(data.answer, 'what_to_answer');
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: data.answer,
-                        isStreaming: false,
-                        chips: chips.length > 0 ? chips : undefined
-                    };
-                    return updated;
-                }
-
-                // If we missed the stream (or not streaming), append fresh
-                const chips0 = generateResponseChips(data.answer, 'what_to_answer');
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: data.answer,
-                    intent: 'what_to_answer',
-                    source: currentSourceRef.current,
-                    chips: chips0.length > 0 ? chips0 : undefined
-                }];
+            const intent = getSuggestedAnswerIntent(data.question);
+            const requestId = resolveIntentRequestId(intent, data.requestId);
+            if (!requestId) return;
+            clearProcessingForRequest(requestId);
+            const chips = generateResponseChips(data.answer, intent);
+            finalizeRequestMessage(requestId, data.answer, {
+                chips: chips.length > 0 ? chips : undefined,
             });
+            rememberIntentRequest(intent, null);
             currentSourceRef.current = undefined;
         }));
 
@@ -1254,55 +1399,22 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         cleanups.push(window.electronAPI.onIntelligenceRefinedAnswerToken((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === data.intent) {
-                    const updated = [...prev];
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: lastMsg.text + data.token
-                    };
-                    return updated;
-                }
-                // New stream start (e.g. user clicked Shorten)
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: data.token,
-                    intent: data.intent,
-                    source: currentSourceRef.current,
-                    isStreaming: true
-                }];
-            });
+            const requestId = resolveIntentRequestId(data.intent, data.requestId);
+            if (!requestId) return;
+            appendTokenToRequest(requestId, data.token);
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceRefinedAnswer((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setIsProcessing(false);
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === data.intent) {
-                    const updated = [...prev];
-                    const chips = generateResponseChips(data.answer, data.intent);
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: data.answer,
-                        isStreaming: false,
-                        chips: chips.length > 0 ? chips : undefined
-                    };
-                    return updated;
-                }
-                const chips1 = generateResponseChips(data.answer, data.intent);
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: data.answer,
-                    intent: data.intent,
-                    source: currentSourceRef.current,
-                    chips: chips1.length > 0 ? chips1 : undefined
-                }];
+            const requestId = resolveIntentRequestId(data.intent, data.requestId);
+            if (!requestId) return;
+            clearProcessingForRequest(requestId);
+            const chips = generateResponseChips(data.answer, data.intent);
+            finalizeRequestMessage(requestId, data.answer, {
+                chips: chips.length > 0 ? chips : undefined,
             });
+            rememberIntentRequest(data.intent, null);
             currentSourceRef.current = undefined;
         }));
 
@@ -1310,180 +1422,91 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         cleanups.push(window.electronAPI.onIntelligenceRecapToken((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'recap') {
-                    const updated = [...prev];
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: lastMsg.text + data.token
-                    };
-                    return updated;
-                }
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: data.token,
-                    intent: 'recap',
-                    source: currentSourceRef.current,
-                    isStreaming: true
-                }];
-            });
+            const requestId = resolveIntentRequestId('recap', data.requestId);
+            if (!requestId) return;
+            appendTokenToRequest(requestId, data.token);
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceRecap((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setIsProcessing(false);
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'recap') {
-                    const updated = [...prev];
-                    const chips = generateResponseChips(data.summary, 'recap');
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: data.summary,
-                        isStreaming: false,
-                        chips: chips.length > 0 ? chips : undefined
-                    };
-                    return updated;
-                }
-                const chips2 = generateResponseChips(data.summary, 'recap');
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: data.summary,
-                    intent: 'recap',
-                    source: currentSourceRef.current,
-                    chips: chips2.length > 0 ? chips2 : undefined
-                }];
+            const requestId = resolveIntentRequestId('recap', data.requestId);
+            if (!requestId) return;
+            clearProcessingForRequest(requestId);
+            const chips = generateResponseChips(data.summary, 'recap');
+            finalizeRequestMessage(requestId, data.summary, {
+                chips: chips.length > 0 ? chips : undefined,
             });
+            rememberIntentRequest('recap', null);
             currentSourceRef.current = undefined;
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceFollowUpQuestionsToken((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'follow_up_questions') {
-                    const updated = [...prev];
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: lastMsg.text + data.token
-                    };
-                    return updated;
-                }
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: data.token,
-                    intent: 'follow_up_questions',
-                    source: currentSourceRef.current,
-                    isStreaming: true
-                }];
-            });
+            const requestId = resolveIntentRequestId('follow_up_questions', data.requestId);
+            if (!requestId) return;
+            appendTokenToRequest(requestId, data.token);
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceFollowUpQuestionsUpdate((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setIsProcessing(false);
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'follow_up_questions') {
-                    const updated = [...prev];
-                    const chips = generateResponseChips(data.questions, 'follow_up_questions');
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: data.questions,
-                        isStreaming: false,
-                        chips: chips.length > 0 ? chips : undefined
-                    };
-                    return updated;
-                }
-                const chips3 = generateResponseChips(data.questions, 'follow_up_questions');
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: data.questions,
-                    intent: 'follow_up_questions',
-                    source: currentSourceRef.current,
-                    chips: chips3.length > 0 ? chips3 : undefined
-                }];
+            const requestId = resolveIntentRequestId('follow_up_questions', data.requestId);
+            if (!requestId) return;
+            clearProcessingForRequest(requestId);
+            const chips = generateResponseChips(data.questions, 'follow_up_questions');
+            finalizeRequestMessage(requestId, data.questions, {
+                chips: chips.length > 0 ? chips : undefined,
             });
+            rememberIntentRequest('follow_up_questions', null);
             currentSourceRef.current = undefined;
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceSystemDesignTradeoffsToken((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'system_design_tradeoffs') {
-                    const updated = [...prev];
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: lastMsg.text + data.token
-                    };
-                    return updated;
-                }
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: data.token,
-                    intent: 'system_design_tradeoffs',
-                    source: currentSourceRef.current,
-                    isStreaming: true
-                }];
-            });
+            const requestId = resolveIntentRequestId('system_design_tradeoffs', data.requestId);
+            if (!requestId) return;
+            appendTokenToRequest(requestId, data.token);
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceSystemDesignTradeoffs((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setIsProcessing(false);
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'system_design_tradeoffs') {
-                    const updated = [...prev];
-                    const chips = generateResponseChips(data.answer, 'system_design_tradeoffs');
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: data.answer,
-                        isStreaming: false,
-                        chips: chips.length > 0 ? chips : undefined
-                    };
-                    return updated;
-                }
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: data.answer,
-                    intent: 'system_design_tradeoffs',
-                    source: currentSourceRef.current
-                }];
+            const requestId = resolveIntentRequestId('system_design_tradeoffs', data.requestId);
+            if (!requestId) return;
+            clearProcessingForRequest(requestId);
+            const chips = generateResponseChips(data.answer, 'system_design_tradeoffs');
+            finalizeRequestMessage(requestId, data.answer, {
+                chips: chips.length > 0 ? chips : undefined,
             });
+            rememberIntentRequest('system_design_tradeoffs', null);
             currentSourceRef.current = undefined;
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceManualResult((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setIsProcessing(false);
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'system',
-                text: `🎯 **Answer:**\n\n${data.answer}`,
-                source: currentSourceRef.current
-            }]);
+            const requestId = resolveIntentRequestId('manual', data.requestId);
+            if (!requestId) return;
+            clearProcessingForRequest(requestId);
+            finalizeRequestMessage(requestId, `🎯 **Answer:**\n\n${data.answer}`);
+            rememberIntentRequest('manual', null);
             currentSourceRef.current = undefined;
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceError((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setIsProcessing(false);
+            if (data.requestId) {
+                clearProcessingForRequest(data.requestId);
+                failRequestMessage(data.requestId, `❌ Error (${data.mode}): ${data.error}`);
+                return;
+            }
+            if (activeUiRequestIdRef.current) {
+                clearProcessingForRequest(activeUiRequestIdRef.current);
+            }
             setMessages(prev => [...prev, {
                 id: nextMsgId(),
                 role: 'system',
@@ -1519,51 +1542,22 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         const cleanupToken = window.electronAPI.onIntelligenceClarifyToken((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'clarify') {
-                    const updated = [...prev];
-                    updated[prev.length - 1] = { ...lastMsg, text: lastMsg.text + data.token };
-                    return updated;
-                }
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system' as const,
-                    text: data.token,
-                    intent: 'clarify',
-                    source: currentSourceRef.current,
-                    isStreaming: true
-                }];
-            });
+            const requestId = resolveIntentRequestId('clarify', data.requestId);
+            if (!requestId) return;
+            appendTokenToRequest(requestId, data.token);
         });
 
         const cleanupFinal = window.electronAPI.onIntelligenceClarify((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            setIsProcessing(false);
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'clarify') {
-                    const updated = [...prev];
-                    const chips = generateResponseChips(data.clarification, 'clarify');
-                    updated[prev.length - 1] = { 
-                        ...lastMsg, 
-                        text: data.clarification, 
-                        isStreaming: false,
-                        chips: chips.length > 0 ? chips : undefined
-                    };
-                    return updated;
-                }
-                const chips4 = generateResponseChips(data.clarification, 'clarify');
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system' as const,
-                    text: data.clarification,
-                    intent: 'clarify',
-                    source: currentSourceRef.current,
-                    chips: chips4.length > 0 ? chips4 : undefined
-                }];
+            const requestId = resolveIntentRequestId('clarify', data.requestId);
+            if (!requestId) return;
+            clearProcessingForRequest(requestId);
+            const chips = generateResponseChips(data.clarification, 'clarify');
+            finalizeRequestMessage(requestId, data.clarification, {
+                chips: chips.length > 0 ? chips : undefined,
             });
+            rememberIntentRequest('clarify', null);
             currentSourceRef.current = undefined;
         });
 
@@ -1583,11 +1577,13 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     };
 
     const handleWhatToSay = async () => {
-        if (isProcessingRef.current) return; // H4 Fix: prevent double-submit
+        await cancelInFlightOverlayRequests();
         setIsExpanded(true);
-        setIsProcessing(true);
         currentSourceRef.current = 'What to Answer';
         analytics.trackCommandExecuted('what_to_say');
+        const requestId = nextRequestId('what');
+        markRequestProcessing(requestId);
+        rememberIntentRequest('what_to_answer', requestId);
 
         // Capture and clear attached image context.
         // Also merge in any screenshot from the capture-and-process shortcut that
@@ -1615,126 +1611,164 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             }, 50);
         }
 
+        beginStreamingMessage(requestId, {
+            role: 'system',
+            text: '',
+            intent: 'what_to_answer',
+            source: currentSourceRef.current,
+            isStreaming: true,
+        });
+
         try {
             // Pass imagePath if attached
             await window.electronAPI.generateWhatToSay(
                 undefined,
                 currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
-                forceSystemDesignMode ? 'system_design' : undefined
+                forceSystemDesignMode ? 'system_design' : undefined,
+                requestId
             );
         } catch (err) {
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'system',
-                text: `Error: ${err}`
-            }]);
+            failRequestMessage(requestId, `Error: ${err}`);
         } finally {
-            setIsProcessing(false);
+            clearProcessingForRequest(requestId);
         }
     };
 
     const handleSystemDesignTradeoffs = async () => {
+        await cancelInFlightOverlayRequests();
         setIsExpanded(true);
-        setIsProcessing(true);
         currentSourceRef.current = 'System Design Trade-offs';
         analytics.trackCommandExecuted('system_design_tradeoffs');
+        const requestId = nextRequestId('tradeoffs');
+        markRequestProcessing(requestId);
+        rememberIntentRequest('system_design_tradeoffs', requestId);
+        beginStreamingMessage(requestId, {
+            role: 'system',
+            text: '',
+            intent: 'system_design_tradeoffs',
+            source: currentSourceRef.current,
+            isStreaming: true,
+        });
 
         try {
-            await window.electronAPI.generateSystemDesignTradeoffs();
+            await window.electronAPI.generateSystemDesignTradeoffs(requestId);
         } catch (err) {
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'system',
-                text: `Error: ${err}`
-            }]);
+            failRequestMessage(requestId, `Error: ${err}`);
         } finally {
-            setIsProcessing(false);
+            clearProcessingForRequest(requestId);
         }
     };
 
     const handleFollowUp = async (intent: string = 'rephrase') => {
+        await cancelInFlightOverlayRequests();
         setIsExpanded(true);
-        setIsProcessing(true);
         currentSourceRef.current = 'Follow Up';
         analytics.trackCommandExecuted('follow_up_' + intent);
+        const requestId = nextRequestId(intent);
+        markRequestProcessing(requestId);
+        rememberIntentRequest(intent, requestId);
+        beginStreamingMessage(requestId, {
+            role: 'system',
+            text: '',
+            intent,
+            source: currentSourceRef.current,
+            isStreaming: true,
+        });
 
         try {
-            await window.electronAPI.generateFollowUp(intent);
+            await window.electronAPI.generateFollowUp(intent, undefined, requestId);
         } catch (err) {
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'system',
-                text: `Error: ${err}`
-            }]);
+            failRequestMessage(requestId, `Error: ${err}`);
         } finally {
-            setIsProcessing(false);
+            clearProcessingForRequest(requestId);
         }
     };
 
     const handleRecap = async () => {
+        await cancelInFlightOverlayRequests();
         setIsExpanded(true);
-        setIsProcessing(true);
         currentSourceRef.current = 'Recap';
         analytics.trackCommandExecuted('recap');
+        const requestId = nextRequestId('recap');
+        markRequestProcessing(requestId);
+        rememberIntentRequest('recap', requestId);
+        beginStreamingMessage(requestId, {
+            role: 'system',
+            text: '',
+            intent: 'recap',
+            source: currentSourceRef.current,
+            isStreaming: true,
+        });
 
         try {
-            await window.electronAPI.generateRecap();
+            await window.electronAPI.generateRecap(requestId);
         } catch (err) {
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'system',
-                text: `Error: ${err}`
-            }]);
+            failRequestMessage(requestId, `Error: ${err}`);
         } finally {
-            setIsProcessing(false);
+            clearProcessingForRequest(requestId);
         }
     };
 
     const handleFollowUpQuestions = async () => {
+        await cancelInFlightOverlayRequests();
         setIsExpanded(true);
-        setIsProcessing(true);
         currentSourceRef.current = 'Follow Up Questions';
         analytics.trackCommandExecuted('suggest_questions');
+        const requestId = nextRequestId('followup-questions');
+        markRequestProcessing(requestId);
+        rememberIntentRequest('follow_up_questions', requestId);
+        beginStreamingMessage(requestId, {
+            role: 'system',
+            text: '',
+            intent: 'follow_up_questions',
+            source: currentSourceRef.current,
+            isStreaming: true,
+        });
 
         try {
-            await window.electronAPI.generateFollowUpQuestions();
+            await window.electronAPI.generateFollowUpQuestions(requestId);
         } catch (err) {
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'system',
-                text: `Error: ${err}`
-            }]);
+            failRequestMessage(requestId, `Error: ${err}`);
         } finally {
-            setIsProcessing(false);
+            clearProcessingForRequest(requestId);
         }
     };
 
     const handleClarify = async () => {
+        await cancelInFlightOverlayRequests();
         setIsExpanded(true);
-        setIsProcessing(true);
         currentSourceRef.current = 'Clarify';
         analytics.trackCommandExecuted('clarify');
+        const requestId = nextRequestId('clarify');
+        markRequestProcessing(requestId);
+        rememberIntentRequest('clarify', requestId);
+        beginStreamingMessage(requestId, {
+            role: 'system',
+            text: '',
+            intent: 'clarify',
+            source: currentSourceRef.current,
+            isStreaming: true,
+        });
 
         try {
-            await window.electronAPI.generateClarify();
+            await window.electronAPI.generateClarify(requestId);
         } catch (err) {
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'system',
-                text: `Error: ${err}`
-            }]);
+            failRequestMessage(requestId, `Error: ${err}`);
         } finally {
-            setIsProcessing(false);
+            clearProcessingForRequest(requestId);
         }
     };
 
     const handleCodeHint = async () => {
+        await cancelInFlightOverlayRequests();
         setIsExpanded(true);
-        setIsProcessing(true);
         currentSourceRef.current = 'Code Hint';
         analytics.trackCommandExecuted('code_hint');
+        const requestId = nextRequestId('code-hint');
+        markRequestProcessing(requestId);
+        rememberIntentRequest('code_hint', requestId);
 
-        const currentAttachments = attachedContext;
+        const currentAttachments = attachedContextRef.current;
         if (currentAttachments.length > 0) {
             setAttachedContext([]);
             // Show the attached image in chat
@@ -1748,29 +1782,36 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         	// Scroll to bottom when user sends message
         	setTimeout(() => {
         		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        	}, 50);
+            }, 50);
         }
 
+        beginStreamingMessage(requestId, {
+            role: 'system',
+            text: '',
+            intent: 'code_hint',
+            source: currentSourceRef.current,
+            isStreaming: true,
+        });
+
         try {
-            await window.electronAPI.generateCodeHint(currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined);
+            await window.electronAPI.generateCodeHint(currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined, undefined, requestId);
         } catch (err) {
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'system',
-                text: `Error: ${err}`
-            }]);
+            failRequestMessage(requestId, `Error: ${err}`);
         } finally {
-            setIsProcessing(false);
+            clearProcessingForRequest(requestId);
         }
     };
 
     const handleBrainstorm = async () => {
+        await cancelInFlightOverlayRequests();
         setIsExpanded(true);
-        setIsProcessing(true);
         currentSourceRef.current = 'Brainstorm';
         analytics.trackCommandExecuted('brainstorm');
+        const requestId = nextRequestId('brainstorm');
+        markRequestProcessing(requestId);
+        rememberIntentRequest('brainstorm', requestId);
 
-        const currentAttachments = attachedContext;
+        const currentAttachments = attachedContextRef.current;
         if (currentAttachments.length > 0) {
             setAttachedContext([]);
             // Show the attached image in chat
@@ -1784,19 +1825,23 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         	// Scroll to bottom when user sends message
         	setTimeout(() => {
         		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        	}, 50);
+            }, 50);
         }
 
+        beginStreamingMessage(requestId, {
+            role: 'system',
+            text: '',
+            intent: 'brainstorm',
+            source: currentSourceRef.current,
+            isStreaming: true,
+        });
+
         try {
-            await window.electronAPI.generateBrainstorm(currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined);
+            await window.electronAPI.generateBrainstorm(currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined, undefined, requestId);
         } catch (err) {
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'system',
-                text: `Error: ${err}`
-            }]);
+            failRequestMessage(requestId, `Error: ${err}`);
         } finally {
-            setIsProcessing(false);
+            clearProcessingForRequest(requestId);
         }
     };
 
@@ -1806,7 +1851,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         const cleanups: (() => void)[] = [];
 
         // Stream Token
-        cleanups.push(window.electronAPI.onGeminiStreamToken((token) => {
+        cleanups.push(window.electronAPI.onGeminiStreamToken((payload) => {
+            const token = typeof payload === 'string' ? payload : payload.token;
+            const requestId = typeof payload === 'string' ? activeChatRequestIdRef.current : (payload.requestId || activeChatRequestIdRef.current);
+            if (!requestId) return;
             // Guard: if this token is the negotiation coaching JSON sentinel, accumulate it
             // silently. The JSON is always emitted as a single complete `yield JSON.stringify(...)`
             // call, so one parse attempt is sufficient. The onGeminiStreamDone handler will
@@ -1817,10 +1865,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 if (parsed?.__negotiationCoaching) {
                     // Store the raw JSON text (Done handler needs it) but don't show it.
                     setMessages(prev => {
-                        const lastMsg = prev[prev.length - 1];
-                        if (lastMsg && lastMsg.isStreaming && lastMsg.role === 'system') {
+                        const idx = prev.findIndex(msg => msg.requestId === requestId);
+                        if (idx >= 0) {
                             const updated = [...prev];
-                            updated[prev.length - 1] = { ...lastMsg, text: token };
+                            updated[idx] = { ...updated[idx], text: token };
                             return updated;
                         }
                         return prev;
@@ -1831,26 +1879,16 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 // Not JSON — normal text token, fall through to the standard append.
             }
 
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.role === 'system') {
-                    const updated = [...prev];
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        text: lastMsg.text + token,
-                        // H3 Fix: Only check for triple-backtick fences — 'def '/'function ' caused false positives
-                        isCode: (lastMsg.text + token).includes('```')
-                    };
-                    return updated;
-                }
-                return prev;
-            });
+            appendTokenToRequest(requestId, token);
         }));
 
         // Stream Done
-        cleanups.push(window.electronAPI.onGeminiStreamDone(() => {
-            setIsProcessing(false);
+        cleanups.push(window.electronAPI.onGeminiStreamDone((payload) => {
+            const requestId = payload?.requestId || activeChatRequestIdRef.current;
+            if (!requestId) return;
+            clearProcessingForRequest(requestId);
             currentSourceRef.current = undefined;
+            activeChatRequestIdRef.current = null;
 
             // Calculate latency if we have a start time
             let latency = 0;
@@ -1867,61 +1905,60 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             });
 
             setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming && lastMsg.role === 'system') {
-                    // Detect negotiation coaching response
-                    try {
-                        const parsed = JSON.parse(lastMsg.text);
-                        if (parsed?.__negotiationCoaching) {
-                            const coaching = parsed.__negotiationCoaching;
-                            return [...prev.slice(0, -1), {
-                                ...lastMsg,
-                                isStreaming: false,
-                                isNegotiationCoaching: true,
-                                negotiationCoachingData: coaching,
-                                text: '',
-                            }];
-                        }
-                    } catch {}
-                    // Normal completion
-                    const finalText = lastMsg.text;
-                    const chips = generateResponseChips(finalText, lastMsg.intent);
-                    return [...prev.slice(0, -1), { ...lastMsg, isStreaming: false, chips: chips.length > 0 ? chips : undefined }];
-                }
+                const idx = prev.findIndex(msg => msg.requestId === requestId);
+                const lastMsg = idx >= 0 ? prev[idx] : null;
+                if (!lastMsg || !lastMsg.isStreaming || lastMsg.role !== 'system') return prev;
+                try {
+                    const parsed = JSON.parse(lastMsg.text);
+                    if (parsed?.__negotiationCoaching) {
+                        updateRequestLifecycle(requestId, { status: 'completed' });
+                        const coaching = parsed.__negotiationCoaching;
+                        const updated = [...prev];
+                        updated[idx] = {
+                            ...lastMsg,
+                            isStreaming: false,
+                            isNegotiationCoaching: true,
+                            negotiationCoachingData: coaching,
+                            text: '',
+                        };
+                        return updated;
+                    }
+                } catch {}
                 return prev;
+            });
+            setMessages(prev => {
+                const idx = prev.findIndex(msg => msg.requestId === requestId);
+                const lastMsg = idx >= 0 ? prev[idx] : null;
+                const lifecycle = requestRegistryRef.current[requestId];
+                if (!lastMsg || lifecycle?.status !== 'streaming') return prev;
+                const chips = generateResponseChips(lastMsg.text, lastMsg.intent);
+                updateRequestLifecycle(requestId, { status: 'completed' });
+                const updated = [...prev];
+                updated[idx] = {
+                    ...lastMsg,
+                    isStreaming: false,
+                    chips: chips.length > 0 ? chips : undefined,
+                };
+                return updated;
             });
         }));
 
         // Stream Error
-        cleanups.push(window.electronAPI.onGeminiStreamError((error) => {
-            setIsProcessing(false);
+        cleanups.push(window.electronAPI.onGeminiStreamError((payload) => {
+            const error = typeof payload === 'string' ? payload : payload.error;
+            const requestId = typeof payload === 'string' ? activeChatRequestIdRef.current : (payload.requestId || activeChatRequestIdRef.current);
+            if (!requestId) return;
+            clearProcessingForRequest(requestId);
             requestStartTimeRef.current = null; // Clear timer on error
-            setMessages(prev => {
-                // Append error to the current message or add new one?
-                // Let's add a new error block if the previous one confusing,
-                // or just update status.
-                // Ideally we want to show the partial response AND the error.
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.isStreaming) {
-                    const updated = [...prev];
-                    updated[prev.length - 1] = {
-                        ...lastMsg,
-                        isStreaming: false,
-                        text: lastMsg.text + `\n\n[Error: ${error}]`
-                    };
-                    return updated;
-                }
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: `❌ Error: ${error}`
-                }];
-            });
+            activeChatRequestIdRef.current = null;
+            failRequestMessage(requestId, `❌ Error: ${error}`);
         }));
 
         // JIT RAG Stream listeners (for live meeting RAG responses)
         if (window.electronAPI.onRAGStreamChunk) {
-            cleanups.push(window.electronAPI.onRAGStreamChunk((data: { chunk: string }) => {
+            cleanups.push(window.electronAPI.onRAGStreamChunk((data: { chunk: string; requestId?: string }) => {
+                const requestId = data.requestId || activeRagRequestIdRef.current;
+                if (!requestId) return;
                 // Same guard as onGeminiStreamToken: suppress raw JSON if this chunk is
                 // the negotiation coaching sentinel. The onRAGStreamComplete handler will
                 // convert it to the proper card UI.
@@ -1929,10 +1966,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                     const parsed = JSON.parse(data.chunk);
                     if (parsed?.__negotiationCoaching) {
                         setMessages(prev => {
-                            const lastMsg = prev[prev.length - 1];
-                            if (lastMsg && lastMsg.isStreaming && lastMsg.role === 'system') {
+                            const idx = prev.findIndex(msg => msg.requestId === requestId);
+                            if (idx >= 0) {
                                 const updated = [...prev];
-                                updated[prev.length - 1] = { ...lastMsg, text: data.chunk };
+                                updated[idx] = { ...updated[idx], text: data.chunk };
                                 return updated;
                             }
                             return prev;
@@ -1943,81 +1980,68 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                     // Normal text chunk — fall through.
                 }
 
-                setMessages(prev => {
-                    const lastMsg = prev[prev.length - 1];
-                    if (lastMsg && lastMsg.isStreaming && lastMsg.role === 'system') {
-                        const updated = [...prev];
-                        updated[prev.length - 1] = {
-                            ...lastMsg,
-                            text: lastMsg.text + data.chunk,
-                            isCode: (lastMsg.text + data.chunk).includes('```')
-                        };
-                        return updated;
-                    }
-                    return prev;
-                });
+                appendTokenToRequest(requestId, data.chunk);
             }));
         }
 
         if (window.electronAPI.onRAGStreamComplete) {
-            cleanups.push(window.electronAPI.onRAGStreamComplete(() => {
-                setIsProcessing(false);
+            cleanups.push(window.electronAPI.onRAGStreamComplete((data) => {
+                const requestId = data.requestId || activeRagRequestIdRef.current;
+                if (!requestId) return;
+                clearProcessingForRequest(requestId);
                 requestStartTimeRef.current = null;
                 currentSourceRef.current = undefined;
+                activeRagRequestIdRef.current = null;
+                activeChatRequestIdRef.current = null;
                 setMessages(prev => {
-                    const lastMsg = prev[prev.length - 1];
-                    if (lastMsg && lastMsg.isStreaming && lastMsg.role === 'system') {
-                        // Detect negotiation coaching response
-                        try {
-                            const parsed = JSON.parse(lastMsg.text);
-                            if (parsed?.__negotiationCoaching) {
-                                const coaching = parsed.__negotiationCoaching;
-                                return [...prev.slice(0, -1), {
-                                    ...lastMsg,
-                                    isStreaming: false,
-                                    isNegotiationCoaching: true,
-                                    negotiationCoachingData: coaching,
-                                    text: '',
-                                }];
-                            }
-                        } catch {}
-                        // Normal completion
-                        const finalText2 = lastMsg.text;
-                        const chips2 = generateResponseChips(finalText2, lastMsg.intent);
-                        return [...prev.slice(0, -1), { ...lastMsg, isStreaming: false, chips: chips2.length > 0 ? chips2 : undefined }];
-                    }
-                    if (lastMsg && lastMsg.isStreaming) {
-                        const updated = [...prev];
-                        const chips = generateResponseChips(lastMsg.text, lastMsg.intent);
-                        updated[prev.length - 1] = { 
-                            ...lastMsg, 
-                            isStreaming: false,
-                            chips: chips.length > 0 ? chips : undefined
-                        };
-                        return updated;
-                    }
+                    const idx = prev.findIndex(msg => msg.requestId === requestId);
+                    const lastMsg = idx >= 0 ? prev[idx] : null;
+                    if (!lastMsg || !lastMsg.isStreaming || lastMsg.role !== 'system') return prev;
+                    try {
+                        const parsed = JSON.parse(lastMsg.text);
+                        if (parsed?.__negotiationCoaching) {
+                            updateRequestLifecycle(requestId, { status: 'completed' });
+                            const coaching = parsed.__negotiationCoaching;
+                            const updated = [...prev];
+                            updated[idx] = {
+                                ...lastMsg,
+                                isStreaming: false,
+                                isNegotiationCoaching: true,
+                                negotiationCoachingData: coaching,
+                                text: '',
+                            };
+                            return updated;
+                        }
+                    } catch {}
                     return prev;
+                });
+                setMessages(prev => {
+                    const idx = prev.findIndex(msg => msg.requestId === requestId);
+                    const lastMsg = idx >= 0 ? prev[idx] : null;
+                    const lifecycle = requestRegistryRef.current[requestId];
+                    if (!lastMsg || lifecycle?.status !== 'streaming') return prev;
+                    const chips = generateResponseChips(lastMsg.text, lastMsg.intent);
+                    updateRequestLifecycle(requestId, { status: 'completed' });
+                    const updated = [...prev];
+                    updated[idx] = {
+                        ...lastMsg,
+                        isStreaming: false,
+                        chips: chips.length > 0 ? chips : undefined,
+                    };
+                    return updated;
                 });
             }));
         }
 
         if (window.electronAPI.onRAGStreamError) {
-            cleanups.push(window.electronAPI.onRAGStreamError((data: { error: string }) => {
-                setIsProcessing(false);
+            cleanups.push(window.electronAPI.onRAGStreamError((data: { error: string; requestId?: string }) => {
+                const requestId = data.requestId || activeRagRequestIdRef.current;
+                if (!requestId) return;
+                clearProcessingForRequest(requestId);
                 requestStartTimeRef.current = null;
-                setMessages(prev => {
-                    const lastMsg = prev[prev.length - 1];
-                    if (lastMsg && lastMsg.isStreaming) {
-                        const updated = [...prev];
-                        updated[prev.length - 1] = {
-                            ...lastMsg,
-                            isStreaming: false,
-                            text: lastMsg.text + `\n\n[RAG Error: ${data.error}]`
-                        };
-                        return updated;
-                    }
-                    return prev;
-                });
+                activeRagRequestIdRef.current = null;
+                activeChatRequestIdRef.current = null;
+                failRequestMessage(requestId, `[RAG Error: ${data.error}]`);
             }));
         }
 
@@ -2028,6 +2052,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     const handleAnswerNow = async () => {
         if (isManualRecording) {
+            await cancelInFlightOverlayRequests();
             // Stop recording - send accumulated voice input to Gemini
             isRecordingRef.current = false;  // Update ref immediately
             setIsManualRecording(false);
@@ -2037,7 +2062,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             // Send manual finalization signal to STT Providers
             window.electronAPI.finalizeMicSTT().catch(err => console.error('[NativelyInterface] Failed to send finalizeMicSTT:', err));
 
-            const currentAttachments = attachedContext;
+            const currentAttachments = attachedContextRef.current;
             setAttachedContext([]); // Clear context immediately on send
 
             const question = (voiceInputRef.current + (manualTranscriptRef.current ? ' ' + manualTranscriptRef.current : '')).trim();
@@ -2085,15 +2110,17 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             }, 50);
 
             // Add placeholder for streaming response
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
+            const requestId = nextRequestId('answer-now');
+            activeChatRequestIdRef.current = requestId;
+            activeRagRequestIdRef.current = requestId;
+            beginStreamingMessage(requestId, {
                 role: 'system',
                 text: '',
                 isStreaming: true,
-                source: currentSourceRef.current
-            }]);
+                source: currentSourceRef.current,
+            });
 
-            setIsProcessing(true);
+            markRequestProcessing(requestId);
 
             try {
                 let prompt = '';
@@ -2105,48 +2132,38 @@ User said: "${question}"
 
 Instructions:
 1. Analyze the screenshot in the context of what the user said.
-2. Provide a direct, helpful answer.
-3. Be concise.`;
+2. Answer directly in at most 4 short bullet points.
+3. Keep the answer under 120 words.
+4. No preamble or filler.`;
                 } else {
                     // JIT RAG pre-flight: try to use indexed meeting context first
-                    const ragResult = await window.electronAPI.ragQueryLive?.(question);
+                    const ragResult = await window.electronAPI.ragQueryLive?.(question, requestId);
                     if (ragResult?.success) {
                         // JIT RAG handled it — response streamed via rag:stream-chunk events
                         return;
                     }
+                    activeRagRequestIdRef.current = null;
 
                     // Voice Only — direct answer, adaptive formatting
-                    prompt = `Answer directly. Adapt your format to the question type:
-- **Coding**: Clean code block with language tag. Add 1-2 line explanation above if needed.
-- **Concept/Definition**: Bold key term, then 2-4 bullet points covering what, why, and key aspects.
-- **How-to/Steps**: Numbered list, each step concise.
-- **Short factual**: 1-2 sentences max.
-No preamble like "Sure!" or "Great question". No meta-commentary. Start with the answer immediately.`;
+                    prompt = `Answer directly. Keep the response short.
+- Coding: one clean code block, then at most 2 short bullets.
+- Concept/definition: 3-5 short bullets max.
+- How-to: 3-5 concise numbered steps max.
+- Short factual: 1-2 sentences max.
+Hard limit: under 120 words unless code is required.
+No preamble. No meta-commentary. Start with the answer immediately.`;
                 }
 
                 // Call Streaming API: message = question, context = instructions
                 requestStartTimeRef.current = Date.now();
-                await window.electronAPI.streamGeminiChat(question, currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined, prompt, { skipSystemPrompt: true, ignoreKnowledgeMode: true });
+                await window.electronAPI.streamGeminiChat(question, currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined, prompt, { skipSystemPrompt: true, ignoreKnowledgeMode: true, requestId });
 
             } catch (err) {
                 // Initial invocation failing (e.g. IPC error before stream starts)
-                setIsProcessing(false);
-                setMessages(prev => {
-                    const last = prev[prev.length - 1];
-                    // If we just added the empty streaming placeholder, remove it or fill it with error
-                    if (last && last.isStreaming && last.text === '') {
-                        return prev.slice(0, -1).concat({
-                            id: nextMsgId(),
-                            role: 'system',
-                            text: `❌ Error starting stream: ${err}`
-                        });
-                    }
-                    return [...prev, {
-                        id: nextMsgId(),
-                        role: 'system',
-                        text: `❌ Error: ${err}`
-                    }];
-                });
+                clearProcessingForRequest(requestId);
+                activeChatRequestIdRef.current = null;
+                activeRagRequestIdRef.current = null;
+                failRequestMessage(requestId, `❌ Error starting stream: ${err}`);
             }
         } else {
             // Start recording - reset voice input state
@@ -2160,12 +2177,12 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
     };
 
     const handleManualSubmit = async () => {
-        if (isProcessingRef.current) return; // H4 Fix: prevent double-submit
-        if (!inputValue.trim() && attachedContext.length === 0) return;
+        if (!inputValue.trim() && attachedContextRef.current.length === 0) return;
+        await cancelInFlightOverlayRequests();
         currentSourceRef.current = 'Manual Input';
 
         const userText = inputValue;
-        const currentAttachments = attachedContext;
+        const currentAttachments = attachedContextRef.current;
 
         // Clear inputs immediately
         setInputValue('');
@@ -2185,52 +2202,48 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
         }, 50);
 
         // Add placeholder for streaming response
-        setMessages(prev => [...prev, {
-            id: nextMsgId(),
+        const requestId = nextRequestId('manual');
+        activeChatRequestIdRef.current = requestId;
+        activeRagRequestIdRef.current = requestId;
+        beginStreamingMessage(requestId, {
             role: 'system',
             text: '',
             isStreaming: true,
             source: currentSourceRef.current
-        }]);
+        });
 
         setIsExpanded(true);
-        setIsProcessing(true);
+        markRequestProcessing(requestId);
 
         try {
             // JIT RAG pre-flight: try to use indexed meeting context first
             if (currentAttachments.length === 0) {
-                const ragResult = await window.electronAPI.ragQueryLive?.(userText || '');
+                const ragResult = await window.electronAPI.ragQueryLive?.(userText || '', requestId);
                 if (ragResult?.success) {
                     // JIT RAG handled it — response streamed via rag:stream-chunk events
                     return;
                 }
             }
+            activeRagRequestIdRef.current = null;
 
             // Pass imagePath if attached, AND conversation context
             requestStartTimeRef.current = Date.now();
+            const streamContext = [
+                conversationContext.trim(),
+                finalizedTranscriptRef.current.slice(-700),
+                'RESPONSE RULES:\n- 3-5 bullets max when listing items.\n- Keep the answer under 120 words unless code is required.\n- No preamble.'
+            ].filter(Boolean).join('\n') || undefined;
             await window.electronAPI.streamGeminiChat(
                 userText || 'Analyze this screenshot',
                 currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
-                conversationContext // Pass context so "answer this" works
+                streamContext,
+                { requestId }
             );
         } catch (err) {
-            setIsProcessing(false);
-            setMessages(prev => {
-                const last = prev[prev.length - 1];
-                if (last && last.isStreaming && last.text === '') {
-                    // remove the empty placeholder
-                    return prev.slice(0, -1).concat({
-                        id: nextMsgId(),
-                        role: 'system',
-                        text: `❌ Error starting stream: ${err}`
-                    });
-                }
-                return [...prev, {
-                    id: nextMsgId(),
-                    role: 'system',
-                    text: `❌ Error: ${err}`
-                }];
-            });
+            clearProcessingForRequest(requestId);
+            activeChatRequestIdRef.current = null;
+            activeRagRequestIdRef.current = null;
+            failRequestMessage(requestId, `❌ Error starting stream: ${err}`);
         }
     };
 
@@ -2610,7 +2623,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
         processScreenshots: handleWhatToSay,
         resetCancel: async () => {
             if (isProcessing) {
-                setIsProcessing(false);
+                await cancelInFlightOverlayRequests();
             } else {
                 await window.electronAPI.resetIntelligence();
                 setMessages([]);
@@ -3109,7 +3122,16 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                     ],
                                     behavioral: [
                                         { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
-                                        { label: 'STAR Story', icon: '⭐', handler: handleClarify, isRecommended: true },
+                                        {
+                                            label: 'STAR Story',
+                                            icon: '⭐',
+                                            handler: () => {
+                                                const hasCompletedAssistantAnswer = messages.some(msg => msg.role === 'system' && !msg.isStreaming && msg.text.trim().length > 0);
+                                                if (hasCompletedAssistantAnswer) handleFollowUp('add_example');
+                                                else handleWhatToSay();
+                                            },
+                                            isRecommended: true
+                                        },
                                         { label: 'Follow Up', icon: '➡️', handler: handleFollowUpQuestions },
                                         { label: actionButtonMode === 'brainstorm' ? 'Brainstorm' : 'Recap', icon: actionButtonMode === 'brainstorm' ? '🧠' : '📝', handler: actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap },
                                     ],
@@ -3123,7 +3145,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
 
                                 // Smart recommendation override via keywords
                                 const actions = actionSets[effectiveQuestionType] || actionSets.general;
-                                const combined = `${rollingTranscript} ${inputValue}`.toLowerCase();
+                                const combined = `${lastFinalSentence || finalizedTranscriptRef.current.slice(-500)}`.toLowerCase();
                                 let recommendedIdx = actions.findIndex((a: ActionDef) => a.isRecommended);
                                 if (recommendedIdx < 0) recommendedIdx = 0;
 
@@ -3165,7 +3187,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                     const colors = buttonColors[action.label] || fallbackColor;
                                                     return (
                                                         <motion.button
-                                                            key={`${effectiveQuestionType}-${action.label}`}
+                                                            key={`${currentQuestionTurnId}-${effectiveQuestionType}-${action.label}`}
                                                             layout
                                                             initial={{ opacity: 0, y: 6, scale: 0.92 }}
                                                             animate={{ opacity: 1, y: 0, scale: isRec ? 1.03 : 1 }}

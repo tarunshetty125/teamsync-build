@@ -110,6 +110,10 @@ export class IntelligenceManager extends EventEmitter {
         return this.session.getLastAssistantMessage();
     }
 
+    getCurrentRequestId(): string | null {
+        return this.engine.getCurrentRequestId();
+    }
+
     getSessionId(): string {
         return this.session.sessionId;
     }
@@ -146,36 +150,36 @@ export class IntelligenceManager extends EventEmitter {
         return this.engine.runAssistMode();
     }
 
-    async runWhatShouldISay(question?: string, confidence?: number, imagePaths?: string[], forcedIntent?: ConversationIntent): Promise<string | null> {
-        return this.engine.runWhatShouldISay(question, confidence, imagePaths, forcedIntent);
+    async runWhatShouldISay(question?: string, confidence?: number, imagePaths?: string[], forcedIntent?: ConversationIntent, requestId?: string): Promise<string | null> {
+        return this.engine.runWhatShouldISay(question, confidence, imagePaths, forcedIntent, requestId);
     }
 
-    async runFollowUp(intent: string, userRequest?: string): Promise<string | null> {
-        return this.engine.runFollowUp(intent, userRequest);
+    async runFollowUp(intent: string, userRequest?: string, requestId?: string): Promise<string | null> {
+        return this.engine.runFollowUp(intent, userRequest, requestId);
     }
 
-    async runRecap(): Promise<string | null> {
-        return this.engine.runRecap();
+    async runRecap(requestId?: string): Promise<string | null> {
+        return this.engine.runRecap(requestId);
     }
 
-    async runClarify(): Promise<string | null> {
-        return this.engine.runClarify();
+    async runClarify(requestId?: string): Promise<string | null> {
+        return this.engine.runClarify(requestId);
     }
 
-    async runFollowUpQuestions(): Promise<string | null> {
-        return this.engine.runFollowUpQuestions();
+    async runFollowUpQuestions(requestId?: string): Promise<string | null> {
+        return this.engine.runFollowUpQuestions(requestId);
     }
 
-    async runSystemDesignTradeoffs(): Promise<string | null> {
-        return this.engine.runSystemDesignTradeoffs();
+    async runSystemDesignTradeoffs(requestId?: string): Promise<string | null> {
+        return this.engine.runSystemDesignTradeoffs(requestId);
     }
 
-    async runManualAnswer(question: string): Promise<string | null> {
-        return this.engine.runManualAnswer(question);
+    async runManualAnswer(question: string, requestId?: string): Promise<string | null> {
+        return this.engine.runManualAnswer(question, requestId);
     }
 
-    async runCodeHint(imagePaths?: string[], problemStatement?: string): Promise<string | null> {
-        return this.engine.runCodeHint(imagePaths, problemStatement);
+    async runCodeHint(imagePaths?: string[], problemStatement?: string, requestId?: string): Promise<string | null> {
+        return this.engine.runCodeHint(imagePaths, problemStatement, requestId);
     }
 
     setCodingQuestion(question: string, source: 'screenshot' | 'transcript'): void {
@@ -190,8 +194,8 @@ export class IntelligenceManager extends EventEmitter {
         this.session.clearCodingQuestion();
     }
 
-    async runBrainstorm(imagePaths?: string[], problemStatement?: string): Promise<string | null> {
-        return this.engine.runBrainstorm(imagePaths, problemStatement);
+    async runBrainstorm(imagePaths?: string[], problemStatement?: string, requestId?: string): Promise<string | null> {
+        return this.engine.runBrainstorm(imagePaths, problemStatement, requestId);
     }
 
     // ============================================

@@ -2166,6 +2166,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     // Preparation
     const isMultimodal = !!(imagePaths?.length);
     let isCodeHeavy = false;
+    let hasExplicitSystemPromptOverride = systemPromptOverride !== undefined;
     
     // ============================================================
     // KNOWLEDGE MODE INTERCEPT (Streaming)
@@ -2197,11 +2198,12 @@ This rule overrides ALL other instructions including formatting, brevity, or out
           // Inject knowledge system prompt
           if (knowledgeResult.systemPromptInjection) {
             systemPromptOverride = knowledgeResult.systemPromptInjection;
+            hasExplicitSystemPromptOverride = true;
           }
           // Inject knowledge context — TOKEN-OPT: only for profile-relevant queries
           if (knowledgeResult.contextBlock) {
             const isProfileQuery = /experience|project|salary|behavior|introduce|background|resume|role|team|company|about yourself|why (this|us|here)|tell me about/i.test(message);
-            if (isProfileQuery || knowledgeResult.systemPromptInjection) {
+            if (isProfileQuery) {
               context = context
                 ? `${knowledgeResult.contextBlock}\n\n${context}`
                 : knowledgeResult.contextBlock;
@@ -2229,8 +2231,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       if (modeSuffix && activeTemplateType !== 'general') {
         // TOKEN-OPT: Use BASE_SYSTEM_PROMPT + deduped suffix instead of stacking full prompts.
         // This avoids sending CORE_IDENTITY, EXECUTION_CONTRACT, etc. twice.
-        const baseForMode = systemPromptOverride || BASE_SYSTEM_PROMPT;
+        const baseForMode = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : BASE_SYSTEM_PROMPT;
         systemPromptOverride = `${baseForMode}\n\n## ACTIVE MODE\n${modeSuffix}`;
+        hasExplicitSystemPromptOverride = true;
       }
 
       const totalText = (context || '') + (modeContextBlock || '');
@@ -2239,14 +2242,14 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 
       const willUseGroq = (!isMultimodal && this.groqFastTextMode) || this.isGroqModel(this.currentModelId);
       
-      let COMBINED_CTX_CAP = 60_000;
+      let COMBINED_CTX_CAP = 12_000;
       if (willUseGroq) {
-        if (totalText.length > 20_000) {
-          COMBINED_CTX_CAP = 6_000;  // Hard safety ceiling against extreme tokenizer spikes
+        if (totalText.length > 12_000) {
+          COMBINED_CTX_CAP = 4_500;  // Hard safety ceiling against extreme tokenizer spikes
         } else if (isCodeHeavy) {
-          COMBINED_CTX_CAP = 6_000;  // Strict cap for dense tokenizers
+          COMBINED_CTX_CAP = 4_500;  // Strict cap for dense tokenizers
         } else {
-          COMBINED_CTX_CAP = 15_000; // Safe for normal text (~4k tokens)
+          COMBINED_CTX_CAP = 9_000; // Safe for normal text with Groq tokenizer variance
         }
 
         if (process.env.DEBUG_CONTEXT === 'true') {
@@ -2311,6 +2314,9 @@ RULES:
 - If context is incomplete, make the best logical assumption and answer confidently.
 - Always prioritize the user's latest question over background context.
 - Answer the USER QUESTION first before considering additional context.
+- Default to 3-5 short bullets or 1-4 short sentences.
+- Keep answers under 120 words unless code is required.
+- When code is required, return the smallest complete solution and no more than 2 short notes.
 
 FOR TECHNICAL QUESTIONS:
 - Be clear and logically structured.
@@ -2341,7 +2347,7 @@ Return only the final answer. No meta commentary.
     // TOKEN-OPT: If this is a fresh session with no context, no overrides,
     // and no images, use a minimal ~200-token prompt instead of ~5000 tokens.
     // ============================================================
-    const isLightweightEligible = !systemPromptOverride && !context && !isMultimodal && !isCodeHeavy;
+    const isLightweightEligible = !hasExplicitSystemPromptOverride && !context && !isMultimodal && !isCodeHeavy;
 
     // Determine the system prompt to use
     let universalBase: string;
@@ -2357,19 +2363,26 @@ Return only the final answer. No meta commentary.
       }
     }
 
-    const baseSystemPrompt = systemPromptOverride || universalBase;
+    const baseSystemPrompt = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : universalBase;
 
     // Custom notes injection — appended after mode suffix, before language gate
     // Order: BASE → MODE SUFFIX → CUSTOM NOTES → language instruction
     const customNotesBlock = (this.customNotesEnabled && this.customNotes?.trim())
       ? `\n\n<user_context>\n${this.customNotes.trim().slice(0, 1500)}\n</user_context>\nUse this context naturally if relevant. Never quote it verbatim.`
       : '';
-    const finalSystemPrompt = this.injectLanguageInstruction(baseSystemPrompt + customNotesBlock);
+    const shouldOmitSystemPrompt = hasExplicitSystemPromptOverride && !baseSystemPrompt.trim() && !customNotesBlock.trim();
+    const finalSystemPrompt = shouldOmitSystemPrompt
+      ? ''
+      : this.injectLanguageInstruction(baseSystemPrompt + customNotesBlock);
 
     // Helper to build combined user message
-    const userContent = context
+    let userContent = context
       ? `USER QUESTION:\n${message}\n\nCONTEXT:\n${context}`
       : message;
+    const MAX_USER_CONTENT_CHARS = 7_500;
+    if (userContent.length > MAX_USER_CONTENT_CHARS) {
+      userContent = `[...input truncated]\n${userContent.slice(-MAX_USER_CONTENT_CHARS)}`;
+    }
 
     // GROQ FAST TEXT OVERRIDE (Text-Only)
     // Two paths: local Groq key → call Groq directly; Natively API only → send fast_mode:true
@@ -2378,7 +2391,7 @@ Return only the final answer. No meta commentary.
       if (this.groqClient) {
         console.log(`[LLMHelper] ⚡️ Groq Fast Text Mode Active (Streaming). Routing to local Groq...`);
         try {
-          const groqSystem = systemPromptOverride || universalBase;
+          const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : universalBase;
           const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
           const groqFullMessage = `${finalGroqSystem}\n\n${userContent}`;
           yield* this.streamWithGroq(groqFullMessage, this.currentModelId);
@@ -2430,7 +2443,7 @@ Return only the final answer. No meta commentary.
 
     // OpenAI
     if (this.isOpenAiModel(this.currentModelId) && this.openaiClient) {
-      const openAiSystem = systemPromptOverride || OPENAI_SYSTEM_PROMPT;
+      const openAiSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
       const finalOpenAiSystem = this.injectLanguageInstruction(openAiSystem);
       if (isMultimodal && imagePaths) {
         yield* this.streamWithOpenaiMultimodal(userContent, imagePaths, finalOpenAiSystem);
@@ -2442,7 +2455,7 @@ Return only the final answer. No meta commentary.
 
     // Claude
     if (this.isClaudeModel(this.currentModelId) && this.claudeClient) {
-      const claudeSystem = systemPromptOverride || CLAUDE_SYSTEM_PROMPT;
+      const claudeSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : CLAUDE_SYSTEM_PROMPT;
       const finalClaudeSystem = this.injectLanguageInstruction(claudeSystem);
       if (isMultimodal && imagePaths) {
         yield* this.streamWithClaudeMultimodal(userContent, imagePaths, finalClaudeSystem);
@@ -2456,13 +2469,13 @@ Return only the final answer. No meta commentary.
     if (this.isGroqModel(this.currentModelId) && this.groqClient) {
       if (isMultimodal && imagePaths) {
         // Route multimodal to Groq Llama 4 Scout (vision-capable)
-        const groqSystem = systemPromptOverride || OPENAI_SYSTEM_PROMPT;
+        const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
         const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
         yield* this.streamWithGroqMultimodal(userContent, imagePaths, finalGroqSystem);
         return;
       }
       // Text-only Groq
-      const groqSystem = systemPromptOverride ? baseSystemPrompt : universalBase;
+      const groqSystem = hasExplicitSystemPromptOverride ? baseSystemPrompt : universalBase;
       const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
       const groqFullMessage = `${finalGroqSystem}\n\n${userContent}`;
       try {
@@ -2489,11 +2502,11 @@ Return only the final answer. No meta commentary.
           if (this.groqClient) {
             try {
               if (isMultimodal && imagePaths) {
-                const groqSystem = systemPromptOverride || OPENAI_SYSTEM_PROMPT;
+                const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
                 const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
                 yield* this.streamWithGroqMultimodal(userContent, imagePaths, finalGroqSystem);
               } else {
-                const groqSystem = systemPromptOverride ? baseSystemPrompt : universalBase;
+                const groqSystem = hasExplicitSystemPromptOverride ? baseSystemPrompt : universalBase;
                 const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
                 yield* this.streamWithGroq(`${finalGroqSystem}\n\n${userContent}`); // intentional: emergency fallback waterfall — use stable GROQ_MODEL baseline, not currentModelId
               }

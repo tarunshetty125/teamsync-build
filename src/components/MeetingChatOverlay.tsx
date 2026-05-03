@@ -368,7 +368,8 @@ const MeetingChatOverlay: React.FC<MeetingChatOverlayProps> = ({
 ${contextString}`;
 
                     streamBuffer.reset();
-                    const oldTokenCleanup = window.electronAPI?.onGeminiStreamToken((token: string) => {
+                    const oldTokenCleanup = window.electronAPI?.onGeminiStreamToken((payload) => {
+                        const token = typeof payload === 'string' ? payload : payload.token;
                         setChatState('streaming_response');
                         streamBuffer.appendToken(token, (content) => {
                             setMessages(prev => prev.map(msg =>
@@ -392,7 +393,8 @@ ${contextString}`;
                         oldErrorCleanup?.();
                     });
 
-                    const oldErrorCleanup = window.electronAPI?.onGeminiStreamError((error: string) => {
+                    const oldErrorCleanup = window.electronAPI?.onGeminiStreamError((payload) => {
+                        const error = typeof payload === 'string' ? payload : payload.error;
                         console.error('[MeetingChat] Gemini stream error (fallback):', error);
                         setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
                         setErrorMessage("Couldn't get a response. Please check your settings.");
@@ -419,7 +421,8 @@ ${contextString}`;
 
                 // Switch to Gemini streaming (RAF-batched)
                 streamBuffer.reset();
-                const oldTokenCleanup = window.electronAPI?.onGeminiStreamToken((token: string) => {
+                const oldTokenCleanup = window.electronAPI?.onGeminiStreamToken((payload) => {
+                    const token = typeof payload === 'string' ? payload : payload.token;
                     setChatState('streaming_response');
                     streamBuffer.appendToken(token, (content) => {
                         setMessages(prev => prev.map(msg =>
@@ -444,7 +447,8 @@ ${contextString}`;
                     oldErrorCleanup?.();
                 });
 
-                const oldErrorCleanup = window.electronAPI?.onGeminiStreamError((error: string) => {
+                const oldErrorCleanup = window.electronAPI?.onGeminiStreamError((payload) => {
+                    const error = typeof payload === 'string' ? payload : payload.error;
                     console.error('[MeetingChat] Gemini stream error:', error);
                     setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
                     setErrorMessage("Couldn't get a response. Please check your settings.");

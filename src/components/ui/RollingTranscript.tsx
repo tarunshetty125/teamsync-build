@@ -27,7 +27,7 @@ interface RollingTranscriptProps {
 }
 
 const RollingTranscript: React.FC<RollingTranscriptProps> = ({
-    text, isActive = true, aiHasResponded = false, surfaceStyle,
+    text, isActive: _isActive = true, aiHasResponded = false, surfaceStyle: _surfaceStyle,
     interviewerChannel, microphoneChannel,
     onCopyDiagnostics
 }) => {

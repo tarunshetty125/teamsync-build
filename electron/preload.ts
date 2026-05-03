@@ -123,17 +123,18 @@ interface ElectronAPI {
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
-  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
-  generateClarify: () => Promise<{ clarification: string | null }>
-  generateCodeHint: (imagePaths?: string[], problemStatement?: string) => Promise<{ hint: string | null }>
-  generateBrainstorm: (imagePaths?: string[], problemStatement?: string) => Promise<{ script: string | null }>
-  generateFollowUp: (intent: string, userRequest?: string) => Promise<{ refined: string | null; intent: string }>
-  generateFollowUpQuestions: () => Promise<{ questions: string | null }>
-  generateSystemDesignTradeoffs: () => Promise<{ answer: string | null }>
-  generateRecap: () => Promise<{ summary: string | null }>
-  submitManualQuestion: (question: string) => Promise<{ answer: string | null; question: string }>
+  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string, requestId?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
+  generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
+  generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
+  generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ script: string | null }>
+  generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => Promise<{ refined: string | null; intent: string }>
+  generateFollowUpQuestions: (requestId?: string) => Promise<{ questions: string | null }>
+  generateSystemDesignTradeoffs: (requestId?: string) => Promise<{ answer: string | null }>
+  generateRecap: (requestId?: string) => Promise<{ summary: string | null }>
+  submitManualQuestion: (question: string, requestId?: string) => Promise<{ answer: string | null; question: string }>
   getIntelligenceContext: () => Promise<{ context: string; lastAssistantMessage: string | null; activeMode: string }>
   resetIntelligence: () => Promise<{ success: boolean; error?: string }>
+  cancelIntelligenceRequest: () => Promise<{ success: boolean; error?: string }>
 
   // Meeting Lifecycle
   startMeeting: (metadata?: any) => Promise<{ success: boolean; error?: string }>
@@ -147,22 +148,22 @@ interface ElectronAPI {
 
   // Intelligence Mode Events
   onIntelligenceAssistUpdate: (callback: (data: { insight: string }) => void) => () => void
-  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number }) => void) => () => void
-  onIntelligenceRefinedAnswer: (callback: (data: { answer: string; intent: string }) => void) => () => void
-  onIntelligenceRecap: (callback: (data: { summary: string }) => void) => () => void
-  onIntelligenceClarify: (callback: (data: { clarification: string }) => void) => () => void
-  onIntelligenceClarifyToken: (callback: (data: { token: string }) => void) => () => void
-  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number }) => void) => () => void
-  onIntelligenceRefinedAnswerToken: (callback: (data: { token: string; intent: string }) => void) => () => void
-  onIntelligenceFollowUpQuestionsUpdate: (callback: (data: { questions: string }) => void) => () => void
-  onIntelligenceFollowUpQuestionsToken: (callback: (data: { token: string }) => void) => () => void
-  onIntelligenceRecapToken: (callback: (data: { token: string }) => void) => () => void
-  onIntelligenceSystemDesignTradeoffs: (callback: (data: { answer: string }) => void) => () => void
-  onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string }) => void) => () => void
-  onIntelligenceManualStarted: (callback: () => void) => () => void
-  onIntelligenceManualResult: (callback: (data: { answer: string; question: string }) => void) => () => void
+  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; requestId?: string }) => void) => () => void
+  onIntelligenceRefinedAnswer: (callback: (data: { answer: string; intent: string; requestId?: string }) => void) => () => void
+  onIntelligenceRecap: (callback: (data: { summary: string; requestId?: string }) => void) => () => void
+  onIntelligenceClarify: (callback: (data: { clarification: string; requestId?: string }) => void) => () => void
+  onIntelligenceClarifyToken: (callback: (data: { token: string; requestId?: string }) => void) => () => void
+  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; requestId?: string }) => void) => () => void
+  onIntelligenceRefinedAnswerToken: (callback: (data: { token: string; intent: string; requestId?: string }) => void) => () => void
+  onIntelligenceFollowUpQuestionsUpdate: (callback: (data: { questions: string; requestId?: string }) => void) => () => void
+  onIntelligenceFollowUpQuestionsToken: (callback: (data: { token: string; requestId?: string }) => void) => () => void
+  onIntelligenceRecapToken: (callback: (data: { token: string; requestId?: string }) => void) => () => void
+  onIntelligenceSystemDesignTradeoffs: (callback: (data: { answer: string; requestId?: string }) => void) => () => void
+  onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string; requestId?: string }) => void) => () => void
+  onIntelligenceManualStarted: (callback: (data?: { requestId?: string }) => void) => () => void
+  onIntelligenceManualResult: (callback: (data: { answer: string; question: string; requestId?: string }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
-  onIntelligenceError: (callback: (data: { error: string; mode: string }) => void) => () => void
+  onIntelligenceError: (callback: (data: { error: string; mode: string; requestId?: string }) => void) => () => void
 
   // Model Management
   getDefaultModel: () => Promise<{ model: string }>
@@ -217,7 +218,8 @@ interface ElectronAPI {
   onOverlayMousePassthroughChanged: (callback: (enabled: boolean) => void) => () => void
 
   // Streaming listeners
-  streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean }) => Promise<void>
+  streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }) => Promise<void>
+  cancelGeminiChatStream: () => Promise<{ success: boolean }>
   onGeminiStreamToken: (callback: (token: string) => void) => () => void
   onGeminiStreamDone: (callback: () => void) => () => void
   onGeminiStreamError: (callback: (error: string) => void) => () => void
@@ -257,15 +259,15 @@ interface ElectronAPI {
 
   // RAG (Retrieval-Augmented Generation) API
   ragQueryMeeting: (meetingId: string, query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
-  ragQueryLive: (query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
+  ragQueryLive: (query: string, requestId?: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
   ragQueryGlobal: (query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
   ragCancelQuery: (options: { meetingId?: string; global?: boolean }) => Promise<{ success: boolean }>
   ragIsMeetingProcessed: (meetingId: string) => Promise<boolean>
   ragGetQueueStatus: () => Promise<{ pending: number; processing: number; completed: number; failed: number }>
   ragRetryEmbeddings: () => Promise<{ success: boolean }>
-  onRAGStreamChunk: (callback: (data: { meetingId?: string; global?: boolean; chunk: string }) => void) => () => void
-  onRAGStreamComplete: (callback: (data: { meetingId?: string; global?: boolean }) => void) => () => void
-  onRAGStreamError: (callback: (data: { meetingId?: string; global?: boolean; error: string }) => void) => () => void
+  onRAGStreamChunk: (callback: (data: { meetingId?: string; global?: boolean; chunk: string; requestId?: string }) => void) => () => void
+  onRAGStreamComplete: (callback: (data: { meetingId?: string; global?: boolean; requestId?: string }) => void) => () => void
+  onRAGStreamError: (callback: (data: { meetingId?: string; global?: boolean; error: string; requestId?: string }) => void) => () => void
 
   // Keybind Management
   getKeybinds: () => Promise<Array<{ id: string; label: string; accelerator: string; isGlobal: boolean; defaultAccelerator: string }>>
@@ -768,15 +770,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Intelligence Mode IPC
   generateAssist: () => ipcRenderer.invoke("generate-assist"),
-  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string) => ipcRenderer.invoke("generate-what-to-say", question, imagePaths, forcedIntent),
-  generateClarify: () => ipcRenderer.invoke("generate-clarify"),
-  generateCodeHint: (imagePaths?: string[], problemStatement?: string) => ipcRenderer.invoke("generate-code-hint", imagePaths, problemStatement),
-  generateBrainstorm: (imagePaths?: string[], problemStatement?: string) => ipcRenderer.invoke("generate-brainstorm", imagePaths, problemStatement),
-  generateFollowUp: (intent: string, userRequest?: string) => ipcRenderer.invoke("generate-follow-up", intent, userRequest),
-  generateFollowUpQuestions: () => ipcRenderer.invoke("generate-follow-up-questions"),
-  generateSystemDesignTradeoffs: () => ipcRenderer.invoke("generate-system-design-tradeoffs"),
-  generateRecap: () => ipcRenderer.invoke("generate-recap"),
-  submitManualQuestion: (question: string) => ipcRenderer.invoke("submit-manual-question", question),
+  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string, requestId?: string) => ipcRenderer.invoke("generate-what-to-say", question, imagePaths, forcedIntent, requestId),
+  generateClarify: (requestId?: string) => ipcRenderer.invoke("generate-clarify", requestId),
+  generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => ipcRenderer.invoke("generate-code-hint", imagePaths, problemStatement, requestId),
+  generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => ipcRenderer.invoke("generate-brainstorm", imagePaths, problemStatement, requestId),
+  generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => ipcRenderer.invoke("generate-follow-up", intent, userRequest, requestId),
+  generateFollowUpQuestions: (requestId?: string) => ipcRenderer.invoke("generate-follow-up-questions", requestId),
+  generateSystemDesignTradeoffs: (requestId?: string) => ipcRenderer.invoke("generate-system-design-tradeoffs", requestId),
+  generateRecap: (requestId?: string) => ipcRenderer.invoke("generate-recap", requestId),
+  submitManualQuestion: (question: string, requestId?: string) => ipcRenderer.invoke("submit-manual-question", question, requestId),
   getIntelligenceContext: () => ipcRenderer.invoke("get-intelligence-context"),
   resetIntelligence: () => ipcRenderer.invoke("reset-intelligence"),
 
@@ -817,21 +819,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setWindowMode: (mode: 'launcher' | 'overlay', inactive?: boolean) => ipcRenderer.invoke("set-window-mode", mode, inactive),
 
   // Intelligence Mode Events
-  onIntelligenceAssistUpdate: (callback: (data: { insight: string }) => void) => {
+  onIntelligenceAssistUpdate: (callback: (data: { insight: string; requestId?: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("intelligence-assist-update", subscription)
     return () => {
       ipcRenderer.removeListener("intelligence-assist-update", subscription)
     }
   },
-  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number }) => void) => {
+  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; requestId?: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("intelligence-suggested-answer-token", subscription)
     return () => {
       ipcRenderer.removeListener("intelligence-suggested-answer-token", subscription)
     }
   },
-  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number }) => void) => {
+  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; requestId?: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("intelligence-suggested-answer", subscription)
     return () => {
@@ -929,7 +931,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("intelligence-mode-changed", subscription)
     }
   },
-  onIntelligenceError: (callback: (data: { error: string; mode: string }) => void) => {
+  onIntelligenceError: (callback: (data: { error: string; mode: string; requestId?: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("intelligence-error", subscription)
     return () => {
@@ -946,26 +948,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
 
   // Streaming Chat
-  streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean }) => ipcRenderer.invoke("gemini-chat-stream", message, imagePaths, context, options),
+  streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }) => ipcRenderer.invoke("gemini-chat-stream", message, imagePaths, context, options),
+  cancelGeminiChatStream: () => ipcRenderer.invoke("cancel-gemini-chat-stream"),
+  cancelIntelligenceRequest: () => ipcRenderer.invoke("cancel-intelligence-request"),
 
-  onGeminiStreamToken: (callback: (token: string) => void) => {
-    const subscription = (_: any, token: string) => callback(token)
+  onGeminiStreamToken: (callback: (data: { token: string; requestId?: string } | string) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("gemini-stream-token", subscription)
     return () => {
       ipcRenderer.removeListener("gemini-stream-token", subscription)
     }
   },
 
-  onGeminiStreamDone: (callback: () => void) => {
-    const subscription = () => callback()
+  onGeminiStreamDone: (callback: (data?: { requestId?: string }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("gemini-stream-done", subscription)
     return () => {
       ipcRenderer.removeListener("gemini-stream-done", subscription)
     }
   },
 
-  onGeminiStreamError: (callback: (error: string) => void) => {
-    const subscription = (_: any, error: string) => callback(error)
+  onGeminiStreamError: (callback: (data: { error: string; requestId?: string } | string) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("gemini-stream-error", subscription)
     return () => {
       ipcRenderer.removeListener("gemini-stream-error", subscription)
@@ -1132,7 +1136,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // RAG API
   ragQueryMeeting: (meetingId: string, query: string) => ipcRenderer.invoke('rag:query-meeting', { meetingId, query }),
-  ragQueryLive: (query: string) => ipcRenderer.invoke('rag:query-live', { query }),
+  ragQueryLive: (query: string, requestId?: string) => ipcRenderer.invoke('rag:query-live', { query, requestId }),
   ragQueryGlobal: (query: string) => ipcRenderer.invoke('rag:query-global', { query }),
   ragCancelQuery: (options: { meetingId?: string; global?: boolean }) => ipcRenderer.invoke('rag:cancel-query', options),
   ragIsMeetingProcessed: (meetingId: string) => ipcRenderer.invoke('rag:is-meeting-processed', meetingId),
@@ -1148,21 +1152,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   reindexIncompatibleMeetings: () => ipcRenderer.invoke('rag:reindex-incompatible-meetings'),
 
-  onRAGStreamChunk: (callback: (data: { meetingId?: string; global?: boolean; chunk: string }) => void) => {
+  onRAGStreamChunk: (callback: (data: { meetingId?: string; global?: boolean; chunk: string; requestId?: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('rag:stream-chunk', subscription)
     return () => {
       ipcRenderer.removeListener('rag:stream-chunk', subscription)
     }
   },
-  onRAGStreamComplete: (callback: (data: { meetingId?: string; global?: boolean }) => void) => {
+  onRAGStreamComplete: (callback: (data: { meetingId?: string; global?: boolean; requestId?: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('rag:stream-complete', subscription)
     return () => {
       ipcRenderer.removeListener('rag:stream-complete', subscription)
     }
   },
-  onRAGStreamError: (callback: (data: { meetingId?: string; global?: boolean; error: string }) => void) => {
+  onRAGStreamError: (callback: (data: { meetingId?: string; global?: boolean; error: string; requestId?: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on('rag:stream-error', subscription)
     return () => {

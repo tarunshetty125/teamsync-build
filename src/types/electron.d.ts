@@ -154,17 +154,18 @@ export interface ElectronAPI {
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
-  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
-  generateClarify: () => Promise<{ clarification: string | null }>
-  generateCodeHint: (imagePaths?: string[], problemStatement?: string) => Promise<{ hint: string | null }>
-  generateBrainstorm: (imagePaths?: string[], problemStatement?: string) => Promise<{ script: string | null }>
-  generateFollowUp: (intent: string, userRequest?: string) => Promise<{ refined: string | null; intent: string }>
-  generateFollowUpQuestions: () => Promise<{ questions: string | null }>
-  generateSystemDesignTradeoffs: () => Promise<{ answer: string | null }>
-  generateRecap: () => Promise<{ summary: string | null }>
-  submitManualQuestion: (question: string) => Promise<{ answer: string | null; question: string }>
+  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string, requestId?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
+  generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
+  generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
+  generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ script: string | null }>
+  generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => Promise<{ refined: string | null; intent: string }>
+  generateFollowUpQuestions: (requestId?: string) => Promise<{ questions: string | null }>
+  generateSystemDesignTradeoffs: (requestId?: string) => Promise<{ answer: string | null }>
+  generateRecap: (requestId?: string) => Promise<{ summary: string | null }>
+  submitManualQuestion: (question: string, requestId?: string) => Promise<{ answer: string | null; question: string }>
   getIntelligenceContext: () => Promise<{ context: string; lastAssistantMessage: string | null; activeMode: string }>
   resetIntelligence: () => Promise<{ success: boolean; error?: string }>
+  cancelIntelligenceRequest: () => Promise<{ success: boolean; error?: string }>
 
   // Dynamic Action Button Mode
   getActionButtonMode: () => Promise<'recap' | 'brainstorm'>
@@ -200,31 +201,32 @@ export interface ElectronAPI {
   setWindowMode: (mode: 'launcher' | 'overlay', inactive?: boolean) => Promise<void>
 
   // Intelligence Mode Events
-  onIntelligenceAssistUpdate: (callback: (data: { insight: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; _sessionId?: string }) => void) => () => void
-  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; _sessionId?: string }) => void) => () => void
-  onIntelligenceRefinedAnswerToken: (callback: (data: { token: string; intent: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceRefinedAnswer: (callback: (data: { answer: string; intent: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceFollowUpQuestionsUpdate: (callback: (data: { questions: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceFollowUpQuestionsToken: (callback: (data: { token: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceRecap: (callback: (data: { summary: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceRecapToken: (callback: (data: { token: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceClarify: (callback: (data: { clarification: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceClarifyToken: (callback: (data: { token: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceSystemDesignTradeoffs: (callback: (data: { answer: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string; _sessionId?: string }) => void) => () => void
-  onIntelligenceManualStarted: (callback: (data?: { _sessionId?: string }) => void) => () => void
-  onIntelligenceManualResult: (callback: (data: { answer: string; question: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceAssistUpdate: (callback: (data: { insight: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceRefinedAnswerToken: (callback: (data: { token: string; intent: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceRefinedAnswer: (callback: (data: { answer: string; intent: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceFollowUpQuestionsUpdate: (callback: (data: { questions: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceFollowUpQuestionsToken: (callback: (data: { token: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceRecap: (callback: (data: { summary: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceRecapToken: (callback: (data: { token: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceClarify: (callback: (data: { clarification: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceClarifyToken: (callback: (data: { token: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceSystemDesignTradeoffs: (callback: (data: { answer: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceManualStarted: (callback: (data?: { _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceManualResult: (callback: (data: { answer: string; question: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
-  onIntelligenceError: (callback: (data: { error: string, mode: string; _sessionId?: string }) => void) => () => void;
+  onIntelligenceError: (callback: (data: { error: string, mode: string; _sessionId?: string; requestId?: string }) => void) => () => void;
   // Session Management
   onSessionReset: (callback: (payload?: { sessionId: string }) => void) => () => void;
 
   // Streaming listeners
-  streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean }) => Promise<void>
-  onGeminiStreamToken: (callback: (token: string) => void) => () => void
-  onGeminiStreamDone: (callback: () => void) => () => void
-  onGeminiStreamError: (callback: (error: string) => void) => () => void;
+  streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }) => Promise<void>
+  cancelGeminiChatStream: () => Promise<{ success: boolean }>
+  onGeminiStreamToken: (callback: (data: { token: string; requestId?: string } | string) => void) => () => void
+  onGeminiStreamDone: (callback: (data?: { requestId?: string }) => void) => () => void
+  onGeminiStreamError: (callback: (data: { error: string; requestId?: string } | string) => void) => () => void;
 
   // Model Management
   getDefaultModel: () => Promise<{ model: string }>;
@@ -301,15 +303,15 @@ export interface ElectronAPI {
 
   // RAG (Retrieval-Augmented Generation) API
   ragQueryMeeting: (meetingId: string, query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
-  ragQueryLive: (query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
+  ragQueryLive: (query: string, requestId?: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
   ragQueryGlobal: (query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
   ragCancelQuery: (options: { meetingId?: string; global?: boolean }) => Promise<{ success: boolean }>
   ragIsMeetingProcessed: (meetingId: string) => Promise<boolean>
   ragGetQueueStatus: () => Promise<{ pending: number; processing: number; completed: number; failed: number }>
   ragRetryEmbeddings: () => Promise<{ success: boolean }>
-  onRAGStreamChunk: (callback: (data: { meetingId?: string; global?: boolean; chunk: string }) => void) => () => void
-  onRAGStreamComplete: (callback: (data: { meetingId?: string; global?: boolean }) => void) => () => void
-  onRAGStreamError: (callback: (data: { meetingId?: string; global?: boolean; error: string }) => void) => () => void
+  onRAGStreamChunk: (callback: (data: { meetingId?: string; global?: boolean; chunk: string; requestId?: string }) => void) => () => void
+  onRAGStreamComplete: (callback: (data: { meetingId?: string; global?: boolean; requestId?: string }) => void) => () => void
+  onRAGStreamError: (callback: (data: { meetingId?: string; global?: boolean; error: string; requestId?: string }) => void) => () => void
 
   // Donation API
   getDonationStatus: () => Promise<{ shouldShow: boolean; hasDonated: boolean; lifetimeShows: number }>;

@@ -250,7 +250,8 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
 
                 // Setup fallback listeners (Standard Gemini)
                 streamBuffer.reset();
-                const oldTokenCleanup = window.electronAPI?.onGeminiStreamToken((token: string) => {
+                const oldTokenCleanup = window.electronAPI?.onGeminiStreamToken((payload) => {
+                    const token = typeof payload === 'string' ? payload : payload.token;
                     setChatState('streaming_response');
                     streamBuffer.appendToken(token, (content) => {
                         setMessages(prev => prev.map(msg =>
@@ -275,7 +276,8 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                     oldErrorCleanup?.();
                 });
 
-                const oldErrorCleanup = window.electronAPI?.onGeminiStreamError((error: string) => {
+                const oldErrorCleanup = window.electronAPI?.onGeminiStreamError((payload) => {
+                    const error = typeof payload === 'string' ? payload : payload.error;
                     console.error('[GlobalChat] Gemini stream error:', error);
                     setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
                     setErrorMessage("Couldn't get a response. Please check your settings.");

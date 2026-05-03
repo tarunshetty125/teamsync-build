@@ -40,23 +40,23 @@ function detectRefinementIntent(userText: string): { isRefinement: boolean; inte
 
 // Events emitted by IntelligenceEngine
 export interface IntelligenceModeEvents {
-    'assist_update': (insight: string) => void;
-    'suggested_answer': (answer: string, question: string, confidence: number) => void;
-    'suggested_answer_token': (token: string, question: string, confidence: number) => void;
-    'refined_answer': (answer: string, intent: string) => void;
-    'refined_answer_token': (token: string, intent: string) => void;
-    'recap': (summary: string) => void;
-    'recap_token': (token: string) => void;
-    'clarify': (clarification: string) => void;
-    'clarify_token': (token: string) => void;
-    'follow_up_questions_update': (questions: string) => void;
-    'follow_up_questions_token': (token: string) => void;
-    'system_design_tradeoffs': (answer: string) => void;
-    'system_design_tradeoffs_token': (token: string) => void;
-    'manual_answer_started': () => void;
-    'manual_answer_result': (answer: string, question: string) => void;
+    'assist_update': (insight: string, requestId?: string | null) => void;
+    'suggested_answer': (answer: string, question: string, confidence: number, requestId?: string | null) => void;
+    'suggested_answer_token': (token: string, question: string, confidence: number, requestId?: string | null) => void;
+    'refined_answer': (answer: string, intent: string, requestId?: string | null) => void;
+    'refined_answer_token': (token: string, intent: string, requestId?: string | null) => void;
+    'recap': (summary: string, requestId?: string | null) => void;
+    'recap_token': (token: string, requestId?: string | null) => void;
+    'clarify': (clarification: string, requestId?: string | null) => void;
+    'clarify_token': (token: string, requestId?: string | null) => void;
+    'follow_up_questions_update': (questions: string, requestId?: string | null) => void;
+    'follow_up_questions_token': (token: string, requestId?: string | null) => void;
+    'system_design_tradeoffs': (answer: string, requestId?: string | null) => void;
+    'system_design_tradeoffs_token': (token: string, requestId?: string | null) => void;
+    'manual_answer_started': (requestId?: string | null) => void;
+    'manual_answer_result': (answer: string, question: string, requestId?: string | null) => void;
     'mode_changed': (mode: IntelligenceMode) => void;
-    'error': (error: Error, mode: IntelligenceMode) => void;
+    'error': (error: Error, mode: IntelligenceMode, requestId?: string | null) => void;
 }
 
 export class IntelligenceEngine extends EventEmitter {
@@ -78,6 +78,7 @@ export class IntelligenceEngine extends EventEmitter {
     // Concurrency tracking
     private assistCancellationToken: AbortController | null = null;
     private currentGenerationId: number = 0;
+    private currentClientRequestId: string | null = null;
 
     // Keep reference to LLMHelper for client access
     private llmHelper: LLMHelper;
@@ -99,6 +100,10 @@ export class IntelligenceEngine extends EventEmitter {
 
     getLLMHelper(): LLMHelper {
         return this.llmHelper;
+    }
+
+    getCurrentRequestId(): string | null {
+        return this.currentClientRequestId;
     }
 
     getRecapLLM(): RecapLLM | null {
@@ -230,8 +235,10 @@ export class IntelligenceEngine extends EventEmitter {
      * Manual trigger - uses clean transcript pipeline for question inference
      * NEVER returns null - always provides a usable response
      */
-    async runWhatShouldISay(question?: string, confidence: number = 0.8, imagePaths?: string[], forcedIntent?: ConversationIntent): Promise<string | null> {
+    async runWhatShouldISay(question?: string, confidence: number = 0.8, imagePaths?: string[], forcedIntent?: ConversationIntent, requestId?: string): Promise<string | null> {
         const now = Date.now();
+        const activeRequestId = requestId ?? null;
+        this.currentClientRequestId = activeRequestId;
 
         // Bypass cooldown when the user explicitly attached images (capture-and-process intent).
         // The cooldown exists to debounce auto-triggers, not explicit shortcuts with context.
@@ -259,7 +266,7 @@ export class IntelligenceEngine extends EventEmitter {
                 const answer = await Promise.race([this.answerLLM.generate(question || '', context), timeoutPromise]).catch((): any => null);
                 if (answer) {
                     this.session.addAssistantMessage(answer);
-                    this.emit('suggested_answer', answer, question || 'inferred', confidence);
+                    this.emit('suggested_answer', answer, question || 'inferred', confidence, activeRequestId);
                 }
                 this.setMode('idle');
                 return answer || "Could you repeat that? I want to make sure I address your question properly.";
@@ -331,7 +338,7 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('suggested_answer_token', token, question || 'inferred', confidence);
+                this.emit('suggested_answer_token', token, question || 'inferred', confidence, activeRequestId);
                 fullAnswer += token;
             }
 
@@ -356,13 +363,13 @@ export class IntelligenceEngine extends EventEmitter {
 
             // CQ-05 fix: only emit the "complete" event after a non-aborted stream.
             // The renderer already has all tokens — this is for metadata only (e.g. copying, history).
-            this.emit('suggested_answer', fullAnswer, question || 'What to Answer', confidence);
+            this.emit('suggested_answer', fullAnswer, question || 'What to Answer', confidence, activeRequestId);
 
             this.setMode('idle');
             return fullAnswer;
 
         } catch (error) {
-            this.emit('error', error as Error, 'what_to_say');
+            this.emit('error', error as Error, 'what_to_say', activeRequestId);
             this.setMode('idle');
             return "Could you repeat that? I want to make sure I address your question properly.";
         }
@@ -372,8 +379,10 @@ export class IntelligenceEngine extends EventEmitter {
      * MODE 3: Follow-Up (Refinement)
      * Modify the last assistant message
      */
-    async runFollowUp(intent: string, userRequest?: string): Promise<string | null> {
+    async runFollowUp(intent: string, userRequest?: string, requestId?: string): Promise<string | null> {
         console.log(`[IntelligenceEngine] runFollowUp called with intent: ${intent}`);
+        const activeRequestId = requestId ?? null;
+        this.currentClientRequestId = activeRequestId;
         const lastMsg = this.session.getLastAssistantMessage();
         if (!lastMsg) {
             console.warn('[IntelligenceEngine] No lastAssistantMessage found for follow-up');
@@ -408,13 +417,13 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('refined_answer_token', token, intent);
+                this.emit('refined_answer_token', token, intent, activeRequestId);
                 fullRefined += token;
             }
 
             if (!streamAborted && fullRefined) {
                 this.session.addAssistantMessage(fullRefined);
-                this.emit('refined_answer', fullRefined, intent);
+                this.emit('refined_answer', fullRefined, intent, activeRequestId);
 
                 const intentMap: Record<string, string> = {
                     'expand': 'Expand Answer',
@@ -440,7 +449,7 @@ export class IntelligenceEngine extends EventEmitter {
             return fullRefined;
 
         } catch (error) {
-            this.emit('error', error as Error, 'follow_up');
+            this.emit('error', error as Error, 'follow_up', activeRequestId);
             this.setMode('idle');
             return null;
         }
@@ -450,8 +459,10 @@ export class IntelligenceEngine extends EventEmitter {
      * MODE 4: Recap (Summary)
      * Neutral conversation summary
      */
-    async runRecap(): Promise<string | null> {
+    async runRecap(requestId?: string): Promise<string | null> {
         console.log('[IntelligenceEngine] runRecap called');
+        const activeRequestId = requestId ?? null;
+        this.currentClientRequestId = activeRequestId;
         this.setMode('recap');
 
         try {
@@ -480,13 +491,13 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('recap_token', token);
+                this.emit('recap_token', token, activeRequestId);
                 fullSummary += token;
             }
 
             // Only emit final if not aborted
             if (!streamAborted && fullSummary && this.currentGenerationId === generationId) {
-                this.emit('recap', fullSummary);
+                this.emit('recap', fullSummary, activeRequestId);
 
                 this.session.pushUsage({
                     type: 'chat',
@@ -501,7 +512,7 @@ export class IntelligenceEngine extends EventEmitter {
             return fullSummary;
 
         } catch (error) {
-            this.emit('error', error as Error, 'recap');
+            this.emit('error', error as Error, 'recap', activeRequestId);
             this.setMode('idle');
             return null;
         }
@@ -511,8 +522,10 @@ export class IntelligenceEngine extends EventEmitter {
      * MODE: Clarify
      * Ask a clarifying question to the interviewer
      */
-    async runClarify(): Promise<string | null> {
+    async runClarify(requestId?: string): Promise<string | null> {
         console.log('[IntelligenceEngine] runClarify called');
+        const activeRequestId = requestId ?? null;
+        this.currentClientRequestId = activeRequestId;
         this.setMode('clarify');
 
         try {
@@ -538,7 +551,7 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('clarify_token', token);
+                this.emit('clarify_token', token, activeRequestId);
                 fullClarification += token;
             }
 
@@ -549,7 +562,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             // Only update history and emit final if not aborted
             if (fullClarification && this.currentGenerationId === generationId) {
-                this.emit('clarify', fullClarification);
+                this.emit('clarify', fullClarification, activeRequestId);
                 this.session.addAssistantMessage(fullClarification);
 
                 this.session.pushUsage({
@@ -565,7 +578,7 @@ export class IntelligenceEngine extends EventEmitter {
             return fullClarification;
 
         } catch (error) {
-            this.emit('error', error as Error, 'clarify');
+            this.emit('error', error as Error, 'clarify', activeRequestId);
             this.setMode('idle');
             return null;
         }
@@ -575,8 +588,10 @@ export class IntelligenceEngine extends EventEmitter {
      * MODE 6: Follow-Up Questions
      * Suggest strategic questions for the user to ask
      */
-    async runFollowUpQuestions(): Promise<string | null> {
+    async runFollowUpQuestions(requestId?: string): Promise<string | null> {
         console.log('[IntelligenceEngine] runFollowUpQuestions called');
+        const activeRequestId = requestId ?? null;
+        this.currentClientRequestId = activeRequestId;
         this.setMode('follow_up_questions');
 
         try {
@@ -603,12 +618,12 @@ export class IntelligenceEngine extends EventEmitter {
                     await stream.return(undefined); // FIX §3.6: cancel underlying request immediately
                     break;
                 }
-                this.emit('follow_up_questions_token', token);
+                this.emit('follow_up_questions_token', token, activeRequestId);
                 fullQuestions += token;
             }
 
             if (fullQuestions && this.currentGenerationId === generationId) {
-                this.emit('follow_up_questions_update', fullQuestions);
+                this.emit('follow_up_questions_update', fullQuestions, activeRequestId);
                 this.session.pushUsage({
                     type: 'followup_questions',
                     timestamp: Date.now(),
@@ -622,14 +637,16 @@ export class IntelligenceEngine extends EventEmitter {
             return fullQuestions;
 
         } catch (error) {
-            this.emit('error', error as Error, 'follow_up_questions');
+            this.emit('error', error as Error, 'follow_up_questions', activeRequestId);
             this.setMode('idle');
             return null;
         }
     }
 
-    async runSystemDesignTradeoffs(): Promise<string | null> {
+    async runSystemDesignTradeoffs(requestId?: string): Promise<string | null> {
         console.log('[IntelligenceEngine] runSystemDesignTradeoffs called');
+        const activeRequestId = requestId ?? null;
+        this.currentClientRequestId = activeRequestId;
         this.setMode('system_design_tradeoffs');
 
         try {
@@ -656,7 +673,7 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('system_design_tradeoffs_token', token);
+                this.emit('system_design_tradeoffs_token', token, activeRequestId);
                 fullAnswer += token;
             }
 
@@ -673,13 +690,13 @@ export class IntelligenceEngine extends EventEmitter {
                     question: 'System Design Trade-offs',
                     answer: fullAnswer
                 });
-                this.emit('system_design_tradeoffs', fullAnswer);
+                this.emit('system_design_tradeoffs', fullAnswer, activeRequestId);
             }
 
             this.setMode('idle');
             return fullAnswer;
         } catch (error) {
-            this.emit('error', error as Error, 'system_design_tradeoffs');
+            this.emit('error', error as Error, 'system_design_tradeoffs', activeRequestId);
             this.setMode('idle');
             return null;
         }
@@ -689,8 +706,10 @@ export class IntelligenceEngine extends EventEmitter {
      * MODE 5: Manual Answer (Fallback)
      * Explicit bypass when auto-detection fails
      */
-    async runManualAnswer(question: string): Promise<string | null> {
-        this.emit('manual_answer_started');
+    async runManualAnswer(question: string, requestId?: string): Promise<string | null> {
+        const activeRequestId = requestId ?? null;
+        this.currentClientRequestId = activeRequestId;
+        this.emit('manual_answer_started', activeRequestId);
         this.setMode('manual');
 
         try {
@@ -712,7 +731,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             if (answer) {
                 this.session.addAssistantMessage(answer);
-                this.emit('manual_answer_result', answer, question);
+                this.emit('manual_answer_result', answer, question, activeRequestId);
 
                 this.session.pushUsage({
                     type: 'chat',
@@ -726,7 +745,7 @@ export class IntelligenceEngine extends EventEmitter {
             return answer;
 
         } catch (error) {
-            this.emit('error', error as Error, 'manual');
+            this.emit('error', error as Error, 'manual', activeRequestId);
             this.setMode('idle');
             return null;
         }
@@ -740,12 +759,14 @@ export class IntelligenceEngine extends EventEmitter {
      *   2. session.detectedCodingQuestion (detected from interviewer transcript)
      *   3. transcriptContext (last N seconds of conversation — fallback for inference)
      */
-    async runCodeHint(imagePaths?: string[], problemStatement?: string): Promise<string | null> {
+    async runCodeHint(imagePaths?: string[], problemStatement?: string, requestId?: string): Promise<string | null> {
         if (this.assistCancellationToken) {
             this.assistCancellationToken.abort();
             this.assistCancellationToken = null;
         }
 
+        const activeRequestId = requestId ?? null;
+        this.currentClientRequestId = activeRequestId;
         this.setMode('code_hint');
 
         try {
@@ -785,7 +806,7 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('suggested_answer_token', token, 'Code Hint', 1.0);
+                this.emit('suggested_answer_token', token, 'Code Hint', 1.0, activeRequestId);
                 fullHint += token;
             }
 
@@ -807,12 +828,12 @@ export class IntelligenceEngine extends EventEmitter {
                 answer: fullHint
             });
 
-            this.emit('suggested_answer', fullHint, 'Code Hint', 1.0);
+            this.emit('suggested_answer', fullHint, 'Code Hint', 1.0, activeRequestId);
             this.setMode('idle');
             return fullHint;
 
         } catch (error) {
-            this.emit('error', error as Error, 'code_hint');
+            this.emit('error', error as Error, 'code_hint', activeRequestId);
             this.setMode('idle');
             return null;
         }
@@ -822,12 +843,14 @@ export class IntelligenceEngine extends EventEmitter {
      * MODE 8: Brainstorm (Strategic Approach Generator)
      * Generates a spoken script outlining 2-3 problem-solving approaches with trade-offs.
      */
-    async runBrainstorm(imagePaths?: string[], problemStatement?: string): Promise<string | null> {
+    async runBrainstorm(imagePaths?: string[], problemStatement?: string, requestId?: string): Promise<string | null> {
         if (this.assistCancellationToken) {
             this.assistCancellationToken.abort();
             this.assistCancellationToken = null;
         }
 
+        const activeRequestId = requestId ?? null;
+        this.currentClientRequestId = activeRequestId;
         this.setMode('brainstorm');
 
         try {
@@ -845,7 +868,7 @@ export class IntelligenceEngine extends EventEmitter {
                 this.setMode('idle');
                 const msg = "There's nothing to brainstorm right now. Make sure your question is visible or spoken aloud, then try again.";
                 this.session.addAssistantMessage(msg);
-                this.emit('suggested_answer', msg, 'Brainstorming Approaches', 1.0);
+                this.emit('suggested_answer', msg, 'Brainstorming Approaches', 1.0, activeRequestId);
                 return msg;
             }
 
@@ -864,7 +887,7 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('suggested_answer_token', token, 'Brainstorming Approaches', 1.0);
+                this.emit('suggested_answer_token', token, 'Brainstorming Approaches', 1.0, activeRequestId);
                 fullResult += token;
             }
 
@@ -885,12 +908,12 @@ export class IntelligenceEngine extends EventEmitter {
                 answer: fullResult
             });
 
-            this.emit('suggested_answer', fullResult, 'Brainstorming Approaches', 1.0);
+            this.emit('suggested_answer', fullResult, 'Brainstorming Approaches', 1.0, activeRequestId);
             this.setMode('idle');
             return fullResult;
 
         } catch (error) {
-            this.emit('error', error as Error, 'brainstorm');
+            this.emit('error', error as Error, 'brainstorm', activeRequestId);
             this.setMode('idle');
             return null;
         }
@@ -916,6 +939,7 @@ export class IntelligenceEngine extends EventEmitter {
      */
     reset(): void {
         this.activeMode = 'idle';
+        this.currentClientRequestId = null;
         this.currentGenerationId++; // Increment to break all active LLM streams
         if (this.assistCancellationToken) {
             this.assistCancellationToken.abort();
