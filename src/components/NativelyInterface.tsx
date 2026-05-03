@@ -3314,6 +3314,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                 onClick={() => {
                                                     setIsMousePassthrough(prev => {
                                                         const newState = !prev;
+                                                        console.log(`[Overlay] Mouse passthrough mode ${newState ? 'on' : 'off'}`);
                                                         window.electronAPI?.setOverlayMousePassthrough?.(newState);
                                                         return newState;
                                                     });
@@ -3350,6 +3351,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                         else if (rounded >= 50) nextOpacity = 0.2;
                                                         else nextOpacity = 1.0;
 
+                                                        console.log(`[Overlay] Opacity/stealth mode set to ${nextOpacity} (${nextOpacity < 1.0 ? 'on' : 'off'})`);
                                                         window.electronAPI?.setOverlayOpacity?.(nextOpacity);
                                                         return nextOpacity;
                                                     });
