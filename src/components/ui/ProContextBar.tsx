@@ -216,8 +216,8 @@ const ProContextBar: React.FC<ProContextBarProps> = ({
                 exit="exit"
                 className="w-full no-drag draggable-area"
                 style={{
-                    background: 'rgba(147, 51, 234, 0.08)',
-                    border: '1px solid rgba(147, 51, 234, 0.18)',
+                    background: 'rgba(88, 28, 135, 0.25)',
+                    border: '1px solid rgba(88, 28, 135, 0.4)',
                     borderRadius: '16px',
                     boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25), inset 0 1px rgba(255,255,255,0.03)',
                     padding: '12px 16px',
