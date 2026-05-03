@@ -38,7 +38,6 @@ import { oneLight, vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/
 // import { ModelSelector } from './ui/ModelSelector'; // REMOVED
 import TopPill from './ui/TopPill';
 import RollingTranscript from './ui/RollingTranscript';
-import SttRuntimePanel from './ui/SttRuntimePanel';
 import ProContextBar from './ui/ProContextBar';
 import { NegotiationCoachingCard } from '../premium';
 import ReactMarkdown from 'react-markdown';
@@ -2943,16 +2942,6 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                             provider: sttMetrics.user?.activeProvider || sttUserProvider,
                                         }}
                                         onCopyDiagnostics={copyDiagnostics}
-                                    />
-                                    <SttRuntimePanel
-                                        sttUserStatus={sttUserStatus}
-                                        sttUserError={sttUserError}
-                                        sttUserProvider={sttUserProvider}
-                                        sttInterviewerStatus={sttInterviewerStatus}
-                                        sttInterviewerError={sttInterviewerError}
-                                        sttInterviewerProvider={sttInterviewerProvider}
-                                        sttTelemetry={sttTelemetry}
-                                        sttMetrics={sttMetrics}
                                     />
                                 </>
                             ) : null}
