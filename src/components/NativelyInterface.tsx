@@ -61,6 +61,7 @@ interface Message {
     isCode?: boolean;
     intent?: string;
     source?: string;
+    chips?: ResponseChip[];
     isNegotiationCoaching?: boolean;
     negotiationCoachingData?: {
         tacticalNote: string;
@@ -71,6 +72,71 @@ interface Message {
         yourTarget: number | null;
         currency: string;
     };
+}
+
+type ChipVariant = 'green' | 'amber' | 'red' | 'blue' | 'purple' | 'gray';
+interface ResponseChip { label: string; variant: ChipVariant; }
+
+function generateResponseChips(text: string, intent?: string): ResponseChip[] {
+    if (!text || text.length < 40) return [];
+    const chips: ResponseChip[] = [];
+    const seen = new Set<string>();
+    const add = (label: string, variant: ChipVariant) => {
+        const key = label.toLowerCase();
+        if (!seen.has(key) && chips.length < 5) { seen.add(key); chips.push({ label, variant }); }
+    };
+
+    // Salary / TC ranges  e.g. "$245K–$310K", "$280-295K", "250,000"
+    const moneyRe = /\$(\d[\d,]*(?:\.\d+)?[Kk]?)\s*[–\-~to]+\s*\$(\d[\d,]*(?:\.\d+)?[Kk]?)/g;
+    let m: RegExpExecArray | null;
+    while ((m = moneyRe.exec(text)) !== null) {
+        add(`${m[1]}–${m[2]}`, 'green');
+    }
+
+    // Single TC / salary mention  "$280K"
+    if (chips.length === 0) {
+        const singleMoney = /\$(\d[\d,]*[Kk]?)\b/.exec(text);
+        if (singleMoney) add(singleMoney[0], 'green');
+    }
+
+    // Percentage mentions  "within 15%", "20% increase"
+    const pctRe = /(?:within |up to |\+)?\d+(?:\.\d+)?%\s*(?:increase|raise|above|below|buffer|margin|counter)?/gi;
+    while ((m = pctRe.exec(text)) !== null && chips.length < 5) {
+        add(m[0].trim(), 'amber');
+    }
+
+    // Don't / Avoid imperative chips
+    const dontRe = /(?:don['']t|never|avoid)\s+(?:say|mention|use|give|share)?\s*["']?([\w][\w\s"']{3,30})["']?/gi;
+    while ((m = dontRe.exec(text)) !== null && chips.length < 5) {
+        add(`Don't ${m[1].trim()}`, 'red');
+    }
+
+    // Do / Make sure imperative chips
+    const doRe = /(?:(?:^|\n|\.|,)\s*(?:always|make sure|ensure|remember to|be sure to)\s+([^.\n,]{8,40}))/gi;
+    while ((m = doRe.exec(text)) !== null && chips.length < 5) {
+        const cap = m[1].trim();
+        if (cap.length > 5) add(cap.charAt(0).toUpperCase() + cap.slice(1), 'blue');
+    }
+
+    // Time references  "2 weeks", "30 days"
+    const timeRe = /\b(\d+\s*(?:days?|weeks?|months?|hours?))\b/gi;
+    while ((m = timeRe.exec(text)) !== null && chips.length < 5) {
+        add(m[0].trim(), 'purple');
+    }
+
+    // Key quoted terms  "flexible", "market rate"
+    const quotedRe = /["']([\w][\w\s]{2,24})["']/g;
+    while ((m = quotedRe.exec(text)) !== null && chips.length < 5) {
+        add(`"${m[1]}"`, 'gray');
+    }
+
+    // Anchor / counter / target labels
+    const anchorRe = /\b(anchor|target|floor|counter(?:offer)?)\s*:?\s*(\$[\d,K]+(?:\s*[–\-]\s*\$?[\d,K]+)?)/gi;
+    while ((m = anchorRe.exec(text)) !== null && chips.length < 5) {
+        add(`${m[1].charAt(0).toUpperCase() + m[1].slice(1)}: ${m[2]}`, 'amber');
+    }
+
+    return chips;
 }
 
 interface SttTelemetryData {
@@ -1793,7 +1859,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                         }
                     } catch {}
                     // Normal completion
-                    return [...prev.slice(0, -1), { ...lastMsg, isStreaming: false }];
+                    const finalText = lastMsg.text;
+                    const chips = generateResponseChips(finalText, lastMsg.intent);
+                    return [...prev.slice(0, -1), { ...lastMsg, isStreaming: false, chips: chips.length > 0 ? chips : undefined }];
                 }
                 return prev;
             });
@@ -1889,7 +1957,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                             }
                         } catch {}
                         // Normal completion
-                        return [...prev.slice(0, -1), { ...lastMsg, isStreaming: false }];
+                        const finalText2 = lastMsg.text;
+                        const chips2 = generateResponseChips(finalText2, lastMsg.intent);
+                        return [...prev.slice(0, -1), { ...lastMsg, isStreaming: false, chips: chips2.length > 0 ? chips2 : undefined }];
                     }
                     if (lastMsg && lastMsg.isStreaming) {
                         const updated = [...prev];
@@ -2916,6 +2986,30 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                             )}
                                                             {renderMessageText(msg)}
                                                         </div>
+
+                                                        {/* Response Chips */}
+                                                        {!msg.isStreaming && msg.chips && msg.chips.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+                                                                {msg.chips.map((chip, i) => (
+                                                                    <span
+                                                                        key={i}
+                                                                        className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-tight border cursor-default select-none"
+                                                                        style={{
+                                                                            animationDelay: `${i * 60}ms`,
+                                                                            animation: 'fadeInUp 0.22s cubic-bezier(0.23,1,0.32,1) both',
+                                                                            ...(chip.variant === 'green'  ? { background: 'rgba(34,197,94,0.12)',  color: '#4ADE80', border: '1px solid rgba(34,197,94,0.28)' } :
+                                                                               chip.variant === 'amber'  ? { background: 'rgba(245,158,11,0.14)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.32)' } :
+                                                                               chip.variant === 'red'    ? { background: 'rgba(239,68,68,0.12)',  color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.28)' } :
+                                                                               chip.variant === 'blue'   ? { background: 'rgba(59,130,246,0.12)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.28)' } :
+                                                                               chip.variant === 'purple' ? { background: 'rgba(167,139,250,0.12)', color: '#C4B5FD', border: '1px solid rgba(167,139,250,0.28)' } :
+                                                                                                          { background: 'rgba(255,255,255,0.07)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.12)' })
+                                                                        }}
+                                                                    >
+                                                                        {chip.label}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
