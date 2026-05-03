@@ -144,6 +144,25 @@ export class IntelligenceEngine extends EventEmitter {
         }
     }
 
+    /**
+     * FINAL EMIT GUARD
+     * Enforces two conditions before any completion-level emit:
+     *   1. The request signal is not aborted
+     *   2. The requestId still exists in the map (not cleaned up or cancelled)
+     * Token-level emits are already guarded by the stream loop itself.
+     */
+    private safeEmit(
+        signal: AbortSignal | undefined,
+        requestId: string | null,
+        event: string,
+        ...args: any[]
+    ): boolean {
+        if (signal?.aborted) return false;
+        if (requestId && !this.requestAbortControllers.has(requestId)) return false;
+        return this.emit(event, ...args, requestId);
+    }
+
+
     getRecapLLM(): RecapLLM | null {
         return this.recapLLM;
     }
@@ -341,7 +360,7 @@ export class IntelligenceEngine extends EventEmitter {
                 const answer = await Promise.race([this.answerLLM.generate(question || '', context), timeoutPromise]).catch((): any => null);
                 if (answer) {
                     this.session.addAssistantMessage(answer);
-                    this.emit('suggested_answer', answer, question || 'inferred', confidence, activeRequestId);
+                    this.safeEmit(undefined, activeRequestId, 'suggested_answer', answer, question || 'inferred', confidence);
                 }
                 this.setMode('idle');
                 return answer || "Could you repeat that? I want to make sure I address your question properly.";
@@ -443,7 +462,7 @@ export class IntelligenceEngine extends EventEmitter {
                 return null;
             }
             // The renderer already has all tokens — this is for metadata only (e.g. copying, history).
-            this.emit('suggested_answer', fullAnswer, question || 'What to Answer', confidence, activeRequestId);
+            this.safeEmit(_signalWTS, activeRequestId, 'suggested_answer', fullAnswer, question || 'What to Answer', confidence);
 
             this.cleanupRequestAbort(activeRequestId);
             this.setMode('idle');
@@ -451,7 +470,7 @@ export class IntelligenceEngine extends EventEmitter {
 
         } catch (error) {
             this.cleanupRequestAbort(activeRequestId);
-            this.emit('error', error as Error, 'what_to_say', activeRequestId);
+            this.emit('error', error as Error, 'what_to_say', activeRequestId); // error path: emit always
             this.setMode('idle');
             return "Could you repeat that? I want to make sure I address your question properly.";
         }
@@ -507,7 +526,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             if (!streamAborted && !_signalFU?.aborted && fullRefined) {
                 this.session.addAssistantMessage(fullRefined);
-                this.emit('refined_answer', fullRefined, intent, activeRequestId);
+                this.safeEmit(_signalFU, activeRequestId, 'refined_answer', fullRefined, intent);
 
                 const intentMap: Record<string, string> = {
                     'expand': 'Expand Answer',
@@ -590,7 +609,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             // Only emit final if not aborted
             if (!streamAborted && !_signalRecap?.aborted && fullSummary && this.currentGenerationId === generationId) {
-                this.emit('recap', fullSummary, activeRequestId);
+                this.safeEmit(_signalRecap, activeRequestId, 'recap', fullSummary);
 
                 this.session.pushUsage({
                     type: 'chat',
@@ -659,7 +678,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             // Only update history and emit final if not aborted
             if (fullClarification && !_signalClarify?.aborted && this.currentGenerationId === generationId) {
-                this.emit('clarify', fullClarification, activeRequestId);
+                this.safeEmit(_signalClarify, activeRequestId, 'clarify', fullClarification);
                 this.session.addAssistantMessage(fullClarification);
 
                 this.session.pushUsage({
@@ -723,7 +742,7 @@ export class IntelligenceEngine extends EventEmitter {
             }
 
             if (fullQuestions && !_signalFUQ?.aborted && this.currentGenerationId === generationId) {
-                this.emit('follow_up_questions_update', fullQuestions, activeRequestId);
+                this.safeEmit(_signalFUQ, activeRequestId, 'follow_up_questions_update', fullQuestions);
                 this.session.pushUsage({
                     type: 'followup_questions',
                     timestamp: Date.now(),
@@ -793,7 +812,7 @@ export class IntelligenceEngine extends EventEmitter {
                     question: 'System Design Trade-offs',
                     answer: fullAnswer
                 });
-                this.emit('system_design_tradeoffs', fullAnswer, activeRequestId);
+                this.safeEmit(_signalSDT, activeRequestId, 'system_design_tradeoffs', fullAnswer);
             }
 
             this.setMode('idle');
@@ -835,7 +854,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             if (answer) {
                 this.session.addAssistantMessage(answer);
-                this.emit('manual_answer_result', answer, question, activeRequestId);
+                this.safeEmit(undefined, activeRequestId, 'manual_answer_result', answer, question);
 
                 this.session.pushUsage({
                     type: 'chat',
@@ -934,7 +953,7 @@ export class IntelligenceEngine extends EventEmitter {
                 answer: fullHint
             });
 
-            this.emit('suggested_answer', fullHint, 'Code Hint', 1.0, activeRequestId);
+            this.safeEmit(_signalCH, activeRequestId, 'suggested_answer', fullHint, 'Code Hint', 1.0);
             this.setMode('idle');
             return fullHint;
 
@@ -977,7 +996,7 @@ export class IntelligenceEngine extends EventEmitter {
                 this.setMode('idle');
                 const msg = "There's nothing to brainstorm right now. Make sure your question is visible or spoken aloud, then try again.";
                 this.session.addAssistantMessage(msg);
-                this.emit('suggested_answer', msg, 'Brainstorming Approaches', 1.0, activeRequestId);
+                this.safeEmit(undefined, activeRequestId, 'suggested_answer', msg, 'Brainstorming Approaches', 1.0);
                 return msg;
             }
 
@@ -1017,7 +1036,7 @@ export class IntelligenceEngine extends EventEmitter {
                 answer: fullResult
             });
 
-            this.emit('suggested_answer', fullResult, 'Brainstorming Approaches', 1.0, activeRequestId);
+            this.safeEmit(_signalBS, activeRequestId, 'suggested_answer', fullResult, 'Brainstorming Approaches', 1.0);
             this.setMode('idle');
             return fullResult;
 
