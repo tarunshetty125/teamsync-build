@@ -439,6 +439,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isManualRecording, setIsManualRecording] = useState(false);
     const isRecordingRef = useRef(false);  // Ref to track recording state (avoids stale closure)
+    // V2 Fix: tracks the active session ID so the transcript handler can drop
+    // cross-session payloads that arrive via IPC after a rapid restart.
+    const activeSessionIdRef = useRef<string | null>(null);
     const [manualTranscript, setManualTranscript] = useState('');
     const manualTranscriptRef = useRef<string>('');
     const [showTranscript, setShowTranscript] = useState(() => {
@@ -893,7 +896,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     // Session Reset Listener - Clears UI when a NEW meeting starts
     useEffect(() => {
         if (!window.electronAPI?.onSessionReset) return;
-        const unsubscribe = window.electronAPI.onSessionReset(() => {
+        const unsubscribe = window.electronAPI.onSessionReset((payload) => {
             console.log('[NativelyInterface] Resetting session state...');
             setMessages([]);
             setInputValue('');
@@ -910,6 +913,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             setCurrentSentenceId(0);
             currentSentenceIdRef.current = 0;
             setLastResponseSentenceId(0);
+            // V2 Fix: update session ID ref from the payload embedded by main.ts
+            if (payload?.sessionId) {
+                activeSessionIdRef.current = payload.sessionId;
+            }
 
             // SESSION ISOLATION FIX: Reset intentReducer so no button mode from
             // the previous session leaks into the new one. seqRef/scheduledSeqRef
@@ -1002,6 +1009,12 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
         // Real-time Transcripts
         cleanups.push(window.electronAPI.onNativeAudioTranscript((transcript) => {
+            // V2 Fix: drop transcripts from a previous session that arrive via buffered IPC
+            // after a rapid restart. _sessionId is embedded by main.ts at broadcast time.
+            if (transcript._sessionId && activeSessionIdRef.current &&
+                transcript._sessionId !== activeSessionIdRef.current) {
+                return;
+            }
             // When Answer button is active, capture USER transcripts for voice input
             // Use ref to avoid stale closure issue
             if (isRecordingRef.current && transcript.speaker === 'user') {
@@ -1096,6 +1109,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
 
         cleanups.push(window.electronAPI.onIntelligenceSuggestedAnswerToken((data) => {
+            // V2 Guard: drop tokens from a previous session
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             // Progressive update for 'what_to_answer' mode
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
@@ -1123,6 +1138,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceSuggestedAnswer((data) => {
+            // V2 Guard: drop final answers from a previous session
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             if (userHasScrolledRef.current) {
                 setUnreadCount(prev => prev + 1);
             }
@@ -1132,7 +1149,6 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
                 // If we were streaming, finalize it
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'what_to_answer') {
-                    // Start new array to avoid mutation
                     const updated = [...prev];
                     updated[prev.length - 1] = {
                         ...lastMsg,
@@ -1156,6 +1172,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
         // STREAMING: Refinement
         cleanups.push(window.electronAPI.onIntelligenceRefinedAnswerToken((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === data.intent) {
@@ -1179,6 +1197,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceRefinedAnswer((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setIsProcessing(false);
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
@@ -1204,6 +1224,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
         // STREAMING: Recap
         cleanups.push(window.electronAPI.onIntelligenceRecapToken((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'recap') {
@@ -1226,6 +1248,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceRecap((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setIsProcessing(false);
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
@@ -1249,19 +1273,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             currentSourceRef.current = undefined;
         }));
 
-        // STREAMING: Follow-Up Questions (Rendered as message? Or specific UI?)
-        // Currently interface typically renders follow-up Qs as a message or button update.
-        // Let's assume message for now based on existing 'follow_up_questions_update' handling
-        // But wait, existing handle just sets state?
-        // Let's check how 'follow_up_questions_update' was handled.
-        // It was handled separate locally in this component maybe?
-        // Ah, I need to see the existing listener for 'onIntelligenceFollowUpQuestionsUpdate'
-
-        // Let's implemented token streaming for it anyway, likely it updates a message bubble 
-        // OR it might update a specialized "Suggested Questions" area.
-        // Assuming it's a message for consistency with "Copilot" approach.
-
         cleanups.push(window.electronAPI.onIntelligenceFollowUpQuestionsToken((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'follow_up_questions') {
@@ -1284,7 +1298,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceFollowUpQuestionsUpdate((data) => {
-            // This event name is slightly different ('update' vs 'answer')
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setIsProcessing(false);
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
@@ -1309,6 +1324,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceSystemDesignTradeoffsToken((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'system_design_tradeoffs') {
@@ -1331,6 +1348,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceSystemDesignTradeoffs((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setIsProcessing(false);
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
@@ -1355,6 +1374,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceManualResult((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setIsProcessing(false);
             setMessages(prev => [...prev, {
                 id: nextMsgId(),
@@ -1366,6 +1387,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceError((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setIsProcessing(false);
             setMessages(prev => [...prev, {
                 id: nextMsgId(),
@@ -1400,6 +1423,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     // orphaning the final 'clarify' event and leaving isProcessing=true forever.
     useEffect(() => {
         const cleanupToken = window.electronAPI.onIntelligenceClarifyToken((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];
                 if (lastMsg && lastMsg.isStreaming && lastMsg.intent === 'clarify') {
@@ -1419,6 +1444,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         });
 
         const cleanupFinal = window.electronAPI.onIntelligenceClarify((data) => {
+            // V2 Guard
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             setIsProcessing(false);
             setMessages(prev => {
                 const lastMsg = prev[prev.length - 1];

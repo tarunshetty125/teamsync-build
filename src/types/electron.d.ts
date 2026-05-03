@@ -120,7 +120,7 @@ export interface ElectronAPI {
   onCredentialsChanged: (callback: () => void) => () => void
 
   // Native Audio Service Events
-  onNativeAudioTranscript: (callback: (transcript: { speaker: string; text: string; final: boolean }) => void) => () => void
+  onNativeAudioTranscript: (callback: (transcript: { speaker: string; text: string; final: boolean; _sessionId?: string }) => void) => () => void
   onNativeAudioSuggestion: (callback: (suggestion: { context: string; lastQuestion: string; confidence: number }) => void) => () => void
   onNativeAudioConnected: (callback: () => void) => () => void
   onNativeAudioDisconnected: (callback: () => void) => () => void
@@ -200,25 +200,25 @@ export interface ElectronAPI {
   setWindowMode: (mode: 'launcher' | 'overlay', inactive?: boolean) => Promise<void>
 
   // Intelligence Mode Events
-  onIntelligenceAssistUpdate: (callback: (data: { insight: string }) => void) => () => void
-  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number }) => void) => () => void
-  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number }) => void) => () => void
-  onIntelligenceRefinedAnswerToken: (callback: (data: { token: string; intent: string }) => void) => () => void
-  onIntelligenceRefinedAnswer: (callback: (data: { answer: string; intent: string }) => void) => () => void
-  onIntelligenceFollowUpQuestionsUpdate: (callback: (data: { questions: string }) => void) => () => void
-  onIntelligenceFollowUpQuestionsToken: (callback: (data: { token: string }) => void) => () => void
-  onIntelligenceRecap: (callback: (data: { summary: string }) => void) => () => void
-  onIntelligenceRecapToken: (callback: (data: { token: string }) => void) => () => void
-  onIntelligenceClarify: (callback: (data: { clarification: string }) => void) => () => void
-  onIntelligenceClarifyToken: (callback: (data: { token: string }) => void) => () => void
-  onIntelligenceSystemDesignTradeoffs: (callback: (data: { answer: string }) => void) => () => void
-  onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string }) => void) => () => void
-  onIntelligenceManualStarted: (callback: () => void) => () => void
-  onIntelligenceManualResult: (callback: (data: { answer: string; question: string }) => void) => () => void
+  onIntelligenceAssistUpdate: (callback: (data: { insight: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; _sessionId?: string }) => void) => () => void
+  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; _sessionId?: string }) => void) => () => void
+  onIntelligenceRefinedAnswerToken: (callback: (data: { token: string; intent: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceRefinedAnswer: (callback: (data: { answer: string; intent: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceFollowUpQuestionsUpdate: (callback: (data: { questions: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceFollowUpQuestionsToken: (callback: (data: { token: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceRecap: (callback: (data: { summary: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceRecapToken: (callback: (data: { token: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceClarify: (callback: (data: { clarification: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceClarifyToken: (callback: (data: { token: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceSystemDesignTradeoffs: (callback: (data: { answer: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string; _sessionId?: string }) => void) => () => void
+  onIntelligenceManualStarted: (callback: (data?: { _sessionId?: string }) => void) => () => void
+  onIntelligenceManualResult: (callback: (data: { answer: string; question: string; _sessionId?: string }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
-  onIntelligenceError: (callback: (data: { error: string, mode: string }) => void) => () => void;
+  onIntelligenceError: (callback: (data: { error: string, mode: string; _sessionId?: string }) => void) => () => void;
   // Session Management
-  onSessionReset: (callback: () => void) => () => void;
+  onSessionReset: (callback: (payload?: { sessionId: string }) => void) => () => void;
 
   // Streaming listeners
   streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean }) => Promise<void>

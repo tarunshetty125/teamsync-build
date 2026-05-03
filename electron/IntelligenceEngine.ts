@@ -197,10 +197,15 @@ export class IntelligenceEngine extends EventEmitter {
                 return null;
             }
 
+            const generationId = ++this.currentGenerationId;
             const timeoutPromise = new Promise<string | null>((_, reject) => { setTimeout(() => reject(new Error("LLM timeout")), 15000); });
             const insight = await Promise.race([this.assistLLM.generate(context), timeoutPromise]).catch((): any => null);
 
             if (this.assistCancellationToken?.signal.aborted) {
+                return null;
+            }
+            // V3 Fix: discard result if a newer generation started while awaiting
+            if (this.currentGenerationId !== generationId) {
                 return null;
             }
 
@@ -695,8 +700,15 @@ export class IntelligenceEngine extends EventEmitter {
             }
 
             const context = this.session.getFormattedContext(120);
+            const generationId = ++this.currentGenerationId;
             const timeoutPromise = new Promise<string | null>((_, reject) => { setTimeout(() => reject(new Error("LLM timeout")), 15000); });
             const answer = await Promise.race([this.answerLLM.generate(question, context), timeoutPromise]).catch((): any => null);
+
+            // V3 Fix: discard if a new generation (or session reset) fired while awaiting
+            if (this.currentGenerationId !== generationId) {
+                this.setMode('idle');
+                return null;
+            }
 
             if (answer) {
                 this.session.addAssistantMessage(answer);
@@ -765,14 +777,22 @@ export class IntelligenceEngine extends EventEmitter {
                 transcriptContext ?? undefined
             );
 
+            let streamAborted = false;
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
                     console.log('[GENERATION_DISCARDED] code_hint stream aborted by new generation');
-                    await stream.return(undefined); // FIX §3.6: cancel underlying request immediately
+                    await stream.return(undefined);
+                    streamAborted = true;
                     break;
                 }
                 this.emit('suggested_answer_token', token, 'Code Hint', 1.0);
                 fullHint += token;
+            }
+
+            // V4 Fix: match brainstorm/recap pattern — abort before writing session state
+            if (streamAborted) {
+                this.setMode('idle');
+                return null;
             }
 
             if (!fullHint || fullHint.trim().length < 5) {

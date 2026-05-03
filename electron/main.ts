@@ -1157,7 +1157,8 @@ export class AppState {
         text: segment.text,
         timestamp: Date.now(),
         final: segment.isFinal,
-        confidence: segment.confidence
+        confidence: segment.confidence,
+        _sessionId: expectedSessionId,  // V1 Fix: allows renderer to drop cross-session transcripts
       };
       helper.getLauncherWindow()?.webContents.send('native-audio-transcript', payload);
       helper.getOverlayWindow()?.webContents.send('native-audio-transcript', payload);
@@ -1894,8 +1895,11 @@ export class AppState {
     this.windowHelper.resetOverlayPosition();
 
     // Emit session reset to clear UI state immediately
-    this.getWindowHelper().getOverlayWindow()?.webContents.send('session-reset');
-    this.getWindowHelper().getLauncherWindow()?.webContents.send('session-reset');
+    // V2 Fix: embed the new session ID so the renderer can update its
+    // activeSessionIdRef without a separate IPC round-trip.
+    const newSessionId = this.intelligenceManager.getSessionId();
+    this.getWindowHelper().getOverlayWindow()?.webContents.send('session-reset', { sessionId: newSessionId });
+    this.getWindowHelper().getLauncherWindow()?.webContents.send('session-reset', { sessionId: newSessionId });
 
     // ★ ASYNC AUDIO INIT: Return INSTANTLY so the IPC response goes back
     // to the renderer immediately, allowing the UI to switch to overlay
@@ -2061,120 +2065,121 @@ export class AppState {
 
   private setupIntelligenceEvents(): void {
     const mainWindow = this.getMainWindow.bind(this)
+    // V2 Fix: every emit captures the session ID at the moment the event fires.
+    // The renderer drops any payload whose _sessionId != activeSessionIdRef.current.
+    const sid = () => this.intelligenceManager.getSessionId();
 
     // Forward intelligence events to renderer
     this.intelligenceManager.on('assist_update', (insight: string) => {
-      // Send to both if both exist, though mostly overlay needs it
       const helper = this.getWindowHelper();
-      helper.getLauncherWindow()?.webContents.send('intelligence-assist-update', { insight });
-      helper.getOverlayWindow()?.webContents.send('intelligence-assist-update', { insight });
+      const _sessionId = sid();
+      helper.getLauncherWindow()?.webContents.send('intelligence-assist-update', { insight, _sessionId });
+      helper.getOverlayWindow()?.webContents.send('intelligence-assist-update', { insight, _sessionId });
     })
 
     this.intelligenceManager.on('suggested_answer', (answer: string, question: string, confidence: number) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-suggested-answer', { answer, question, confidence })
+        win.webContents.send('intelligence-suggested-answer', { answer, question, confidence, _sessionId: sid() })
       }
-
     })
 
     this.intelligenceManager.on('suggested_answer_token', (token: string, question: string, confidence: number) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-suggested-answer-token', { token, question, confidence })
+        win.webContents.send('intelligence-suggested-answer-token', { token, question, confidence, _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('refined_answer_token', (token: string, intent: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-refined-answer-token', { token, intent })
+        win.webContents.send('intelligence-refined-answer-token', { token, intent, _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('refined_answer', (answer: string, intent: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-refined-answer', { answer, intent })
+        win.webContents.send('intelligence-refined-answer', { answer, intent, _sessionId: sid() })
       }
-
     })
 
     this.intelligenceManager.on('recap', (summary: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-recap', { summary })
+        win.webContents.send('intelligence-recap', { summary, _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('recap_token', (token: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-recap-token', { token })
+        win.webContents.send('intelligence-recap-token', { token, _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('clarify', (clarification: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-clarify', { clarification })
+        win.webContents.send('intelligence-clarify', { clarification, _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('clarify_token', (token: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-clarify-token', { token })
+        win.webContents.send('intelligence-clarify-token', { token, _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('follow_up_questions_update', (questions: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-follow-up-questions-update', { questions })
+        win.webContents.send('intelligence-follow-up-questions-update', { questions, _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('follow_up_questions_token', (token: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-follow-up-questions-token', { token })
+        win.webContents.send('intelligence-follow-up-questions-token', { token, _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('system_design_tradeoffs', (answer: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-system-design-tradeoffs', { answer })
+        win.webContents.send('intelligence-system-design-tradeoffs', { answer, _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('system_design_tradeoffs_token', (token: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-system-design-tradeoffs-token', { token })
+        win.webContents.send('intelligence-system-design-tradeoffs-token', { token, _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('manual_answer_started', () => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-manual-started')
+        win.webContents.send('intelligence-manual-started', { _sessionId: sid() })
       }
     })
 
     this.intelligenceManager.on('manual_answer_result', (answer: string, question: string) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-manual-result', { answer, question })
+        win.webContents.send('intelligence-manual-result', { answer, question, _sessionId: sid() })
       }
-
     })
 
     this.intelligenceManager.on('mode_changed', (mode: string) => {
       const win = mainWindow()
       if (win) {
         win.webContents.send('intelligence-mode-changed', { mode })
+        // Note: mode_changed is metadata-only, no session guard needed in renderer
       }
     })
 
@@ -2182,7 +2187,7 @@ export class AppState {
       console.error(`[IntelligenceManager] Error in ${mode}:`, error)
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-error', { error: error.message, mode })
+        win.webContents.send('intelligence-error', { error: error.message, mode, _sessionId: sid() })
       }
     })
   }
