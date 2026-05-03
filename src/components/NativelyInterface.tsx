@@ -3447,7 +3447,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                         </div>
 
                         {/* ─── Pro Context Bar ─────────────────────────────── */}
-                        <div className="w-[600px] max-w-full">
+                        <div className="w-[600px] max-w-full transition-opacity duration-300 ease-in-out" style={{ opacity: localOpacity }}>
                             <ProContextBar
                                 profileModeEnabled={hasProContextAccess}
                                 negotiationEnabled={negotiationContextEnabled}
