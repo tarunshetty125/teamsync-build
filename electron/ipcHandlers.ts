@@ -3318,6 +3318,15 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  // ==========================================
+  // System Design Mode (renderer → main telemetry)
+  // ==========================================
+
+  safeHandle("overlay:log-system-design-mode", async (_, enabled: boolean) => {
+    console.log(`[IPC] System Design Mode ${enabled ? 'ON' : 'OFF'}`);
+    return { success: true };
+  });
+
   safeHandle("profile:get-negotiation-state", async () => {
     try {
       const orchestrator = appState.getKnowledgeOrchestrator();
@@ -3337,15 +3346,21 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("profile:set-negotiation-context-enabled", async (_, enabled: boolean) => {
     try {
       if (!isProOrTrialActive()) {
+        console.warn('[IPC] Negotiation toggle blocked — Pro license required');
         return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
       }
       const orchestrator = appState.getKnowledgeOrchestrator();
-      if (!orchestrator) return { success: false, error: 'Engine not ready' };
+      if (!orchestrator) {
+        console.warn('[IPC] Negotiation toggle blocked — engine not ready');
+        return { success: false, error: 'Engine not ready' };
+      }
       const hasScript = !!orchestrator.getNegotiationScript?.();
       if (enabled && !hasScript) {
+        console.warn('[IPC] Negotiation toggle blocked — no script generated yet');
         return { success: false, error: 'Generate a negotiation script first.' };
       }
       const result = orchestrator.setNegotiationContextEnabled(Boolean(enabled));
+      console.log(`[IPC] Negotiation context ${enabled ? 'ON' : 'OFF'} → phase=${result.state?.phase}`);
       broadcastNegotiationStateChanged();
       return {
         success: true,
@@ -3355,6 +3370,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         hasScript,
       };
     } catch (error: any) {
+      console.error('[IPC] Negotiation toggle error:', error.message);
       return { success: false, error: error.message };
     }
   });

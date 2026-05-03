@@ -3379,6 +3379,7 @@ No preamble like "Sure!" or "Great question". No meta-commentary. Start with the
                                                     setForceSystemDesignMode(prev => {
                                                         const next = !prev;
                                                         console.log(`[Overlay] System design mode ${next ? 'on' : 'off'}`);
+                                                        window.electronAPI?.overlayLogSystemDesignMode?.(next);
                                                         return next;
                                                     });
                                                 }}

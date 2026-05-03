@@ -1225,6 +1225,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   profileSaveNotes: (content: string) => ipcRenderer.invoke('profile:save-notes', content),
   setCustomNotesEnabled: (enabled: boolean) => ipcRenderer.invoke('set-custom-notes-enabled', enabled),
   getCustomNotesEnabled: () => ipcRenderer.invoke('get-custom-notes-enabled'),
+  overlayLogSystemDesignMode: (enabled: boolean) => ipcRenderer.invoke('overlay:log-system-design-mode', enabled),
   onNegotiationRestored: (callback: (data: { restored: boolean }) => void) => {
     const subscription = (_: any, data: { restored: boolean }) => callback(data);
     ipcRenderer.on('negotiation_restored', subscription);
