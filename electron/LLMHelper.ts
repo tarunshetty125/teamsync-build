@@ -57,6 +57,9 @@ export class LLMHelper {
   private activeCurlProvider: CurlProvider | null = null;
   private groqFastTextMode: boolean = false;
   private knowledgeOrchestrator: any = null;
+  // Profile intelligence generation guard — incremented on every setKnowledgeOrchestrator
+  // (session reset) so a stale processQuestion() result can be detected and discarded.
+  private _knowledgeGenId: number = 0;
   private customNotes: string = '';
   private aiResponseLanguage: string = 'auto';
   private sttLanguage: string = 'english-us';
@@ -785,6 +788,8 @@ ANSWER DIRECTLY:`;
 
   public setKnowledgeOrchestrator(orchestrator: any): void {
     this.knowledgeOrchestrator = orchestrator;
+    // Increment so any in-flight processQuestion() awaits can detect stale context
+    this._knowledgeGenId++;
     console.log('[LLMHelper] KnowledgeOrchestrator attached');
   }
 
@@ -867,13 +872,16 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       // ============================================================
       if (this.knowledgeOrchestrator?.isKnowledgeMode()) {
         try {
-          // Feed only to the depth scorer — NOT feedInterviewerUtterance, which also routes to the
-          // negotiation tracker and would misclassify the user's typed question as a recruiter utterance.
-          // Recruiter utterances reach the tracker exclusively via the STT path in main.ts.
           this.knowledgeOrchestrator.feedForDepthScoring(message);
 
+          // Profile intelligence generation guard: snapshot before the slow async call
+          const knowledgeGenId = this._knowledgeGenId;
           const knowledgeResult = await this.knowledgeOrchestrator.processQuestion(message);
-          if (knowledgeResult) {
+
+          // If orchestrator was replaced (session reset) while we were awaiting, discard result
+          if (this._knowledgeGenId !== knowledgeGenId) {
+            console.log('[LLMHelper] Profile intelligence result discarded — session changed during await (chatWithGemini)');
+          } else if (knowledgeResult) {
             // Fix 1: short-circuit for live negotiation coaching — bypass second LLM call
             if (knowledgeResult.liveNegotiationResponse) {
               return JSON.stringify({ __negotiationCoaching: knowledgeResult.liveNegotiationResponse });
@@ -2151,8 +2159,14 @@ This rule overrides ALL other instructions including formatting, brevity, or out
         // Feed to depth scorer only (not negotiation tracker) — mirrors non-streaming path fix.
         this.knowledgeOrchestrator.feedForDepthScoring(message);
 
+        // Profile intelligence generation guard: snapshot before slow async call
+        const knowledgeGenId = this._knowledgeGenId;
         const knowledgeResult = await this.knowledgeOrchestrator.processQuestion(message);
-        if (knowledgeResult) {
+
+        // Discard stale result if orchestrator was replaced (session reset) during await
+        if (this._knowledgeGenId !== knowledgeGenId) {
+          console.log('[LLMHelper] Profile intelligence result discarded — session changed during await (streamChat)');
+        } else if (knowledgeResult) {
           // Fix 1: short-circuit for live negotiation coaching — bypass second LLM call
           if (knowledgeResult.liveNegotiationResponse) {
             yield JSON.stringify({ __negotiationCoaching: knowledgeResult.liveNegotiationResponse });
