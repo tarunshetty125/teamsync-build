@@ -192,7 +192,7 @@ const SettingsPopup = () => {
 
     return (
         <div className="w-fit h-fit bg-transparent flex flex-col">
-            <div ref={contentRef} className={`w-[200px] max-h-[280px] p-2 flex flex-col animate-scale-in origin-top-left ${popupPanelClass}`}>
+            <div ref={contentRef} className={`w-[200px] max-h-[100vh] p-2 flex flex-col animate-scale-in origin-top-left ${popupPanelClass}`}>
                 <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col min-h-0">
 
                     {/* Undetectability */}
