@@ -2163,6 +2163,20 @@ export class AppState {
       }
     })
 
+    this.intelligenceManager.on('screen_scan_result', (answer: string, mode: string, requestId?: string | null) => {
+      const win = mainWindow()
+      if (win) {
+        win.webContents.send('intelligence-screen-scan-result', { answer, mode, _sessionId: sid(), requestId: requestId ?? rid() })
+      }
+    })
+
+    this.intelligenceManager.on('screen_scan_token', (token: string, mode: string, requestId?: string | null) => {
+      const win = mainWindow()
+      if (win) {
+        win.webContents.send('intelligence-screen-scan-token', { token, mode, _sessionId: sid(), requestId: requestId ?? rid() })
+      }
+    })
+
     this.intelligenceManager.on('manual_answer_started', (requestId?: string | null) => {
       const win = mainWindow()
       if (win) {

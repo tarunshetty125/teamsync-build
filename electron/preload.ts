@@ -33,6 +33,7 @@ interface ElectronAPI {
   onUnauthorized: (callback: () => void) => () => void
   onDebugError: (callback: (error: string) => void) => () => void
   takeScreenshot: () => Promise<void>
+  captureScreen: () => Promise<string>
   takeSelectiveScreenshot: () => Promise<{ path: string; preview: string; cancelled?: boolean }>
   moveWindowLeft: () => Promise<void>
   moveWindowRight: () => Promise<void>
@@ -127,6 +128,8 @@ interface ElectronAPI {
   generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ script: string | null }>
+  generateScreenScan: (imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => Promise<{ result: string | null; mode: string; error?: string }>
+  runScreenAnalysis: (payload: { requestId: string; image: string }) => void
   generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => Promise<{ refined: string | null; intent: string }>
   generateFollowUpQuestions: (requestId?: string) => Promise<{ questions: string | null }>
   generateSystemDesignTradeoffs: (requestId?: string) => Promise<{ answer: string | null }>
@@ -414,6 +417,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("update-content-dimensions", dimensions),
   getRecognitionLanguages: () => ipcRenderer.invoke("get-recognition-languages"),
   takeScreenshot: () => ipcRenderer.invoke("take-screenshot"),
+  captureScreen: async () => {
+    const data = await ipcRenderer.invoke("take-screenshot");
+    return data?.path ?? "";
+  },
   takeSelectiveScreenshot: () => ipcRenderer.invoke("take-selective-screenshot"),
   getScreenshots: () => ipcRenderer.invoke("get-screenshots"),
   deleteScreenshot: (path: string) =>
@@ -774,6 +781,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   generateClarify: (requestId?: string) => ipcRenderer.invoke("generate-clarify", requestId),
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => ipcRenderer.invoke("generate-code-hint", imagePaths, problemStatement, requestId),
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => ipcRenderer.invoke("generate-brainstorm", imagePaths, problemStatement, requestId),
+  generateScreenScan: (imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => ipcRenderer.invoke("generate-screen-scan", imagePaths, extractedText, forcedMode, requestId),
+  runScreenAnalysis: (payload: { requestId: string; image: string }) => {
+    void ipcRenderer.invoke("generate-screen-scan", payload.image ? [payload.image] : [], undefined, undefined, payload.requestId);
+  },
   generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => ipcRenderer.invoke("generate-follow-up", intent, userRequest, requestId),
   generateFollowUpQuestions: (requestId?: string) => ipcRenderer.invoke("generate-follow-up-questions", requestId),
   generateSystemDesignTradeoffs: (requestId?: string) => ipcRenderer.invoke("generate-system-design-tradeoffs", requestId),
@@ -894,6 +905,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("intelligence-system-design-tradeoffs", subscription)
     return () => {
       ipcRenderer.removeListener("intelligence-system-design-tradeoffs", subscription)
+    }
+  },
+  onIntelligenceScreenScanToken: (callback: (data: { token: string; mode: string }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("intelligence-screen-scan-token", subscription)
+    return () => {
+      ipcRenderer.removeListener("intelligence-screen-scan-token", subscription)
+    }
+  },
+  onIntelligenceScreenScanResult: (callback: (data: { answer: string; mode: string }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("intelligence-screen-scan-result", subscription)
+    return () => {
+      ipcRenderer.removeListener("intelligence-screen-scan-result", subscription)
     }
   },
   onIntelligenceFollowUpQuestionsToken: (callback: (data: { token: string }) => void) => {

@@ -9,6 +9,9 @@ export { CodeHintLLM } from "./CodeHintLLM";
 export { FollowUpLLM } from "./FollowUpLLM";
 export { FollowUpQuestionsLLM } from "./FollowUpQuestionsLLM";
 export { RecapLLM } from "./RecapLLM";
+export { ScreenScanLLM } from "./ScreenScanLLM";
+export { detectScreenContentMode, MODE_BEHAVIOR } from "./ScreenScanLLM";
+export type { ScreenContentMode } from "./ScreenScanLLM";
 export { SystemDesignTradeoffsLLM } from "./SystemDesignTradeoffsLLM";
 export { WhatToAnswerLLM } from "./WhatToAnswerLLM";
 export { clampResponse, validateResponse } from "./postProcessor";
@@ -57,5 +60,8 @@ export {
     CODE_HINT_PROMPT,
     buildCodeHintMessage,
     BRAINSTORM_MODE_PROMPT,
-    SYSTEM_DESIGN_TRADEOFFS_PROMPT
+    SYSTEM_DESIGN_TRADEOFFS_PROMPT,
+    SCREEN_SCAN_PROMPT,
+    buildScreenScanMessage
 } from "./prompts";
+

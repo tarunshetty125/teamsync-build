@@ -8,14 +8,16 @@ import { SessionTracker, TranscriptSegment, SuggestionTrigger, ContextItem } fro
 import {
     AnswerLLM, AssistLLM, BrainstormLLM, ClarifyLLM, CodeHintLLM, FollowUpLLM, RecapLLM,
     FollowUpQuestionsLLM, SystemDesignTradeoffsLLM, WhatToAnswerLLM,
+    ScreenScanLLM,
     prepareTranscriptForWhatToAnswer, buildTemporalContext,
     AssistantResponse as LLMAssistantResponse, classifyIntent, getAnswerShapeGuidance,
-    buildBoundedRecapContext
+    buildBoundedRecapContext,
+    detectScreenContentMode, MODE_BEHAVIOR
 } from './llm';
-import type { ConversationIntent } from './llm';
+import type { ConversationIntent, ScreenContentMode } from './llm';
 
 // Mode types
-export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm' | 'system_design_tradeoffs';
+export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm' | 'system_design_tradeoffs' | 'screen_scan';
 
 // Refinement intent detection (refined to avoid false positives)
 function detectRefinementIntent(userText: string): { isRefinement: boolean; intent: string } {
@@ -54,6 +56,8 @@ export interface IntelligenceModeEvents {
     'follow_up_questions_token': (token: string, requestId?: string | null) => void;
     'system_design_tradeoffs': (answer: string, requestId?: string | null) => void;
     'system_design_tradeoffs_token': (token: string, requestId?: string | null) => void;
+    'screen_scan_result': (answer: string, mode: string, requestId?: string | null) => void;
+    'screen_scan_token': (token: string, mode: string, requestId?: string | null) => void;
     'manual_answer_started': (requestId?: string | null) => void;
     'manual_answer_result': (answer: string, question: string, requestId?: string | null) => void;
     'mode_changed': (mode: IntelligenceMode) => void;
@@ -75,6 +79,8 @@ export class IntelligenceEngine extends EventEmitter {
     private codeHintLLM: CodeHintLLM | null = null;
     private brainstormLLM: BrainstormLLM | null = null;
     private systemDesignTradeoffsLLM: SystemDesignTradeoffsLLM | null = null;
+    private screenScanLLM: ScreenScanLLM | null = null;
+    private activeScreenScanRequestId: string | null = null;
 
     // Concurrency tracking
     private assistCancellationToken: AbortController | null = null;
@@ -187,6 +193,7 @@ export class IntelligenceEngine extends EventEmitter {
         this.codeHintLLM = new CodeHintLLM(this.llmHelper);
         this.brainstormLLM = new BrainstormLLM(this.llmHelper);
         this.systemDesignTradeoffsLLM = new SystemDesignTradeoffsLLM(this.llmHelper);
+        this.screenScanLLM = new ScreenScanLLM(this.llmHelper);
 
         // Sync RecapLLM reference to SessionTracker for epoch compaction
         this.session.setRecapLLM(this.recapLLM);
@@ -1045,6 +1052,114 @@ export class IntelligenceEngine extends EventEmitter {
             this.setMode('idle');
             return null;
         }
+    }
+
+    /**
+     * MODE 9: Screen Scan (Context-Aware Screen Intelligence)
+     * Captures screen → detects content type → routes to mode-specific prompt → streams response.
+     * Does NOT use transcript or session history — ONLY screen content + detected mode.
+     */
+    async runScreenScan(imagePaths: string[], extractedText?: string, forcedMode?: ScreenContentMode, requestId?: string): Promise<string | null> {
+        if (this.assistCancellationToken) {
+            this.assistCancellationToken.abort();
+            this.assistCancellationToken = null;
+        }
+        const activeRequestId = requestId ?? null;
+        if (this.activeScreenScanRequestId && this.activeScreenScanRequestId !== activeRequestId) {
+            this.cancelRequest(this.activeScreenScanRequestId);
+        }
+        this.activeScreenScanRequestId = activeRequestId;
+
+        return this.runLLMGuarded(activeRequestId, 'screen_scan', async (signal, generationId) => {
+            const previousKnowledgeOrchestrator = this.llmHelper.getKnowledgeOrchestrator();
+            const MAX_SCREEN_CHARS = 6000;
+            if (!this.screenScanLLM) {
+                const fallback = "Please configure your API Keys in Settings to use Screen Scan.";
+                this.safeEmit(signal, activeRequestId, 'screen_scan_result', fallback, 'ui_general');
+                return fallback;
+            }
+
+            if (!imagePaths || imagePaths.length === 0) {
+                const fallback = "No screenshot available. Capture your screen first.";
+                this.safeEmit(signal, activeRequestId, 'screen_scan_result', fallback, 'ui_general');
+                return fallback;
+            }
+
+            this.llmHelper.setKnowledgeOrchestrator(null);
+
+            try {
+                const rawText = extractedText?.trim()
+                    ? extractedText.trim()
+                    : await this.llmHelper.extractScreenTextHybrid(imagePaths);
+                if (rawText === '__NO_CHANGE__') {
+                    const noChange = "No visible screen changes detected.";
+                    this.safeEmit(signal, activeRequestId, 'screen_scan_result', noChange, 'ui_general');
+                    return noChange;
+                }
+                const screenText = rawText
+                    .replace(/\s+/g, ' ')
+                    .replace(/[^\x20-\x7E\n]/g, '')
+                    .trim()
+                    .slice(0, MAX_SCREEN_CHARS);
+
+                if (screenText.length < 50) {
+                    const fallback = "I couldn't detect enough readable text on screen. Try capturing a clearer area.";
+                    this.safeEmit(signal, activeRequestId, 'screen_scan_result', fallback, 'ui_general');
+                    return fallback;
+                }
+
+                const detectedMode: ScreenContentMode = forcedMode
+                    ?? (screenText ? detectScreenContentMode(screenText) : 'ui_general');
+
+                const behavior = MODE_BEHAVIOR[detectedMode];
+                console.log(
+                    `[IntelligenceEngine] Screen Scan — mode: ${detectedMode} (${behavior.label}), images: ${imagePaths.length}, textLength: ${screenText.length}`
+                );
+
+                let fullResult = "";
+                const stream = this.screenScanLLM.generateStream(imagePaths, screenText, detectedMode);
+                let streamAborted = false;
+
+                for await (const token of stream) {
+                    if (signal?.aborted || this.currentGenerationId !== generationId) {
+                        console.log('[GENERATION_DISCARDED] screen_scan stream aborted by new generation');
+                        await stream.return(undefined);
+                        streamAborted = true;
+                        break;
+                    }
+                    if (activeRequestId && !this.requestAbortControllers.has(activeRequestId)) {
+                        await stream.return(undefined);
+                        streamAborted = true;
+                        break;
+                    }
+                    this.safeEmit(signal, activeRequestId, 'screen_scan_token', token, detectedMode);
+                    fullResult += token;
+                }
+
+                if (streamAborted) {
+                    return null;
+                }
+
+                if (!fullResult || fullResult.trim().length < 5) {
+                    fullResult = "I couldn't detect meaningful content on screen. Try capturing a different area.";
+                }
+
+                this.session.pushUsage({
+                    type: 'screen_scan',
+                    timestamp: Date.now(),
+                    question: `Screen Scan (${detectedMode})`,
+                    answer: fullResult
+                });
+
+                this.safeEmit(signal, activeRequestId, 'screen_scan_result', fullResult, detectedMode);
+                return fullResult;
+            } finally {
+                this.llmHelper.setKnowledgeOrchestrator(previousKnowledgeOrchestrator);
+                if (this.activeScreenScanRequestId === activeRequestId) {
+                    this.activeScreenScanRequestId = null;
+                }
+            }
+        });
     }
 
     // ============================================

@@ -39,6 +39,7 @@ import { oneLight, vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/
 import TopPill from './ui/TopPill';
 import RollingTranscript from './ui/RollingTranscript';
 import ProContextBar from './ui/ProContextBar';
+import ScreenScanOverlay, { type ScreenScanOverlayMode, type ScreenScanOverlayPhase } from './ScreenScanOverlay';
 import { NegotiationCoachingCard } from '../premium';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -87,6 +88,16 @@ interface RequestLifecycle {
     intent?: string;
     questionTurnId?: string | null;
     startedAt: number;
+}
+
+interface ScreenScanOverlayState {
+    visible: boolean;
+    phase: ScreenScanOverlayPhase;
+    requestId: string | null;
+    mode: ScreenScanOverlayMode;
+    answer: string;
+    chips: ResponseChip[];
+    expanded: boolean;
 }
 
 function generateResponseChips(text: string, _intent?: string): ResponseChip[] {
@@ -518,6 +529,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         'Follow Up Questions': { light: 'bg-cyan-100/80 text-cyan-700 border-cyan-200/60', dark: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/25' },
         'Code Hint':      { light: 'bg-purple-100/80 text-purple-700 border-purple-200/60', dark: 'bg-purple-500/15 text-purple-300 border-purple-400/25' },
         'Brainstorm':     { light: 'bg-pink-100/80 text-pink-700 border-pink-200/60', dark: 'bg-pink-500/15 text-pink-300 border-pink-400/25' },
+        'Screen Scan':    { light: 'bg-orange-100/80 text-orange-700 border-orange-200/60', dark: 'bg-orange-500/15 text-orange-300 border-orange-400/25' },
         'System Design Trade-offs': { light: 'bg-emerald-100/80 text-emerald-700 border-emerald-200/60', dark: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
         'Answer Now':     { light: 'bg-indigo-100/80 text-indigo-700 border-indigo-200/60', dark: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
         'Manual Input':   { light: 'bg-slate-100/80 text-slate-600 border-slate-200/60', dark: 'bg-slate-500/15 text-slate-300 border-slate-400/25' },
@@ -532,6 +544,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         'Recap': '📝',
         'Code Hint': '💻',
         'Brainstorm': '🧠',
+        'Screen Scan': '🔍',
         'System Design Trade-offs': '⚖️',
         'Answer Now': '⚡',
         'Manual Input': '⌨️',
@@ -540,6 +553,15 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const [inputValue, setInputValue] = useState('');
     const { shortcuts, isShortcutPressed } = useShortcuts();
     const [messages, setMessages] = useState<Message[]>([]);
+    const [screenScanOverlay, setScreenScanOverlay] = useState<ScreenScanOverlayState>({
+        visible: false,
+        phase: 'hidden',
+        requestId: null,
+        mode: 'ui_general',
+        answer: '',
+        chips: [],
+        expanded: false,
+    });
     const [isConnected, setIsConnected] = useState(false);
     const [sttUserStatus, setSttUserStatus] = useState<'connected' | 'reconnecting' | 'failed'>('connected');
     const [sttUserError, setSttUserError] = useState<string>('');
@@ -566,6 +588,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     // Analytics State
     const requestStartTimeRef = useRef<number | null>(null);
+    const screenScanDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const activeScanRequestIdRef = useRef<string | null>(null);
+    const isScreenScanInFlightRef = useRef(false);
+    const handleScreenScanRef = useRef<() => Promise<void>>(async () => {});
     const activeIntentRequestIdsRef = useRef<Record<string, string>>({});
     const activeChatRequestIdRef = useRef<string | null>(null);
     const activeRagRequestIdRef = useRef<string | null>(null);
@@ -591,6 +617,68 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         if (!current) return;
         requestRegistryRef.current[requestId] = { ...current, ...patch };
     }, []);
+
+    const clearScreenScanDismissTimer = useCallback(() => {
+        if (screenScanDismissTimerRef.current) {
+            clearTimeout(screenScanDismissTimerRef.current);
+            screenScanDismissTimerRef.current = null;
+        }
+    }, []);
+
+    const hideScreenScanOverlay = useCallback(() => {
+        clearScreenScanDismissTimer();
+        setScreenScanOverlay({
+            visible: false,
+            phase: 'hidden',
+            requestId: null,
+            mode: 'ui_general',
+            answer: '',
+            chips: [],
+            expanded: false,
+        });
+    }, [clearScreenScanDismissTimer]);
+
+    const showScreenScanOverlayPhase = useCallback((
+        requestId: string,
+        phase: Exclude<ScreenScanOverlayPhase, 'hidden'>,
+        patch?: Partial<ScreenScanOverlayState>,
+    ) => {
+        clearScreenScanDismissTimer();
+        setScreenScanOverlay((prev) => ({
+            visible: true,
+            phase,
+            requestId,
+            mode: patch?.mode ?? prev.mode ?? 'ui_general',
+            answer: patch?.answer ?? '',
+            chips: patch?.chips ?? [],
+            expanded: patch?.expanded ?? false,
+        }));
+    }, [clearScreenScanDismissTimer]);
+
+    const showScreenScanResult = useCallback((requestId: string, mode: ScreenScanOverlayMode, answer: string, chips: ResponseChip[] = []) => {
+        clearScreenScanDismissTimer();
+        setScreenScanOverlay({
+            visible: true,
+            phase: 'result',
+            requestId,
+            mode,
+            answer,
+            chips,
+            expanded: false,
+        });
+        screenScanDismissTimerRef.current = setTimeout(() => {
+            setScreenScanOverlay((current) => current.requestId === requestId ? {
+                visible: false,
+                phase: 'hidden',
+                requestId: null,
+                mode: 'ui_general',
+                answer: '',
+                chips: [],
+                expanded: false,
+            } : current);
+            screenScanDismissTimerRef.current = null;
+        }, 10000);
+    }, [clearScreenScanDismissTimer]);
 
     const markRequestProcessing = useCallback((requestId: string) => {
         activeUiRequestIdRef.current = requestId;
@@ -721,6 +809,22 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             return updated;
         });
     }, [updateRequestLifecycle]);
+
+    useEffect(() => {
+        return () => {
+            clearScreenScanDismissTimer();
+        };
+    }, [clearScreenScanDismissTimer]);
+
+    useEffect(() => {
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && screenScanOverlay.visible) {
+                hideScreenScanOverlay();
+            }
+        };
+        window.addEventListener('keydown', handleEscape);
+        return () => window.removeEventListener('keydown', handleEscape);
+    }, [hideScreenScanOverlay, screenScanOverlay.visible]);
 
     // Sync transcript setting
     useEffect(() => {
@@ -873,7 +977,14 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }
         requestStartTimeRef.current = null;
         currentSourceRef.current = undefined;
-    }, [cancelRequestMessage]);
+        if (!nextRequestId || screenScanOverlay.requestId !== nextRequestId) {
+            hideScreenScanOverlay();
+        }
+        if (!nextRequestId || activeScanRequestIdRef.current !== nextRequestId) {
+            activeScanRequestIdRef.current = null;
+            isScreenScanInFlightRef.current = false;
+        }
+    }, [cancelRequestMessage, hideScreenScanOverlay, screenScanOverlay.requestId]);
 
     const codeTheme = isLightTheme ? oneLight : vscDarkPlus;
     const codeLineNumberColor = isLightTheme ? 'rgba(15,23,42,0.35)' : 'rgba(255,255,255,0.2)';
@@ -1498,6 +1609,39 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             currentSourceRef.current = undefined;
         }));
 
+        // STREAMING: Screen Scan (Context-Aware Screen Intelligence)
+        cleanups.push(window.electronAPI.onIntelligenceScreenScanToken((data) => {
+            // V2 Guard
+            if ((data as any)._sessionId && activeSessionIdRef.current && (data as any)._sessionId !== activeSessionIdRef.current) return;
+            if ((data as any).requestId && activeScanRequestIdRef.current && (data as any).requestId !== activeScanRequestIdRef.current) return;
+            const requestId = resolveIntentRequestId('screen_scan', (data as any).requestId);
+            if (!requestId) return;
+            if (activeScanRequestIdRef.current && requestId !== activeScanRequestIdRef.current) return;
+            setScreenScanOverlay((prev) => prev.requestId === requestId
+                ? { ...prev, visible: true, phase: 'processing', mode: data.mode as ScreenScanOverlayMode }
+                : prev);
+            appendTokenToRequest(requestId, data.token);
+        }));
+
+        cleanups.push(window.electronAPI.onIntelligenceScreenScanResult((data) => {
+            // V2 Guard
+            if ((data as any)._sessionId && activeSessionIdRef.current && (data as any)._sessionId !== activeSessionIdRef.current) return;
+            if ((data as any).requestId && activeScanRequestIdRef.current && (data as any).requestId !== activeScanRequestIdRef.current) return;
+            const requestId = resolveIntentRequestId('screen_scan', (data as any).requestId);
+            if (!requestId) return;
+            if (activeScanRequestIdRef.current && requestId !== activeScanRequestIdRef.current) return;
+            clearProcessingForRequest(requestId);
+            const chips = generateResponseChips(data.answer, 'screen_scan');
+            showScreenScanResult(requestId, data.mode as ScreenScanOverlayMode, data.answer, chips);
+            finalizeRequestMessage(requestId, data.answer, {
+                chips: chips.length > 0 ? chips : undefined,
+            });
+            activeScanRequestIdRef.current = null;
+            isScreenScanInFlightRef.current = false;
+            rememberIntentRequest('screen_scan', null);
+            currentSourceRef.current = undefined;
+        }));
+
         cleanups.push(window.electronAPI.onIntelligenceManualResult((data) => {
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
@@ -1514,6 +1658,13 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             if (data.requestId) {
                 clearProcessingForRequest(data.requestId);
+                if (data.mode === 'screen_scan') {
+                    hideScreenScanOverlay();
+                    if (!activeScanRequestIdRef.current || data.requestId === activeScanRequestIdRef.current) {
+                        activeScanRequestIdRef.current = null;
+                        isScreenScanInFlightRef.current = false;
+                    }
+                }
                 failRequestMessage(data.requestId, `❌ Error (${data.mode}): ${data.error}`);
                 return;
             }
@@ -1858,6 +2009,82 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }
     };
 
+    const handleScreenScan = async () => {
+        const previousScanRequestId = isScreenScanInFlightRef.current ? activeScanRequestIdRef.current : null;
+        await cancelInFlightOverlayRequests();
+        setIsExpanded(true);
+        currentSourceRef.current = 'Screen Scan';
+        analytics.trackCommandExecuted('screen_scan');
+        const requestId = nextRequestId('screen-scan');
+        if (previousScanRequestId) {
+            await window.electronAPI.cancelIntelligenceByRequest(previousScanRequestId);
+        }
+        activeScanRequestIdRef.current = requestId;
+        isScreenScanInFlightRef.current = true;
+        markRequestProcessing(requestId);
+        rememberIntentRequest('screen_scan', requestId);
+        showScreenScanOverlayPhase(requestId, 'scanning');
+
+        const pending = pendingCaptureRef.current;
+        let currentAttachments = attachedContextRef.current;
+        if (pending && !currentAttachments.some((s) => s.path === pending.path)) {
+            currentAttachments = [...currentAttachments, pending].slice(-5);
+        }
+
+        try {
+            if (currentAttachments.length === 0) {
+                const capturedPath = await window.electronAPI.captureScreen();
+                if (!capturedPath) {
+                    pendingCaptureRef.current = null;
+                    hideScreenScanOverlay();
+                    failRequestMessage(requestId, 'Unable to capture the screen right now. Try again.');
+                    activeScanRequestIdRef.current = null;
+                    isScreenScanInFlightRef.current = false;
+                    rememberIntentRequest('screen_scan', null);
+                    return;
+                }
+                currentAttachments = [{ path: capturedPath, preview: '' }];
+            } else {
+                setAttachedContext([]);
+            }
+
+            pendingCaptureRef.current = null;
+
+            if (currentAttachments.length > 0) {
+                setMessages(prev => [...prev, {
+                    id: nextMsgId(),
+                    role: 'user',
+                    text: '🔍 Analyze this screen',
+                    hasScreenshot: true,
+                    screenshotPreview: currentAttachments[0].preview
+                }]);
+                setTimeout(() => {
+                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                }, 50);
+            }
+
+            showScreenScanOverlayPhase(requestId, 'processing');
+
+            beginStreamingMessage(requestId, {
+                role: 'system',
+                text: '',
+                intent: 'screen_scan',
+                source: currentSourceRef.current,
+                isStreaming: true,
+            });
+
+            window.electronAPI.runScreenAnalysis({ requestId, image: currentAttachments[0]?.path ?? '' });
+        } catch (err) {
+            pendingCaptureRef.current = null;
+            hideScreenScanOverlay();
+            activeScanRequestIdRef.current = null;
+            isScreenScanInFlightRef.current = false;
+            failRequestMessage(requestId, `Error: ${err}`);
+            rememberIntentRequest('screen_scan', null);
+        }
+    };
+
+    handleScreenScanRef.current = handleScreenScan;
 
     // Setup Streaming Listeners
     useEffect(() => {
@@ -2549,7 +2776,8 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
         handleAnswerNow,
         handleClarify,
         handleCodeHint,
-        handleBrainstorm
+        handleBrainstorm,
+        handleScreenScan
     });
 
     // Update ref on every render so the event listener always access latest state/props
@@ -2561,7 +2789,8 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
         handleAnswerNow,
         handleClarify,
         handleCodeHint,
-        handleBrainstorm
+        handleBrainstorm,
+        handleScreenScan
     };
 
     useEffect(() => {
@@ -2633,7 +2862,7 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
     // Update ref on every render so event listeners always access latest state/props
     generalHandlersRef.current = {
         toggleVisibility: () => window.electronAPI.toggleWindow(),
-        processScreenshots: handleWhatToSay,
+        processScreenshots: handleScreenScan,
         resetCancel: async () => {
             if (isProcessing) {
                 await cancelInFlightOverlayRequests();
@@ -2735,7 +2964,7 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
             // whether the state update has flushed yet.
             requestAnimationFrame(() => {
                 try {
-                    handlersRef.current.handleWhatToSay();
+                    handlersRef.current.handleScreenScan();
                 } finally {
                     pendingCaptureRef.current = null;
                 }
@@ -2877,6 +3106,21 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                     style={{ boxShadow: '0 0 10px rgba(245,158,11,0.8)' }}
                                 />
                             </div>
+
+                            <ScreenScanOverlay
+                                visible={screenScanOverlay.visible}
+                                phase={screenScanOverlay.phase}
+                                mode={screenScanOverlay.mode}
+                                answer={screenScanOverlay.answer}
+                                chips={screenScanOverlay.chips}
+                                expanded={screenScanOverlay.expanded}
+                                onToggleExpanded={() => {
+                                    setScreenScanOverlay((prev) => prev.visible
+                                        ? { ...prev, expanded: !prev.expanded }
+                                        : prev);
+                                }}
+                                onClose={hideScreenScanOverlay}
+                            />
 
 
 
@@ -3124,6 +3368,7 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                     coding: [
                                         { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
                                         { label: 'Code Hint', icon: '💻', handler: handleCodeHint, isRecommended: true },
+                                        { label: 'Scan Screen', icon: '🔍', handler: handleScreenScan },
                                         { label: 'Brainstorm', icon: '🧠', handler: handleBrainstorm },
                                         { label: 'Clarify', icon: '❓', handler: handleClarify },
                                     ],
@@ -3150,6 +3395,7 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                     ],
                                     general: [
                                         { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
+                                        { label: 'Scan Screen', icon: '🔍', handler: handleScreenScan },
                                         { label: 'Clarify', icon: '❓', handler: handleClarify },
                                         { label: actionButtonMode === 'brainstorm' ? 'Brainstorm' : 'Recap', icon: actionButtonMode === 'brainstorm' ? '🧠' : '📝', handler: actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap },
                                         { label: 'Follow Up', icon: '➡️', handler: handleFollowUpQuestions },
@@ -3195,6 +3441,7 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                                 const buttonColors: Record<string, { gradient: string; glow: string }> = {
                                                     'What to answer?': { gradient: 'from-sky-400 via-sky-500 to-blue-600', glow: 'rgba(56,189,248,0.35)' },
                                                     'Code Hint':       { gradient: 'from-violet-400 via-violet-500 to-purple-600', glow: 'rgba(139,92,246,0.35)' },
+                                                    'Scan Screen':     { gradient: 'from-orange-400 via-amber-500 to-yellow-600', glow: 'rgba(251,191,36,0.35)' },
                                                     'Brainstorm':      { gradient: 'from-amber-400 via-orange-500 to-orange-600', glow: 'rgba(251,146,60,0.35)' },
                                                     'Clarify':         { gradient: 'from-cyan-400 via-cyan-500 to-teal-600', glow: 'rgba(34,211,238,0.35)' },
                                                     'STAR Story':      { gradient: 'from-pink-400 via-pink-500 to-rose-600', glow: 'rgba(244,114,182,0.35)' },
@@ -3585,6 +3832,15 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                         )}
 
                                     </div>
+
+                                    <button
+                                        onClick={handleScreenScan}
+                                        className="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.08] text-[#FDE68A] shadow-sm interaction-base interaction-press"
+                                        title="Capture and scan screen"
+                                        style={appearance.iconStyle}
+                                    >
+                                        <Camera className="w-3.5 h-3.5" />
+                                    </button>
 
                                     <button
                                         onClick={handleManualSubmit}

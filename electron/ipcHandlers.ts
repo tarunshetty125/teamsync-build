@@ -2590,6 +2590,31 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  // MODE 9: Screen Scan (Context-Aware Screen Intelligence)
+  safeHandle("generate-screen-scan", async (_, imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => {
+    try {
+      // If no explicit images were passed from the frontend, fall back to the
+      // screenshot queue so the AI can always "see" the user's screen.
+      const resolvedImagePaths: string[] =
+        imagePaths && imagePaths.length > 0
+          ? imagePaths
+          : appState.getScreenshotQueue();
+
+      console.log(`[IPC] generate-screen-scan: using ${resolvedImagePaths.length} image(s) (${imagePaths?.length ? 'explicit' : 'queue fallback'}), mode: ${forcedMode || 'auto'}`);
+
+      const intelligenceManager = appState.getIntelligenceManager();
+      const result = await intelligenceManager.runScreenScan(
+        resolvedImagePaths,
+        extractedText,
+        forcedMode as any,
+        requestId
+      );
+      return { result, mode: forcedMode || 'auto' };
+    } catch (error: any) {
+      throw error;
+    }
+  });
+
   // Dynamic Action Button Mode (Recap vs Brainstorm)
   safeHandle("get-action-button-mode", () => {
     const { SettingsManager } = require('./services/SettingsManager');

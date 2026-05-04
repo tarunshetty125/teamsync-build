@@ -30,6 +30,7 @@ export interface ElectronAPI {
   onUnauthorized: (callback: () => void) => () => void
   onDebugError: (callback: (error: string) => void) => () => void
   takeScreenshot: () => Promise<{ path: string; preview: string }>
+  captureScreen: () => Promise<string>
   takeSelectiveScreenshot: () => Promise<{ path: string; preview: string; cancelled?: boolean }>
   moveWindowLeft: () => Promise<void>
   moveWindowRight: () => Promise<void>
@@ -158,6 +159,8 @@ export interface ElectronAPI {
   generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ script: string | null }>
+  generateScreenScan: (imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => Promise<{ result: string | null; mode: string; error?: string }>
+  runScreenAnalysis: (payload: { requestId: string; image: string }) => void
   generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => Promise<{ refined: string | null; intent: string }>
   generateFollowUpQuestions: (requestId?: string) => Promise<{ questions: string | null }>
   generateSystemDesignTradeoffs: (requestId?: string) => Promise<{ answer: string | null }>
@@ -215,6 +218,8 @@ export interface ElectronAPI {
   onIntelligenceClarifyToken: (callback: (data: { token: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceSystemDesignTradeoffs: (callback: (data: { answer: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceScreenScanToken: (callback: (data: { token: string; mode: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceScreenScanResult: (callback: (data: { answer: string; mode: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceManualStarted: (callback: (data?: { _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceManualResult: (callback: (data: { answer: string; question: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void

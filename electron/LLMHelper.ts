@@ -17,9 +17,10 @@ import { enforceTokenCap, estimateTokens, TOKEN_CAP } from './llm/TokenBudget';
 import { deepVariableReplacer, getByPath, injectImageIntoMessages } from './utils/curlUtils';
 import curl2Json from "@bany/curl-to-json";
 import { CustomProvider, CurlProvider } from './services/CredentialsManager';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import axios from 'axios';
+import path from 'path';
 import { createProviderRateLimiters, RateLimiter } from './services/RateLimiter';
 const execAsync = promisify(exec);
 
@@ -66,6 +67,11 @@ export class LLMHelper {
   private aiResponseLanguage: string = 'auto';
   private sttLanguage: string = 'english-us';
   private nativelyKey: string | null = null;
+  private lastOCRCache = new Map<string, string>();
+  private ocrWorker: any = null;
+  private ocrWorkerBuffer: string = '';
+  private ocrWorkerResolvers: Array<(value: string) => void> = [];
+  private lastScreenHash: string = '';
 
   // Rate limiters per provider to prevent 429 errors on free tiers
   private rateLimiters: ReturnType<typeof createProviderRateLimiters>;
@@ -695,6 +701,195 @@ CRITICAL RULES:
         text: `I couldn't analyze the screen right now (${error.message}). Please try again.`,
         timestamp: Date.now()
       };
+    }
+  }
+
+  /**
+   * Extract visible on-screen text and layout cues from screenshots.
+   * This is intentionally stateless: no transcript, no knowledge mode, no RAG.
+   */
+  public async extractScreenText(imagePaths: string[]): Promise<string> {
+    if (!imagePaths?.length) return '';
+    const Tesseract = require('tesseract.js');
+
+    try {
+      const texts = await Promise.all(
+        imagePaths.map(async (imagePath) => {
+          const result = await Tesseract.recognize(imagePath, 'eng', {
+            logger: () => undefined,
+          });
+          return result?.data?.text ?? '';
+        })
+      );
+      return texts.join('\n');
+    } catch (error: any) {
+      console.warn('[LLMHelper] Screen text extraction failed:', error?.message || error);
+      return '';
+    }
+  }
+
+  private isLowQualityScreenText(text: string): boolean {
+    if (!text) return true;
+
+    const cleaned = text.trim();
+    if (cleaned.length < 80) return true;
+
+    const lines = cleaned.split('\n').length;
+    const hasCode = /(function|const|let|class|=>)/.test(cleaned);
+
+    const weirdChars =
+      (cleaned.match(/[^a-zA-Z0-9\s\n\{\}\(\);\.\,\:\<\>\=\+\-\*\/]/g) || []).length;
+
+    if (weirdChars > cleaned.length * 0.15) return true;
+    if (lines < 3 && !hasCode) return true;
+
+    return false;
+  }
+
+  private initOCRWorker() {
+    if (this.ocrWorker) return;
+
+    const scriptPath = path.join(__dirname, '..', 'ocr_worker.py');
+    this.ocrWorker = spawn('python3', [scriptPath]);
+    this.ocrWorker.stderr.on('data', () => {});
+    this.ocrWorker.stdout.on('data', (data: Buffer) => {
+      this.ocrWorkerBuffer += data.toString();
+
+      let newlineIndex = this.ocrWorkerBuffer.indexOf('\n');
+      while (newlineIndex !== -1) {
+        const line = this.ocrWorkerBuffer.slice(0, newlineIndex);
+        this.ocrWorkerBuffer = this.ocrWorkerBuffer.slice(newlineIndex + 1);
+        const resolve = this.ocrWorkerResolvers.shift();
+        if (resolve) {
+          try {
+            const parsed = JSON.parse(line);
+            resolve(typeof parsed?.text === 'string' ? parsed.text : '');
+          } catch {
+            resolve('');
+          }
+        }
+        newlineIndex = this.ocrWorkerBuffer.indexOf('\n');
+      }
+    });
+    this.ocrWorker.on('exit', () => {
+      this.ocrWorker = null;
+      this.ocrWorkerBuffer = '';
+      while (this.ocrWorkerResolvers.length > 0) {
+        const resolve = this.ocrWorkerResolvers.shift();
+        resolve?.('');
+      }
+    });
+  }
+
+  private runOCRWorker(imagePaths: string[]): Promise<string> {
+    return new Promise((resolve) => {
+      this.initOCRWorker();
+
+      if (!this.ocrWorker?.stdin) {
+        resolve('');
+        return;
+      }
+
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const wrappedResolve = (value: string) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        resolve(value);
+      };
+
+      timeoutId = setTimeout(() => {
+        const idx = this.ocrWorkerResolvers.indexOf(wrappedResolve);
+        if (idx !== -1) {
+          this.ocrWorkerResolvers.splice(idx, 1);
+        }
+        wrappedResolve('');
+      }, 3000);
+
+      this.ocrWorkerResolvers.push(wrappedResolve);
+
+      try {
+        const payload = JSON.stringify({ imagePaths }) + '\n';
+        this.ocrWorker.stdin.write(payload);
+      } catch {
+        const idx = this.ocrWorkerResolvers.indexOf(wrappedResolve);
+        if (idx !== -1) {
+          this.ocrWorkerResolvers.splice(idx, 1);
+        }
+        wrappedResolve('');
+      }
+    });
+  }
+
+  private hashText(text: string): string {
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      hash = (hash << 5) - hash + text.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash.toString();
+  }
+
+  private hashBuffer(buffer: Buffer): string {
+    let hash = buffer.length;
+    const step = Math.max(1, Math.floor(buffer.length / 200));
+    for (let i = 0; i < buffer.length; i += step) {
+      hash = (hash * 31 + buffer[i] + i) | 0;
+    }
+    return hash.toString();
+  }
+
+  public async extractScreenTextHybrid(imagePaths: string[]): Promise<string> {
+    if (!imagePaths?.length) return '';
+    const imageBuffers = await Promise.all(imagePaths.map((imagePath) => fs.promises.readFile(imagePath)));
+    const key = this.hashText(imageBuffers.map((buffer) => this.hashBuffer(buffer)).join('|'));
+
+    if (key === this.lastScreenHash) {
+      return '__NO_CHANGE__';
+    }
+
+    if (this.lastOCRCache.has(key)) {
+      const cached = this.lastOCRCache.get(key)!;
+      this.lastScreenHash = key;
+      return cached;
+    }
+    const Tesseract = require('tesseract.js');
+
+    try {
+      const fastTexts = await Promise.all(
+        imagePaths.map(async (imagePath) => {
+          const result = await Tesseract.recognize(imagePath, 'eng', {
+            logger: () => undefined,
+          });
+          return result?.data?.text ?? '';
+        })
+      );
+
+      let text = fastTexts.join('\n');
+      this.lastOCRCache.set(key, text);
+
+      if (this.isLowQualityScreenText(text)) {
+        const fallback = await this.runOCRWorker(imagePaths);
+
+        if (fallback && fallback.trim().length > 0) {
+          text = fallback
+            .replace(/\r/g, '')
+            .replace(/[ \t]+/g, ' ')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+        }
+      }
+
+      this.lastScreenHash = key;
+      if (this.lastOCRCache.size > 100) {
+        this.lastOCRCache.clear();
+      }
+      this.lastOCRCache.set(key, text);
+      return text;
+    } catch (error: any) {
+      console.warn('[LLMHelper] Hybrid screen text extraction failed:', error?.message || error);
+      return '';
     }
   }
 

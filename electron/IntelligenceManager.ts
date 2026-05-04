@@ -54,6 +54,7 @@ export class IntelligenceManager extends EventEmitter {
             'recap', 'recap_token', 'clarify', 'clarify_token',
             'follow_up_questions_update', 'follow_up_questions_token',
             'system_design_tradeoffs', 'system_design_tradeoffs_token',
+            'screen_scan_result', 'screen_scan_token',
             'manual_answer_started', 'manual_answer_result',
             'mode_changed', 'error'
         ];
@@ -204,6 +205,10 @@ export class IntelligenceManager extends EventEmitter {
 
     async runBrainstorm(imagePaths?: string[], problemStatement?: string, requestId?: string): Promise<string | null> {
         return this.engine.runBrainstorm(imagePaths, problemStatement, requestId);
+    }
+
+    async runScreenScan(imagePaths: string[], extractedText?: string, forcedMode?: import('./llm').ScreenContentMode, requestId?: string): Promise<string | null> {
+        return this.engine.runScreenScan(imagePaths, extractedText, forcedMode, requestId);
     }
 
     // ============================================
