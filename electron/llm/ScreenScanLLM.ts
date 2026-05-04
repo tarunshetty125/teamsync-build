@@ -152,19 +152,24 @@ export const MODE_BEHAVIOR: Record<ScreenContentMode, {
 
 /**
  * Extract the most relevant signal from raw OCR text.
- * Takes the top 30 lines (where problem statements usually live)
- * and caps at 800 chars to send a clean, focused chunk instead of
- * a noisy full OCR dump.
+ *
+ * SIGNAL PRIORITY (Parakeet-critical):
+ * 1. Filter out lines ≤ 20 chars — removes UI chrome noise (menu items, tab titles, icons)
+ * 2. Take top 25 meaningful lines — problem statements live at the top of the screen
+ * 3. Cap at 600 chars — clean, focused chunk instead of a noisy full OCR dump
+ *
+ * This dramatically reduces noise dominance and lets the LLM focus on the actual problem.
  */
 function extractSignal(text: string): string {
     if (!text || !text.trim()) return '';
     const normalized = normalizeScreenText(text);
     return normalized
         .split('\n')
-        .slice(0, 30)       // top portion only — problem statement lives here
+        .filter(line => line.trim().length > 20)  // kill short noise lines (menus, tabs, icons)
+        .slice(0, 25)       // top meaningful portion — problem statement lives here
         .join(' ')
         .replace(/\s+/g, ' ')
-        .slice(0, 800)      // clean chunk
+        .slice(0, 600)      // tight clean chunk — no token waste on noise
         .trim();
 }
 
@@ -202,15 +207,18 @@ function isGoodOCR(text: string | undefined): boolean {
 // ---------------------------------------------------------------------------
 
 const CODING_CONTEXT_PREFIX = `Context:
-- This is a coding problem screen (likely LeetCode, HackerRank, CodeSignal, or similar)
-- OCR text may be noisy — reconstruct meaning intelligently
-- Focus on identifying the exact problem and solving it completely
-- Look for: problem title, description, constraints, examples, and any visible code`;
+- This is a coding problem screen (very likely LeetCode or HackerRank)
+- OCR text may contain noise, UI artifacts, and broken words
+- Focus ONLY on meaningful problem description and code
+- Ignore menus, toolbars, and unrelated text
+- Identify the exact problem and solve it confidently`;
 
 const INTERVIEW_CONTEXT_PREFIX = `Context:
 - This is an interview screen with a question visible
-- OCR text may be noisy — reconstruct meaning intelligently
-- Focus on identifying the exact question and providing a complete, speakable answer`;
+- OCR text may contain noise, UI artifacts, and broken words
+- Focus ONLY on the question — ignore menus, toolbars, unrelated text
+- Identify the exact question and solve it confidently`;
+
 
 // ---------------------------------------------------------------------------
 // Vision Fallback Prompt — used when OCR is too weak
@@ -218,36 +226,43 @@ const INTERVIEW_CONTEXT_PREFIX = `Context:
 
 const VISION_FALLBACK_PROMPT = `You are an expert coding interview assistant analyzing a screenshot.
 
-The OCR text extraction failed or was too noisy to use, so you must rely on the screenshot image directly.
+OCR text extraction failed or was too noisy. You MUST rely on the screenshot image directly.
 
-Analyze this coding problem screenshot and provide a COMPLETE, structured response:
+Use visual cues to identify the problem:
+- Platform UI (LeetCode, HackerRank) → identify by layout
+- Visible function signatures → infer problem from parameters
+- Visible test cases/examples → reconstruct the problem
 
-**Problem:**
-- Identify the problem name and platform if visible
-- Describe what the problem is asking
+Respond in this STRICT format:
 
-**Explanation:**
-- Explain the problem clearly in simple terms
+Problem:
+- Exact name if identifiable
+- Platform and number if visible
+
+Explanation:
+- Restate the problem clearly
 - State constraints and examples if visible
 
-**Approach:**
-- Explain the optimal algorithm strategy
-- State time and space complexity
+Approach:
+- State the optimal strategy and WHY it works
 
-**Steps:**
+Steps:
 1. Step-by-step reasoning through the solution
 
-**Code:**
+Code:
 \`\`\`javascript
-// Complete, working, interview-ready solution
+// Complete, correct, interview-ready solution
+// Handle ALL edge cases
 \`\`\`
 
-**Follow-ups:**
-- Time/Space complexity with explanation
-- Edge cases considered
-- Alternative approaches
+Complexity:
+- Time: O(...) — explain why
+- Space: O(...) — explain why
 
-IMPORTANT: Provide a COMPLETE answer. Never shorten artificially.`;
+Edge Cases:
+- List all important edge cases and how they are handled
+
+First identify the exact problem, then solve it completely. BE CONFIDENT.`;
 
 // ---------------------------------------------------------------------------
 // ScreenScanLLM
@@ -313,8 +328,8 @@ export class ScreenScanLLM {
                 return;
             }
 
-            // ── UPGRADE 1: SIGNAL EXTRACTION ────────────────────────────
-            // Extract clean top-of-screen signal instead of full OCR dump
+            // ── UPGRADE 1: SIGNAL EXTRACTION (Parakeet) ─────────────────
+            // Filter noise, extract clean signal from meaningful lines only
             const signal = extractSignal(extractedText!);
             console.log(`[ScreenScanLLM] Signal extracted: ${signal.length} chars from ${extractedText!.length} chars OCR`);
 
@@ -327,11 +342,25 @@ export class ScreenScanLLM {
                 contextPrefix = INTERVIEW_CONTEXT_PREFIX;
             }
 
-            // Build the final message with prefix + signal
-            const baseMessage = buildScreenScanMessage(mode, signal);
-            const message = contextPrefix
-                ? `${contextPrefix}\n\n${baseMessage}`
-                : baseMessage;
+            // ── UPGRADE 3: FORCE PROBLEM IDENTIFICATION FIRST ───────────
+            // For coding/interview modes, inject an explicit "identify then solve"
+            // instruction that dramatically improves problem identification accuracy.
+            let message: string;
+            if (isCodingMode && signal) {
+                message = `${contextPrefix}
+
+Extracted Content:
+${signal}
+
+Task:
+First identify the exact problem (or closest match), then provide full solution.`;
+            } else {
+                // Non-coding modes or no signal — use the standard message builder
+                const baseMessage = buildScreenScanMessage(mode, signal || null);
+                message = contextPrefix
+                    ? `${contextPrefix}\n\n${baseMessage}`
+                    : baseMessage;
+            }
 
             // Stream from LLM with image + extracted text signal
             yield* this.llmHelper.streamChat(
