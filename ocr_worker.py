@@ -8,8 +8,10 @@ from paddleocr import PaddleOCR
 ocr = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
 
 for line in sys.stdin:
+    request_id = ""
     try:
         data = json.loads(line)
+        request_id = str(data.get("id", ""))
         image_paths = data.get("imagePaths", [])
 
         results = []
@@ -21,8 +23,8 @@ for line in sys.stdin:
                     if text:
                         results.append(text)
 
-        print(json.dumps({"text": "\n".join(results)}))
+        print(json.dumps({"id": request_id, "text": "\n".join(results)}))
         sys.stdout.flush()
     except Exception:
-        print(json.dumps({"text": ""}))
+        print(json.dumps({"id": request_id, "text": ""}))
         sys.stdout.flush()

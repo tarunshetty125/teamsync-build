@@ -2010,17 +2010,18 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     };
 
     const handleScreenScan = async () => {
-        const previousScanRequestId = isScreenScanInFlightRef.current ? activeScanRequestIdRef.current : null;
-        await cancelInFlightOverlayRequests();
+        const requestId = nextRequestId('screen-scan');
+        const previousScanRequestId = activeScanRequestIdRef.current;
+        activeScanRequestIdRef.current = requestId;
+        isScreenScanInFlightRef.current = true;
+
+        await cancelInFlightOverlayRequests(requestId);
         setIsExpanded(true);
         currentSourceRef.current = 'Screen Scan';
         analytics.trackCommandExecuted('screen_scan');
-        const requestId = nextRequestId('screen-scan');
-        if (previousScanRequestId) {
+        if (previousScanRequestId && previousScanRequestId !== requestId) {
             await window.electronAPI.cancelIntelligenceByRequest(previousScanRequestId);
         }
-        activeScanRequestIdRef.current = requestId;
-        isScreenScanInFlightRef.current = true;
         markRequestProcessing(requestId);
         rememberIntentRequest('screen_scan', requestId);
         showScreenScanOverlayPhase(requestId, 'scanning');
@@ -2030,9 +2031,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         if (pending && !currentAttachments.some((s) => s.path === pending.path)) {
             currentAttachments = [...currentAttachments, pending].slice(-5);
         }
+        let attachmentForScan = currentAttachments[currentAttachments.length - 1] ?? null;
 
         try {
-            if (currentAttachments.length === 0) {
+            if (!attachmentForScan) {
                 const capturedPath = await window.electronAPI.captureScreen();
                 if (!capturedPath) {
                     pendingCaptureRef.current = null;
@@ -2043,20 +2045,20 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                     rememberIntentRequest('screen_scan', null);
                     return;
                 }
-                currentAttachments = [{ path: capturedPath, preview: '' }];
+                attachmentForScan = { path: capturedPath, preview: '' };
             } else {
                 setAttachedContext([]);
             }
 
             pendingCaptureRef.current = null;
 
-            if (currentAttachments.length > 0) {
+            if (attachmentForScan) {
                 setMessages(prev => [...prev, {
                     id: nextMsgId(),
                     role: 'user',
                     text: '🔍 Analyze this screen',
                     hasScreenshot: true,
-                    screenshotPreview: currentAttachments[0].preview
+                    screenshotPreview: attachmentForScan?.preview
                 }]);
                 setTimeout(() => {
                     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -2073,7 +2075,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 isStreaming: true,
             });
 
-            window.electronAPI.runScreenAnalysis({ requestId, image: currentAttachments[0]?.path ?? '' });
+            window.electronAPI.runScreenAnalysis({ requestId, image: attachmentForScan?.path ?? '' });
         } catch (err) {
             pendingCaptureRef.current = null;
             hideScreenScanOverlay();

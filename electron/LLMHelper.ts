@@ -70,7 +70,8 @@ export class LLMHelper {
   private lastOCRCache = new Map<string, string>();
   private ocrWorker: any = null;
   private ocrWorkerBuffer: string = '';
-  private ocrWorkerResolvers: Array<(value: string) => void> = [];
+  private ocrWorkerResolvers = new Map<string, (value: string) => void>();
+  private ocrWorkerRequestSeq = 0;
   private lastScreenHash: string = '';
 
   // Rate limiters per provider to prevent 429 errors on free tiers
@@ -759,25 +760,27 @@ CRITICAL RULES:
       while (newlineIndex !== -1) {
         const line = this.ocrWorkerBuffer.slice(0, newlineIndex);
         this.ocrWorkerBuffer = this.ocrWorkerBuffer.slice(newlineIndex + 1);
-        const resolve = this.ocrWorkerResolvers.shift();
-        if (resolve) {
-          try {
-            const parsed = JSON.parse(line);
-            resolve(typeof parsed?.text === 'string' ? parsed.text : '');
-          } catch {
-            resolve('');
-          }
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(line);
+        } catch {}
+
+        const workerRequestId = typeof parsed?.id === 'string' ? parsed.id : '';
+        if (!workerRequestId || !this.ocrWorkerResolvers.has(workerRequestId)) {
+          continue;
         }
+        const resolve = workerRequestId ? this.ocrWorkerResolvers.get(workerRequestId) : undefined;
+
+        if (workerRequestId) this.ocrWorkerResolvers.delete(workerRequestId);
+        if (resolve) resolve(typeof parsed?.text === 'string' ? parsed.text : '');
         newlineIndex = this.ocrWorkerBuffer.indexOf('\n');
       }
     });
     this.ocrWorker.on('exit', () => {
       this.ocrWorker = null;
       this.ocrWorkerBuffer = '';
-      while (this.ocrWorkerResolvers.length > 0) {
-        const resolve = this.ocrWorkerResolvers.shift();
-        resolve?.('');
-      }
+      for (const resolve of this.ocrWorkerResolvers.values()) resolve('');
+      this.ocrWorkerResolvers.clear();
     });
   }
 
@@ -790,6 +793,7 @@ CRITICAL RULES:
         return;
       }
 
+      const workerRequestId = String(++this.ocrWorkerRequestSeq);
       let settled = false;
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
       const wrappedResolve = (value: string) => {
@@ -800,23 +804,24 @@ CRITICAL RULES:
       };
 
       timeoutId = setTimeout(() => {
-        const idx = this.ocrWorkerResolvers.indexOf(wrappedResolve);
-        if (idx !== -1) {
-          this.ocrWorkerResolvers.splice(idx, 1);
-        }
+        this.ocrWorkerResolvers.delete(workerRequestId);
         wrappedResolve('');
       }, 3000);
 
-      this.ocrWorkerResolvers.push(wrappedResolve);
+      this.ocrWorkerResolvers.set(workerRequestId, wrappedResolve);
+
+      if (this.ocrWorkerResolvers.size > 200) {
+        for (const [, pendingResolve] of this.ocrWorkerResolvers) {
+          pendingResolve('');
+        }
+        this.ocrWorkerResolvers.clear();
+      }
 
       try {
-        const payload = JSON.stringify({ imagePaths }) + '\n';
+        const payload = JSON.stringify({ id: workerRequestId, imagePaths }) + '\n';
         this.ocrWorker.stdin.write(payload);
       } catch {
-        const idx = this.ocrWorkerResolvers.indexOf(wrappedResolve);
-        if (idx !== -1) {
-          this.ocrWorkerResolvers.splice(idx, 1);
-        }
+        this.ocrWorkerResolvers.delete(workerRequestId);
         wrappedResolve('');
       }
     });
@@ -842,23 +847,42 @@ CRITICAL RULES:
 
   public async extractScreenTextHybrid(imagePaths: string[]): Promise<string> {
     if (!imagePaths?.length) return '';
-    const imageBuffers = await Promise.all(imagePaths.map((imagePath) => fs.promises.readFile(imagePath)));
-    const key = this.hashText(imageBuffers.map((buffer) => this.hashBuffer(buffer)).join('|'));
-
-    if (key === this.lastScreenHash) {
-      return '__NO_CHANGE__';
-    }
-
-    if (this.lastOCRCache.has(key)) {
-      const cached = this.lastOCRCache.get(key)!;
-      this.lastScreenHash = key;
-      return cached;
-    }
-    const Tesseract = require('tesseract.js');
+    let resizedPaths: string[] = [];
 
     try {
-      const fastTexts = await Promise.all(
+      resizedPaths = await Promise.all(
         imagePaths.map(async (imagePath) => {
+          const outputPath = imagePath + `_resized_${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
+          const metadata = await sharp(imagePath).metadata().catch(() => null);
+
+          if ((metadata?.width ?? 0) > 1600) {
+            await sharp(imagePath)
+              .resize({ width: 1280, withoutEnlargement: true })
+              .toFile(outputPath);
+
+            return outputPath;
+          }
+
+          return imagePath;
+        })
+      );
+
+      const imageBuffers = await Promise.all(resizedPaths.map((p) => fs.promises.readFile(p)));
+      const key = this.hashText(imageBuffers.map((buffer) => this.hashBuffer(buffer)).join('|'));
+
+      if (key === this.lastScreenHash) {
+        return '__NO_CHANGE__';
+      }
+
+      if (this.lastOCRCache.has(key)) {
+        const cached = this.lastOCRCache.get(key)!;
+        this.lastScreenHash = key;
+        return cached;
+      }
+      const Tesseract = require('tesseract.js');
+
+      const fastTexts = await Promise.all(
+        resizedPaths.map(async (imagePath) => {
           const result = await Tesseract.recognize(imagePath, 'eng', {
             logger: () => undefined,
           });
@@ -870,7 +894,7 @@ CRITICAL RULES:
       this.lastOCRCache.set(key, text);
 
       if (this.isLowQualityScreenText(text)) {
-        const fallback = await this.runOCRWorker(imagePaths);
+        const fallback = await this.runOCRWorker(resizedPaths);
 
         if (fallback && fallback.trim().length > 0) {
           text = fallback
@@ -890,6 +914,12 @@ CRITICAL RULES:
     } catch (error: any) {
       console.warn('[LLMHelper] Hybrid screen text extraction failed:', error?.message || error);
       return '';
+    } finally {
+      for (const p of resizedPaths) {
+        if (p.includes('_resized_')) {
+          fs.unlink(p, () => {});
+        }
+      }
     }
   }
 

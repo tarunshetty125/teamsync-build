@@ -105,7 +105,7 @@ export const ScreenScanOverlay: React.FC<ScreenScanOverlayProps> = ({
                                 </span>
                                 <div className="flex flex-col">
                                     <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-200/90">
-                                        {phase === 'processing' ? 'Analyzing screen' : phase === 'result' ? 'Suggestions' : 'Scanning'}
+                                        {phase === 'processing' ? 'Analyzing screen' : phase === 'result' ? 'Screen Analysis Answer' : 'Scanning'}
                                     </span>
                                     <span className="text-[11px] text-white/55">
                                         {phase === 'result' ? meta.label : 'Context-aware screen intelligence'}
