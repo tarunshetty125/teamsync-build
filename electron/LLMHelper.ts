@@ -846,6 +846,7 @@ CRITICAL RULES:
   }
 
   public async extractScreenTextHybrid(imagePaths: string[]): Promise<string> {
+    console.log(`[OCR] Starting hybrid screen text extraction for ${imagePaths?.length || 0} images...`);
     if (!imagePaths?.length) return '';
     let resizedPaths: string[] = [];
 
@@ -891,12 +892,15 @@ CRITICAL RULES:
       );
 
       let text = fastTexts.join('\n');
+      console.log(`[OCR] Tesseract extraction complete. Length: ${text.length}`);
       this.lastOCRCache.set(key, text);
 
       if (this.isLowQualityScreenText(text)) {
+        console.log('[OCR] Low quality text detected, running fallback OCR worker...');
         const fallback = await this.runOCRWorker(resizedPaths);
 
         if (fallback && fallback.trim().length > 0) {
+          console.log(`[OCR] Fallback OCR complete. Length: ${fallback.length}`);
           text = fallback
             .replace(/\r/g, '')
             .replace(/[ \t]+/g, ' ')

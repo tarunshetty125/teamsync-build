@@ -1102,6 +1102,8 @@ export class IntelligenceEngine extends EventEmitter {
                     .trim()
                     .slice(0, MAX_SCREEN_CHARS);
 
+                console.log(`[OCR_SCAN] Retrieved Text:\n${screenText}\n[OCR_SCAN_END]`);
+
                 if (screenText.length < 50) {
                     const fallback = "I couldn't detect enough readable text on screen. Try capturing a clearer area.";
                     this.safeEmit(signal, activeRequestId, 'screen_scan_result', fallback, 'ui_general');

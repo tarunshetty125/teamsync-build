@@ -2010,6 +2010,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     };
 
     const handleScreenScan = async () => {
+        console.log('[DEBUG] Analyze Screen button clicked');
         const requestId = nextRequestId('screen-scan');
         const previousScanRequestId = activeScanRequestIdRef.current;
         activeScanRequestIdRef.current = requestId;
@@ -3370,7 +3371,6 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                     coding: [
                                         { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
                                         { label: 'Code Hint', icon: '💻', handler: handleCodeHint, isRecommended: true },
-                                        { label: 'Scan Screen', icon: '🔍', handler: handleScreenScan },
                                         { label: 'Brainstorm', icon: '🧠', handler: handleBrainstorm },
                                         { label: 'Clarify', icon: '❓', handler: handleClarify },
                                     ],
@@ -3397,7 +3397,6 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                     ],
                                     general: [
                                         { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
-                                        { label: 'Scan Screen', icon: '🔍', handler: handleScreenScan },
                                         { label: 'Clarify', icon: '❓', handler: handleClarify },
                                         { label: actionButtonMode === 'brainstorm' ? 'Brainstorm' : 'Recap', icon: actionButtonMode === 'brainstorm' ? '🧠' : '📝', handler: actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap },
                                         { label: 'Follow Up', icon: '➡️', handler: handleFollowUpQuestions },
@@ -3833,16 +3832,23 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                             </div>
                                         )}
 
+                                        <div className="relative group p-[1px] rounded-full overflow-hidden flex items-center justify-center">
+                                            {/* Rotating Glowing Border */}
+                                            <motion.div
+                                                animate={{ rotate: 360 }}
+                                                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                                                className="absolute inset-[-150%] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_300deg,#FDE68A_360deg)] opacity-60"
+                                            />
+                                            <button
+                                                onClick={handleScreenScan}
+                                                className="relative h-[26px] px-3.5 rounded-full flex items-center justify-center transition-all duration-200 bg-black hover:bg-black/90 text-[#FDE68A] shadow-sm interaction-base interaction-press text-[11px] font-bold tracking-wide whitespace-nowrap z-10"
+                                                title="Capture and scan screen"
+                                            >
+                                                Analyse Screen
+                                            </button>
+                                        </div>
                                     </div>
 
-                                    <button
-                                        onClick={handleScreenScan}
-                                        className="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.08] text-[#FDE68A] shadow-sm interaction-base interaction-press"
-                                        title="Capture and scan screen"
-                                        style={appearance.iconStyle}
-                                    >
-                                        <Camera className="w-3.5 h-3.5" />
-                                    </button>
 
                                     <button
                                         onClick={handleManualSubmit}
