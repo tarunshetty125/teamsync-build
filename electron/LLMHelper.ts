@@ -717,7 +717,7 @@ CRITICAL RULES:
       const texts = await Promise.all(
         imagePaths.map(async (imagePath) => {
           const result = await Tesseract.recognize(imagePath, 'eng', {
-            logger: () => undefined,
+            logger: (): any => undefined,
           });
           return result?.data?.text ?? '';
         })
@@ -752,7 +752,7 @@ CRITICAL RULES:
 
     const scriptPath = path.join(__dirname, '..', 'ocr_worker.py');
     this.ocrWorker = spawn('python3', [scriptPath]);
-    this.ocrWorker.stderr.on('data', () => {});
+    this.ocrWorker.stderr.on('data', () => { });
     this.ocrWorker.stdout.on('data', (data: Buffer) => {
       this.ocrWorkerBuffer += data.toString();
 
@@ -763,7 +763,7 @@ CRITICAL RULES:
         let parsed: any = null;
         try {
           parsed = JSON.parse(line);
-        } catch {}
+        } catch { }
 
         const workerRequestId = typeof parsed?.id === 'string' ? parsed.id : '';
         if (!workerRequestId || !this.ocrWorkerResolvers.has(workerRequestId)) {
@@ -853,7 +853,7 @@ CRITICAL RULES:
       resizedPaths = await Promise.all(
         imagePaths.map(async (imagePath) => {
           const outputPath = imagePath + `_resized_${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
-          const metadata = await sharp(imagePath).metadata().catch(() => null);
+          const metadata = await sharp(imagePath).metadata().catch((): any => null);
 
           if ((metadata?.width ?? 0) > 1600) {
             await sharp(imagePath)
@@ -884,7 +884,7 @@ CRITICAL RULES:
       const fastTexts = await Promise.all(
         resizedPaths.map(async (imagePath) => {
           const result = await Tesseract.recognize(imagePath, 'eng', {
-            logger: () => undefined,
+            logger: (): any => undefined,
           });
           return result?.data?.text ?? '';
         })
@@ -917,7 +917,7 @@ CRITICAL RULES:
     } finally {
       for (const p of resizedPaths) {
         if (p.includes('_resized_')) {
-          fs.unlink(p, () => {});
+          fs.unlink(p, () => { });
         }
       }
     }
@@ -1888,14 +1888,14 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     if (data.choices?.[0]?.delta !== undefined) {
       // It's a streaming delta chunk with no extractable content
       return "";
-   	}
+    }
 
     // For streaming responses with empty choices array (e.g., final usage chunk)
     // This handles: { "choices": [], "usage": { ... } }
     if (Array.isArray(data.choices) && data.choices.length === 0) {
       return "";
     }
-    
+
     // Fallback: stringify the whole response (only for non-streaming responses)
     console.warn("[LLMHelper] Could not extract text from custom provider response, returning raw JSON");
     return JSON.stringify(data);
@@ -2186,7 +2186,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
           // Event-driven discovery: trigger on 404 / model-not-found errors
           const errMsg = (err.message || '').toLowerCase();
           if (errMsg.includes('404') || errMsg.includes('not found') || errMsg.includes('deprecated')) {
-            this.modelVersionManager.onModelError(provider.name).catch(() => {});
+            this.modelVersionManager.onModelError(provider.name).catch(() => { });
           }
         }
       }
@@ -2332,10 +2332,10 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     // ============================================================
     const currentFamilyLabel = this.currentModelId === 'natively' ? 'Natively'
       : this.isClaudeModel(this.currentModelId) ? 'Claude'
-      : this.isOpenAiModel(this.currentModelId) ? 'OpenAI'
-      : this.isGroqModel(this.currentModelId) ? 'Groq'
-      : this.isGeminiModel(this.currentModelId) ? 'Gemini'
-      : '';
+        : this.isOpenAiModel(this.currentModelId) ? 'OpenAI'
+          : this.isGroqModel(this.currentModelId) ? 'Groq'
+            : this.isGeminiModel(this.currentModelId) ? 'Gemini'
+              : '';
 
     if (currentFamilyLabel) {
       providers.sort((a, b) => {
@@ -2402,7 +2402,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     const isMultimodal = !!(imagePaths?.length);
     let isCodeHeavy = false;
     let hasExplicitSystemPromptOverride = systemPromptOverride !== undefined;
-    
+
     // ============================================================
     // KNOWLEDGE MODE INTERCEPT (Streaming)
     // ============================================================
@@ -2476,7 +2476,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       isCodeHeavy = totalText.length > 800 && (codeChars > 500 || (codeChars / totalText.length) > 0.05);
 
       const willUseGroq = (!isMultimodal && this.groqFastTextMode) || this.isGroqModel(this.currentModelId);
-      
+
       let COMBINED_CTX_CAP = 12_000;
       if (willUseGroq) {
         if (totalText.length > 12_000) {
@@ -2808,10 +2808,10 @@ Return only the final answer. No meta commentary.
 
     const body: Record<string, unknown> = {
       messages: [{ role: 'user', content: userContent }],
-      stream:   true,
+      stream: true,
     };
-    if (this.groqFastTextMode && (!imagePaths || imagePaths.length === 0))      body.fast_mode = true;
-    if (systemPrompt)                                           body.system    = systemPrompt;
+    if (this.groqFastTextMode && (!imagePaths || imagePaths.length === 0)) body.fast_mode = true;
+    if (systemPrompt) body.system = systemPrompt;
     if (this.aiResponseLanguage && this.aiResponseLanguage !== 'English') {
       body.language = this.aiResponseLanguage; // 'auto' is forwarded — server handles it
     }
@@ -2831,7 +2831,7 @@ Return only the final answer. No meta commentary.
     // When the key is the trial sentinel, authenticate with the real trial token.
     const streamHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Accept':       'text/event-stream',
+      'Accept': 'text/event-stream',
     };
     if (nativelyKey === '__trial__') {
       const { CredentialsManager } = require('./services/CredentialsManager');
@@ -2845,9 +2845,9 @@ Return only the final answer. No meta commentary.
     // 60s timeout covers worst-case: max-token Gemini Pro response streamed over a slow connection.
     // This is intentionally longer than the non-streaming 25s timeout.
     const response = await fetch('https://api.natively.software/v1/chat', {
-      method:  'POST',
+      method: 'POST',
       headers: streamHeaders,
-      body:   JSON.stringify(body),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(60_000),
     });
 
@@ -2860,9 +2860,9 @@ Return only the final answer. No meta commentary.
     // Protocol: each line starting with "data: " carries a JSON payload.
     //   data: {"delta":"token","model":"llama-3.3-70b"}
     //   data: [DONE]
-    const reader  = response.body!.getReader();
+    const reader = response.body!.getReader();
     const decoder = new TextDecoder();
-    let   buf     = '';
+    let buf = '';
 
     try {
       outer: while (true) {
@@ -2886,7 +2886,7 @@ Return only the final answer. No meta commentary.
         }
       }
     } finally {
-      try { reader.cancel(); } catch {}  // release the fetch connection cleanly
+      try { reader.cancel(); } catch { }  // release the fetch connection cleanly
     }
   }
 
@@ -3392,29 +3392,29 @@ Return only the final answer. No meta commentary.
 
   public async getOllamaModels(): Promise<string[]> {
     const baseUrl = (this.ollamaUrl || "http://127.0.0.1:11434").replace('localhost', '127.0.0.1');
-    
+
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1000); // Fast 1s timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1000); // Fast 1s timeout
 
-        const response = await fetch(`${baseUrl}/api/tags`, {
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
+      const response = await fetch(`${baseUrl}/api/tags`, {
+        signal: controller.signal
+      });
 
-        if (!response.ok) return [];
+      clearTimeout(timeoutId);
 
-        const data = await response.json();
-        if (data && data.models) {
-            return data.models.map((m: any) => m.name);
-        }
-        
-        return [];
+      if (!response.ok) return [];
+
+      const data = await response.json();
+      if (data && data.models) {
+        return data.models.map((m: any) => m.name);
+      }
+
+      return [];
     } catch (error: any) {
-        // Silently catch connection refused/timeout errors. 
-        // OllamaManager handles logging the startup status.
-        return [];
+      // Silently catch connection refused/timeout errors. 
+      // OllamaManager handles logging the startup status.
+      return [];
     }
   }
 
@@ -3688,7 +3688,7 @@ Return only the final answer. No meta commentary.
     });
 
     // Suppress unhandled-rejection if the original promise settles after the timeout wins the race
-    promise.catch(() => {});
+    promise.catch(() => { });
 
     return Promise.race([
       promise.then(result => {
