@@ -128,6 +128,7 @@ interface ElectronAPI {
   generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ script: string | null }>
+  generateAnswerNow: (question: string, imagePaths?: string[], context?: string, requestId?: string) => Promise<{ answer: string | null }>
   generateScreenScan: (imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => Promise<{ result: string | null; mode: string; error?: string }>
   runScreenAnalysis: (payload: { requestId: string; image: string }) => void
   generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => Promise<{ refined: string | null; intent: string }>
@@ -151,12 +152,12 @@ interface ElectronAPI {
 
   // Intelligence Mode Events
   onIntelligenceAssistUpdate: (callback: (data: { insight: string }) => void) => () => void
-  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; requestId?: string }) => void) => () => void
+  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; intent?: string; requestId?: string }) => void) => () => void
   onIntelligenceRefinedAnswer: (callback: (data: { answer: string; intent: string; requestId?: string }) => void) => () => void
   onIntelligenceRecap: (callback: (data: { summary: string; requestId?: string }) => void) => () => void
   onIntelligenceClarify: (callback: (data: { clarification: string; requestId?: string }) => void) => () => void
   onIntelligenceClarifyToken: (callback: (data: { token: string; requestId?: string }) => void) => () => void
-  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; requestId?: string }) => void) => () => void
+  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; intent?: string; requestId?: string }) => void) => () => void
   onIntelligenceRefinedAnswerToken: (callback: (data: { token: string; intent: string; requestId?: string }) => void) => () => void
   onIntelligenceFollowUpQuestionsUpdate: (callback: (data: { questions: string; requestId?: string }) => void) => () => void
   onIntelligenceFollowUpQuestionsToken: (callback: (data: { token: string; requestId?: string }) => void) => () => void
@@ -781,6 +782,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   generateClarify: (requestId?: string) => ipcRenderer.invoke("generate-clarify", requestId),
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => ipcRenderer.invoke("generate-code-hint", imagePaths, problemStatement, requestId),
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => ipcRenderer.invoke("generate-brainstorm", imagePaths, problemStatement, requestId),
+  generateAnswerNow: (question: string, imagePaths?: string[], context?: string, requestId?: string) => ipcRenderer.invoke("generate-answer-now", question, imagePaths, context, requestId),
   generateScreenScan: (imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => ipcRenderer.invoke("generate-screen-scan", imagePaths, extractedText, forcedMode, requestId),
   runScreenAnalysis: (payload: { requestId: string; image: string }) => {
     void ipcRenderer.invoke("generate-screen-scan", payload.image ? [payload.image] : [], undefined, undefined, payload.requestId);
@@ -837,14 +839,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("intelligence-assist-update", subscription)
     }
   },
-  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; requestId?: string }) => void) => {
+  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; intent?: string; requestId?: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("intelligence-suggested-answer-token", subscription)
     return () => {
       ipcRenderer.removeListener("intelligence-suggested-answer-token", subscription)
     }
   },
-  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; requestId?: string }) => void) => {
+  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; intent?: string; requestId?: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("intelligence-suggested-answer", subscription)
     return () => {

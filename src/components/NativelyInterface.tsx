@@ -228,6 +228,113 @@ function getSuggestedAnswerIntent(question: string): string {
 
 // ── Context-Aware Question Type Detection (mirrors IntentClassifier patterns) ──
 type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'follow_up' | 'general';
+type QuickActionLabel =
+    | 'What to answer?'
+    | 'Code Hint'
+    | 'Brainstorm'
+    | 'Clarify'
+    | 'Trade-offs'
+    | 'STAR Story'
+    | 'Follow Up'
+    | 'Recap'
+    | 'Explain'
+    | 'Summarize';
+
+const MODE_BUTTON_LABELS: Record<DetectedQuestionType, QuickActionLabel[]> = {
+    coding: ['What to answer?', 'Code Hint', 'Brainstorm', 'Clarify'],
+    system_design: ['What to answer?', 'Brainstorm', 'Clarify', 'Trade-offs'],
+    behavioral: ['What to answer?', 'STAR Story', 'Follow Up', 'Recap'],
+    follow_up: ['What to answer?', 'Follow Up', 'Clarify', 'Recap'],
+    general: ['What to answer?', 'Explain', 'Summarize', 'Clarify'],
+};
+
+const QUICK_ACTION_ICONS: Record<QuickActionLabel, string> = {
+    'What to answer?': '💡',
+    'Code Hint': '💻',
+    'Brainstorm': '🧠',
+    'Clarify': '❓',
+    'Trade-offs': '⚖️',
+    'STAR Story': '⭐',
+    'Follow Up': '➡️',
+    'Recap': '📝',
+    'Explain': '🧠',
+    'Summarize': '📝',
+};
+
+function countPatternMatches(text: string, patterns: RegExp[]): number {
+    return patterns.reduce((score, pattern) => score + (pattern.test(text) ? 1 : 0), 0);
+}
+
+function getRecommendedButton(mode: DetectedQuestionType, transcript: string, screenText: string): QuickActionLabel {
+    const combined = normalizeTranscript(`${transcript} ${screenText}`.trim());
+
+    switch (mode) {
+        case 'coding': {
+            const scores: Array<[QuickActionLabel, number]> = [
+                ['Brainstorm', countPatternMatches(combined, [/\boptimiz/i, /\bimprov/i, /\bbetter\b/i, /\befficient\b/i, /\brefactor/i])],
+                ['Code Hint', countPatternMatches(combined, [/\bbug\b/i, /\berror\b/i, /\bissue\b/i, /\bexception\b/i, /\bfailing\b/i])],
+                ['Clarify', countPatternMatches(combined, [/\bwhy\b/i, /\bconfused\b/i, /\bunclear\b/i, /\bclarif/i])],
+            ];
+            const [bestLabel, bestScore] = scores.reduce(
+                (best, curr) => (curr[1] > best[1] ? curr : best),
+                ['What to answer?', 0] as [QuickActionLabel, number]
+            );
+            if (bestScore > 0) return bestLabel;
+            return 'What to answer?';
+        }
+        case 'system_design': {
+            const scores: Array<[QuickActionLabel, number]> = [
+                ['Trade-offs', countPatternMatches(combined, [/\btrade[\s-]?off/i, /\bscalab/i, /\bscale\b/i, /\blatency\b/i, /\bthroughput\b/i])],
+                ['Brainstorm', countPatternMatches(combined, [/\bdesign\b/i, /\bapproach\b/i, /\barchitecture\b/i])],
+            ];
+            const [bestLabel, bestScore] = scores.reduce(
+                (best, curr) => (curr[1] > best[1] ? curr : best),
+                ['What to answer?', 0] as [QuickActionLabel, number]
+            );
+            if (bestScore > 0) return bestLabel;
+            return 'What to answer?';
+        }
+        case 'behavioral': {
+            const scores: Array<[QuickActionLabel, number]> = [
+                ['STAR Story', countPatternMatches(combined, [
+                    /tell me about yourself/i,
+                    /introduce yourself/i,
+                    /\bexample\b/i,
+                    /\bexperience\b/i,
+                    /\bproject\b/i,
+                    /\bprojects\b/i,
+                    /\bchallenge\b/i,
+                    /worked on/i,
+                    /\bbuilt\b/i,
+                    /\bdeveloped\b/i,
+                ])],
+                ['Follow Up', countPatternMatches(combined, [/\bfollow.?up\b/i, /\bnext\b/i, /then what/i])],
+            ];
+            const [bestLabel, bestScore] = scores.reduce(
+                (best, curr) => (curr[1] > best[1] ? curr : best),
+                ['What to answer?', 0] as [QuickActionLabel, number]
+            );
+            if (bestScore > 0) return bestLabel;
+            return 'What to answer?';
+        }
+        case 'follow_up':
+            if (countPatternMatches(combined, [/\bclarify\b/i, /\brepeat\b/i, /\bagain\b/i, /\brestate\b/i]) > 0) return 'Clarify';
+            return 'Follow Up';
+        case 'general':
+        default: {
+            const scores: Array<[QuickActionLabel, number]> = [
+                ['Summarize', countPatternMatches(combined, [/\bsummari[sz]e\b/i, /\btl;dr\b/i, /\boverview\b/i, /\brecap\b/i])],
+                ['Explain', countPatternMatches(combined, [/\bexplain\b/i, /\bwhat is\b/i, /\bwhat.?s\b/i, /\bhow does\b/i])],
+            ];
+            const [bestLabel, bestScore] = scores.reduce(
+                (best, curr) => (curr[1] > best[1] ? curr : best),
+                ['What to answer?', 0] as [QuickActionLabel, number]
+            );
+            if (bestScore > 0) return bestLabel;
+            return 'Clarify';
+        }
+    }
+}
 
 // M3 Fix: Removed /g flags — these are always wrapped in new RegExp(..., 'gi') via cap()
 const REGEX_NORMALIZE_BROKEN = /(\w)\.\s+(\w)/;
@@ -236,11 +343,11 @@ const REGEX_NORMALIZE_SPACE = /\s+/;
 
 const REGEX_CODING_CORE = /(write code|write a? ?(?:function|program|method|class|script)|implement|how to code)/;
 const REGEX_SYSTEM_CORE = /(system design|design a|architecture|database schema|api design)/;
-const REGEX_BEHAVIORAL_CORE = /(tell me about a time|describe a situation|give me an example|share an experience)/;
+const REGEX_BEHAVIORAL_CORE = /(tell me about a time|describe a situation|give me an example|share an experience|tell me about yourself|introduce yourself|walk me through (?:your )?(?:background|resume)|background|resume|personal experience|worked on|built|developed|impact|result|outcome)/;
 
 const REGEX_CODING_STRONG = /(algorithm|debug this|snippet|boilerplate|optimize|refactor|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|time complexity|space complexity)/;
 const REGEX_SYSTEM_STRONG = /(scalab|microservice|load balanc|distributed|high availability|caching strategy|caching|cache|cdn|message queue|rate limit|sharding|replication|partition|cap theorem|event driven|monolith|horizontal scal|fault toleran|throughput|latency|handle more users|high traffic|load)/;
-const REGEX_BEHAVIORAL_STRONG = /(when have you|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|experience|challenge|conflict|pressure|strength|weakness|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment|introduce yourself|background|resume)/;
+const REGEX_BEHAVIORAL_STRONG = /(when have you|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|tell me about yourself|experience|challenge|conflict|pressure|strength|strengths|weakness|weaknesses|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment|introduce yourself|background|resume|project|projects|worked on|built|developed|owned|ownership|impact|result|results|outcome|outcomes|personal)/;
 const REGEX_FOLLOW_UP_CORE = /(what happened next|then what|and after that|what.s next|how did that go|can you elaborate|tell me more|go deeper|expand on)/;
 const REGEX_FOLLOW_UP_STRONG = /(follow.?up|continuation|building on|going back to|earlier you said|you mentioned)/;
 
@@ -261,8 +368,12 @@ function normalizeTranscript(text: string) {
 function detectQuestionType(
     text: string, 
     currentType: DetectedQuestionType,
-    lastStrongType: DetectedQuestionType
+    _lastStrongType: DetectedQuestionType
 ): { nextType: DetectedQuestionType; nextStrong?: DetectedQuestionType } {
+    if (/tell me about yourself|introduce yourself/i.test(text)) {
+        return { nextType: 'behavioral', nextStrong: 'behavioral' };
+    }
+
     // Normalize: fix OCR/STT artifacts, collapse whitespace
     let t = normalizeTranscript(text);
 
@@ -324,7 +435,7 @@ function detectQuestionType(
 
     // Confidence fallback: if signal is too weak, use memory of last strong intent
     if (primaryScore < 2) {
-        return { nextType: lastStrongType };
+        return { nextType: 'general' };
     }
 
     const nextStrong = primaryScore >= 3 ? primary : undefined;
@@ -612,6 +723,26 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         return requestId || activeIntentRequestIdsRef.current[intent] || null;
     }, []);
 
+    const resolveSuggestedAnswerRequest = useCallback((data: { question?: string; intent?: string; requestId?: string | null }) => {
+        if (data.requestId) {
+            const lifecycle = requestRegistryRef.current[data.requestId];
+            if (lifecycle?.intent) {
+                return { intent: lifecycle.intent, requestId: data.requestId };
+            }
+            if (data.intent && activeIntentRequestIdsRef.current[data.intent] === data.requestId) {
+                return { intent: data.intent, requestId: data.requestId };
+            }
+        }
+
+        const fallbackIntent = data.intent || (data.question ? getSuggestedAnswerIntent(data.question) : null);
+        if (!fallbackIntent) return null;
+
+        const fallbackRequestId = resolveIntentRequestId(fallbackIntent);
+        if (!fallbackRequestId) return null;
+
+        return { intent: fallbackIntent, requestId: fallbackRequestId };
+    }, [resolveIntentRequestId]);
+
     const updateRequestLifecycle = useCallback((requestId: string, patch: Partial<RequestLifecycle>) => {
         const current = requestRegistryRef.current[requestId];
         if (!current) return;
@@ -813,6 +944,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     useEffect(() => {
         return () => {
             clearScreenScanDismissTimer();
+            if (recommendationTimerRef.current) {
+                clearTimeout(recommendationTimerRef.current);
+                recommendationTimerRef.current = null;
+            }
         };
     }, [clearScreenScanDismissTimer]);
 
@@ -896,23 +1031,6 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const [currentModel, setCurrentModel] = useState<string>('gemini-3-flash-preview');
     const currentModelRef = useRef(currentModel); // C3 Fix: Ref for analytics in mount-only streaming effect
 
-    // Dynamic Action Button Mode (Recap vs Brainstorm)
-    const [actionButtonMode, setActionButtonMode] = useState<'recap' | 'brainstorm'>('recap');
-    const actionButtonModeRef = useRef(actionButtonMode); // M6 Fix: Ref for stale closure in onGlobalShortcut
-
-    useEffect(() => {
-        // Load persisted mode
-        window.electronAPI?.getActionButtonMode?.()?.then((mode: 'recap' | 'brainstorm') => {
-            if (mode) setActionButtonMode(mode);
-        }).catch(() => {});
-
-        // Listen for live changes from SettingsPopup / IPC
-        const unsubscribe = window.electronAPI?.onActionButtonModeChanged?.((mode: 'recap' | 'brainstorm') => {
-            setActionButtonMode(mode);
-        });
-        return () => { unsubscribe?.(); };
-    }, []);
-
     // ── Context-Aware Dynamic Buttons ──
     const [intentState, dispatchIntent] = useReducer(intentReducer, {
         detectedType: 'general',
@@ -920,9 +1038,20 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         lastStrongAt: performance.now(),
         seq: 0
     });
+    const [recommendedButton, setRecommendedButton] = useState<QuickActionLabel>('Clarify');
+    const recommendedButtonRef = useRef<QuickActionLabel>('Clarify');
+    const recommendationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const recommendationLockTurnIdRef = useRef<string | null>(null);
+    const screenContextTextRef = useRef('');
+    const fourthActionHandlerRef = useRef<() => void | Promise<void>>(() => {});
     
     const detectedQuestionType = intentState.detectedType;
     const effectiveQuestionType: DetectedQuestionType = forceSystemDesignMode ? 'system_design' : detectedQuestionType;
+
+    useEffect(() => {
+        const buttonNames = MODE_BUTTON_LABELS[effectiveQuestionType] || MODE_BUTTON_LABELS.general;
+        console.log(`[Realtime Overlay] Dynamic Buttons Present:`, buttonNames.join(', '), `| Intent: ${effectiveQuestionType}`);
+    }, [effectiveQuestionType]);
 
     const latestCombinedRef = useRef<string>('');
     const seqRef = useRef(0);
@@ -932,6 +1061,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         const finalOnly = lastFinalSentenceRef.current?.trim() || '';
         if (finalOnly.length < 3) return;
 
+        recommendationLockTurnIdRef.current = null;
         latestCombinedRef.current = finalOnly;
         currentQuestionTurnIdRef.current = questionTurnId;
         setCurrentQuestionTurnId(questionTurnId);
@@ -943,6 +1073,46 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             seq
         });
     }, []);
+
+    useEffect(() => {
+        screenContextTextRef.current = screenScanOverlay.answer || '';
+    }, [screenScanOverlay.answer]);
+
+    useEffect(() => {
+        if (!currentQuestionTurnId) return;
+        if (recommendationLockTurnIdRef.current === currentQuestionTurnId) return;
+
+        if (recommendationTimerRef.current) {
+            clearTimeout(recommendationTimerRef.current);
+        }
+
+        recommendationTimerRef.current = setTimeout(() => {
+            if (recommendationLockTurnIdRef.current === currentQuestionTurnId) return;
+
+            const nextRecommendation = getRecommendedButton(
+                effectiveQuestionType,
+                lastFinalSentenceRef.current || '',
+                screenContextTextRef.current || ''
+            );
+
+            const allowedLabels = MODE_BUTTON_LABELS[effectiveQuestionType] || MODE_BUTTON_LABELS.general;
+            const resolvedRecommendation = allowedLabels.includes(nextRecommendation)
+                ? nextRecommendation
+                : allowedLabels[0];
+
+            if (resolvedRecommendation !== recommendedButtonRef.current) {
+                recommendedButtonRef.current = resolvedRecommendation;
+                setRecommendedButton(resolvedRecommendation);
+            }
+        }, 300);
+
+        return () => {
+            if (recommendationTimerRef.current) {
+                clearTimeout(recommendationTimerRef.current);
+                recommendationTimerRef.current = null;
+            }
+        };
+    }, [currentQuestionTurnId, effectiveQuestionType]);
 
     const cancelInFlightOverlayRequests = useCallback(async (nextRequestId?: string) => {
         const streamingRequestIds = Object.values(requestRegistryRef.current)
@@ -1181,7 +1351,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     isProcessingRef.current = isProcessing;
     attachedContextRef.current = attachedContext;
     currentModelRef.current = currentModel;
-    actionButtonModeRef.current = actionButtonMode;
+    recommendedButtonRef.current = recommendedButton;
 
     // DOT STATE FIX: When isProcessing transitions true → false the AI has finished.
     // Stamp lastResponseSentenceId with the current sentence counter so the dot
@@ -1495,10 +1665,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         cleanups.push(window.electronAPI.onIntelligenceSuggestedAnswerToken((data) => {
             // V2 Guard: drop tokens from a previous session
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
-            const intent = getSuggestedAnswerIntent(data.question);
-            const requestId = resolveIntentRequestId(intent, data.requestId);
-            if (!requestId) return;
-            appendTokenToRequest(requestId, data.token);
+            const resolved = resolveSuggestedAnswerRequest(data);
+            if (!resolved) return;
+            appendTokenToRequest(resolved.requestId, data.token);
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceSuggestedAnswer((data) => {
@@ -1507,15 +1676,14 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             if (userHasScrolledRef.current) {
                 setUnreadCount(prev => prev + 1);
             }
-            const intent = getSuggestedAnswerIntent(data.question);
-            const requestId = resolveIntentRequestId(intent, data.requestId);
-            if (!requestId) return;
-            clearProcessingForRequest(requestId);
-            const chips = generateResponseChips(data.answer, intent);
-            finalizeRequestMessage(requestId, data.answer, {
+            const resolved = resolveSuggestedAnswerRequest(data);
+            if (!resolved) return;
+            clearProcessingForRequest(resolved.requestId);
+            const chips = generateResponseChips(data.answer, resolved.intent);
+            finalizeRequestMessage(resolved.requestId, data.answer, {
                 chips: chips.length > 0 ? chips : undefined,
             });
-            rememberIntentRequest(intent, null);
+            rememberIntentRequest(resolved.intent, null);
             currentSourceRef.current = undefined;
         }));
 
@@ -1679,7 +1847,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }));
         return () => cleanups.forEach(fn => fn());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // C2 Fix: mount-only — listeners must survive expand/collapse to prevent dropped tokens
+    }, [appendTokenToRequest, clearProcessingForRequest, finalizeRequestMessage, rememberIntentRequest, resolveSuggestedAnswerRequest]); // C2 Fix: mount-only — listeners must survive expand/collapse to prevent dropped tokens
 
     // Stable mount-only effect for screenshot listeners.
     // These MUST NOT be inside the [isExpanded] effect — when a screenshot is
@@ -2089,6 +2257,122 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     handleScreenScanRef.current = handleScreenScan;
 
+    const handleExplain = async () => {
+        await cancelInFlightOverlayRequests();
+        setIsExpanded(true);
+        currentSourceRef.current = 'Explain';
+        analytics.trackCommandExecuted('explain');
+
+        const requestId = nextRequestId('explain');
+        const currentAttachments = attachedContextRef.current;
+        const question = lastFinalSentenceRef.current.trim() || finalizedTranscriptRef.current.split('  ·  ').pop()?.trim() || '';
+
+        if (!question && currentAttachments.length === 0) {
+            setMessages(prev => [...prev, {
+                id: nextMsgId(),
+                role: 'system',
+                text: '⚠️ Nothing to explain yet. Wait for a finalized question or add context.'
+            }]);
+            return;
+        }
+
+        markRequestProcessing(requestId);
+        rememberIntentRequest('answer_now', requestId);
+
+        if (currentAttachments.length > 0) {
+            setAttachedContext([]);
+            setMessages(prev => [...prev, {
+                id: nextMsgId(),
+                role: 'user',
+                text: question || 'Explain this',
+                hasScreenshot: true,
+                screenshotPreview: currentAttachments[0]?.preview
+            }]);
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 50);
+        }
+
+        beginStreamingMessage(requestId, {
+            role: 'system',
+            text: '',
+            intent: 'answer_now',
+            source: currentSourceRef.current,
+            isStreaming: true,
+        });
+
+        try {
+            await window.electronAPI.generateAnswerNow(
+                question || 'Explain this',
+                currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
+                `Explain the current topic or question clearly.
+- 3-5 short bullets max.
+- Define the key idea simply.
+- Keep it under 120 words.
+- No preamble.`,
+                requestId
+            );
+        } catch (err) {
+            rememberIntentRequest('answer_now', null);
+            failRequestMessage(requestId, `Error: ${err}`);
+        } finally {
+            clearProcessingForRequest(requestId);
+        }
+    };
+
+    const handleStarStory = useCallback(() => {
+        const hasCompletedAssistantAnswer = messages.some(msg => msg.role === 'system' && !msg.isStreaming && msg.text.trim().length > 0);
+        if (hasCompletedAssistantAnswer) {
+            void handleFollowUp('add_example');
+            return;
+        }
+        void handleWhatToSay();
+    }, [handleFollowUp, handleWhatToSay, messages]);
+
+    const handleSummarize = useCallback(() => {
+        void handleRecap();
+    }, [handleRecap]);
+
+    const getQuickActionHandler = useCallback((label: QuickActionLabel): (() => void | Promise<void>) => {
+        switch (label) {
+            case 'What to answer?':
+                return handleWhatToSay;
+            case 'Code Hint':
+                return handleCodeHint;
+            case 'Brainstorm':
+                return handleBrainstorm;
+            case 'Clarify':
+                return handleClarify;
+            case 'Trade-offs':
+                return handleSystemDesignTradeoffs;
+            case 'STAR Story':
+                return handleStarStory;
+            case 'Follow Up':
+                return handleFollowUpQuestions;
+            case 'Recap':
+                return handleRecap;
+            case 'Explain':
+                return handleExplain;
+            case 'Summarize':
+                return handleSummarize;
+            default:
+                return handleWhatToSay;
+        }
+    }, [
+        handleWhatToSay,
+        handleCodeHint,
+        handleBrainstorm,
+        handleClarify,
+        handleSystemDesignTradeoffs,
+        handleStarStory,
+        handleFollowUpQuestions,
+        handleRecap,
+        handleExplain,
+        handleSummarize,
+    ]);
+
+    fourthActionHandlerRef.current = getQuickActionHandler((MODE_BUTTON_LABELS[effectiveQuestionType] || MODE_BUTTON_LABELS.general)[3]);
+
     // Setup Streaming Listeners
     useEffect(() => {
         const cleanups: (() => void)[] = [];
@@ -2354,16 +2638,16 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
             // Add placeholder for streaming response
             const requestId = nextRequestId('answer-now');
-            activeChatRequestIdRef.current = requestId;
-            activeRagRequestIdRef.current = requestId;
             beginStreamingMessage(requestId, {
                 role: 'system',
                 text: '',
+                intent: 'answer_now',
                 isStreaming: true,
                 source: currentSourceRef.current,
             });
 
             markRequestProcessing(requestId);
+            rememberIntentRequest('answer_now', requestId);
 
             try {
                 let prompt = '';
@@ -2379,14 +2663,6 @@ Instructions:
 3. Keep the answer under 120 words.
 4. No preamble or filler.`;
                 } else {
-                    // JIT RAG pre-flight: try to use indexed meeting context first
-                    const ragResult = await window.electronAPI.ragQueryLive?.(question, requestId);
-                    if (ragResult?.success) {
-                        // JIT RAG handled it — response streamed via rag:stream-chunk events
-                        return;
-                    }
-                    activeRagRequestIdRef.current = null;
-
                     // Voice Only — direct answer, adaptive formatting
                     prompt = `Answer directly. Keep the response short.
 - Coding: one clean code block, then at most 2 short bullets.
@@ -2397,16 +2673,20 @@ Hard limit: under 120 words unless code is required.
 No preamble. No meta-commentary. Start with the answer immediately.`;
                 }
 
-                // Call Streaming API: message = question, context = instructions
-                requestStartTimeRef.current = Date.now();
-                await window.electronAPI.streamGeminiChat(question, currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined, prompt, { skipSystemPrompt: true, ignoreKnowledgeMode: true, requestId });
+                await window.electronAPI.generateAnswerNow(
+                    question,
+                    currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
+                    prompt,
+                    requestId
+                );
 
             } catch (err) {
                 // Initial invocation failing (e.g. IPC error before stream starts)
                 clearProcessingForRequest(requestId);
-                activeChatRequestIdRef.current = null;
-                activeRagRequestIdRef.current = null;
+                rememberIntentRequest('answer_now', null);
                 failRequestMessage(requestId, `❌ Error starting stream: ${err}`);
+            } finally {
+                clearProcessingForRequest(requestId);
             }
         } else {
             // Start recording - reset voice input state
@@ -2812,11 +3092,7 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                 handleFollowUpQuestions();
             } else if (isShortcutPressed(e, 'dynamicAction4')) {
                 e.preventDefault();
-                if (actionButtonMode === 'brainstorm') {
-                    handleBrainstorm();
-                } else {
-                    handleRecap();
-                }
+                fourthActionHandlerRef.current();
             } else if (isShortcutPressed(e, 'answer')) {
                 e.preventDefault();
                 handleAnswerNow();
@@ -2991,9 +3267,7 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
             else if (action === 'followUp') handlers.handleFollowUpQuestions();
             else if (action === 'recap') handlers.handleRecap();
             else if (action === 'dynamicAction4') {
-                // M6 Fix: Use ref to avoid stale closure from [] deps
-                if (actionButtonModeRef.current === 'brainstorm') handlers.handleBrainstorm();
-                else handlers.handleRecap();
+                fourthActionHandlerRef.current();
             }
             else if (action === 'answer') handlers.handleAnswerNow();
             else if (action === 'clarify') handlers.handleClarify();
@@ -3366,73 +3640,13 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                             {/* Quick Actions - Dynamic Context-Aware Buttons */}
                             {(() => {
                                 // ── Action Map ──
-                                type ActionDef = { label: string; icon: string; handler: () => void; isRecommended?: boolean };
-                                const actionSets: Record<DetectedQuestionType, ActionDef[]> = {
-                                    coding: [
-                                        { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
-                                        { label: 'Code Hint', icon: '💻', handler: handleCodeHint, isRecommended: true },
-                                        { label: 'Brainstorm', icon: '🧠', handler: handleBrainstorm },
-                                        { label: 'Clarify', icon: '❓', handler: handleClarify },
-                                    ],
-                                    system_design: [
-                                        { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
-                                        { label: 'Brainstorm', icon: '🧠', handler: handleBrainstorm, isRecommended: true },
-                                        { label: 'Clarify', icon: '❓', handler: handleClarify },
-                                        { label: 'Trade-offs', icon: '⚖️', handler: handleSystemDesignTradeoffs },
-                                    ],
-                                    behavioral: [
-                                        { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
-                                        {
-                                            label: 'STAR Story',
-                                            icon: '⭐',
-                                            handler: () => {
-                                                const hasCompletedAssistantAnswer = messages.some(msg => msg.role === 'system' && !msg.isStreaming && msg.text.trim().length > 0);
-                                                if (hasCompletedAssistantAnswer) handleFollowUp('add_example');
-                                                else handleWhatToSay();
-                                            },
-                                            isRecommended: true
-                                        },
-                                        { label: 'Follow Up', icon: '➡️', handler: handleFollowUpQuestions },
-                                        { label: actionButtonMode === 'brainstorm' ? 'Brainstorm' : 'Recap', icon: actionButtonMode === 'brainstorm' ? '🧠' : '📝', handler: actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap },
-                                    ],
-                                    general: [
-                                        { label: 'What to answer?', icon: '💡', handler: handleWhatToSay },
-                                        { label: 'Clarify', icon: '❓', handler: handleClarify },
-                                        { label: actionButtonMode === 'brainstorm' ? 'Brainstorm' : 'Recap', icon: actionButtonMode === 'brainstorm' ? '🧠' : '📝', handler: actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap },
-                                        { label: 'Follow Up', icon: '➡️', handler: handleFollowUpQuestions },
-                                    ],
-                                    follow_up: [
-                                        { label: 'What to answer?', icon: '💡', handler: handleWhatToSay, isRecommended: true },
-                                        { label: 'Follow Up', icon: '➡️', handler: handleFollowUpQuestions },
-                                        { label: 'Clarify', icon: '❓', handler: handleClarify },
-                                        { label: actionButtonMode === 'brainstorm' ? 'Brainstorm' : 'Recap', icon: actionButtonMode === 'brainstorm' ? '🧠' : '📝', handler: actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap },
-                                    ],
-                                };
-
-                                // Smart recommendation override via keywords
-                                const actions = actionSets[effectiveQuestionType] || actionSets.general;
-                                const combined = `${lastFinalSentence || finalizedTranscriptRef.current.slice(-500)}`.toLowerCase();
-                                let recommendedIdx = actions.findIndex((a: ActionDef) => a.isRecommended);
-                                if (recommendedIdx < 0) recommendedIdx = 0;
-
-                                // Keyword-based overrides
-                                if (effectiveQuestionType === 'coding') {
-                                    if (/(optimiz|improv|faster|efficient|refactor)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Brainstorm');
-                                    else if (/(explain|why|how does|approach)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Clarify');
-                                } else if (effectiveQuestionType === 'system_design') {
-                                    if (/(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Trade-offs');
-                                    else if (/(scal|million|billion|traffic|handle more users)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Brainstorm');
-                                } else if (effectiveQuestionType === 'behavioral') {
-                                    if (/(follow.?up|next|then what)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Follow Up');
-                                    else if (/(improv|better|stronger)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label.includes('Brainstorm') || a.label.includes('Recap'));
-                                } else if (effectiveQuestionType === 'general') {
-                                    // Silent general fallback UX boost
-                                    recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Clarify');
-                                } else if (effectiveQuestionType === 'follow_up') {
-                                    if (/(elaborate|more detail|expand)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Clarify');
-                                    else if (/(example|instance|case)/.test(combined)) recommendedIdx = actions.findIndex((a: ActionDef) => a.label === 'Follow Up');
-                                }
-                                if (recommendedIdx < 0) recommendedIdx = 0;
+                                type ActionDef = { label: QuickActionLabel; icon: string; handler: () => void | Promise<void> };
+                                const labels = MODE_BUTTON_LABELS[effectiveQuestionType] || MODE_BUTTON_LABELS.general;
+                                const actions: ActionDef[] = labels.map((label) => ({
+                                    label,
+                                    icon: QUICK_ACTION_ICONS[label],
+                                    handler: getQuickActionHandler(label),
+                                }));
 
                                 return (
                                     <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity }}>
@@ -3444,16 +3658,18 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                                     'Code Hint':       { gradient: 'from-violet-400 via-violet-500 to-purple-600', glow: 'rgba(139,92,246,0.35)' },
                                                     'Scan Screen':     { gradient: 'from-orange-400 via-amber-500 to-yellow-600', glow: 'rgba(251,191,36,0.35)' },
                                                     'Brainstorm':      { gradient: 'from-amber-400 via-orange-500 to-orange-600', glow: 'rgba(251,146,60,0.35)' },
+                                                    'Explain':         { gradient: 'from-amber-400 via-orange-500 to-orange-600', glow: 'rgba(251,146,60,0.35)' },
                                                     'Clarify':         { gradient: 'from-cyan-400 via-cyan-500 to-teal-600', glow: 'rgba(34,211,238,0.35)' },
                                                     'STAR Story':      { gradient: 'from-pink-400 via-pink-500 to-rose-600', glow: 'rgba(244,114,182,0.35)' },
                                                     'Follow Up':       { gradient: 'from-amber-400 via-yellow-500 to-amber-600', glow: 'rgba(245,158,11,0.35)' },
                                                     'Trade-offs':      { gradient: 'from-teal-400 via-teal-500 to-emerald-600', glow: 'rgba(20,184,166,0.35)' },
                                                     'Recap':           { gradient: 'from-slate-400 via-slate-500 to-gray-600', glow: 'rgba(148,163,184,0.3)' },
+                                                    'Summarize':       { gradient: 'from-slate-400 via-slate-500 to-gray-600', glow: 'rgba(148,163,184,0.3)' },
                                                 };
                                                 const fallbackColor = { gradient: 'from-indigo-400 via-indigo-500 to-blue-600', glow: 'rgba(99,102,241,0.35)' };
 
                                                 return actions.map((action: ActionDef, idx: number) => {
-                                                    const isRec = idx === recommendedIdx;
+                                                    const isRec = action.label === recommendedButton;
                                                     const colors = buttonColors[action.label] || fallbackColor;
                                                     return (
                                                         <motion.button
@@ -3465,7 +3681,15 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                                             transition={{ duration: 0.2, delay: idx * 0.04, ease: [0.25, 1, 0.5, 1] }}
                                                             whileHover={{ scale: isRec ? 1.07 : 1.05, y: -1, filter: 'brightness(1.12)' }}
                                                             whileTap={{ scale: 0.95 }}
-                                                            onClick={() => { if (!isProcessing) action.handler(); }}
+                                                            onClick={() => {
+                                                                if (isProcessing) return;
+                                                                recommendationLockTurnIdRef.current = currentQuestionTurnIdRef.current;
+                                                                if (recommendedButtonRef.current !== action.label) {
+                                                                    recommendedButtonRef.current = action.label;
+                                                                    setRecommendedButton(action.label);
+                                                                }
+                                                                action.handler();
+                                                            }}
                                                             className={`group relative overflow-hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap shrink-0 no-drag text-white`}
                                                             style={{
                                                                 boxShadow: `inset 0 1px 1px rgba(255,255,255,${isRec ? '0.5' : '0.3'}), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px ${colors.glow}, 0 0 0 1px rgba(255,255,255,${isRec ? '0.1' : '0.06'})`,

@@ -2079,17 +2079,17 @@ export class AppState {
       helper.getOverlayWindow()?.webContents.send('intelligence-assist-update', { insight, _sessionId, requestId });
     })
 
-    this.intelligenceManager.on('suggested_answer', (answer: string, question: string, confidence: number, requestId?: string | null) => {
+    this.intelligenceManager.on('suggested_answer', (answer: string, question: string, confidence: number, requestId?: string | null, intent?: string | null) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-suggested-answer', { answer, question, confidence, _sessionId: sid(), requestId: requestId ?? rid() })
+        win.webContents.send('intelligence-suggested-answer', { answer, question, confidence, intent, _sessionId: sid(), requestId: requestId ?? rid() })
       }
     })
 
-    this.intelligenceManager.on('suggested_answer_token', (token: string, question: string, confidence: number, requestId?: string | null) => {
+    this.intelligenceManager.on('suggested_answer_token', (token: string, question: string, confidence: number, requestId?: string | null, intent?: string | null) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-suggested-answer-token', { token, question, confidence, _sessionId: sid(), requestId: requestId ?? rid() })
+        win.webContents.send('intelligence-suggested-answer-token', { token, question, confidence, intent, _sessionId: sid(), requestId: requestId ?? rid() })
       }
     })
 

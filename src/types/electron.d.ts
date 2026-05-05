@@ -159,6 +159,7 @@ export interface ElectronAPI {
   generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ script: string | null }>
+  generateAnswerNow: (question: string, imagePaths?: string[], context?: string, requestId?: string) => Promise<{ answer: string | null }>
   generateScreenScan: (imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => Promise<{ result: string | null; mode: string; error?: string }>
   runScreenAnalysis: (payload: { requestId: string; image: string }) => void
   generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => Promise<{ refined: string | null; intent: string }>
@@ -206,8 +207,8 @@ export interface ElectronAPI {
 
   // Intelligence Mode Events
   onIntelligenceAssistUpdate: (callback: (data: { insight: string; _sessionId?: string; requestId?: string }) => void) => () => void
-  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; _sessionId?: string; requestId?: string }) => void) => () => void
-  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceSuggestedAnswerToken: (callback: (data: { token: string; question: string; confidence: number; intent?: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceSuggestedAnswer: (callback: (data: { answer: string; question: string; confidence: number; intent?: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceRefinedAnswerToken: (callback: (data: { token: string; intent: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceRefinedAnswer: (callback: (data: { answer: string; intent: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceFollowUpQuestionsUpdate: (callback: (data: { questions: string; _sessionId?: string; requestId?: string }) => void) => () => void

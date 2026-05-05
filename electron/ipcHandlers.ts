@@ -2590,6 +2590,19 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  safeHandle("generate-answer-now", async (_, question: string, imagePaths?: string[], context?: string, requestId?: string) => {
+    try {
+      const answer = await appState.getIntelligenceManager().getEngine().runAnswerNow(question, {
+        imagePaths,
+        context,
+        requestId,
+      });
+      return { answer };
+    } catch (error: any) {
+      throw error;
+    }
+  });
+
   // MODE 9: Screen Scan (Context-Aware Screen Intelligence)
   safeHandle("generate-screen-scan", async (_, imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => {
     try {

@@ -17,7 +17,13 @@ import {
 import type { ConversationIntent, ScreenContentMode } from './llm';
 
 // Mode types
-export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm' | 'system_design_tradeoffs' | 'screen_scan';
+export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm' | 'system_design_tradeoffs' | 'screen_scan' | 'answer_now';
+
+export interface RunAnswerNowOptions {
+    imagePaths?: string[];
+    context?: string;
+    requestId?: string;
+}
 
 // Refinement intent detection (refined to avoid false positives)
 function detectRefinementIntent(userText: string): { isRefinement: boolean; intent: string } {
@@ -44,8 +50,8 @@ function detectRefinementIntent(userText: string): { isRefinement: boolean; inte
 // Events emitted by IntelligenceEngine
 export interface IntelligenceModeEvents {
     'assist_update': (insight: string, requestId?: string | null) => void;
-    'suggested_answer': (answer: string, question: string, confidence: number, requestId?: string | null) => void;
-    'suggested_answer_token': (token: string, question: string, confidence: number, requestId?: string | null) => void;
+    'suggested_answer': (answer: string, question: string, confidence: number, requestId?: string | null, intent?: string | null) => void;
+    'suggested_answer_token': (token: string, question: string, confidence: number, requestId?: string | null, intent?: string | null) => void;
     'refined_answer': (answer: string, intent: string, requestId?: string | null) => void;
     'refined_answer_token': (token: string, intent: string, requestId?: string | null) => void;
     'recap': (summary: string, requestId?: string | null) => void;
@@ -439,7 +445,7 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('suggested_answer_token', token, question || 'inferred', confidence, activeRequestId);
+                this.emit('suggested_answer_token', token, question || 'inferred', confidence, activeRequestId, 'what_to_answer');
                 fullAnswer += token;
             }
 
@@ -469,7 +475,7 @@ export class IntelligenceEngine extends EventEmitter {
                 return null;
             }
             // The renderer already has all tokens — this is for metadata only (e.g. copying, history).
-            this.safeEmit(_signalWTS, activeRequestId, 'suggested_answer', fullAnswer, question || 'What to Answer', confidence);
+            this.safeEmit(_signalWTS, activeRequestId, 'suggested_answer', fullAnswer, question || 'What to Answer', confidence, 'what_to_answer');
 
             this.cleanupRequestAbort(activeRequestId);
             this.setMode('idle');
@@ -832,6 +838,75 @@ export class IntelligenceEngine extends EventEmitter {
         }
     }
 
+    async runAnswerNow(question: string, options?: RunAnswerNowOptions): Promise<string | null> {
+        const activeRequestId = options?.requestId ?? null;
+        const imagePaths = options?.imagePaths;
+        const message = question.trim() || 'Analyze this screenshot';
+
+        this.currentClientRequestId = activeRequestId;
+        this.setMode('answer_now');
+        const _abortAnswer = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
+        const _signalAnswer = _abortAnswer?.signal;
+
+        try {
+            const generationId = ++this.currentGenerationId;
+            let fullAnswer = '';
+            let streamAborted = false;
+
+            this.session.addTranscript({
+                text: message,
+                speaker: 'user',
+                timestamp: Date.now(),
+                final: true,
+            });
+
+            const stream = this.llmHelper.streamChat(
+                message,
+                imagePaths,
+                options?.context,
+                '',
+                true
+            );
+
+            for await (const token of stream) {
+                if (_signalAnswer?.aborted || this.currentGenerationId !== generationId) {
+                    console.log('[GENERATION_DISCARDED] answer_now stream aborted by new generation');
+                    await stream.return(undefined);
+                    streamAborted = true;
+                    break;
+                }
+                this.emit('suggested_answer_token', token, message, 1.0, activeRequestId, 'answer_now');
+                fullAnswer += token;
+            }
+
+            if (streamAborted) {
+                this.cleanupRequestAbort(activeRequestId);
+                this.setMode('idle');
+                return null;
+            }
+
+            if (fullAnswer && !_signalAnswer?.aborted && this.currentGenerationId === generationId) {
+                this.session.addAssistantMessage(fullAnswer);
+                this.session.pushUsage({
+                    type: 'chat',
+                    timestamp: Date.now(),
+                    question: message,
+                    answer: fullAnswer
+                });
+                this.safeEmit(_signalAnswer, activeRequestId, 'suggested_answer', fullAnswer, message, 1.0, 'answer_now');
+            }
+
+            this.cleanupRequestAbort(activeRequestId);
+            this.setMode('idle');
+            return fullAnswer;
+        } catch (error) {
+            this.cleanupRequestAbort(activeRequestId);
+            this.emit('error', error as Error, 'answer_now', activeRequestId);
+            this.setMode('idle');
+            return null;
+        }
+    }
+
     /**
      * MODE 5: Manual Answer (Fallback)
      * Explicit bypass when auto-detection fails
@@ -938,7 +1013,7 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('suggested_answer_token', token, 'Code Hint', 1.0, activeRequestId);
+                this.emit('suggested_answer_token', token, 'Code Hint', 1.0, activeRequestId, 'code_hint');
                 fullHint += token;
             }
 
@@ -960,7 +1035,7 @@ export class IntelligenceEngine extends EventEmitter {
                 answer: fullHint
             });
 
-            this.safeEmit(_signalCH, activeRequestId, 'suggested_answer', fullHint, 'Code Hint', 1.0);
+            this.safeEmit(_signalCH, activeRequestId, 'suggested_answer', fullHint, 'Code Hint', 1.0, 'code_hint');
             this.setMode('idle');
             return fullHint;
 
@@ -1003,7 +1078,7 @@ export class IntelligenceEngine extends EventEmitter {
                 this.setMode('idle');
                 const msg = "There's nothing to brainstorm right now. Make sure your question is visible or spoken aloud, then try again.";
                 this.session.addAssistantMessage(msg);
-                this.safeEmit(undefined, activeRequestId, 'suggested_answer', msg, 'Brainstorming Approaches', 1.0);
+                this.safeEmit(undefined, activeRequestId, 'suggested_answer', msg, 'Brainstorming Approaches', 1.0, 'brainstorm');
                 return msg;
             }
 
@@ -1022,7 +1097,7 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('suggested_answer_token', token, 'Brainstorming Approaches', 1.0, activeRequestId);
+                this.emit('suggested_answer_token', token, 'Brainstorming Approaches', 1.0, activeRequestId, 'brainstorm');
                 fullResult += token;
             }
 
@@ -1043,7 +1118,7 @@ export class IntelligenceEngine extends EventEmitter {
                 answer: fullResult
             });
 
-            this.safeEmit(_signalBS, activeRequestId, 'suggested_answer', fullResult, 'Brainstorming Approaches', 1.0);
+            this.safeEmit(_signalBS, activeRequestId, 'suggested_answer', fullResult, 'Brainstorming Approaches', 1.0, 'brainstorm');
             this.setMode('idle');
             return fullResult;
 
