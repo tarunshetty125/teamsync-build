@@ -2191,6 +2191,20 @@ export class AppState {
       }
     })
 
+    this.intelligenceManager.on('action_token', (payload: any) => {
+      const win = mainWindow()
+      if (win) {
+        win.webContents.send('intelligence-action-token', { ...payload, _sessionId: sid(), requestId: payload?.requestId ?? rid() })
+      }
+    })
+
+    this.intelligenceManager.on('action_result', (payload: any) => {
+      const win = mainWindow()
+      if (win) {
+        win.webContents.send('intelligence-action-result', { ...payload, _sessionId: sid(), requestId: payload?.requestId ?? rid() })
+      }
+    })
+
     this.intelligenceManager.on('mode_changed', (mode: string) => {
       const win = mainWindow()
       if (win) {

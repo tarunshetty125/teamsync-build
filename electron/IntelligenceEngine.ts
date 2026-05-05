@@ -6,6 +6,20 @@ import { EventEmitter } from 'events';
 import { LLMHelper } from './LLMHelper';
 import { SessionTracker, TranscriptSegment, SuggestionTrigger, ContextItem } from './SessionTracker';
 import {
+    type ActionRagContext,
+    buildContext,
+    serializePromptObject,
+    type PromptObject,
+    type ProfilePreference,
+    type UnifiedActionIntent,
+} from './ActionContextBuilder';
+import { logPrompt } from './PromptDebugLogger';
+import { enforceTokenBudget } from './TokenBudgetEnforcer';
+import { validatePromptObject } from './PromptValidator';
+import { logActionMetrics } from './ActionMetricsLogger';
+import { ActionResponseCache } from './ActionResponseCache';
+import { buildRepairInstruction, buildSafeActionFallback, validateActionOutput } from './ActionOutputValidator';
+import {
     AnswerLLM, AssistLLM, BrainstormLLM, ClarifyLLM, CodeHintLLM, FollowUpLLM, RecapLLM,
     FollowUpQuestionsLLM, SystemDesignTradeoffsLLM, WhatToAnswerLLM,
     ScreenScanLLM,
@@ -16,13 +30,94 @@ import {
 } from './llm';
 import type { ConversationIntent, ScreenContentMode } from './llm';
 
+type UserControlledMode = Extract<ConversationIntent, 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design'>;
+
 // Mode types
 export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm' | 'system_design_tradeoffs' | 'screen_scan' | 'answer_now';
 
 export interface RunAnswerNowOptions {
     imagePaths?: string[];
     context?: string;
+    mode?: UserControlledMode;
     requestId?: string;
+    rag?: ActionRagContext | null;
+    profilePreference?: ProfilePreference;
+}
+
+interface UnifiedActionEventPayload {
+    intent: UnifiedActionIntent;
+    requestId?: string | null;
+    content?: string;
+    token?: string;
+    mode: UserControlledMode;
+    profileApplied?: boolean;
+}
+
+function getEngineModeForAction(intent: UnifiedActionIntent): IntelligenceMode {
+    switch (intent) {
+        case 'recap':
+            return 'recap';
+        case 'clarify':
+            return 'clarify';
+        case 'brainstorm':
+            return 'brainstorm';
+        case 'follow_up_questions':
+            return 'follow_up_questions';
+        case 'answer_now':
+            return 'answer_now';
+        case 'manual_chat':
+            return 'manual';
+        case 'code_hint':
+            return 'code_hint';
+        case 'system_design_tradeoffs':
+            return 'system_design_tradeoffs';
+        case 'screen_scan':
+            return 'screen_scan';
+        case 'what_to_answer':
+        default:
+            return 'what_to_say';
+    }
+}
+
+const MAX_ACTION_PROMPT_TOKENS = 3200;
+const ACTION_CACHE_TTL_MS = 2 * 60 * 1000;
+const ACTION_DEBOUNCE_MS = 250;
+const ACTION_MAX_PRIMARY_ATTEMPTS = 2;
+const ACTION_MAX_FALLBACK_ATTEMPTS = 1;
+const ACTION_EMIT_CHUNK_SIZE = 3;
+const ACTION_EMIT_CHUNK_DELAY_MS = 18;
+const ACTION_STREAM_IDLE_TIMEOUT_MS = 30_000;
+
+function isFailureResponseText(content: string): boolean {
+    const normalized = content.trim().toLowerCase();
+    return normalized.includes('all ai services are currently unavailable')
+        || normalized.includes('please check your api keys')
+        || normalized.includes('i could not generate a response')
+        || normalized.includes('no ai providers configured');
+}
+
+function getIntentResultForMode(mode: UserControlledMode) {
+    return {
+        intent: mode,
+        confidence: 1,
+        answerShape: getAnswerShapeGuidance(mode),
+    };
+}
+
+function buildUserControlledModeContext(mode: UserControlledMode): string {
+    switch (mode) {
+        case 'behavioral':
+            return 'MODE: behavioral\nAnswer in first person with a concrete example and a crisp STAR-style structure.';
+        case 'coding':
+            return 'MODE: coding\nPrioritize implementation details, correctness, and concise technical reasoning.';
+        case 'follow_up':
+            return 'MODE: follow_up\nContinue naturally from the latest context without restarting from scratch.';
+        case 'system_design':
+            return 'MODE: system_design\nFocus on architecture, tradeoffs, scalability, and failure handling.';
+        case 'general':
+        default:
+            return 'MODE: general\nAnswer directly and concisely without changing task type.';
+    }
 }
 
 // Refinement intent detection (refined to avoid false positives)
@@ -66,6 +161,8 @@ export interface IntelligenceModeEvents {
     'screen_scan_token': (token: string, mode: string, requestId?: string | null) => void;
     'manual_answer_started': (requestId?: string | null) => void;
     'manual_answer_result': (answer: string, question: string, requestId?: string | null) => void;
+    'action_token': (payload: UnifiedActionEventPayload) => void;
+    'action_result': (payload: UnifiedActionEventPayload) => void;
     'mode_changed': (mode: IntelligenceMode) => void;
     'error': (error: Error, mode: IntelligenceMode, requestId?: string | null) => void;
 }
@@ -95,6 +192,10 @@ export class IntelligenceEngine extends EventEmitter {
 
     // Per-request AbortController map — cancel(requestId) only cancels that request
     private requestAbortControllers = new Map<string, AbortController>();
+    private activeActionRequestId: string | null = null;
+    private readonly actionResponseCache = new ActionResponseCache(ACTION_CACHE_TTL_MS);
+    private lastActionAcceptedAt: number = 0;
+    private lastActionFingerprint: string | null = null;
 
     // Keep reference to LLMHelper for client access
     private llmHelper: LLMHelper;
@@ -122,6 +223,252 @@ export class IntelligenceEngine extends EventEmitter {
         return this.currentClientRequestId;
     }
 
+    async runAction(params: {
+        intent: UnifiedActionIntent;
+        message?: string;
+        imagePaths?: string[];
+        requestId?: string;
+        profilePreference?: ProfilePreference;
+        additionalContext?: string;
+        rag?: ActionRagContext | null;
+        modeOverride?: UserControlledMode;
+        screenScanMode?: ScreenContentMode;
+    }): Promise<string | null> {
+        const activeRequestId = params.requestId ?? null;
+        const sessionMode = params.modeOverride ?? this.session.getMode();
+        const actionStartedAt = Date.now();
+        const fingerprint = `${params.intent}::${(params.message || '').trim()}`;
+        const sessionIdSnapshot = this.session.sessionId;
+
+        const debounceDelayMs = this.getDebounceDelay(actionStartedAt, fingerprint);
+        if (debounceDelayMs > 0) {
+            console.warn(`[IntelligenceEngine] Rapid repeat action detected for intent "${params.intent}" (${debounceDelayMs}ms window); latest request will replace the previous one deterministically.`);
+        }
+
+        this.claimActionRequestOwnership(activeRequestId);
+        this.lastActionAcceptedAt = actionStartedAt;
+        this.lastActionFingerprint = fingerprint;
+
+        return this.runLLMGuarded(
+            activeRequestId,
+            getEngineModeForAction(params.intent),
+            async (signal, generationId) => {
+                const builtContext = await buildContext({
+                    session: this.session,
+                    intent: params.intent,
+                    mode: sessionMode,
+                    profile: this.llmHelper.getKnowledgeOrchestrator?.() ?? null,
+                    message: params.message,
+                    imagePaths: params.imagePaths,
+                    profilePreference: params.profilePreference,
+                    additionalContext: params.additionalContext,
+                    rag: params.rag,
+                    includeModeCustomContext: this.llmHelper.getCustomNotesEnabled?.() ?? true,
+                    screenScanMode: params.screenScanMode,
+                });
+                const contextLayers = builtContext.layers;
+                const isOwnedRequest = () => this.isOwnedActionRequest(activeRequestId, generationId, signal, sessionIdSnapshot);
+                let inputTokens = 0;
+
+                try {
+                    if (!isOwnedRequest()) {
+                        return null;
+                    }
+
+                    if ((params.intent === 'answer_now' || params.intent === 'manual_chat') && params.message?.trim()) {
+                        this.session.addUserMessage(params.message.trim());
+                    }
+
+                    const budgeted = enforceTokenBudget({
+                        prompt: contextLayers.promptObject,
+                        maxTokens: MAX_ACTION_PROMPT_TOKENS,
+                    });
+                    validatePromptObject(budgeted.prompt, { maxTokens: MAX_ACTION_PROMPT_TOKENS });
+                    const serializedPrompt = serializePromptObject(budgeted.prompt);
+                    inputTokens = this.session.estimateTokenCount(serializedPrompt.finalPrompt);
+
+                    logPrompt({
+                        intent: params.intent,
+                        mode: sessionMode,
+                        transcriptStrategy: contextLayers.transcriptStrategy,
+                        transcriptLength: budgeted.prompt.transcript.content.length,
+                        transcriptApproxTokens: budgeted.transcriptTokens,
+                        profileUsed: contextLayers.profileApplied,
+                        profilePolicy: contextLayers.profilePolicy,
+                        finalPrompt: serializedPrompt.finalPrompt,
+                    });
+
+                    if (!isOwnedRequest()) {
+                        return null;
+                    }
+
+                    const cacheLookup = this.actionResponseCache.get(budgeted.prompt, sessionIdSnapshot);
+                    if (cacheLookup.hit && cacheLookup.content) {
+                        const cachedContent = cacheLookup.content.trim();
+                        if (!isOwnedRequest()) {
+                            return null;
+                        }
+                        this.persistActionResult(params.intent, budgeted.prompt.question, cachedContent);
+                        await this.emitBufferedActionContent(
+                            signal,
+                            activeRequestId,
+                            generationId,
+                            params.intent,
+                            sessionMode,
+                            contextLayers.profileApplied,
+                            cachedContent,
+                            sessionIdSnapshot
+                        );
+                        logActionMetrics({
+                            intent: params.intent,
+                            mode: sessionMode,
+                            latencyMs: Date.now() - actionStartedAt,
+                            inputTokens,
+                            outputTokens: this.session.estimateTokenCount(cachedContent),
+                            cacheHit: true,
+                            retryCount: 0,
+                            fallbackUsed: false,
+                            profileUsed: contextLayers.profileApplied,
+                            profilePolicy: contextLayers.profilePolicy,
+                            transcriptStrategy: contextLayers.transcriptStrategy,
+                            requestId: activeRequestId,
+                        });
+                        this.safeEmitAction(signal, activeRequestId, generationId, 'action_result', {
+                            intent: params.intent,
+                            requestId: activeRequestId,
+                            content: cachedContent,
+                            mode: sessionMode,
+                            profileApplied: contextLayers.profileApplied,
+                        }, sessionIdSnapshot);
+                        return cachedContent;
+                    }
+
+                    const primaryDirect = contextLayers.directResponse?.trim();
+                    const executionResult = primaryDirect
+                        ? {
+                            content: primaryDirect,
+                            retryCount: 0,
+                            fallbackUsed: false,
+                        }
+                        : await this.executeActionWithRetry({
+                            prompt: budgeted.prompt,
+                            imagePaths: params.imagePaths,
+                            skipCustomNotesInjection: contextLayers.profileApplied,
+                            signal,
+                            generationId,
+                            requestId: activeRequestId,
+                            sessionIdSnapshot,
+                        });
+
+                    if (!executionResult || !isOwnedRequest()) {
+                        return null;
+                    }
+
+                    const finalContent = await this.ensureValidActionOutput({
+                        prompt: budgeted.prompt,
+                        content: executionResult.content,
+                        imagePaths: params.imagePaths,
+                        skipCustomNotesInjection: contextLayers.profileApplied,
+                        signal,
+                        generationId,
+                        requestId: activeRequestId,
+                        sessionIdSnapshot,
+                    });
+
+                    if (!finalContent || !isOwnedRequest()) {
+                        return null;
+                    }
+
+                    this.persistActionResult(params.intent, budgeted.prompt.question, finalContent);
+                    if (!isFailureResponseText(finalContent)) {
+                        this.actionResponseCache.set(budgeted.prompt, sessionIdSnapshot, finalContent);
+                    }
+                    await this.emitBufferedActionContent(
+                        signal,
+                        activeRequestId,
+                        generationId,
+                        params.intent,
+                        sessionMode,
+                        contextLayers.profileApplied,
+                        finalContent,
+                        sessionIdSnapshot
+                    );
+                    logActionMetrics({
+                        intent: params.intent,
+                        mode: sessionMode,
+                        latencyMs: Date.now() - actionStartedAt,
+                        inputTokens,
+                        outputTokens: this.session.estimateTokenCount(finalContent),
+                        cacheHit: false,
+                        retryCount: executionResult.retryCount,
+                        fallbackUsed: executionResult.fallbackUsed,
+                        profileUsed: contextLayers.profileApplied,
+                        profilePolicy: contextLayers.profilePolicy,
+                        transcriptStrategy: contextLayers.transcriptStrategy,
+                        requestId: activeRequestId,
+                    });
+                    this.safeEmitAction(signal, activeRequestId, generationId, 'action_result', {
+                        intent: params.intent,
+                        requestId: activeRequestId,
+                        content: finalContent,
+                        mode: sessionMode,
+                        profileApplied: contextLayers.profileApplied,
+                    }, sessionIdSnapshot);
+                    return finalContent;
+                } catch (error: any) {
+                    console.error('[IntelligenceEngine] Action pipeline failed hard:', error?.message || error);
+                    if (!isOwnedRequest()) {
+                        return null;
+                    }
+                    const safeFallback = buildSafeActionFallback(
+                        params.intent,
+                        sessionMode,
+                        params.message || this.session.getLastInterviewerTurn() || 'the latest question'
+                    );
+                    this.persistActionResult(params.intent, params.message || 'safe fallback', safeFallback);
+                    await this.emitBufferedActionContent(
+                        signal,
+                        activeRequestId,
+                        generationId,
+                        params.intent,
+                        sessionMode,
+                        false,
+                        safeFallback,
+                        sessionIdSnapshot
+                    );
+                    logActionMetrics({
+                        intent: params.intent,
+                        mode: sessionMode,
+                        latencyMs: Date.now() - actionStartedAt,
+                        inputTokens,
+                        outputTokens: this.session.estimateTokenCount(safeFallback),
+                        cacheHit: false,
+                        retryCount: 0,
+                        fallbackUsed: true,
+                        profileUsed: false,
+                        profilePolicy: contextLayers.profilePolicy,
+                        transcriptStrategy: contextLayers.transcriptStrategy,
+                        requestId: activeRequestId,
+                    });
+                    this.safeEmitAction(signal, activeRequestId, generationId, 'action_result', {
+                        intent: params.intent,
+                        requestId: activeRequestId,
+                        content: safeFallback,
+                        mode: sessionMode,
+                        profileApplied: false,
+                    }, sessionIdSnapshot);
+                    return safeFallback;
+                }
+            }
+        );
+    }
+
+    private getDebounceDelay(now: number, fingerprint: string): number {
+        if (this.lastActionFingerprint !== fingerprint) return 0;
+        const elapsed = now - this.lastActionAcceptedAt;
+        return elapsed < ACTION_DEBOUNCE_MS ? ACTION_DEBOUNCE_MS - elapsed : 0;
+    }
+
     /**
      * Cancel a specific request by its requestId.
      * Only aborts that request — no global abort.
@@ -132,6 +479,9 @@ export class IntelligenceEngine extends EventEmitter {
             controller.abort();
             this.requestAbortControllers.delete(requestId);
             console.log(`[IntelligenceEngine] Cancelled request: ${requestId}`);
+        }
+        if (this.activeActionRequestId === requestId) {
+            this.activeActionRequestId = null;
         }
     }
 
@@ -156,6 +506,314 @@ export class IntelligenceEngine extends EventEmitter {
         }
     }
 
+    private claimActionRequestOwnership(requestId: string | null): void {
+        if (!requestId) {
+            this.activeActionRequestId = null;
+            return;
+        }
+
+        if (this.activeActionRequestId && this.activeActionRequestId !== requestId) {
+            this.cancelRequest(this.activeActionRequestId);
+        }
+
+        this.activeActionRequestId = requestId;
+    }
+
+    private isOwnedActionRequest(
+        requestId: string | null,
+        generationId: number,
+        signal?: AbortSignal,
+        expectedSessionId?: string
+    ): boolean {
+        if (signal?.aborted) return false;
+        if (expectedSessionId && this.session.sessionId !== expectedSessionId) return false;
+        if (this.currentGenerationId !== generationId) return false;
+        if (!requestId) return this.activeActionRequestId === null;
+        if (this.activeActionRequestId !== requestId) return false;
+        return this.requestAbortControllers.has(requestId);
+    }
+
+    private async emitBufferedActionContent(
+        signal: AbortSignal | undefined,
+        requestId: string | null,
+        generationId: number,
+        intent: UnifiedActionIntent,
+        mode: UserControlledMode,
+        profileApplied: boolean,
+        content: string,
+        expectedSessionId: string
+    ): Promise<void> {
+        for (let index = 0; index < content.length; index += ACTION_EMIT_CHUNK_SIZE) {
+            const token = content.slice(index, index + ACTION_EMIT_CHUNK_SIZE);
+            if (!this.safeEmitAction(signal, requestId, generationId, 'action_token', {
+                intent,
+                requestId,
+                token,
+                mode,
+                profileApplied,
+            }, expectedSessionId)) {
+                return;
+            }
+
+            if (index + ACTION_EMIT_CHUNK_SIZE < content.length) {
+                const shouldContinue = await this.waitWithBackoff(ACTION_EMIT_CHUNK_DELAY_MS, signal);
+                if (!shouldContinue) {
+                    return;
+                }
+            }
+        }
+    }
+
+    private async waitWithBackoff(delayMs: number, signal?: AbortSignal): Promise<boolean> {
+        if (delayMs <= 0) return true;
+        return new Promise((resolve) => {
+            const timeout = setTimeout(() => {
+                signal?.removeEventListener('abort', onAbort);
+                resolve(true);
+            }, delayMs);
+            const onAbort = () => {
+                clearTimeout(timeout);
+                resolve(false);
+            };
+            if (signal) {
+                signal.addEventListener('abort', onAbort, { once: true });
+            }
+        });
+    }
+
+    private resolveFallbackModel(primaryModel: string): string | null {
+        const candidates: string[] = [];
+        const lower = primaryModel.toLowerCase();
+
+        if (!lower.includes('claude') && this.llmHelper.hasClaude()) candidates.push('claude');
+        if (!lower.includes('gpt') && !lower.includes('openai') && this.llmHelper.hasOpenai()) candidates.push('gpt-4o-mini');
+        if (!lower.includes('gemini')) candidates.push('gemini');
+        if (!lower.includes('llama') && !lower.includes('groq') && this.llmHelper.hasGroq()) candidates.push('llama');
+        candidates.push('natively');
+
+        return candidates.find((candidate) => candidate !== primaryModel) ?? null;
+    }
+
+    private async collectStreamResponseForPrompt(args: {
+        prompt: PromptObject;
+        imagePaths?: string[];
+        modelOverride?: string | null;
+        skipCustomNotesInjection?: boolean;
+        signal?: AbortSignal;
+        generationId: number;
+        requestId: string | null;
+        sessionIdSnapshot: string;
+    }): Promise<string | null> {
+        const { prompt, imagePaths, modelOverride, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
+        const originalModel = this.llmHelper.getCurrentModel();
+        const serialized = serializePromptObject(prompt);
+
+        try {
+            if (!this.isOwnedActionRequest(requestId, generationId, signal, sessionIdSnapshot)) {
+                return null;
+            }
+            if (modelOverride && modelOverride !== originalModel) {
+                this.llmHelper.setModel(modelOverride);
+            }
+
+            let fullResponse = '';
+            const stream = this.llmHelper.streamStructuredPrompt(
+                {
+                    question: prompt.question,
+                    context: serialized.context,
+                    systemPrompt: serialized.systemPrompt,
+                },
+                imagePaths,
+                {
+                    ignoreKnowledgeMode: true,
+                    skipKnowledgeInjection: true,
+                    skipModeInjection: true,
+                    skipCustomNotesInjection,
+                }
+            );
+
+            const iterator = stream[Symbol.asyncIterator]();
+            while (true) {
+                let timeoutId: NodeJS.Timeout | null = null;
+                const nextChunk = await Promise.race([
+                    iterator.next(),
+                    new Promise<IteratorResult<string, void>>((_, reject) => {
+                        timeoutId = setTimeout(() => reject(new Error('LLM stream timeout')), ACTION_STREAM_IDLE_TIMEOUT_MS);
+                    }),
+                ]);
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                }
+
+                if (!this.isOwnedActionRequest(requestId, generationId, signal, sessionIdSnapshot)) {
+                    await iterator.return?.(undefined);
+                    return null;
+                }
+
+                if (nextChunk.done) {
+                    break;
+                }
+
+                fullResponse += nextChunk.value || '';
+            }
+
+            return fullResponse.trim();
+        } finally {
+            if (modelOverride && modelOverride !== originalModel) {
+                this.llmHelper.setModel(originalModel);
+            }
+        }
+    }
+
+    private async executeActionWithRetry(args: {
+        prompt: PromptObject;
+        imagePaths?: string[];
+        skipCustomNotesInjection?: boolean;
+        signal?: AbortSignal;
+        generationId: number;
+        requestId: string | null;
+        sessionIdSnapshot: string;
+    }): Promise<{ content: string; retryCount: number; fallbackUsed: boolean } | null> {
+        const { prompt, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
+        const primaryModel = this.llmHelper.getCurrentModel();
+        const fallbackModel = this.resolveFallbackModel(primaryModel);
+        const attempts: Array<{ model: string; fallbackUsed: boolean }> = [];
+
+        for (let i = 0; i < ACTION_MAX_PRIMARY_ATTEMPTS; i++) {
+            attempts.push({ model: primaryModel, fallbackUsed: false });
+        }
+        if (fallbackModel) {
+            for (let i = 0; i < ACTION_MAX_FALLBACK_ATTEMPTS; i++) {
+                attempts.push({ model: fallbackModel, fallbackUsed: true });
+            }
+        }
+
+        const failureReasons: string[] = [];
+        for (let attemptIndex = 0; attemptIndex < attempts.length; attemptIndex++) {
+            const attempt = attempts[attemptIndex];
+            if (!this.isOwnedActionRequest(requestId, generationId, signal, sessionIdSnapshot)) {
+                return null;
+            }
+
+            if (attemptIndex > 0) {
+                const ready = await this.waitWithBackoff(250 * Math.pow(2, attemptIndex - 1), signal);
+                if (!ready) return null;
+            }
+
+            try {
+                const content = await this.collectStreamResponseForPrompt({
+                    prompt,
+                    imagePaths,
+                    modelOverride: attempt.model,
+                    skipCustomNotesInjection,
+                    signal,
+                    generationId,
+                    requestId,
+                    sessionIdSnapshot,
+                });
+                if (content && content.trim() && !isFailureResponseText(content)) {
+                    return {
+                        content: content.trim(),
+                        retryCount: attemptIndex,
+                        fallbackUsed: attempt.fallbackUsed,
+                    };
+                }
+                failureReasons.push(`attempt_${attemptIndex + 1}:invalid_or_empty_response(${attempt.model})`);
+            } catch (error: any) {
+                const reason = error?.message || String(error);
+                failureReasons.push(`attempt_${attemptIndex + 1}:${attempt.model}:${reason}`);
+                console.warn('[IntelligenceEngine] Action attempt failed:', reason);
+            }
+        }
+
+        console.warn('[IntelligenceEngine] Action retries exhausted:', failureReasons.join(' | '));
+        return {
+            content: buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question),
+            retryCount: Math.max(0, attempts.length - 1),
+            fallbackUsed: attempts.some((attempt) => attempt.fallbackUsed),
+        };
+    }
+
+    private async ensureValidActionOutput(args: {
+        prompt: PromptObject;
+        content: string;
+        imagePaths?: string[];
+        skipCustomNotesInjection?: boolean;
+        signal?: AbortSignal;
+        generationId: number;
+        requestId: string | null;
+        sessionIdSnapshot: string;
+    }): Promise<string | null> {
+        const { prompt, content, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
+        const validation = validateActionOutput(prompt.intent, prompt.mode, content);
+        if (validation.valid) {
+            return validation.correctedContent.trim();
+        }
+
+        if (validation.correctedContent.trim()) {
+            const correctedValidation = validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent);
+            if (correctedValidation.valid) {
+                return correctedValidation.correctedContent.trim();
+            }
+        }
+
+        const repairPrompt: PromptObject = {
+            ...prompt,
+            instructions: [
+                ...prompt.instructions,
+                {
+                    key: 'output_repair',
+                    title: 'OUTPUT REPAIR',
+                    content: `${buildRepairInstruction(prompt.intent, validation.issues)}\n\nINVALID DRAFT:\n${content}`,
+                },
+            ],
+        };
+        const repairBudgeted = enforceTokenBudget({
+            prompt: repairPrompt,
+            maxTokens: MAX_ACTION_PROMPT_TOKENS,
+        });
+        validatePromptObject(repairBudgeted.prompt, { maxTokens: MAX_ACTION_PROMPT_TOKENS });
+
+        const repaired = await this.collectStreamResponseForPrompt({
+            prompt: repairBudgeted.prompt,
+            imagePaths,
+            skipCustomNotesInjection,
+            signal,
+            generationId,
+            requestId,
+            sessionIdSnapshot,
+        });
+        if (!repaired?.trim()) {
+            return buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question);
+        }
+
+        const repairedValidation = validateActionOutput(prompt.intent, prompt.mode, repaired);
+        if (repairedValidation.valid) {
+            return repairedValidation.correctedContent.trim();
+        }
+        if (repairedValidation.correctedContent.trim()) {
+            const correctedRepairValidation = validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent);
+            if (correctedRepairValidation.valid) {
+                return correctedRepairValidation.correctedContent.trim();
+            }
+        }
+        return buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question);
+    }
+
+    private persistActionResult(intent: UnifiedActionIntent, question: string, answer: string): void {
+        const shouldTrackAsLastAssistant = intent !== 'recap' && intent !== 'follow_up_questions';
+        this.session.addAssistantMessage(answer, {
+            trackAsLastMessage: shouldTrackAsLastAssistant,
+        });
+
+        this.session.pushUsage({
+            type: intent,
+            timestamp: Date.now(),
+            question,
+            answer,
+        });
+    }
+
     /**
      * FINAL EMIT GUARD
      * Enforces two conditions before any completion-level emit:
@@ -172,6 +830,18 @@ export class IntelligenceEngine extends EventEmitter {
         if (signal?.aborted) return false;
         if (requestId && !this.requestAbortControllers.has(requestId)) return false;
         return this.emit(event, ...args, requestId);
+    }
+
+    private safeEmitAction(
+        signal: AbortSignal | undefined,
+        requestId: string | null,
+        generationId: number,
+        event: 'action_token' | 'action_result',
+        payload: UnifiedActionEventPayload,
+        expectedSessionId: string
+    ): boolean {
+        if (!this.isOwnedActionRequest(requestId, generationId, signal, expectedSessionId)) return false;
+        return this.emit(event, payload);
     }
 
 
@@ -271,6 +941,9 @@ export class IntelligenceEngine extends EventEmitter {
             return null;
         } finally {
             this.cleanupRequestAbort(requestId);
+            if (this.activeActionRequestId === requestId) {
+                this.activeActionRequestId = null;
+            }
             if (this.currentGenerationId === generationId) {
                 this.setMode('idle');
             }
@@ -338,7 +1011,7 @@ export class IntelligenceEngine extends EventEmitter {
      * Manual trigger - uses clean transcript pipeline for question inference
      * NEVER returns null - always provides a usable response
      */
-    async runWhatShouldISay(question?: string, confidence: number = 0.8, imagePaths?: string[], forcedIntent?: ConversationIntent, requestId?: string): Promise<string | null> {
+    async runWhatShouldISay(question?: string, confidence: number = 0.8, imagePaths?: string[], selectedMode: UserControlledMode = 'general', requestId?: string): Promise<string | null> {
         const now = Date.now();
         const activeRequestId = requestId ?? null;
         this.currentClientRequestId = activeRequestId;
@@ -419,13 +1092,13 @@ export class IntelligenceEngine extends EventEmitter {
                 preparedTranscript,
                 this.session.getAssistantResponseHistory().length
             );
-            const intentResult = forcedIntent
-                ? {
-                    intent: forcedIntent,
-                    confidence: 1,
-                    answerShape: getAnswerShapeGuidance(forcedIntent),
-                }
-                : classifiedIntent;
+            if (classifiedIntent.intent !== selectedMode) {
+                console.debug('[IntelligenceEngine] Ignoring classified intent mismatch', {
+                    classifiedIntent: classifiedIntent.intent,
+                    sessionMode: selectedMode,
+                });
+            }
+            const intentResult = getIntentResultForMode(selectedMode);
 
             console.log(`[IntelligenceEngine] Temporal RAG: ${temporalContext.previousResponses.length} responses, tone: ${temporalContext.toneSignals[0]?.type || 'neutral'}, intent: ${intentResult.intent}${imagePaths?.length ? `, with ${imagePaths.length} image(s)` : ''}`);
 
@@ -577,72 +1250,11 @@ export class IntelligenceEngine extends EventEmitter {
      * Neutral conversation summary
      */
     async runRecap(requestId?: string): Promise<string | null> {
-        console.log('[IntelligenceEngine] runRecap called');
-        const activeRequestId = requestId ?? null;
-        this.currentClientRequestId = activeRequestId;
-        this.setMode('recap');
-
-        // Register per-request AbortController
-        const _abortRecap = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
-        const _signalRecap = _abortRecap?.signal;
-
-        try {
-            if (!this.recapLLM) {
-                console.error('[IntelligenceEngine] RecapLLM not initialized');
-                this.setMode('idle');
-                return null;
-            }
-
-            const context = this.session.getFormattedContext(120);
-            if (!context) {
-                console.warn('[IntelligenceEngine] No context available for recap');
-                this.setMode('idle');
-                return null;
-            }
-
-            // CONTEXT STRATEGY: Recap uses bounded reverse accumulation (max 3000 tokens)
-            // Never sends full transcript — only most recent content within budget
-            const boundedContext = buildBoundedRecapContext(context, 3000);
-
-            const generationId = ++this.currentGenerationId;
-            let fullSummary = "";
-            const stream = this.recapLLM.generateStream(boundedContext);
-            let streamAborted = false;
-
-            for await (const token of stream) {
-                if (_signalRecap?.aborted || this.currentGenerationId !== generationId) {
-                    console.log('[GENERATION_DISCARDED] _recap stream aborted by new generation');
-                    await stream.return(undefined);
-                    streamAborted = true;
-                    break;
-                }
-                this.emit('recap_token', token, activeRequestId);
-                fullSummary += token;
-            }
-
-            // Only emit final if not aborted
-            if (!streamAborted && !_signalRecap?.aborted && fullSummary && this.currentGenerationId === generationId) {
-                this.safeEmit(_signalRecap, activeRequestId, 'recap', fullSummary);
-
-                this.session.pushUsage({
-                    type: 'chat',
-                    timestamp: Date.now(),
-                    question: 'Recap Meeting',
-                    answer: fullSummary
-                });
-            }
-            if (this.currentGenerationId === generationId) {
-                this.cleanupRequestAbort(activeRequestId);
-                this.setMode('idle');
-            }
-            return fullSummary;
-
-        } catch (error) {
-            this.cleanupRequestAbort(activeRequestId);
-            this.emit('error', error as Error, 'recap', activeRequestId);
-            this.setMode('idle');
-            return null;
-        }
+        return this.runAction({
+            intent: 'recap',
+            requestId,
+            profilePreference: 'force_off',
+        });
     }
 
     /**
@@ -650,68 +1262,11 @@ export class IntelligenceEngine extends EventEmitter {
      * Ask a clarifying question to the interviewer
      */
     async runClarify(requestId?: string): Promise<string | null> {
-        console.log('[IntelligenceEngine] runClarify called');
-        const activeRequestId = requestId ?? null;
-        this.currentClientRequestId = activeRequestId;
-        this.setMode('clarify');
-        const _abortClarify = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
-        const _signalClarify = _abortClarify?.signal;
-
-        try {
-            if (!this.clarifyLLM) {
-                console.error('[IntelligenceEngine] ClarifyLLM not initialized');
-                this.setMode('idle');
-                return null;
-            }
-
-            const rawContext = this.session.getFormattedContext(180);
-            // If no transcript yet, use a generic prompt — the LLM will ask a scoping question
-            const context = rawContext || '[No transcript available yet. The candidate just joined the interview. Generate an opening clarifying question to understand the scope and constraints of the upcoming problem.]';
-
-            const generationId = ++this.currentGenerationId;
-            let fullClarification = "";
-            const stream = this.clarifyLLM.generateStream(context);
-            let streamAborted = false;
-
-            for await (const token of stream) {
-                if (_signalClarify?.aborted || this.currentGenerationId !== generationId) {
-                    console.log('[GENERATION_DISCARDED] _clarify stream aborted by new generation');
-                    await stream.return(undefined);
-                    streamAborted = true;
-                    break;
-                }
-                this.emit('clarify_token', token, activeRequestId);
-                fullClarification += token;
-            }
-
-            if (streamAborted) {
-                this.setMode('idle');
-                return null;
-            }
-
-            // Only update history and emit final if not aborted
-            if (fullClarification && !_signalClarify?.aborted && this.currentGenerationId === generationId) {
-                this.safeEmit(_signalClarify, activeRequestId, 'clarify', fullClarification);
-                this.session.addAssistantMessage(fullClarification);
-
-                this.session.pushUsage({
-                    type: 'chat',
-                    timestamp: Date.now(),
-                    question: 'Clarify Question',
-                    answer: fullClarification
-                });
-            }
-            if (this.currentGenerationId === generationId) {
-                this.setMode('idle');
-            }
-            return fullClarification;
-
-        } catch (error) {
-            this.cleanupRequestAbort(activeRequestId);
-            this.emit('error', error as Error, 'clarify', activeRequestId);
-            this.setMode('idle');
-            return null;
-        }
+        return this.runAction({
+            intent: 'clarify',
+            requestId,
+            profilePreference: 'force_off',
+        });
     }
 
     /**
@@ -719,61 +1274,11 @@ export class IntelligenceEngine extends EventEmitter {
      * Suggest strategic questions for the user to ask
      */
     async runFollowUpQuestions(requestId?: string): Promise<string | null> {
-        console.log('[IntelligenceEngine] runFollowUpQuestions called');
-        const activeRequestId = requestId ?? null;
-        this.currentClientRequestId = activeRequestId;
-        this.setMode('follow_up_questions');
-        const _abortFUQ = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
-        const _signalFUQ = _abortFUQ?.signal;
-
-        try {
-            if (!this.followUpQuestionsLLM) {
-                console.error('[IntelligenceEngine] FollowUpQuestionsLLM not initialized');
-                this.setMode('idle');
-                return null;
-            }
-
-            const context = this.session.getFormattedContext(120);
-            if (!context) {
-                console.warn('[IntelligenceEngine] No context available for follow-up questions');
-                this.setMode('idle');
-                return null;
-            }
-
-            const generationId = ++this.currentGenerationId;
-            let fullQuestions = "";
-            const stream = this.followUpQuestionsLLM.generateStream(context);
-
-            for await (const token of stream) {
-                if (_signalFUQ?.aborted || this.currentGenerationId !== generationId) {
-                    console.log('[GENERATION_DISCARDED] _follow_up_questions stream aborted by new generation');
-                    await stream.return(undefined); // FIX §3.6: cancel underlying request immediately
-                    break;
-                }
-                this.emit('follow_up_questions_token', token, activeRequestId);
-                fullQuestions += token;
-            }
-
-            if (fullQuestions && !_signalFUQ?.aborted && this.currentGenerationId === generationId) {
-                this.safeEmit(_signalFUQ, activeRequestId, 'follow_up_questions_update', fullQuestions);
-                this.session.pushUsage({
-                    type: 'followup_questions',
-                    timestamp: Date.now(),
-                    question: 'Generate Follow-up Questions',
-                    answer: fullQuestions
-                });
-            }
-            if (this.currentGenerationId === generationId) {
-                this.setMode('idle');
-            }
-            return fullQuestions;
-
-        } catch (error) {
-            this.cleanupRequestAbort(activeRequestId);
-            this.emit('error', error as Error, 'follow_up_questions', activeRequestId);
-            this.setMode('idle');
-            return null;
-        }
+        return this.runAction({
+            intent: 'follow_up_questions',
+            requestId,
+            profilePreference: 'force_off',
+        });
     }
 
     async runSystemDesignTradeoffs(requestId?: string): Promise<string | null> {
@@ -839,72 +1344,19 @@ export class IntelligenceEngine extends EventEmitter {
     }
 
     async runAnswerNow(question: string, options?: RunAnswerNowOptions): Promise<string | null> {
-        const activeRequestId = options?.requestId ?? null;
-        const imagePaths = options?.imagePaths;
-        const message = question.trim() || 'Analyze this screenshot';
-
-        this.currentClientRequestId = activeRequestId;
-        this.setMode('answer_now');
-        const _abortAnswer = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
-        const _signalAnswer = _abortAnswer?.signal;
-
-        try {
-            const generationId = ++this.currentGenerationId;
-            let fullAnswer = '';
-            let streamAborted = false;
-
-            this.session.addTranscript({
-                text: message,
-                speaker: 'user',
-                timestamp: Date.now(),
-                final: true,
-            });
-
-            const stream = this.llmHelper.streamChat(
-                message,
-                imagePaths,
-                options?.context,
-                '',
-                true
-            );
-
-            for await (const token of stream) {
-                if (_signalAnswer?.aborted || this.currentGenerationId !== generationId) {
-                    console.log('[GENERATION_DISCARDED] answer_now stream aborted by new generation');
-                    await stream.return(undefined);
-                    streamAborted = true;
-                    break;
-                }
-                this.emit('suggested_answer_token', token, message, 1.0, activeRequestId, 'answer_now');
-                fullAnswer += token;
-            }
-
-            if (streamAborted) {
-                this.cleanupRequestAbort(activeRequestId);
-                this.setMode('idle');
-                return null;
-            }
-
-            if (fullAnswer && !_signalAnswer?.aborted && this.currentGenerationId === generationId) {
-                this.session.addAssistantMessage(fullAnswer);
-                this.session.pushUsage({
-                    type: 'chat',
-                    timestamp: Date.now(),
-                    question: message,
-                    answer: fullAnswer
-                });
-                this.safeEmit(_signalAnswer, activeRequestId, 'suggested_answer', fullAnswer, message, 1.0, 'answer_now');
-            }
-
-            this.cleanupRequestAbort(activeRequestId);
-            this.setMode('idle');
-            return fullAnswer;
-        } catch (error) {
-            this.cleanupRequestAbort(activeRequestId);
-            this.emit('error', error as Error, 'answer_now', activeRequestId);
-            this.setMode('idle');
-            return null;
-        }
+        return this.runAction({
+            intent: 'answer_now',
+            message: question.trim() || 'Analyze this screenshot',
+            imagePaths: options?.imagePaths,
+            requestId: options?.requestId,
+            additionalContext: [
+                options?.mode ? buildUserControlledModeContext(options.mode) : '',
+                options?.context?.trim() || '',
+            ].filter(Boolean).join('\n\n'),
+            rag: options?.rag,
+            modeOverride: options?.mode,
+            profilePreference: options?.profilePreference ?? 'default',
+        });
     }
 
     /**
@@ -913,47 +1365,16 @@ export class IntelligenceEngine extends EventEmitter {
      */
     async runManualAnswer(question: string, requestId?: string): Promise<string | null> {
         const activeRequestId = requestId ?? null;
-        this.currentClientRequestId = activeRequestId;
         this.emit('manual_answer_started', activeRequestId);
-        this.setMode('manual');
-
-        try {
-            if (!this.answerLLM) {
-                this.setMode('idle');
-                return null;
-            }
-
-            const context = this.session.getFormattedContext(120);
-            const generationId = ++this.currentGenerationId;
-            const timeoutPromise = new Promise<string | null>((_, reject) => { setTimeout(() => reject(new Error("LLM timeout")), 15000); });
-            const answer = await Promise.race([this.answerLLM.generate(question, context), timeoutPromise]).catch((): any => null);
-
-            // V3 Fix: discard if a new generation (or session reset) fired while awaiting
-            if (this.currentGenerationId !== generationId) {
-                this.setMode('idle');
-                return null;
-            }
-
-            if (answer) {
-                this.session.addAssistantMessage(answer);
-                this.safeEmit(undefined, activeRequestId, 'manual_answer_result', answer, question);
-
-                this.session.pushUsage({
-                    type: 'chat',
-                    timestamp: Date.now(),
-                    question: question,
-                    answer: answer
-                });
-            }
-
-            this.setMode('idle');
-            return answer;
-
-        } catch (error) {
-            this.emit('error', error as Error, 'manual', activeRequestId);
-            this.setMode('idle');
-            return null;
+        const answer = await this.runAction({
+            intent: 'manual_chat',
+            message: question,
+            requestId,
+        });
+        if (answer) {
+            this.safeEmit(undefined, activeRequestId, 'manual_answer_result', answer, question);
         }
+        return answer;
     }
 
     /**
@@ -1192,44 +1613,52 @@ export class IntelligenceEngine extends EventEmitter {
                 console.log(
                     `[IntelligenceEngine] Screen Scan — mode: ${detectedMode} (${behavior.label}), images: ${imagePaths.length}, textLength: ${screenText.length}`
                 );
+                const actionTokenListener = (payload: any) => {
+                    if (payload?.intent !== 'screen_scan' || payload?.requestId !== activeRequestId) return;
+                    this.safeEmit(signal, activeRequestId, 'screen_scan_token', payload.token || '', detectedMode);
+                };
+                const actionResultListener = (payload: any) => {
+                    if (payload?.intent !== 'screen_scan' || payload?.requestId !== activeRequestId) return;
+                    this.safeEmit(signal, activeRequestId, 'screen_scan_result', payload.content || '', detectedMode);
+                };
 
-                let fullResult = "";
-                const stream = this.screenScanLLM.generateStream(imagePaths, screenText, detectedMode);
-                let streamAborted = false;
+                this.on('action_token', actionTokenListener);
+                this.on('action_result', actionResultListener);
 
-                for await (const token of stream) {
-                    if (signal?.aborted || this.currentGenerationId !== generationId) {
-                        console.log('[GENERATION_DISCARDED] screen_scan stream aborted by new generation');
-                        await stream.return(undefined);
-                        streamAborted = true;
-                        break;
+                try {
+                    const fullResult = await this.runAction({
+                        intent: 'screen_scan',
+                        message: screenText,
+                        imagePaths,
+                        requestId: activeRequestId ?? undefined,
+                        modeOverride: detectedMode === 'coding' ? 'coding' : this.session.getMode(),
+                        profilePreference: 'force_off',
+                        additionalContext: [
+                            `SCREEN MODE: ${detectedMode}`,
+                            `OBJECTIVE: ${behavior.objective}`,
+                            `FORMAT: ${behavior.format}`,
+                        ].join('\n'),
+                        screenScanMode: detectedMode,
+                    });
+
+                    if (!fullResult || fullResult.trim().length < 5) {
+                        const fallback = "I couldn't detect meaningful content on screen. Try capturing a different area.";
+                        this.safeEmit(signal, activeRequestId, 'screen_scan_result', fallback, detectedMode);
+                        return fallback;
                     }
-                    if (activeRequestId && !this.requestAbortControllers.has(activeRequestId)) {
-                        await stream.return(undefined);
-                        streamAborted = true;
-                        break;
-                    }
-                    this.safeEmit(signal, activeRequestId, 'screen_scan_token', token, detectedMode);
-                    fullResult += token;
+
+                    this.session.pushUsage({
+                        type: 'screen_scan',
+                        timestamp: Date.now(),
+                        question: `Screen Scan (${detectedMode})`,
+                        answer: fullResult
+                    });
+
+                    return fullResult;
+                } finally {
+                    this.off('action_token', actionTokenListener);
+                    this.off('action_result', actionResultListener);
                 }
-
-                if (streamAborted) {
-                    return null;
-                }
-
-                if (!fullResult || fullResult.trim().length < 5) {
-                    fullResult = "I couldn't detect meaningful content on screen. Try capturing a different area.";
-                }
-
-                this.session.pushUsage({
-                    type: 'screen_scan',
-                    timestamp: Date.now(),
-                    question: `Screen Scan (${detectedMode})`,
-                    answer: fullResult
-                });
-
-                this.safeEmit(signal, activeRequestId, 'screen_scan_result', fullResult, detectedMode);
-                return fullResult;
             } finally {
                 this.llmHelper.setKnowledgeOrchestrator(previousKnowledgeOrchestrator);
                 if (this.activeScreenScanRequestId === activeRequestId) {
@@ -1259,7 +1688,11 @@ export class IntelligenceEngine extends EventEmitter {
      */
     reset(): void {
         this.activeMode = 'idle';
+        this.activeActionRequestId = null;
         this.currentClientRequestId = null;
+        this.lastActionAcceptedAt = 0;
+        this.lastActionFingerprint = null;
+        this.actionResponseCache.clear();
         this.currentGenerationId++; // Increment to break all active LLM streams
         if (this.assistCancellationToken) {
             this.assistCancellationToken.abort();

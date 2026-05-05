@@ -155,13 +155,14 @@ export interface ElectronAPI {
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
-  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string, requestId?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
+  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off' }) => Promise<{ success: boolean; result: string | null }>
+  generateWhatToSay: (question?: string, imagePaths?: string[], mode?: string, requestId?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
   generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ script: string | null }>
-  generateAnswerNow: (question: string, imagePaths?: string[], context?: string, requestId?: string) => Promise<{ answer: string | null }>
+  generateAnswerNow: (question: string, imagePaths?: string[], context?: string, mode?: string, requestId?: string) => Promise<{ answer: string | null }>
   generateScreenScan: (imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => Promise<{ result: string | null; mode: string; error?: string }>
-  runScreenAnalysis: (payload: { requestId: string; image: string }) => void
+  runScreenAnalysis: (payload: { requestId: string; image: string; mode?: string }) => void
   generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => Promise<{ refined: string | null; intent: string }>
   generateFollowUpQuestions: (requestId?: string) => Promise<{ questions: string | null }>
   generateSystemDesignTradeoffs: (requestId?: string) => Promise<{ answer: string | null }>
@@ -171,6 +172,8 @@ export interface ElectronAPI {
   resetIntelligence: () => Promise<{ success: boolean; error?: string }>
   cancelIntelligenceRequest: () => Promise<{ success: boolean; error?: string }>
   cancelIntelligenceByRequest: (requestId: string) => Promise<{ success: boolean; error?: string }>
+  getSessionMode: () => Promise<{ mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
+  setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => Promise<{ success: boolean; mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
 
   // Dynamic Action Button Mode
   getActionButtonMode: () => Promise<'recap' | 'brainstorm'>
@@ -223,10 +226,13 @@ export interface ElectronAPI {
   onIntelligenceScreenScanResult: (callback: (data: { answer: string; mode: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceManualStarted: (callback: (data?: { _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceManualResult: (callback: (data: { answer: string; question: string; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceActionToken: (callback: (data: { intent: string; token: string; mode: string; profileApplied?: boolean; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; mode: string; profileApplied?: boolean; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
   onIntelligenceError: (callback: (data: { error: string, mode: string; _sessionId?: string; requestId?: string }) => void) => () => void;
   // Session Management
   onSessionReset: (callback: (payload?: { sessionId: string }) => void) => () => void;
+  onSessionModeChanged: (callback: (data: { mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }) => void) => () => void;
 
   // Streaming listeners
   streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }) => Promise<void>

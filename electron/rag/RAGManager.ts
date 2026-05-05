@@ -11,6 +11,7 @@ import { EmbeddingPipeline } from './EmbeddingPipeline';
 import { RAGRetriever } from './RAGRetriever';
 import { LiveRAGIndexer } from './LiveRAGIndexer';
 import { buildRAGPrompt, NO_CONTEXT_FALLBACK, NO_GLOBAL_CONTEXT_FALLBACK } from './prompts';
+import type { QueryIntent } from './RAGRetriever';
 
 export interface RAGManagerConfig {
     db: Database.Database;
@@ -187,6 +188,45 @@ export class RAGManager {
             if (abortSignal?.aborted) break;
             yield chunk;
         }
+    }
+
+    async retrieveMeetingContext(
+        meetingId: string,
+        query: string
+    ): Promise<{ formattedContext: string; intent: QueryIntent; scope: 'meeting' }> {
+        const hasEmbeddings = this.vectorStore.hasEmbeddings(meetingId);
+        if (!hasEmbeddings) {
+            const isLiveMeeting = this.liveIndexer.getActiveMeetingId() === meetingId;
+            if (!(isLiveMeeting && this.liveIndexer.hasIndexedChunks())) {
+                throw new Error('NO_MEETING_EMBEDDINGS');
+            }
+        }
+
+        const context = await this.retriever.retrieve(query, { meetingId });
+        if (context.chunks.length === 0) {
+            throw new Error('NO_RELEVANT_CONTEXT_FOUND');
+        }
+
+        return {
+            formattedContext: context.formattedContext,
+            intent: context.intent,
+            scope: 'meeting',
+        };
+    }
+
+    async retrieveGlobalContext(
+        query: string
+    ): Promise<{ formattedContext: string; intent: QueryIntent; scope: 'global' }> {
+        const context = await this.retriever.retrieveGlobal(query);
+        if (context.chunks.length === 0) {
+            throw new Error('NO_GLOBAL_RELEVANT_CONTEXT_FOUND');
+        }
+
+        return {
+            formattedContext: context.formattedContext,
+            intent: context.intent,
+            scope: 'global',
+        };
     }
 
     /**

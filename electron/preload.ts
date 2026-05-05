@@ -124,13 +124,14 @@ interface ElectronAPI {
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
-  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string, requestId?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
+  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off' }) => Promise<{ success: boolean; result: string | null }>
+  generateWhatToSay: (question?: string, imagePaths?: string[], mode?: string, requestId?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
   generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ script: string | null }>
-  generateAnswerNow: (question: string, imagePaths?: string[], context?: string, requestId?: string) => Promise<{ answer: string | null }>
+  generateAnswerNow: (question: string, imagePaths?: string[], context?: string, mode?: string, requestId?: string) => Promise<{ answer: string | null }>
   generateScreenScan: (imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => Promise<{ result: string | null; mode: string; error?: string }>
-  runScreenAnalysis: (payload: { requestId: string; image: string }) => void
+  runScreenAnalysis: (payload: { requestId: string; image: string; mode?: string }) => void
   generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => Promise<{ refined: string | null; intent: string }>
   generateFollowUpQuestions: (requestId?: string) => Promise<{ questions: string | null }>
   generateSystemDesignTradeoffs: (requestId?: string) => Promise<{ answer: string | null }>
@@ -139,6 +140,8 @@ interface ElectronAPI {
   getIntelligenceContext: () => Promise<{ context: string; lastAssistantMessage: string | null; activeMode: string }>
   resetIntelligence: () => Promise<{ success: boolean; error?: string }>
   cancelIntelligenceRequest: () => Promise<{ success: boolean; error?: string }>
+  getSessionMode: () => Promise<{ mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
+  setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => Promise<{ success: boolean; mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
 
   // Meeting Lifecycle
   startMeeting: (metadata?: any) => Promise<{ success: boolean; error?: string }>
@@ -166,8 +169,11 @@ interface ElectronAPI {
   onIntelligenceSystemDesignTradeoffsToken: (callback: (data: { token: string; requestId?: string }) => void) => () => void
   onIntelligenceManualStarted: (callback: (data?: { requestId?: string }) => void) => () => void
   onIntelligenceManualResult: (callback: (data: { answer: string; question: string; requestId?: string }) => void) => () => void
+  onIntelligenceActionToken: (callback: (data: { intent: string; token: string; requestId?: string; mode: string; profileApplied?: boolean }) => void) => () => void
+  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; requestId?: string; mode: string; profileApplied?: boolean }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
   onIntelligenceError: (callback: (data: { error: string; mode: string; requestId?: string }) => void) => () => void
+  onSessionModeChanged: (callback: (data: { mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }) => void) => () => void
 
   // Model Management
   getDefaultModel: () => Promise<{ model: string }>
@@ -778,14 +784,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Intelligence Mode IPC
   generateAssist: () => ipcRenderer.invoke("generate-assist"),
-  generateWhatToSay: (question?: string, imagePaths?: string[], forcedIntent?: string, requestId?: string) => ipcRenderer.invoke("generate-what-to-say", question, imagePaths, forcedIntent, requestId),
+  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off' }) => ipcRenderer.invoke("generate-action", payload),
+  generateWhatToSay: (question?: string, imagePaths?: string[], mode?: string, requestId?: string) => ipcRenderer.invoke("generate-what-to-say", question, imagePaths, mode, requestId),
   generateClarify: (requestId?: string) => ipcRenderer.invoke("generate-clarify", requestId),
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => ipcRenderer.invoke("generate-code-hint", imagePaths, problemStatement, requestId),
   generateBrainstorm: (imagePaths?: string[], problemStatement?: string, requestId?: string) => ipcRenderer.invoke("generate-brainstorm", imagePaths, problemStatement, requestId),
-  generateAnswerNow: (question: string, imagePaths?: string[], context?: string, requestId?: string) => ipcRenderer.invoke("generate-answer-now", question, imagePaths, context, requestId),
+  generateAnswerNow: (question: string, imagePaths?: string[], context?: string, mode?: string, requestId?: string) => ipcRenderer.invoke("generate-answer-now", question, imagePaths, context, mode, requestId),
   generateScreenScan: (imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => ipcRenderer.invoke("generate-screen-scan", imagePaths, extractedText, forcedMode, requestId),
-  runScreenAnalysis: (payload: { requestId: string; image: string }) => {
-    void ipcRenderer.invoke("generate-screen-scan", payload.image ? [payload.image] : [], undefined, undefined, payload.requestId);
+  runScreenAnalysis: (payload: { requestId: string; image: string; mode?: string }) => {
+    void ipcRenderer.invoke("generate-screen-scan", payload.image ? [payload.image] : [], undefined, payload.mode, payload.requestId);
   },
   generateFollowUp: (intent: string, userRequest?: string, requestId?: string) => ipcRenderer.invoke("generate-follow-up", intent, userRequest, requestId),
   generateFollowUpQuestions: (requestId?: string) => ipcRenderer.invoke("generate-follow-up-questions", requestId),
@@ -794,6 +801,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   submitManualQuestion: (question: string, requestId?: string) => ipcRenderer.invoke("submit-manual-question", question, requestId),
   getIntelligenceContext: () => ipcRenderer.invoke("get-intelligence-context"),
   resetIntelligence: () => ipcRenderer.invoke("reset-intelligence"),
+  getSessionMode: () => ipcRenderer.invoke("session:get-mode"),
+  setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => ipcRenderer.invoke("session:set-mode", mode),
 
   // Action Button Mode (Dynamic Recap / Brainstorm toggle)
   getActionButtonMode: () => ipcRenderer.invoke("get-action-button-mode"),
@@ -951,6 +960,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("intelligence-manual-result", subscription)
     }
   },
+  onIntelligenceActionToken: (callback: (data: { intent: string; token: string; requestId?: string; mode: string; profileApplied?: boolean }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("intelligence-action-token", subscription)
+    return () => {
+      ipcRenderer.removeListener("intelligence-action-token", subscription)
+    }
+  },
+  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; requestId?: string; mode: string; profileApplied?: boolean }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("intelligence-action-result", subscription)
+    return () => {
+      ipcRenderer.removeListener("intelligence-action-result", subscription)
+    }
+  },
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("intelligence-mode-changed", subscription)
@@ -970,6 +993,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("session-reset", subscription)
     return () => {
       ipcRenderer.removeListener("session-reset", subscription)
+    }
+  },
+  onSessionModeChanged: (callback: (data: { mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("session-mode-changed", subscription)
+    return () => {
+      ipcRenderer.removeListener("session-mode-changed", subscription)
     }
   },
 

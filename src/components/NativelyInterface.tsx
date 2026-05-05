@@ -228,111 +228,115 @@ function getSuggestedAnswerIntent(question: string): string {
 
 // ── Context-Aware Question Type Detection (mirrors IntentClassifier patterns) ──
 type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'follow_up' | 'general';
+type SessionMode = DetectedQuestionType;
 type QuickActionLabel =
     | 'What to answer?'
-    | 'Code Hint'
-    | 'Brainstorm'
-    | 'Clarify'
-    | 'Trade-offs'
-    | 'STAR Story'
-    | 'Follow Up'
     | 'Recap'
-    | 'Explain'
-    | 'Summarize';
+    | 'Clarify'
+    | 'Brainstorm'
+    | 'Answer'
+    | 'Follow Up';
 
-const MODE_BUTTON_LABELS: Record<DetectedQuestionType, QuickActionLabel[]> = {
-    coding: ['What to answer?', 'Code Hint', 'Brainstorm', 'Clarify'],
-    system_design: ['What to answer?', 'Brainstorm', 'Clarify', 'Trade-offs'],
-    behavioral: ['What to answer?', 'STAR Story', 'Follow Up', 'Recap'],
-    follow_up: ['What to answer?', 'Follow Up', 'Clarify', 'Recap'],
-    general: ['What to answer?', 'Explain', 'Summarize', 'Clarify'],
+type ActionIntent =
+    | 'what_to_answer'
+    | 'recap'
+    | 'clarify'
+    | 'brainstorm'
+    | 'follow_up_questions'
+    | 'answer_now';
+
+type OverlaySessionState = {
+    currentMode: SessionMode;
 };
+
+const STATIC_QUICK_ACTION_LABELS: QuickActionLabel[] = [
+    'What to answer?',
+    'Recap',
+    'Clarify',
+    'Brainstorm',
+    'Follow Up',
+];
 
 const QUICK_ACTION_ICONS: Record<QuickActionLabel, string> = {
     'What to answer?': '💡',
-    'Code Hint': '💻',
-    'Brainstorm': '🧠',
-    'Clarify': '❓',
-    'Trade-offs': '⚖️',
-    'STAR Story': '⭐',
-    'Follow Up': '➡️',
     'Recap': '📝',
-    'Explain': '🧠',
-    'Summarize': '📝',
+    'Clarify': '❓',
+    'Brainstorm': '🧠',
+    'Answer': '⚡',
+    'Follow Up': '➡️',
 };
 
-function countPatternMatches(text: string, patterns: RegExp[]): number {
-    return patterns.reduce((score, pattern) => score + (pattern.test(text) ? 1 : 0), 0);
+function countKeywordMatches(text: string, patterns: RegExp[]): number {
+    return patterns.reduce((score, pattern) => {
+        const matches = text.match(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`));
+        return score + (matches?.length ?? 0);
+    }, 0);
 }
 
-function getRecommendedButton(mode: DetectedQuestionType, transcript: string, screenText: string): QuickActionLabel {
+function getScreenScanModeForSessionMode(mode: SessionMode): 'coding' | 'interview_question' | 'ui_general' {
+    if (mode === 'coding') return 'coding';
+    if (mode === 'general') return 'ui_general';
+    return 'interview_question';
+}
+
+function getRecommendedButton(mode: SessionMode, transcript: string, screenText: string): QuickActionLabel {
     const combined = normalizeTranscript(`${transcript} ${screenText}`.trim());
 
+    if (/tell me about yourself|introduce yourself/i.test(combined)) {
+        return 'Answer';
+    }
+
+    const scoringGroups: Record<SessionMode, Array<[QuickActionLabel, RegExp[]]>> = {
+        behavioral: [
+            ['Answer', [
+                /tell me about yourself/i,
+                /introduce yourself/i,
+                /\bexample\b/i,
+                /\bexperience\b/i,
+                /\bproject\b/i,
+                /\bprojects\b/i,
+                /\bchallenge\b/i,
+                /worked on/i,
+                /\bbuilt\b/i,
+                /\bdeveloped\b/i,
+            ]],
+            ['Follow Up', [/\bfollow.?up\b/i, /\bnext\b/i, /then what/i]],
+        ],
+        coding: [
+            ['Brainstorm', [/\berror\b/i, /\bbug\b/i, /\bissue\b/i, /\bexception\b/i]],
+            ['Clarify', [/\bwhy\b/i, /\bconfused\b/i, /\bclarif/i, /\bwhat is\b/i]],
+        ],
+        follow_up: [
+            ['Follow Up', [/\bfollow.?up\b/i, /\bnext\b/i, /then what/i]],
+            ['Clarify', [/\bclarify\b/i, /\brepeat\b/i, /\bagain\b/i]],
+        ],
+        general: [
+            ['Recap', [/\bsummari[sz]e\b/i, /\brecap\b/i, /\boverview\b/i, /\btl;dr\b/i]],
+            ['Clarify', [/\bexplain\b/i, /\bwhat is\b/i, /\bwhat.?s\b/i, /\bhow does\b/i]],
+        ],
+        system_design: [
+            ['Brainstorm', [/\btrade[\s-]?off/i, /\btradeoff/i, /\bscalab/i, /\bscale\b/i, /\blatency\b/i, /\bthroughput\b/i]],
+            ['Clarify', [/\bexplain\b/i, /\bwhat is\b/i, /\bhow would\b/i]],
+        ],
+    };
+
+    const scores = scoringGroups[mode].map(([label, patterns]) => [label, countKeywordMatches(combined, patterns)] as [QuickActionLabel, number]);
+    const [bestLabel, bestScore] = scores.reduce(
+        (best, curr) => (curr[1] > best[1] ? curr : best),
+        ['What to answer?', 0] as [QuickActionLabel, number]
+    );
+
+    if (bestScore > 0) {
+        return bestLabel;
+    }
+
     switch (mode) {
-        case 'coding': {
-            const scores: Array<[QuickActionLabel, number]> = [
-                ['Brainstorm', countPatternMatches(combined, [/\boptimiz/i, /\bimprov/i, /\bbetter\b/i, /\befficient\b/i, /\brefactor/i])],
-                ['Code Hint', countPatternMatches(combined, [/\bbug\b/i, /\berror\b/i, /\bissue\b/i, /\bexception\b/i, /\bfailing\b/i])],
-                ['Clarify', countPatternMatches(combined, [/\bwhy\b/i, /\bconfused\b/i, /\bunclear\b/i, /\bclarif/i])],
-            ];
-            const [bestLabel, bestScore] = scores.reduce(
-                (best, curr) => (curr[1] > best[1] ? curr : best),
-                ['What to answer?', 0] as [QuickActionLabel, number]
-            );
-            if (bestScore > 0) return bestLabel;
-            return 'What to answer?';
-        }
-        case 'system_design': {
-            const scores: Array<[QuickActionLabel, number]> = [
-                ['Trade-offs', countPatternMatches(combined, [/\btrade[\s-]?off/i, /\bscalab/i, /\bscale\b/i, /\blatency\b/i, /\bthroughput\b/i])],
-                ['Brainstorm', countPatternMatches(combined, [/\bdesign\b/i, /\bapproach\b/i, /\barchitecture\b/i])],
-            ];
-            const [bestLabel, bestScore] = scores.reduce(
-                (best, curr) => (curr[1] > best[1] ? curr : best),
-                ['What to answer?', 0] as [QuickActionLabel, number]
-            );
-            if (bestScore > 0) return bestLabel;
-            return 'What to answer?';
-        }
-        case 'behavioral': {
-            const scores: Array<[QuickActionLabel, number]> = [
-                ['STAR Story', countPatternMatches(combined, [
-                    /tell me about yourself/i,
-                    /introduce yourself/i,
-                    /\bexample\b/i,
-                    /\bexperience\b/i,
-                    /\bproject\b/i,
-                    /\bprojects\b/i,
-                    /\bchallenge\b/i,
-                    /worked on/i,
-                    /\bbuilt\b/i,
-                    /\bdeveloped\b/i,
-                ])],
-                ['Follow Up', countPatternMatches(combined, [/\bfollow.?up\b/i, /\bnext\b/i, /then what/i])],
-            ];
-            const [bestLabel, bestScore] = scores.reduce(
-                (best, curr) => (curr[1] > best[1] ? curr : best),
-                ['What to answer?', 0] as [QuickActionLabel, number]
-            );
-            if (bestScore > 0) return bestLabel;
-            return 'What to answer?';
-        }
         case 'follow_up':
-            if (countPatternMatches(combined, [/\bclarify\b/i, /\brepeat\b/i, /\bagain\b/i, /\brestate\b/i]) > 0) return 'Clarify';
             return 'Follow Up';
         case 'general':
-        default: {
-            const scores: Array<[QuickActionLabel, number]> = [
-                ['Summarize', countPatternMatches(combined, [/\bsummari[sz]e\b/i, /\btl;dr\b/i, /\boverview\b/i, /\brecap\b/i])],
-                ['Explain', countPatternMatches(combined, [/\bexplain\b/i, /\bwhat is\b/i, /\bwhat.?s\b/i, /\bhow does\b/i])],
-            ];
-            const [bestLabel, bestScore] = scores.reduce(
-                (best, curr) => (curr[1] > best[1] ? curr : best),
-                ['What to answer?', 0] as [QuickActionLabel, number]
-            );
-            if (bestScore > 0) return bestLabel;
             return 'Clarify';
-        }
+        default:
+            return 'What to answer?';
     }
 }
 
@@ -533,9 +537,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     hasProContextAccess = false,
 }) => {
     const isLightTheme = useResolvedTheme() === 'light';
-    const [forceSystemDesignMode, setForceSystemDesignMode] = useState(() => {
-        return localStorage.getItem('natively_force_system_design_mode') === 'true';
-    });
+    const [session, setSession] = useState<OverlaySessionState>({ currentMode: 'general' });
     const [negotiationContextEnabled, setNegotiationContextEnabled] = useState(false);
     const [negotiationToggleLoading, setNegotiationToggleLoading] = useState(false);
     const [hasNegotiationScript, setHasNegotiationScript] = useState(false);
@@ -626,8 +628,24 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     }, [refreshNegotiationContextState]);
 
     useEffect(() => {
-        localStorage.setItem('natively_force_system_design_mode', String(forceSystemDesignMode));
-    }, [forceSystemDesignMode]);
+        let mounted = true;
+        window.electronAPI?.getSessionMode?.()
+            .then((result) => {
+                if (!mounted || !result?.mode) return;
+                setSession({ currentMode: result.mode });
+            })
+            .catch(() => {});
+
+        const unsubscribe = window.electronAPI?.onSessionModeChanged?.((data) => {
+            if (!data?.mode) return;
+            setSession({ currentMode: data.mode });
+        });
+
+        return () => {
+            mounted = false;
+            unsubscribe?.();
+        };
+    }, []);
 
     // Source label tracking: set by handlers, read by stream listeners
     const currentSourceRef = useRef<string | undefined>(undefined);
@@ -707,6 +725,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const activeChatRequestIdRef = useRef<string | null>(null);
     const activeRagRequestIdRef = useRef<string | null>(null);
     const activeUiRequestIdRef = useRef<string | null>(null);
+    const activeOverlayAbortRef = useRef<AbortController | null>(null);
     const requestRegistryRef = useRef<Record<string, RequestLifecycle>>({});
     const currentQuestionTurnIdRef = useRef<string | null>(null);
     const [currentQuestionTurnId, setCurrentQuestionTurnId] = useState<string>('question-init');
@@ -788,27 +807,15 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     const showScreenScanResult = useCallback((requestId: string, mode: ScreenScanOverlayMode, answer: string, chips: ResponseChip[] = []) => {
         clearScreenScanDismissTimer();
-        setScreenScanOverlay({
-            visible: true,
-            phase: 'result',
-            requestId,
+        setScreenScanOverlay((current) => current.requestId === requestId ? {
+            visible: false,
+            phase: 'hidden',
+            requestId: null,
             mode,
             answer,
             chips,
             expanded: false,
-        });
-        screenScanDismissTimerRef.current = setTimeout(() => {
-            setScreenScanOverlay((current) => current.requestId === requestId ? {
-                visible: false,
-                phase: 'hidden',
-                requestId: null,
-                mode: 'ui_general',
-                answer: '',
-                chips: [],
-                expanded: false,
-            } : current);
-            screenScanDismissTimerRef.current = null;
-        }, 10000);
+        } : current);
     }, [clearScreenScanDismissTimer]);
 
     const markRequestProcessing = useCallback((requestId: string) => {
@@ -944,6 +951,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     useEffect(() => {
         return () => {
             clearScreenScanDismissTimer();
+            activeOverlayAbortRef.current?.abort();
             if (recommendationTimerRef.current) {
                 clearTimeout(recommendationTimerRef.current);
                 recommendationTimerRef.current = null;
@@ -1031,27 +1039,37 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const [currentModel, setCurrentModel] = useState<string>('gemini-3-flash-preview');
     const currentModelRef = useRef(currentModel); // C3 Fix: Ref for analytics in mount-only streaming effect
 
-    // ── Context-Aware Dynamic Buttons ──
+    // ── User-Controlled Mode + Recommendation Hints ──
     const [intentState, dispatchIntent] = useReducer(intentReducer, {
         detectedType: 'general',
         lastStrongType: 'general',
         lastStrongAt: performance.now(),
         seq: 0
     });
-    const [recommendedButton, setRecommendedButton] = useState<QuickActionLabel>('Clarify');
-    const recommendedButtonRef = useRef<QuickActionLabel>('Clarify');
+    const [recommendedButton, setRecommendedButton] = useState<QuickActionLabel>('What to answer?');
+    const recommendedButtonRef = useRef<QuickActionLabel>('What to answer?');
     const recommendationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const recommendationLockTurnIdRef = useRef<string | null>(null);
     const screenContextTextRef = useRef('');
     const fourthActionHandlerRef = useRef<() => void | Promise<void>>(() => {});
-    
+
     const detectedQuestionType = intentState.detectedType;
-    const effectiveQuestionType: DetectedQuestionType = forceSystemDesignMode ? 'system_design' : detectedQuestionType;
+    const currentSessionMode = session.currentMode;
+    const recommendationMode: SessionMode =
+        currentSessionMode === 'system_design' ? 'system_design' : detectedQuestionType;
 
     useEffect(() => {
-        const buttonNames = MODE_BUTTON_LABELS[effectiveQuestionType] || MODE_BUTTON_LABELS.general;
-        console.log(`[Realtime Overlay] Dynamic Buttons Present:`, buttonNames.join(', '), `| Intent: ${effectiveQuestionType}`);
-    }, [effectiveQuestionType]);
+        console.log('[Realtime Overlay] Session mode locked by user:', currentSessionMode);
+    }, [currentSessionMode]);
+
+    useEffect(() => {
+        if (process.env.NODE_ENV !== 'development') return;
+        if (detectedQuestionType === currentSessionMode) return;
+        console.debug('[Realtime Overlay] Ignoring transcript mode mismatch', {
+            detectedIntent: detectedQuestionType,
+            sessionMode: currentSessionMode,
+        });
+    }, [currentSessionMode, detectedQuestionType]);
 
     const latestCombinedRef = useRef<string>('');
     const seqRef = useRef(0);
@@ -1090,19 +1108,14 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             if (recommendationLockTurnIdRef.current === currentQuestionTurnId) return;
 
             const nextRecommendation = getRecommendedButton(
-                effectiveQuestionType,
+                recommendationMode,
                 lastFinalSentenceRef.current || '',
                 screenContextTextRef.current || ''
             );
 
-            const allowedLabels = MODE_BUTTON_LABELS[effectiveQuestionType] || MODE_BUTTON_LABELS.general;
-            const resolvedRecommendation = allowedLabels.includes(nextRecommendation)
-                ? nextRecommendation
-                : allowedLabels[0];
-
-            if (resolvedRecommendation !== recommendedButtonRef.current) {
-                recommendedButtonRef.current = resolvedRecommendation;
-                setRecommendedButton(resolvedRecommendation);
+            if (nextRecommendation !== recommendedButtonRef.current) {
+                recommendedButtonRef.current = nextRecommendation;
+                setRecommendedButton(nextRecommendation);
             }
         }, 300);
 
@@ -1112,7 +1125,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 recommendationTimerRef.current = null;
             }
         };
-    }, [currentQuestionTurnId, effectiveQuestionType]);
+    }, [currentQuestionTurnId, recommendationMode, screenScanOverlay.answer]);
 
     const cancelInFlightOverlayRequests = useCallback(async (nextRequestId?: string) => {
         const streamingRequestIds = Object.values(requestRegistryRef.current)
@@ -1120,6 +1133,15 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             .map((request) => request.requestId);
 
         streamingRequestIds.forEach((requestId) => cancelRequestMessage(requestId));
+
+        const targetedCancellationIds = new Set<string>();
+        streamingRequestIds.forEach((requestId) => targetedCancellationIds.add(requestId));
+        if (activeUiRequestIdRef.current && activeUiRequestIdRef.current !== nextRequestId) {
+            targetedCancellationIds.add(activeUiRequestIdRef.current);
+        }
+        if (activeScanRequestIdRef.current && activeScanRequestIdRef.current !== nextRequestId) {
+            targetedCancellationIds.add(activeScanRequestIdRef.current);
+        }
 
         Object.entries(activeIntentRequestIdsRef.current).forEach(([intent, requestId]) => {
             if (!requestId || requestId === nextRequestId) return;
@@ -1131,7 +1153,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
         await Promise.allSettled([
             window.electronAPI.cancelGeminiChatStream?.(),
-            window.electronAPI.cancelIntelligenceRequest?.(),
+            ...Array.from(targetedCancellationIds).map((requestId) =>
+                window.electronAPI.cancelIntelligenceByRequest?.(requestId)
+            ),
             window.electronAPI.ragCancelQuery?.({ meetingId: 'live-meeting-current' }),
         ]);
 
@@ -1155,6 +1179,91 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             isScreenScanInFlightRef.current = false;
         }
     }, [cancelRequestMessage, hideScreenScanOverlay, screenScanOverlay.requestId]);
+
+    const runAction = useCallback(async (
+        intent: ActionIntent,
+        options?: {
+            source: string;
+            analyticsKey: string;
+            message?: string;
+            imagePaths?: string[];
+            profilePreference?: 'default' | 'force_on' | 'force_off';
+            userBubbleText?: string;
+            screenshotPreview?: string;
+        }
+    ) => {
+        const controller = new AbortController();
+        activeOverlayAbortRef.current?.abort();
+        activeOverlayAbortRef.current = controller;
+
+        await cancelInFlightOverlayRequests();
+        if (controller.signal.aborted) return null;
+
+        setIsExpanded(true);
+        currentSourceRef.current = options?.source;
+        analytics.trackCommandExecuted(options?.analyticsKey ?? intent);
+
+        const requestId = nextRequestId(intent);
+        markRequestProcessing(requestId);
+        rememberIntentRequest(intent, requestId);
+        const latestFinalQuestion =
+            lastFinalSentenceRef.current.trim()
+            || finalizedTranscriptRef.current.split('  ·  ').pop()?.trim()
+            || '';
+        const resolvedMessage = options?.message?.trim()
+            || (intent === 'recap' ? '' : latestFinalQuestion);
+
+        if (options?.userBubbleText || options?.screenshotPreview) {
+            setMessages(prev => [...prev, {
+                id: nextMsgId(),
+                role: 'user',
+                text: options?.userBubbleText || options?.message || '',
+                hasScreenshot: Boolean(options?.screenshotPreview),
+                screenshotPreview: options?.screenshotPreview,
+            }]);
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 50);
+        }
+
+        beginStreamingMessage(requestId, {
+            role: 'system',
+            text: '',
+            intent,
+            source: options?.source,
+            isStreaming: true,
+        });
+
+        try {
+            requestStartTimeRef.current = Date.now();
+            await window.electronAPI.generateAction({
+                intent,
+                message: resolvedMessage || undefined,
+                imagePaths: options?.imagePaths,
+                requestId,
+                profilePreference: options?.profilePreference,
+            });
+            return requestId;
+        } catch (err) {
+            if (!controller.signal.aborted) {
+                clearProcessingForRequest(requestId);
+                rememberIntentRequest(intent, null);
+                failRequestMessage(requestId, `❌ Error starting stream: ${err}`);
+            }
+            return null;
+        } finally {
+            if (activeOverlayAbortRef.current === controller) {
+                activeOverlayAbortRef.current = null;
+            }
+        }
+    }, [
+        beginStreamingMessage,
+        cancelInFlightOverlayRequests,
+        clearProcessingForRequest,
+        failRequestMessage,
+        markRequestProcessing,
+        rememberIntentRequest,
+    ]);
 
     const codeTheme = isLightTheme ? oneLight : vscDarkPlus;
     const codeLineNumberColor = isLightTheme ? 'rgba(15,23,42,0.35)' : 'rgba(255,255,255,0.2)';
@@ -1440,6 +1549,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         if (!window.electronAPI?.onSessionReset) return;
         const unsubscribe = window.electronAPI.onSessionReset((payload) => {
             console.log('[NativelyInterface] Resetting session state...');
+            activeOverlayAbortRef.current?.abort();
             void window.electronAPI.cancelGeminiChatStream?.().catch(() => {});
             void window.electronAPI.cancelIntelligenceRequest?.().catch(() => {});
             void window.electronAPI.ragCancelQuery?.({ meetingId: 'live-meeting-current' }).catch(() => {});
@@ -1468,6 +1578,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             activeChatRequestIdRef.current = null;
             activeRagRequestIdRef.current = null;
             activeUiRequestIdRef.current = null;
+            setSession({ currentMode: 'general' });
             requestRegistryRef.current = {};
 
             // SESSION ISOLATION FIX: Reset intentReducer so no button mode from
@@ -1658,6 +1769,27 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 role: 'system',
                 text: `Error: ${err.error}`
             }]);
+        }));
+
+        cleanups.push(window.electronAPI.onIntelligenceActionToken((data) => {
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
+            if (!data.requestId || activeUiRequestIdRef.current !== data.requestId) return;
+            appendTokenToRequest(data.requestId, data.token);
+        }));
+
+        cleanups.push(window.electronAPI.onIntelligenceActionResult((data) => {
+            if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
+            if (!data.requestId) return;
+            if (userHasScrolledRef.current) {
+                setUnreadCount(prev => prev + 1);
+            }
+            clearProcessingForRequest(data.requestId);
+            const chips = generateResponseChips(data.content, data.intent);
+            finalizeRequestMessage(data.requestId, data.content, {
+                chips: chips.length > 0 ? chips : undefined,
+            });
+            rememberIntentRequest(data.intent as ActionIntent, null);
+            currentSourceRef.current = undefined;
         }));
 
 
@@ -1909,19 +2041,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     };
 
     const handleWhatToSay = async () => {
-        await cancelInFlightOverlayRequests();
-        setIsExpanded(true);
-        currentSourceRef.current = 'What to Answer';
-        analytics.trackCommandExecuted('what_to_say');
-        const requestId = nextRequestId('what');
-        markRequestProcessing(requestId);
-        rememberIntentRequest('what_to_answer', requestId);
-
-        // Capture and clear attached image context.
-        // Also merge in any screenshot from the capture-and-process shortcut that
-        // arrived via pendingCaptureRef before the React state flush (React 18 fix).
         const pending = pendingCaptureRef.current;
-        // C4 Fix: Use ref for stable access instead of potentially stale closure
         let currentAttachments = attachedContextRef.current;
         if (pending && !currentAttachments.some(s => s.path === pending.path)) {
             currentAttachments = [...currentAttachments, pending].slice(-5);
@@ -1929,41 +2049,16 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
         if (currentAttachments.length > 0) {
             setAttachedContext([]);
-            // Show the attached image in chat
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'user',
-                text: 'What should I say about this?',
-                hasScreenshot: true,
-                screenshotPreview: currentAttachments[0].preview
-            }]);
-            // Scroll to bottom when user sends message
-            setTimeout(() => {
-            	messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            }, 50);
         }
+        pendingCaptureRef.current = null;
 
-        beginStreamingMessage(requestId, {
-            role: 'system',
-            text: '',
-            intent: 'what_to_answer',
-            source: currentSourceRef.current,
-            isStreaming: true,
+        await runAction('what_to_answer', {
+            source: 'What to Answer',
+            analyticsKey: 'what_to_say',
+            imagePaths: currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
+            userBubbleText: currentAttachments.length > 0 ? 'What should I say about this?' : undefined,
+            screenshotPreview: currentAttachments[0]?.preview,
         });
-
-        try {
-            // Pass imagePath if attached
-            await window.electronAPI.generateWhatToSay(
-                undefined,
-                currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
-                forceSystemDesignMode ? 'system_design' : undefined,
-                requestId
-            );
-        } catch (err) {
-            failRequestMessage(requestId, `Error: ${err}`);
-        } finally {
-            clearProcessingForRequest(requestId);
-        }
     };
 
     const handleSystemDesignTradeoffs = async () => {
@@ -2017,78 +2112,24 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     };
 
     const handleRecap = async () => {
-        await cancelInFlightOverlayRequests();
-        setIsExpanded(true);
-        currentSourceRef.current = 'Recap';
-        analytics.trackCommandExecuted('recap');
-        const requestId = nextRequestId('recap');
-        markRequestProcessing(requestId);
-        rememberIntentRequest('recap', requestId);
-        beginStreamingMessage(requestId, {
-            role: 'system',
-            text: '',
-            intent: 'recap',
-            source: currentSourceRef.current,
-            isStreaming: true,
+        await runAction('recap', {
+            source: 'Recap',
+            analyticsKey: 'recap',
         });
-
-        try {
-            await window.electronAPI.generateRecap(requestId);
-        } catch (err) {
-            failRequestMessage(requestId, `Error: ${err}`);
-        } finally {
-            clearProcessingForRequest(requestId);
-        }
     };
 
     const handleFollowUpQuestions = async () => {
-        await cancelInFlightOverlayRequests();
-        setIsExpanded(true);
-        currentSourceRef.current = 'Follow Up Questions';
-        analytics.trackCommandExecuted('suggest_questions');
-        const requestId = nextRequestId('followup-questions');
-        markRequestProcessing(requestId);
-        rememberIntentRequest('follow_up_questions', requestId);
-        beginStreamingMessage(requestId, {
-            role: 'system',
-            text: '',
-            intent: 'follow_up_questions',
-            source: currentSourceRef.current,
-            isStreaming: true,
+        await runAction('follow_up_questions', {
+            source: 'Follow Up Questions',
+            analyticsKey: 'suggest_questions',
         });
-
-        try {
-            await window.electronAPI.generateFollowUpQuestions(requestId);
-        } catch (err) {
-            failRequestMessage(requestId, `Error: ${err}`);
-        } finally {
-            clearProcessingForRequest(requestId);
-        }
     };
 
     const handleClarify = async () => {
-        await cancelInFlightOverlayRequests();
-        setIsExpanded(true);
-        currentSourceRef.current = 'Clarify';
-        analytics.trackCommandExecuted('clarify');
-        const requestId = nextRequestId('clarify');
-        markRequestProcessing(requestId);
-        rememberIntentRequest('clarify', requestId);
-        beginStreamingMessage(requestId, {
-            role: 'system',
-            text: '',
-            intent: 'clarify',
-            source: currentSourceRef.current,
-            isStreaming: true,
+        await runAction('clarify', {
+            source: 'Clarify',
+            analyticsKey: 'clarify',
         });
-
-        try {
-            await window.electronAPI.generateClarify(requestId);
-        } catch (err) {
-            failRequestMessage(requestId, `Error: ${err}`);
-        } finally {
-            clearProcessingForRequest(requestId);
-        }
     };
 
     const handleCodeHint = async () => {
@@ -2135,46 +2176,18 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     };
 
     const handleBrainstorm = async () => {
-        await cancelInFlightOverlayRequests();
-        setIsExpanded(true);
-        currentSourceRef.current = 'Brainstorm';
-        analytics.trackCommandExecuted('brainstorm');
-        const requestId = nextRequestId('brainstorm');
-        markRequestProcessing(requestId);
-        rememberIntentRequest('brainstorm', requestId);
-
         const currentAttachments = attachedContextRef.current;
         if (currentAttachments.length > 0) {
             setAttachedContext([]);
-            // Show the attached image in chat
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'user',
-                text: 'Brainstorm with this context',
-                hasScreenshot: true,
-                screenshotPreview: currentAttachments[0].preview
-            }]);
-        	// Scroll to bottom when user sends message
-        	setTimeout(() => {
-        		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            }, 50);
         }
 
-        beginStreamingMessage(requestId, {
-            role: 'system',
-            text: '',
-            intent: 'brainstorm',
-            source: currentSourceRef.current,
-            isStreaming: true,
+        await runAction('brainstorm', {
+            source: 'Brainstorm',
+            analyticsKey: 'brainstorm',
+            imagePaths: currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
+            userBubbleText: currentAttachments.length > 0 ? 'Brainstorm with this context' : undefined,
+            screenshotPreview: currentAttachments[0]?.preview,
         });
-
-        try {
-            await window.electronAPI.generateBrainstorm(currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined, undefined, requestId);
-        } catch (err) {
-            failRequestMessage(requestId, `Error: ${err}`);
-        } finally {
-            clearProcessingForRequest(requestId);
-        }
     };
 
     const handleScreenScan = async () => {
@@ -2244,7 +2257,11 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 isStreaming: true,
             });
 
-            window.electronAPI.runScreenAnalysis({ requestId, image: attachmentForScan?.path ?? '' });
+            window.electronAPI.runScreenAnalysis({
+                requestId,
+                image: attachmentForScan?.path ?? '',
+                mode: getScreenScanModeForSessionMode(session.currentMode),
+            });
         } catch (err) {
             pendingCaptureRef.current = null;
             hideScreenScanOverlay();
@@ -2310,6 +2327,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 - Define the key idea simply.
 - Keep it under 120 words.
 - No preamble.`,
+                session.currentMode,
                 requestId
             );
         } catch (err) {
@@ -2337,41 +2355,26 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         switch (label) {
             case 'What to answer?':
                 return handleWhatToSay;
-            case 'Code Hint':
-                return handleCodeHint;
-            case 'Brainstorm':
-                return handleBrainstorm;
-            case 'Clarify':
-                return handleClarify;
-            case 'Trade-offs':
-                return handleSystemDesignTradeoffs;
-            case 'STAR Story':
-                return handleStarStory;
-            case 'Follow Up':
-                return handleFollowUpQuestions;
             case 'Recap':
                 return handleRecap;
-            case 'Explain':
-                return handleExplain;
-            case 'Summarize':
-                return handleSummarize;
+            case 'Clarify':
+                return handleClarify;
+            case 'Brainstorm':
+                return handleBrainstorm;
+            case 'Follow Up':
+                return handleFollowUpQuestions;
             default:
                 return handleWhatToSay;
         }
     }, [
         handleWhatToSay,
-        handleCodeHint,
-        handleBrainstorm,
-        handleClarify,
-        handleSystemDesignTradeoffs,
-        handleStarStory,
-        handleFollowUpQuestions,
         handleRecap,
-        handleExplain,
-        handleSummarize,
+        handleClarify,
+        handleBrainstorm,
+        handleFollowUpQuestions,
     ]);
 
-    fourthActionHandlerRef.current = getQuickActionHandler((MODE_BUTTON_LABELS[effectiveQuestionType] || MODE_BUTTON_LABELS.general)[3]);
+    fourthActionHandlerRef.current = getQuickActionHandler(STATIC_QUICK_ACTION_LABELS[3]);
 
     // Setup Streaming Listeners
     useEffect(() => {
@@ -2622,72 +2625,14 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 return;
             }
 
-            // Show user's spoken question
-            setMessages(prev => [...prev, {
-                id: nextMsgId(),
-                role: 'user',
-                text: question,
-                hasScreenshot: currentAttachments.length > 0,
-                screenshotPreview: currentAttachments[0]?.preview
-            }]);
-            
-            // Scroll to bottom when user sends message
-            setTimeout(() => {
-                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            }, 50);
-
-            // Add placeholder for streaming response
-            const requestId = nextRequestId('answer-now');
-            beginStreamingMessage(requestId, {
-                role: 'system',
-                text: '',
-                intent: 'answer_now',
-                isStreaming: true,
-                source: currentSourceRef.current,
+            await runAction('answer_now', {
+                source: 'Answer Now',
+                analyticsKey: 'answer_now',
+                message: question,
+                imagePaths: currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
+                userBubbleText: question,
+                screenshotPreview: currentAttachments[0]?.preview,
             });
-
-            markRequestProcessing(requestId);
-            rememberIntentRequest('answer_now', requestId);
-
-            try {
-                let prompt = '';
-
-                if (currentAttachments.length > 0) {
-                    // Image + Voice Context
-                    prompt = `You are a helper. The user has provided a screenshot and a spoken question/command.
-User said: "${question}"
-
-Instructions:
-1. Analyze the screenshot in the context of what the user said.
-2. Answer directly in at most 4 short bullet points.
-3. Keep the answer under 120 words.
-4. No preamble or filler.`;
-                } else {
-                    // Voice Only — direct answer, adaptive formatting
-                    prompt = `Answer directly. Keep the response short.
-- Coding: one clean code block, then at most 2 short bullets.
-- Concept/definition: 3-5 short bullets max.
-- How-to: 3-5 concise numbered steps max.
-- Short factual: 1-2 sentences max.
-Hard limit: under 120 words unless code is required.
-No preamble. No meta-commentary. Start with the answer immediately.`;
-                }
-
-                await window.electronAPI.generateAnswerNow(
-                    question,
-                    currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
-                    prompt,
-                    requestId
-                );
-
-            } catch (err) {
-                // Initial invocation failing (e.g. IPC error before stream starts)
-                clearProcessingForRequest(requestId);
-                rememberIntentRequest('answer_now', null);
-                failRequestMessage(requestId, `❌ Error starting stream: ${err}`);
-            } finally {
-                clearProcessingForRequest(requestId);
-            }
         } else {
             // Start recording - reset voice input state
             setVoiceInput('');
@@ -2739,17 +2684,10 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
         markRequestProcessing(requestId);
 
         try {
-            // JIT RAG pre-flight: try to use indexed meeting context first
-            if (currentAttachments.length === 0) {
-                const ragResult = await window.electronAPI.ragQueryLive?.(userText || '', requestId);
-                if (ragResult?.success) {
-                    // JIT RAG handled it — response streamed via rag:stream-chunk events
-                    return;
-                }
-            }
             activeRagRequestIdRef.current = null;
 
-            // Pass imagePath if attached, AND conversation context
+            // Pass imagePath if attached, AND conversation context.
+            // Live RAG is now injected by the unified backend action path when available.
             requestStartTimeRef.current = Date.now();
             const streamContext = [
                 conversationContext.trim(),
@@ -3637,34 +3575,26 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                 </>
                             )}
 
-                            {/* Quick Actions - Dynamic Context-Aware Buttons */}
+                            {/* Quick Actions - Static Buttons with Recommendation Glow */}
                             {(() => {
-                                // ── Action Map ──
                                 type ActionDef = { label: QuickActionLabel; icon: string; handler: () => void | Promise<void> };
-                                const labels = MODE_BUTTON_LABELS[effectiveQuestionType] || MODE_BUTTON_LABELS.general;
-                                const actions: ActionDef[] = labels.map((label) => ({
+                                const actions: ActionDef[] = STATIC_QUICK_ACTION_LABELS.map((label) => ({
                                     label,
                                     icon: QUICK_ACTION_ICONS[label],
                                     handler: getQuickActionHandler(label),
                                 }));
+                                const isRecommendedAnswer = recommendedButton === 'Answer';
 
                                 return (
                                     <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity }}>
                                         <AnimatePresence mode="popLayout">
                                             {(() => {
-                                                // Unique color per button label
                                                 const buttonColors: Record<string, { gradient: string; glow: string }> = {
                                                     'What to answer?': { gradient: 'from-sky-400 via-sky-500 to-blue-600', glow: 'rgba(56,189,248,0.35)' },
-                                                    'Code Hint':       { gradient: 'from-violet-400 via-violet-500 to-purple-600', glow: 'rgba(139,92,246,0.35)' },
-                                                    'Scan Screen':     { gradient: 'from-orange-400 via-amber-500 to-yellow-600', glow: 'rgba(251,191,36,0.35)' },
-                                                    'Brainstorm':      { gradient: 'from-amber-400 via-orange-500 to-orange-600', glow: 'rgba(251,146,60,0.35)' },
-                                                    'Explain':         { gradient: 'from-amber-400 via-orange-500 to-orange-600', glow: 'rgba(251,146,60,0.35)' },
-                                                    'Clarify':         { gradient: 'from-cyan-400 via-cyan-500 to-teal-600', glow: 'rgba(34,211,238,0.35)' },
-                                                    'STAR Story':      { gradient: 'from-pink-400 via-pink-500 to-rose-600', glow: 'rgba(244,114,182,0.35)' },
-                                                    'Follow Up':       { gradient: 'from-amber-400 via-yellow-500 to-amber-600', glow: 'rgba(245,158,11,0.35)' },
-                                                    'Trade-offs':      { gradient: 'from-teal-400 via-teal-500 to-emerald-600', glow: 'rgba(20,184,166,0.35)' },
                                                     'Recap':           { gradient: 'from-slate-400 via-slate-500 to-gray-600', glow: 'rgba(148,163,184,0.3)' },
-                                                    'Summarize':       { gradient: 'from-slate-400 via-slate-500 to-gray-600', glow: 'rgba(148,163,184,0.3)' },
+                                                    'Clarify':         { gradient: 'from-cyan-400 via-cyan-500 to-teal-600', glow: 'rgba(34,211,238,0.35)' },
+                                                    'Brainstorm':      { gradient: 'from-amber-400 via-orange-500 to-orange-600', glow: 'rgba(251,146,60,0.35)' },
+                                                    'Follow Up':       { gradient: 'from-amber-400 via-yellow-500 to-amber-600', glow: 'rgba(245,158,11,0.35)' },
                                                 };
                                                 const fallbackColor = { gradient: 'from-indigo-400 via-indigo-500 to-blue-600', glow: 'rgba(99,102,241,0.35)' };
 
@@ -3673,7 +3603,7 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                                     const colors = buttonColors[action.label] || fallbackColor;
                                                     return (
                                                         <motion.button
-                                                            key={`${currentQuestionTurnId}-${effectiveQuestionType}-${action.label}`}
+                                                            key={`${currentQuestionTurnId}-${currentSessionMode}-${action.label}`}
                                                             layout
                                                             initial={{ opacity: 0, y: 6, scale: 0.92 }}
                                                             animate={{ opacity: 1, y: 0, scale: isRec ? 1.03 : 1 }}
@@ -3690,7 +3620,7 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                                                 }
                                                                 action.handler();
                                                             }}
-                                                            className={`group relative overflow-hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap shrink-0 no-drag text-white`}
+                                                            className={`group relative overflow-hidden flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium whitespace-nowrap shrink-0 no-drag text-white`}
                                                             style={{
                                                                 boxShadow: `inset 0 1px 1px rgba(255,255,255,${isRec ? '0.5' : '0.3'}), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px ${colors.glow}, 0 0 0 1px rgba(255,255,255,${isRec ? '0.1' : '0.06'})`,
                                                             }}
@@ -3702,7 +3632,7 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
                                                             {/* Hover glow */}
                                                             <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-10" />
                                                             {/* Content */}
-                                                            <span className="relative z-20 text-[12px] leading-none">{action.icon}</span>
+                                                            <span className="relative z-20 text-[11px] leading-none">{action.icon}</span>
                                                             <span className="relative z-20 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)]">{action.label}</span>
                                                         </motion.button>
                                                     );
@@ -3712,15 +3642,22 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
 
                                         {/* Answer Button — jelly pill design */}
                                         <motion.button
-                                            onClick={handleAnswerNow}
+                                            onClick={() => {
+                                                recommendationLockTurnIdRef.current = currentQuestionTurnIdRef.current;
+                                                if (recommendedButtonRef.current !== 'Answer') {
+                                                    recommendedButtonRef.current = 'Answer';
+                                                    setRecommendedButton('Answer');
+                                                }
+                                                void handleAnswerNow();
+                                            }}
                                             whileHover={{ scale: 1.04, filter: 'brightness(1.12)' }}
                                             whileTap={{ scale: 0.96 }}
                                             transition={{ duration: 0.18, ease: 'easeOut' }}
-                                            className="group relative overflow-hidden text-white px-4 py-1.5 rounded-full font-medium tracking-normal flex items-center justify-center gap-1.5 shrink-0 min-w-[74px] whitespace-nowrap no-drag text-[11px]"
+                                            className="group relative overflow-hidden text-white px-3 py-1 rounded-full font-medium tracking-normal flex items-center justify-center gap-1 shrink-0 min-w-[64px] whitespace-nowrap no-drag text-[10px]"
                                             style={{
                                                 boxShadow: isManualRecording
                                                     ? 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px rgba(239,68,68,0.4), 0 0 0 1px rgba(255,255,255,0.1)'
-                                                    : 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px rgba(16,185,129,0.35), 0 0 0 1px rgba(255,255,255,0.1)',
+                                                    : `inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px ${isRecommendedAnswer ? 'rgba(16,185,129,0.55)' : 'rgba(16,185,129,0.35)'}, 0 0 0 1px rgba(255,255,255,${isRecommendedAnswer ? '0.16' : '0.1'})`,
                                                 transition: 'box-shadow 0.4s ease-out',
                                             }}
                                         >
@@ -4005,24 +3942,27 @@ No preamble. No meta-commentary. Start with the answer immediately.`;
 
                                         <div className="relative group">
                                             <button
-                                                onClick={() => {
-                                                    setForceSystemDesignMode(prev => {
-                                                        const next = !prev;
-                                                        console.log(`[Overlay] System design mode ${next ? 'on' : 'off'}`);
-                                                        window.electronAPI?.overlayLogSystemDesignMode?.(next);
-                                                        return next;
-                                                    });
+                                                onClick={async () => {
+                                                    const nextMode: SessionMode = currentSessionMode === 'system_design' ? 'general' : 'system_design';
+                                                    console.log(`[Overlay] System design mode ${nextMode === 'system_design' ? 'on' : 'off'}`);
+                                                    window.electronAPI?.overlayLogSystemDesignMode?.(nextMode === 'system_design');
+                                                    setSession({ currentMode: nextMode });
+                                                    try {
+                                                        await window.electronAPI?.setSessionMode?.(nextMode);
+                                                    } catch (error) {
+                                                        console.warn('[Overlay] Failed to persist session mode:', error);
+                                                    }
                                                 }}
                                                 className={`
                                                     w-7 h-7 flex items-center justify-center rounded-lg
                                                     interaction-base interaction-press
-                                                    ${forceSystemDesignMode
+                                                    ${currentSessionMode === 'system_design'
                                                         ? 'overlay-icon-surface overlay-icon-surface-hover text-teal-400 opacity-100'
                                                         : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
                                                 `}
                                                 style={appearance.iconStyle}
                                             >
-                                                <Cpu className={`w-3.5 h-3.5 ${forceSystemDesignMode ? 'animate-flame' : ''}`} />
+                                                <Cpu className={`w-3.5 h-3.5 ${currentSessionMode === 'system_design' ? 'animate-flame' : ''}`} />
                                             </button>
                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
                                                 System Design Mode

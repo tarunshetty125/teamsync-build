@@ -357,13 +357,14 @@ export class ModesManager {
     private static readonly MAX_FILE_CHARS = 12_000;
     private static readonly MAX_TOTAL_CHARS = 40_000;
 
-    public buildActiveModeContextBlock(): string {
+    public buildActiveModeContextBlock(options?: { includeCustomContext?: boolean }): string {
         const mode = this.getActiveMode();
         if (!mode) return '';
 
         const parts: string[] = [];
+        const includeCustomContext = options?.includeCustomContext !== false;
 
-        if (mode.customContext.trim()) {
+        if (includeCustomContext && mode.customContext.trim()) {
             parts.push(`<user_context>\n${mode.customContext.trim()}\n</user_context>`);
         }
 

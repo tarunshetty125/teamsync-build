@@ -9,10 +9,13 @@
 
 import { EventEmitter } from 'events';
 import { LLMHelper } from './LLMHelper';
-import { SessionTracker } from './SessionTracker';
+import { SessionTracker, type SessionMode } from './SessionTracker';
 import { IntelligenceEngine } from './IntelligenceEngine';
 import { MeetingPersistence } from './MeetingPersistence';
-import type { ConversationIntent } from './llm';
+import type { ConversationIntent, ScreenContentMode } from './llm';
+import type { ActionRagContext, UnifiedActionIntent } from './ActionContextBuilder';
+
+type UserControlledMode = Extract<ConversationIntent, 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design'>;
 
 // Re-export types for backward compatibility
 export type { TranscriptSegment, SuggestionTrigger, ContextItem } from './SessionTracker';
@@ -56,6 +59,7 @@ export class IntelligenceManager extends EventEmitter {
             'system_design_tradeoffs', 'system_design_tradeoffs_token',
             'screen_scan_result', 'screen_scan_token',
             'manual_answer_started', 'manual_answer_result',
+            'action_token', 'action_result',
             'mode_changed', 'error'
         ];
 
@@ -127,6 +131,14 @@ export class IntelligenceManager extends EventEmitter {
         return this.session.sessionId;
     }
 
+    getSessionMode(): SessionMode {
+        return this.session.getMode();
+    }
+
+    setSessionMode(mode: SessionMode): void {
+        this.session.setMode(mode);
+    }
+
     getFormattedContext(lastSeconds: number = 120): string {
         return this.session.getFormattedContext(lastSeconds);
     }
@@ -159,8 +171,48 @@ export class IntelligenceManager extends EventEmitter {
         return this.engine.runAssistMode();
     }
 
-    async runWhatShouldISay(question?: string, confidence?: number, imagePaths?: string[], forcedIntent?: ConversationIntent, requestId?: string): Promise<string | null> {
-        return this.engine.runWhatShouldISay(question, confidence, imagePaths, forcedIntent, requestId);
+    async runAction(params: {
+        intent: UnifiedActionIntent;
+        message?: string;
+        imagePaths?: string[];
+        requestId?: string;
+        profilePreference?: 'default' | 'force_on' | 'force_off';
+        additionalContext?: string;
+        rag?: ActionRagContext | null;
+        modeOverride?: UserControlledMode;
+        screenScanMode?: ScreenContentMode;
+    }): Promise<string | null> {
+        return this.engine.runAction(params);
+    }
+
+    async handleAction(
+        intent: UnifiedActionIntent,
+        options: {
+            message?: string;
+            imagePaths?: string[];
+            requestId?: string;
+            profilePreference?: 'default' | 'force_on' | 'force_off';
+            additionalContext?: string;
+            rag?: ActionRagContext | null;
+            modeOverride?: UserControlledMode;
+            screenScanMode?: ScreenContentMode;
+        } = {}
+    ): Promise<string | null> {
+        return this.runAction({
+            intent,
+            message: options.message,
+            imagePaths: options.imagePaths,
+            requestId: options.requestId,
+            profilePreference: options.profilePreference,
+            additionalContext: options.additionalContext,
+            rag: options.rag,
+            modeOverride: options.modeOverride,
+            screenScanMode: options.screenScanMode,
+        });
+    }
+
+    async runWhatShouldISay(question?: string, confidence?: number, imagePaths?: string[], mode?: UserControlledMode, requestId?: string): Promise<string | null> {
+        return this.engine.runWhatShouldISay(question, confidence, imagePaths, mode, requestId);
     }
 
     async runFollowUp(intent: string, userRequest?: string, requestId?: string): Promise<string | null> {
@@ -168,15 +220,15 @@ export class IntelligenceManager extends EventEmitter {
     }
 
     async runRecap(requestId?: string): Promise<string | null> {
-        return this.engine.runRecap(requestId);
+        return this.handleAction('recap', { requestId, profilePreference: 'force_off' });
     }
 
     async runClarify(requestId?: string): Promise<string | null> {
-        return this.engine.runClarify(requestId);
+        return this.handleAction('clarify', { requestId, profilePreference: 'force_off' });
     }
 
     async runFollowUpQuestions(requestId?: string): Promise<string | null> {
-        return this.engine.runFollowUpQuestions(requestId);
+        return this.handleAction('follow_up_questions', { requestId, profilePreference: 'force_off' });
     }
 
     async runSystemDesignTradeoffs(requestId?: string): Promise<string | null> {
@@ -184,7 +236,10 @@ export class IntelligenceManager extends EventEmitter {
     }
 
     async runManualAnswer(question: string, requestId?: string): Promise<string | null> {
-        return this.engine.runManualAnswer(question, requestId);
+        return this.handleAction('manual_chat', {
+            message: question,
+            requestId,
+        });
     }
 
     async runCodeHint(imagePaths?: string[], problemStatement?: string, requestId?: string): Promise<string | null> {

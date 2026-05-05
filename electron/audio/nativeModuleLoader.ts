@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 
 export interface AudioDeviceInfo {
@@ -160,16 +161,20 @@ export function loadNativeModule(): NativeModule | null {
 
     const candidates: string[] = [];
 
-    // 1. Production/electron:dev — app.asar.unpacked via process.resourcesPath.
-    //    NOTE: process.resourcesPath is set in BOTH packaged apps AND when
-    //    running `npm run electron:dev` (it points to the Electron binary's
-    //    resources dir). The path below won't exist in electron:dev so this
-    //    candidate simply fails and we fall through to #2. That is correct
-    //    behavior — the warn log is expected and harmless.
+    // 1. Packaged app — app.asar.unpacked via process.resourcesPath.
+    //    `process.resourcesPath` also exists in `electron .` dev runs, but the
+    //    unpacked native binary is not copied there. Skip this candidate unless
+    //    the file actually exists so local development stays quiet.
     if (process.resourcesPath) {
-        candidates.push(
-            path.join(process.resourcesPath, 'app.asar.unpacked', 'native-module', binary)
+        const unpackedBinaryPath = path.join(
+            process.resourcesPath,
+            'app.asar.unpacked',
+            'native-module',
+            binary
         );
+        if (fs.existsSync(unpackedBinaryPath)) {
+            candidates.push(unpackedBinaryPath);
+        }
     }
 
     // 2. Development — app.getAppPath() returns the project root directly

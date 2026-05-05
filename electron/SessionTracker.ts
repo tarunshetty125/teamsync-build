@@ -34,6 +34,8 @@ export interface AssistantResponse {
     questionContext: string;
 }
 
+export type SessionMode = 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design';
+
 export class SessionTracker {
     // Context management (mirrors Swift ContextManager)
     private contextItems: ContextItem[] = [];
@@ -62,6 +64,7 @@ export class SessionTracker {
     private fullTranscript: TranscriptSegment[] = [];
     private fullUsage: any[] = []; // UsageInteraction
     private sessionStartTime: number = Date.now();
+    private sessionMode: SessionMode = 'general';
 
     // Rolling summarization: epoch summaries preserve early context when arrays are compacted
     private static readonly MAX_EPOCH_SUMMARIES = 5;
@@ -81,6 +84,8 @@ export class SessionTracker {
     private static readonly INTERVIEWER_BUFFER_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
     // Screenshot-detected question stays sticky for 3 min before transcript can override
     private static readonly SCREENSHOT_STALE_MS = 3 * 60 * 1000;
+    private static readonly DEFAULT_FULL_TRANSCRIPT_TOKENS = 2800;
+    private static readonly DEFAULT_ROLLING_TRANSCRIPT_TOKENS = 1600;
 
     // Reference to RecapLLM for epoch summarization (injected later)
     private recapLLM: RecapLLM | null = null;
@@ -268,7 +273,7 @@ export class SessionTracker {
     /**
      * Add assistant-generated message to context
      */
-    addAssistantMessage(text: string): void {
+    addAssistantMessage(text: string, options?: { trackAsLastMessage?: boolean }): void {
         console.log(`[SessionTracker] addAssistantMessage called with:`, text.substring(0, 50));
 
         // Natively-style filtering
@@ -297,7 +302,8 @@ export class SessionTracker {
             text: cleanText,
             timestamp: Date.now(),
             final: true,
-            confidence: 1.0
+            confidence: 1.0,
+            _sessionId: this.sessionId,
         });
 
         // Compact transcript with summarization instead of losing early context
@@ -306,21 +312,23 @@ export class SessionTracker {
             console.warn('[SessionTracker] compactTranscript error (non-fatal):', e)
         );
 
-        this.lastAssistantMessage = cleanText;
+        if (options?.trackAsLastMessage !== false) {
+            this.lastAssistantMessage = cleanText;
 
-        // Temporal RAG: Track response history for anti-repetition
-        this.assistantResponseHistory.push({
-            text: cleanText,
-            timestamp: Date.now(),
-            questionContext: this.getLastInterviewerTurn() || 'unknown'
-        });
+            // Temporal RAG: Track response history for anti-repetition
+            this.assistantResponseHistory.push({
+                text: cleanText,
+                timestamp: Date.now(),
+                questionContext: this.getLastInterviewerTurn() || 'unknown'
+            });
 
-        // Keep history bounded (last 10 responses)
-        if (this.assistantResponseHistory.length > 10) {
-            this.assistantResponseHistory = this.assistantResponseHistory.slice(-10);
+            // Keep history bounded (last 10 responses)
+            if (this.assistantResponseHistory.length > 10) {
+                this.assistantResponseHistory = this.assistantResponseHistory.slice(-10);
+            }
+
+            console.log(`[SessionTracker] lastAssistantMessage updated, history size: ${this.assistantResponseHistory.length}`);
         }
-
-        console.log(`[SessionTracker] lastAssistantMessage updated, history size: ${this.assistantResponseHistory.length}`);
         this.evictOldEntries();
     }
 
@@ -385,6 +393,14 @@ export class SessionTracker {
         return this.lastAssistantMessage;
     }
 
+    getMode(): SessionMode {
+        return this.sessionMode;
+    }
+
+    setMode(mode: SessionMode): void {
+        this.sessionMode = mode;
+    }
+
     getAssistantResponseHistory(): AssistantResponse[] {
         return this.assistantResponseHistory;
     }
@@ -438,50 +454,128 @@ export class SessionTracker {
         return Math.ceil(text.length / 3.5);
     }
 
+    estimateTokenCount(text: string): number {
+        return this.estimateTokens(text);
+    }
+
+    private contextRoleLabel(role: ContextItem['role']): string {
+        return role === 'interviewer' ? 'INTERVIEWER'
+            : role === 'user' ? 'ME'
+                : 'ASSISTANT';
+    }
+
+    private transcriptSpeakerLabel(speaker: TranscriptSegment['speaker']): string {
+        const role = this.mapSpeakerToRole(speaker);
+        return role === 'interviewer' ? 'INTERVIEWER'
+            : role === 'user' ? 'ME'
+                : 'ASSISTANT';
+    }
+
+    private capFormattedLines(lines: string[], maxTokens: number): string {
+        if (maxTokens <= 0) return '';
+
+        let tokens = 0;
+        const kept: string[] = [];
+        for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i];
+            const lineTokens = this.estimateTokens(line);
+            if (tokens + lineTokens > maxTokens) {
+                break;
+            }
+            kept.unshift(line);
+            tokens += lineTokens;
+        }
+        return kept.join('\n');
+    }
+
     /**
      * Get full session context from accumulated transcript (User + Interviewer + Assistant)
      */
     getFullSessionContext(): string {
-        let tokens = 0;
-        const MAX_SAFE_TOKENS = 2800;
-        const recent: string[] = [];
+        return this.getCappedFullTranscript(SessionTracker.DEFAULT_FULL_TRANSCRIPT_TOKENS);
+    }
 
-        for (let i = this.fullTranscript.length - 1; i >= 0; i--) {
-            const segment = this.fullTranscript[i];
-            const role = this.mapSpeakerToRole(segment.speaker);
-            const label = role === 'interviewer' ? 'INTERVIEWER' :
-                role === 'user' ? 'ME' :
-                    'ASSISTANT';
-            const textStr = `[${label}]: ${segment.text}`;
-            const t = this.estimateTokens(textStr);
+    getCappedFullTranscript(maxTokens: number = SessionTracker.DEFAULT_FULL_TRANSCRIPT_TOKENS): string {
+        const transcriptLines = this.fullTranscript.map((segment) => {
+            return `[${this.transcriptSpeakerLabel(segment.speaker)}]: ${segment.text}`;
+        });
+        const recentTranscript = this.capFormattedLines(transcriptLines, maxTokens);
 
-            if (tokens + t > MAX_SAFE_TOKENS) break;
-
-            recent.unshift(textStr);
-            tokens += t;
+        if (this.transcriptEpochSummaries.length === 0) {
+            return recentTranscript;
         }
-        const recentTranscript = recent.join('\n');
 
-        // Prepend epoch summaries for full session context preservation
-        if (this.transcriptEpochSummaries.length > 0) {
-            let epochContext = '';
-            let currentTokens = 0;
-            const MAX_SAFE_SUMMARY_TOKENS = 2800; // Increased buffer safety
-            
-            // Iterate backwards to prioritize the most recent summaries
-            for (let i = this.transcriptEpochSummaries.length - 1; i >= 0; i--) {
-                const s = this.transcriptEpochSummaries[i];
-                const sTokens = this.estimateTokens(s);
-                if (currentTokens + sTokens > MAX_SAFE_SUMMARY_TOKENS) {
-                    break;
-                }
-                epochContext = s + (epochContext ? '\n---\n' + epochContext : '');
-                currentTokens += sTokens;
+        const recentBlock = recentTranscript ? `[RECENT TRANSCRIPT]\n${recentTranscript}` : '[RECENT TRANSCRIPT]';
+        const recentBlockTokens = this.estimateTokens(recentBlock);
+        const remainingTokens = Math.max(0, maxTokens - recentBlockTokens);
+        const summaryHeader = '[SESSION HISTORY - EARLIER DISCUSSION]\n';
+        const summaryHeaderTokens = this.estimateTokens(summaryHeader);
+
+        if (remainingTokens <= summaryHeaderTokens + 20) {
+            return recentBlock;
+        }
+
+        let epochContext = '';
+        let currentTokens = 0;
+        const maxSummaryTokens = remainingTokens - summaryHeaderTokens;
+
+        for (let i = this.transcriptEpochSummaries.length - 1; i >= 0; i--) {
+            const summary = this.transcriptEpochSummaries[i];
+            const summaryWithSeparator = epochContext ? `${summary}\n---\n` : summary;
+            const summaryTokens = this.estimateTokens(summaryWithSeparator);
+            if (currentTokens + summaryTokens > maxSummaryTokens) {
+                break;
             }
-            return `[SESSION HISTORY - EARLIER DISCUSSION]\n${epochContext}\n\n[RECENT TRANSCRIPT]\n${recentTranscript}`;
+            epochContext = summary + (epochContext ? `\n---\n${epochContext}` : '');
+            currentTokens += summaryTokens;
         }
 
-        return recentTranscript;
+        if (!epochContext) {
+            return recentBlock;
+        }
+
+        return `${summaryHeader}${epochContext}\n\n${recentBlock}`;
+    }
+
+    getRollingWindowTranscript(
+        lastSeconds: number = 180,
+        maxItems: number = 18,
+        includeInterim: boolean = true,
+        maxTokens: number = SessionTracker.DEFAULT_ROLLING_TRANSCRIPT_TOKENS
+    ): string {
+        const items = this.getContext(lastSeconds);
+        const selected = items.slice(-maxItems);
+
+        if (includeInterim && this.lastInterimInterviewer?.text?.trim()) {
+            const lastItem = selected[selected.length - 1];
+            const isDuplicate = lastItem
+                && lastItem.role === 'interviewer'
+                && lastItem.text === this.lastInterimInterviewer.text;
+
+            if (!isDuplicate) {
+                selected.push({
+                    role: 'interviewer',
+                    text: this.lastInterimInterviewer.text.trim(),
+                    timestamp: this.lastInterimInterviewer.timestamp,
+                });
+            }
+        }
+
+        const formatted = selected.map((item) => `[${this.contextRoleLabel(item.role)}]: ${item.text}`);
+        return this.capFormattedLines(formatted, maxTokens);
+    }
+
+    getRollingTranscriptWindow(
+        lastSeconds: number = 180,
+        maxItems: number = 18,
+        includeInterim: boolean = true
+    ): string {
+        return this.getRollingWindowTranscript(
+            lastSeconds,
+            maxItems,
+            includeInterim,
+            SessionTracker.DEFAULT_ROLLING_TRANSCRIPT_TOKENS
+        );
     }
 
     // ============================================
@@ -530,6 +624,20 @@ export class SessionTracker {
         this.capUsageArray();
     }
 
+    addUserMessage(text: string, timestamp: number = Date.now()): void {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+
+        this.addTranscript({
+            speaker: 'user',
+            text: trimmed,
+            timestamp,
+            final: true,
+            confidence: 1.0,
+            _sessionId: this.sessionId,
+        });
+    }
+
     // ============================================
     // Interim Transcript Flush
     // ============================================
@@ -562,6 +670,7 @@ export class SessionTracker {
         this.contextItems = [];
         this.fullTranscript = [];
         this.fullUsage = [];
+        this.sessionMode = 'general';
         this.transcriptEpochSummaries = [];
         this.sessionStartTime = Date.now();
         this.lastAssistantMessage = null;
@@ -624,7 +733,15 @@ export class SessionTracker {
                 try {
                     const timeoutPromise = new Promise<string>((_, reject): void => { setTimeout((): void => reject(new Error("LLM timeout")), 15000); });
                     const generatePromise = this.recapLLM.generate(
-                        `Summarize this conversation segment into 3-5 concise bullet points preserving key topics, decisions, and questions:\n\n${summaryInput}`
+                        [
+                            'Summarize this conversation segment into compact long-term memory.',
+                            'Return 4-6 concise bullets.',
+                            'Preserve key people, systems, entities, requirements, decisions, tradeoffs, and open questions.',
+                            'Keep terminology and named components intact.',
+                            'Do not add information that was not discussed.',
+                            '',
+                            summaryInput,
+                        ].join('\n')
                     );
                     const epochSummary = await Promise.race([generatePromise, timeoutPromise]);
                     
@@ -638,19 +755,19 @@ export class SessionTracker {
                         console.log(`[SessionTracker] Epoch summary created (${this.transcriptEpochSummaries.length} total)`);
                     } else {
                         // Empty LLM response — store a basic marker so context is not lost
-                        const marker = `[Earlier discussion: ${oldEntries.length} segments — ${oldEntries.slice(0, 3).map(s => s.text.substring(0, 40)).join('; ')}...]`;
+                        const marker = `[Earlier discussion summary unavailable: ${oldEntries.length} segments. Preserve topics/entities from: ${oldEntries.slice(0, 3).map(s => s.text.substring(0, 60)).join(' | ')}]`;
                         this.transcriptEpochSummaries.push(marker);
                     }
                 } catch (e) {
                     // If summarization fails, store a simple marker
-                    const fallback = `[Earlier discussion: ${oldEntries.length} segments, topics: ${oldEntries.slice(0, 3).map(s => s.text.substring(0, 40)).join('; ')}...]`;
+                    const fallback = `[Earlier discussion summary failed: ${oldEntries.length} segments. Key fragments: ${oldEntries.slice(0, 3).map(s => s.text.substring(0, 60)).join(' | ')}]`;
                     this.transcriptEpochSummaries.push(fallback);
                     console.warn('[SessionTracker] Epoch summarization failed, using fallback marker');
                 }
             } else {
                 // BUG-03 fix: recapLLM not yet available — always push a plain marker so early
                 // context is not silently discarded with no record in transcriptEpochSummaries.
-                const marker = `[Earlier discussion (no LLM): ${oldEntries.length} segments — ${oldEntries.slice(0, 3).map(s => s.text.substring(0, 40)).join('; ')}...]`;
+                const marker = `[Earlier discussion retained without LLM summary: ${oldEntries.length} segments. Key fragments: ${oldEntries.slice(0, 3).map(s => s.text.substring(0, 60)).join(' | ')}]`;
                 this.transcriptEpochSummaries.push(marker);
                 console.warn('[SessionTracker] recapLLM not available — storing plain epoch marker');
             }

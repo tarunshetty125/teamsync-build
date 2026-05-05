@@ -526,7 +526,10 @@ export function initializeIpcHandlers(appState: AppState): void {
   // Generate suggestion from transcript - Natively-style text-only reasoning
   safeHandle("generate-suggestion", async (event, context: string, lastQuestion: string) => {
     try {
-      const suggestion = await appState.processingHelper.getLLMHelper().generateSuggestion(context, lastQuestion)
+      const suggestion = await appState.getIntelligenceManager().handleAction('what_to_answer', {
+        message: lastQuestion,
+        additionalContext: context,
+      });
       return { suggestion }
     } catch (error: any) {
       // console.error("Error generating suggestion:", error)
@@ -577,7 +580,8 @@ export function initializeIpcHandlers(appState: AppState): void {
         text: message,
         speaker: 'user',
         timestamp: Date.now(),
-        final: true
+        final: true,
+        _sessionId: intelligenceManager.getSessionId(),
       }, true);
 
       // 2. Add assistant response and set as last message
@@ -613,6 +617,9 @@ export function initializeIpcHandlers(appState: AppState): void {
         requestId: active.requestId,
         stream: null,
       });
+      if (active.requestId) {
+        appState.getIntelligenceManager().getEngine()?.cancelRequest(active.requestId);
+      }
       if (!active.stream?.return) continue;
       try {
         await active.stream.return(undefined);
@@ -647,8 +654,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }
   ) => {
     try {
-      console.log("[IPC] gemini-chat-stream started using LLMHelper.streamChat");
-      const llmHelper = appState.processingHelper.getLLMHelper();
+      console.log("[IPC] gemini-chat-stream started using IntelligenceManager.handleAction");
       const senderId = event.sender.id;
 
       await cancelActiveChatStream(senderId);
@@ -657,29 +663,23 @@ export function initializeIpcHandlers(appState: AppState): void {
       const requestId = options?.requestId;
       activeChatStreams.set(senderId, { streamId: myStreamId, requestId, stream: null });
 
-      // Update IntelligenceManager with USER message immediately
       const intelligenceManager = appState.getIntelligenceManager();
-      intelligenceManager.addTranscript({
-        text: message,
-        speaker: 'user',
-        timestamp: Date.now(),
-        final: true
-      }, true);
 
-      let fullResponse = "";
+      let additionalContext = context;
+      let ragContext: { content: string; scope: 'live'; title?: string } | null = null;
 
       // Context Injection for "Answer" button (short rolling window)
       // TOKEN-OPT: Only inject auto-context if it contains meaningful conversation
       // (multiple speaker turns, >200 chars). This preserves the lightweight first-request
       // path in streamChat when the user sends a simple standalone question.
-      if (!context) {
+      if (!additionalContext) {
         try {
           const autoContext = intelligenceManager.getFormattedContext(60);
           if (autoContext && autoContext.trim().length > 200) {
             // Block-based: include or drop entirely (no slicing)
             if (autoContext.length <= 1500) {
-              context = autoContext;
-              console.log(`[IPC] Auto-injected context for gemini-chat-stream (${context.length} chars)`);
+              additionalContext = autoContext;
+              console.log(`[IPC] Auto-injected context for gemini-chat-stream (${additionalContext.length} chars)`);
             } else {
               console.log(`[IPC] Auto-context too large (${autoContext.length} chars), dropped (block-based)`);
             }
@@ -690,44 +690,67 @@ export function initializeIpcHandlers(appState: AppState): void {
       }
 
       // Block-based overflow: drop context entirely if over limit (no string slicing)
-      if (context && context.length > 2000) {
-        console.warn(`[IPC] Context too large (${context.length} chars), dropped entirely`);
-        context = undefined;
+      if (additionalContext && additionalContext.length > 2000) {
+        console.warn(`[IPC] Context too large (${additionalContext.length} chars), dropped entirely`);
+        additionalContext = undefined;
       }
 
       try {
-        // USE streamChat which handles routing
-        const stream = llmHelper.streamChat(message, imagePaths, context, options?.skipSystemPrompt ? "" : undefined, options?.ignoreKnowledgeMode);
-        activeChatStreams.set(senderId, { streamId: myStreamId, requestId, stream });
+        const ragManager = appState.getRAGManager();
+        if (!imagePaths?.length && ragManager?.isReady() && ragManager.isLiveIndexingActive('live-meeting-current')) {
+          try {
+            const liveContext = await ragManager.retrieveMeetingContext('live-meeting-current', message);
+            ragContext = {
+              content: liveContext.formattedContext,
+              scope: 'live',
+              title: 'RAG MEMORY (LIVE)',
+            };
+          } catch (ragError: any) {
+            const ragMessage = ragError?.message || '';
+            if (!ragMessage.includes('NO_RELEVANT_CONTEXT') && !ragMessage.includes('NO_MEETING_EMBEDDINGS')) {
+              console.warn('[IPC] Live RAG prefetch failed for gemini-chat-stream:', ragError);
+            }
+          }
+        }
 
-        for await (const token of stream) {
-          // Bail if a newer stream has taken over (user triggered a new request)
+        const onToken = (payload: any) => {
+          if (payload?.requestId !== requestId || payload?.intent !== 'manual_chat') return;
           const liveState = activeChatStreams.get(senderId);
           if (!liveState || liveState.streamId !== myStreamId) {
-            console.log(`[IPC] gemini-chat-stream ${myStreamId} superseded for sender ${senderId}, stopping.`);
-            await stream.return?.(undefined);
-            return null;
+            return;
           }
-          event.sender.send("gemini-stream-token", { token, requestId });
-          fullResponse += token;
-        }
-
-        // Final check: only send done if we are still the active stream
-        if (activeChatStreams.get(senderId)?.streamId === myStreamId) {
-          event.sender.send("gemini-stream-done", { requestId });
-
-          // Update IntelligenceManager with ASSISTANT message after completion
-          if (fullResponse.trim().length > 0) {
-            intelligenceManager.addAssistantMessage(fullResponse);
-            // Log Usage for streaming chat
-            intelligenceManager.logUsage('chat', message, fullResponse);
+          event.sender.send("gemini-stream-token", { token: payload.token, requestId });
+        };
+        const onResult = (payload: any) => {
+          if (payload?.requestId !== requestId || payload?.intent !== 'manual_chat') return;
+          if (activeChatStreams.get(senderId)?.streamId === myStreamId) {
+            event.sender.send("gemini-stream-done", { requestId });
           }
-        }
+        };
+        const onError = (error: any, mode: string, failedRequestId?: string | null) => {
+          if (failedRequestId !== requestId) return;
+          if (activeChatStreams.get(senderId)?.streamId === myStreamId) {
+            event.sender.send("gemini-stream-error", { error: error?.message || "Unknown streaming error", requestId });
+          }
+        };
 
-      } catch (streamError: any) {
-        console.error("[IPC] Streaming error:", streamError);
-        if (activeChatStreams.get(senderId)?.streamId === myStreamId) {
-          event.sender.send("gemini-stream-error", { error: streamError.message || "Unknown streaming error", requestId });
+        intelligenceManager.on('action_token', onToken);
+        intelligenceManager.on('action_result', onResult);
+        intelligenceManager.on('error', onError);
+
+        try {
+          await intelligenceManager.handleAction('manual_chat', {
+            message,
+            imagePaths,
+            requestId,
+            additionalContext: additionalContext,
+            rag: ragContext,
+            profilePreference: options?.ignoreKnowledgeMode ? 'force_off' : 'default',
+          });
+        } finally {
+          intelligenceManager.off('action_token', onToken);
+          intelligenceManager.off('action_result', onResult);
+          intelligenceManager.off('error', onError);
         }
       } finally {
         if (activeChatStreams.get(senderId)?.streamId === myStreamId) {
@@ -2509,12 +2532,48 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  safeHandle("session:get-mode", async () => {
+    return { mode: appState.getIntelligenceManager().getSessionMode() };
+  });
+
+  safeHandle("session:set-mode", async (_, mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => {
+    const intelligenceManager = appState.getIntelligenceManager();
+    intelligenceManager.setSessionMode(mode);
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('session-mode-changed', { mode });
+      }
+    });
+    return { success: true, mode };
+  });
+
+  safeHandle("generate-action", async (_, payload: {
+    intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now';
+    message?: string;
+    imagePaths?: string[];
+    requestId?: string;
+    profilePreference?: 'default' | 'force_on' | 'force_off';
+  }) => {
+    const intelligenceManager = appState.getIntelligenceManager();
+    const result = await intelligenceManager.handleAction(payload.intent, {
+      message: payload.message,
+      imagePaths: payload.imagePaths,
+      requestId: payload.requestId,
+      profilePreference: payload.profilePreference,
+    });
+    return { success: true, result };
+  });
+
   // MODE 2: What Should I Say (Primary auto-answer)
-  safeHandle("generate-what-to-say", async (_, question?: string, imagePaths?: string[], forcedIntent?: string, requestId?: string) => {
+  safeHandle("generate-what-to-say", async (_, question?: string, imagePaths?: string[], mode?: string, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      // Question and imagePaths are now optional - IntelligenceManager infers from transcript
-      const answer = await intelligenceManager.runWhatShouldISay(question, 0.8, imagePaths, forcedIntent as any, requestId);
+      const answer = await intelligenceManager.handleAction('what_to_answer', {
+        message: question,
+        imagePaths,
+        requestId,
+        modeOverride: mode as any,
+      });
       return { answer, question: question || 'inferred from context' };
     } catch (error: any) {
       // Return graceful fallback instead of throwing
@@ -2527,7 +2586,10 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("generate-clarify", async (_, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      const clarification = await intelligenceManager.runClarify(requestId);
+      const clarification = await intelligenceManager.handleAction('clarify', {
+        requestId,
+        profilePreference: 'force_off',
+      });
       // If null returned without throwing, the engine already set mode to idle.
       // We must still ensure the frontend un-sticks — emit an error so onIntelligenceError fires.
       if (clarification === null) {
@@ -2590,12 +2652,14 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("generate-answer-now", async (_, question: string, imagePaths?: string[], context?: string, requestId?: string) => {
+  safeHandle("generate-answer-now", async (_, question: string, imagePaths?: string[], context?: string, mode?: string, requestId?: string) => {
     try {
-      const answer = await appState.getIntelligenceManager().getEngine().runAnswerNow(question, {
+      const answer = await appState.getIntelligenceManager().handleAction('answer_now', {
+        message: question,
         imagePaths,
-        context,
         requestId,
+        additionalContext: context,
+        modeOverride: mode as any,
       });
       return { answer };
     } catch (error: any) {
@@ -2664,7 +2728,10 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("generate-recap", async (_, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      const summary = await intelligenceManager.runRecap(requestId);
+      const summary = await intelligenceManager.handleAction('recap', {
+        requestId,
+        profilePreference: 'force_off',
+      });
       return { summary };
     } catch (error: any) {
       throw error;
@@ -2675,7 +2742,10 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("generate-follow-up-questions", async (_, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      const questions = await intelligenceManager.runFollowUpQuestions(requestId);
+      const questions = await intelligenceManager.handleAction('follow_up_questions', {
+        requestId,
+        profilePreference: 'force_off',
+      });
       return { questions };
     } catch (error: any) {
       throw error;
@@ -2696,7 +2766,10 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("submit-manual-question", async (_, question: string, requestId?: string) => {
     try {
       const intelligenceManager = appState.getIntelligenceManager();
-      const answer = await intelligenceManager.runManualAnswer(question, requestId);
+      const answer = await intelligenceManager.handleAction('manual_chat', {
+        message: question,
+        requestId,
+      });
       return { answer, question };
     } catch (error: any) {
       throw error;
@@ -2907,11 +2980,13 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   // Store active query abort controllers for cancellation
   const activeRAGQueries = new Map<string, AbortController>();
+  const activeRAGActionRequestIds = new Map<string, string>();
   const activeLiveRagQueriesBySender = new Map<number, { queryKey: string; controller: AbortController; requestId?: string }>();
 
   // Query meeting with RAG (meeting-scoped)
   safeHandle("rag:query-meeting", async (event, { meetingId, query }: { meetingId: string; query: string }) => {
     const ragManager = appState.getRAGManager();
+    const intelligenceManager = appState.getIntelligenceManager();
 
     if (!ragManager || !ragManager.isReady()) {
       // Fallback to regular chat if RAG not available
@@ -2928,17 +3003,54 @@ export function initializeIpcHandlers(appState: AppState): void {
 
     const abortController = new AbortController();
     const queryKey = `meeting-${meetingId}`;
+    const requestId = `rag-meeting-${meetingId}-${Date.now()}`;
     activeRAGQueries.set(queryKey, abortController);
+    activeRAGActionRequestIds.set(queryKey, requestId);
 
     try {
-      const stream = ragManager.queryMeeting(meetingId, query, abortController.signal);
+      const retrieved = await ragManager.retrieveMeetingContext(meetingId, query);
+      const onToken = (payload: any) => {
+        if (payload?.intent !== 'manual_chat' || payload?.requestId !== requestId) return;
+        if (abortController.signal.aborted) return;
+        event.sender.send("rag:stream-chunk", { meetingId, chunk: payload.token });
+      };
+      const onResult = (payload: any) => {
+        if (payload?.intent !== 'manual_chat' || payload?.requestId !== requestId) return;
+        if (abortController.signal.aborted) return;
+        event.sender.send("rag:stream-complete", { meetingId });
+      };
+      const onError = (error: any, _mode: string, failedRequestId?: string | null) => {
+        if (failedRequestId !== requestId) return;
+        if (abortController.signal.aborted) return;
+        event.sender.send("rag:stream-error", { meetingId, error: error?.message || 'Unknown error' });
+      };
 
-      for await (const chunk of stream) {
-        if (abortController.signal.aborted) break;
-        event.sender.send("rag:stream-chunk", { meetingId, chunk });
+      intelligenceManager.on('action_token', onToken);
+      intelligenceManager.on('action_result', onResult);
+      intelligenceManager.on('error', onError);
+
+      try {
+        await intelligenceManager.handleAction('manual_chat', {
+          message: query,
+          requestId,
+          rag: {
+            content: retrieved.formattedContext,
+            scope: 'meeting',
+            title: 'RAG MEMORY (MEETING)',
+          },
+          profilePreference: 'force_off',
+          additionalContext: [
+            'Answer questions ONLY about this meeting.',
+            'Be concise and natural.',
+            'If the answer is not present, say so briefly and do not guess.',
+          ].join('\n'),
+        });
+      } finally {
+        intelligenceManager.off('action_token', onToken);
+        intelligenceManager.off('action_result', onResult);
+        intelligenceManager.off('error', onError);
       }
 
-      event.sender.send("rag:stream-complete", { meetingId });
       return { success: true };
 
     } catch (error: any) {
@@ -2956,12 +3068,14 @@ export function initializeIpcHandlers(appState: AppState): void {
       return { success: false, error: error.message };
     } finally {
       activeRAGQueries.delete(queryKey);
+      activeRAGActionRequestIds.delete(queryKey);
     }
   });
 
   // Query live meeting with JIT RAG
   safeHandle("rag:query-live", async (event, { query, requestId }: { query: string; requestId?: string }) => {
     const ragManager = appState.getRAGManager();
+    const intelligenceManager = appState.getIntelligenceManager();
     const senderId = event.sender.id;
 
     if (!ragManager || !ragManager.isReady()) {
@@ -2976,24 +3090,65 @@ export function initializeIpcHandlers(appState: AppState): void {
     const priorLiveQuery = activeLiveRagQueriesBySender.get(senderId);
     if (priorLiveQuery) {
       priorLiveQuery.controller.abort();
+      if (priorLiveQuery.requestId) {
+        appState.getIntelligenceManager().getEngine()?.cancelRequest(priorLiveQuery.requestId);
+      }
       activeRAGQueries.delete(priorLiveQuery.queryKey);
+      activeRAGActionRequestIds.delete(priorLiveQuery.queryKey);
       activeLiveRagQueriesBySender.delete(senderId);
     }
 
     const abortController = new AbortController();
     const queryKey = `live-${Date.now()}`;
     activeRAGQueries.set(queryKey, abortController);
+    if (requestId) {
+      activeRAGActionRequestIds.set(queryKey, requestId);
+    }
     activeLiveRagQueriesBySender.set(senderId, { queryKey, controller: abortController, requestId });
 
     try {
-      const stream = ragManager.queryMeeting('live-meeting-current', query, abortController.signal);
+      const retrieved = await ragManager.retrieveMeetingContext('live-meeting-current', query);
+      const onToken = (payload: any) => {
+        if (payload?.requestId !== requestId || payload?.intent !== 'manual_chat') return;
+        if (abortController.signal.aborted) return;
+        event.sender.send("rag:stream-chunk", { live: true, chunk: payload.token, requestId });
+      };
+      const onResult = (payload: any) => {
+        if (payload?.requestId !== requestId || payload?.intent !== 'manual_chat') return;
+        if (abortController.signal.aborted) return;
+        event.sender.send("rag:stream-complete", { live: true, requestId });
+      };
+      const onError = (error: any, _mode: string, failedRequestId?: string | null) => {
+        if (failedRequestId !== requestId || abortController.signal.aborted) return;
+        event.sender.send("rag:stream-error", { live: true, error: error?.message || 'Unknown error', requestId });
+      };
 
-      for await (const chunk of stream) {
-        if (abortController.signal.aborted) break;
-        event.sender.send("rag:stream-chunk", { live: true, chunk, requestId });
+      intelligenceManager.on('action_token', onToken);
+      intelligenceManager.on('action_result', onResult);
+      intelligenceManager.on('error', onError);
+
+      try {
+        await intelligenceManager.handleAction('manual_chat', {
+          message: query,
+          requestId,
+          rag: {
+            content: retrieved.formattedContext,
+            scope: 'live',
+            title: 'RAG MEMORY (LIVE)',
+          },
+          profilePreference: 'force_off',
+          additionalContext: [
+            'Answer questions ONLY about the current live meeting.',
+            'Be concise and natural.',
+            'If the answer is not present, say so briefly and do not guess.',
+          ].join('\n'),
+        });
+      } finally {
+        intelligenceManager.off('action_token', onToken);
+        intelligenceManager.off('action_result', onResult);
+        intelligenceManager.off('error', onError);
       }
 
-      event.sender.send("rag:stream-complete", { live: true, requestId });
       return { success: true };
 
     } catch (error: any) {
@@ -3010,6 +3165,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       return { success: false, error: error.message };
     } finally {
       activeRAGQueries.delete(queryKey);
+      activeRAGActionRequestIds.delete(queryKey);
       if (activeLiveRagQueriesBySender.get(senderId)?.queryKey === queryKey) {
         activeLiveRagQueriesBySender.delete(senderId);
       }
@@ -3019,6 +3175,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   // Query global (cross-meeting search)
   safeHandle("rag:query-global", async (event, { query }: { query: string }) => {
     const ragManager = appState.getRAGManager();
+    const intelligenceManager = appState.getIntelligenceManager();
 
     if (!ragManager || !ragManager.isReady()) {
       return { fallback: true };
@@ -3026,17 +3183,54 @@ export function initializeIpcHandlers(appState: AppState): void {
 
     const abortController = new AbortController();
     const queryKey = `global-${Date.now()}`;
+    const requestId = `rag-global-${Date.now()}`;
     activeRAGQueries.set(queryKey, abortController);
+    activeRAGActionRequestIds.set(queryKey, requestId);
 
     try {
-      const stream = ragManager.queryGlobal(query, abortController.signal);
+      const retrieved = await ragManager.retrieveGlobalContext(query);
+      const onToken = (payload: any) => {
+        if (payload?.intent !== 'manual_chat' || payload?.requestId !== requestId) return;
+        if (abortController.signal.aborted) return;
+        event.sender.send("rag:stream-chunk", { global: true, chunk: payload.token });
+      };
+      const onResult = (payload: any) => {
+        if (payload?.intent !== 'manual_chat' || payload?.requestId !== requestId) return;
+        if (abortController.signal.aborted) return;
+        event.sender.send("rag:stream-complete", { global: true });
+      };
+      const onError = (error: any, _mode: string, failedRequestId?: string | null) => {
+        if (failedRequestId !== requestId) return;
+        if (abortController.signal.aborted) return;
+        event.sender.send("rag:stream-error", { global: true, error: error?.message || 'Unknown error' });
+      };
 
-      for await (const chunk of stream) {
-        if (abortController.signal.aborted) break;
-        event.sender.send("rag:stream-chunk", { global: true, chunk });
+      intelligenceManager.on('action_token', onToken);
+      intelligenceManager.on('action_result', onResult);
+      intelligenceManager.on('error', onError);
+
+      try {
+        await intelligenceManager.handleAction('manual_chat', {
+          message: query,
+          requestId,
+          rag: {
+            content: retrieved.formattedContext,
+            scope: 'global',
+            title: 'RAG MEMORY (GLOBAL)',
+          },
+          profilePreference: 'force_off',
+          additionalContext: [
+            'Answer by searching across meetings.',
+            'Mention which meeting or time period the answer came from when possible.',
+            'Be concise and do not guess.',
+          ].join('\n'),
+        });
+      } finally {
+        intelligenceManager.off('action_token', onToken);
+        intelligenceManager.off('action_result', onResult);
+        intelligenceManager.off('error', onError);
       }
 
-      event.sender.send("rag:stream-complete", { global: true });
       return { success: true };
 
     } catch (error: any) {
@@ -3046,6 +3240,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       return { success: false, error: error.message };
     } finally {
       activeRAGQueries.delete(queryKey);
+      activeRAGActionRequestIds.delete(queryKey);
     }
   });
 
@@ -3057,7 +3252,12 @@ export function initializeIpcHandlers(appState: AppState): void {
     for (const [key, controller] of activeRAGQueries) {
       if (key.startsWith(queryKey) || (global && key.startsWith('global'))) {
         controller.abort();
+        const requestId = activeRAGActionRequestIds.get(key);
+        if (requestId) {
+          appState.getIntelligenceManager().getEngine()?.cancelRequest(requestId);
+        }
         activeRAGQueries.delete(key);
+        activeRAGActionRequestIds.delete(key);
       }
     }
 
@@ -3551,6 +3751,10 @@ export function initializeIpcHandlers(appState: AppState): void {
       const llmHelper = appState.processingHelper?.getLLMHelper?.();
       if (llmHelper?.setCustomNotesEnabled) {
         llmHelper.setCustomNotesEnabled(!!enabled);
+      }
+      const orchestrator = appState.getKnowledgeOrchestrator?.();
+      if (orchestrator?.setCustomNotesEnabled) {
+        orchestrator.setCustomNotesEnabled(!!enabled);
       }
       return { success: true };
     } catch (error: any) {

@@ -84,9 +84,7 @@ export class SttSupervisor extends EventEmitter {
 
   private currentGenerationId: string = crypto.randomUUID();
   private cutoverTimestamp: number = 0;
-  private lastStallTriggerTime: number = 0;
   private lastInterimText: string = "";
-  private lastTranscriptTimestamp: number = Date.now();
 
   constructor(options: SttSupervisorOptions) {
     super();
@@ -206,24 +204,6 @@ export class SttSupervisor extends EventEmitter {
         sourceLabel: this.sourceLabel,
         timestamp: Date.now()
       } as any);
-    }
-
-    const now = Date.now();
-
-    if (
-      !this.isTransitioning &&
-      this.lastInterimText &&
-      now - this.lastTranscriptTimestamp > 2000 &&
-      now - this.lastStallTriggerTime > 2000
-    ) {
-      this.lastStallTriggerTime = now;
-
-      this.handleFatal(this.activeAdapterIndex, {
-        error: new Error("Interim stall"),
-        provider: this.getActiveProviderName(),
-        sourceLabel: this.sourceLabel,
-        retryable: true
-      });
     }
 
     if (this.replayInProgress || this.isTransitioning || this.activeAdapterIndex < 0) {
@@ -447,7 +427,6 @@ export class SttSupervisor extends EventEmitter {
       return;
     }
 
-    this.lastTranscriptTimestamp = Date.now();
     if (!event.isFinal) {
       this.lastInterimText = event.text;
     } else {

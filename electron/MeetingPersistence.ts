@@ -8,6 +8,33 @@ import { DatabaseManager, Meeting } from './db/DatabaseManager';
 import { GROQ_TITLE_PROMPT, GROQ_SUMMARY_JSON_PROMPT } from './llm';
 const crypto = require('crypto');
 
+const deriveOverviewFromSummaryData = (
+    summaryData: { overview?: string; actionItems: string[]; keyPoints: string[]; sections?: Array<{ title: string; bullets: string[] }> }
+): string | undefined => {
+    if (summaryData.overview?.trim()) return summaryData.overview.trim();
+
+    if (summaryData.keyPoints?.length) {
+        const keyPointSummary = summaryData.keyPoints.filter(Boolean).slice(0, 2).join(' ');
+        if (keyPointSummary.trim()) return keyPointSummary.trim();
+    }
+
+    if (summaryData.sections?.length) {
+        const sectionSummary = summaryData.sections
+            .flatMap(section => section.bullets || [])
+            .filter(Boolean)
+            .slice(0, 2)
+            .join(' ');
+        if (sectionSummary.trim()) return sectionSummary.trim();
+    }
+
+    if (summaryData.actionItems?.length) {
+        const actionSummary = summaryData.actionItems.filter(Boolean).slice(0, 1).join(' ');
+        if (actionSummary.trim()) return actionSummary.trim();
+    }
+
+    return undefined;
+};
+
 export class MeetingPersistence {
     private session: SessionTracker;
     private llmHelper: LLMHelper;
@@ -248,14 +275,18 @@ Return ONLY valid JSON (no markdown code blocks):
             const minutes = Math.floor(data.durationMs / 60000);
             const seconds = ((data.durationMs % 60000) / 1000).toFixed(0);
             const durationStr = `${minutes}:${Number(seconds) < 10 ? '0' : ''}${seconds}`;
+            const overview = deriveOverviewFromSummaryData(summaryData);
 
             const meetingData: Meeting = {
                 id: meetingId,
                 title: title,
                 date: new Date().toISOString(),
                 duration: durationStr,
-                summary: "See detailed summary",
-                detailedSummary: summaryData,
+                summary: overview || "See detailed summary",
+                detailedSummary: {
+                    ...summaryData,
+                    overview,
+                },
                 transcript: data.transcript,
                 usage: data.usage,
                 calendarEventId: calendarEventId,

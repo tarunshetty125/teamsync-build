@@ -27,6 +27,45 @@ const cleanMarkdown = (content: string) => {
     return content.replace(/([^\n])```/g, '$1\n\n```');
 };
 
+const SUMMARY_PLACEHOLDER_VALUES = new Set([
+    '',
+    'See detailed summary',
+    'Generating summary...',
+]);
+
+const getMeetingOverview = (meeting: Meeting) => {
+    const detailedSummary = meeting.detailedSummary as (Meeting['detailedSummary'] & { summary?: string }) | undefined;
+    const overview = detailedSummary?.overview?.trim();
+    if (overview) return overview;
+
+    const legacyDetailedSummary = detailedSummary?.summary?.trim();
+    if (legacyDetailedSummary) return legacyDetailedSummary;
+
+    const summary = meeting.summary?.trim();
+    if (summary && !SUMMARY_PLACEHOLDER_VALUES.has(summary)) return summary;
+
+    if (detailedSummary?.keyPoints?.length) {
+        const keyPointSummary = detailedSummary.keyPoints.filter(Boolean).slice(0, 2).join(' ');
+        if (keyPointSummary.trim()) return keyPointSummary.trim();
+    }
+
+    if (detailedSummary?.sections?.length) {
+        const sectionSummary = detailedSummary.sections
+            .flatMap(section => section.bullets || [])
+            .filter(Boolean)
+            .slice(0, 2)
+            .join(' ');
+        if (sectionSummary.trim()) return sectionSummary.trim();
+    }
+
+    if (detailedSummary?.actionItems?.length) {
+        const actionSummary = detailedSummary.actionItems.filter(Boolean).slice(0, 1).join(' ');
+        if (actionSummary.trim()) return actionSummary.trim();
+    }
+
+    return '';
+};
+
 interface Meeting {
     id: string;
     title: string;
@@ -70,6 +109,7 @@ const MeetingDetails: React.FC<MeetingDetailsProps> = ({ meeting: initialMeeting
     const [isCopied, setIsCopied] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [submittedQuery, setSubmittedQuery] = useState('');
+    const overviewText = getMeetingOverview(meeting);
 
     const handleSubmitQuestion = () => {
         if (query.trim()) {
@@ -91,19 +131,19 @@ const MeetingDetails: React.FC<MeetingDetailsProps> = ({ meeting: initialMeeting
     const handleCopy = async () => {
         let textToCopy = '';
 
-        if (activeTab === 'summary' && meeting.detailedSummary) {
+        if (activeTab === 'summary') {
             textToCopy = `
 Meeting: ${meeting.title}
 Date: ${new Date(meeting.date).toLocaleDateString()}
 
 OVERVIEW:
-${meeting.detailedSummary.overview || ''}
+${overviewText}
 
 ACTION ITEMS:
-${meeting.detailedSummary.actionItems?.map(item => `- ${item}`).join('\n') || 'None'}
+${meeting.detailedSummary?.actionItems?.map(item => `- ${item}`).join('\n') || 'None'}
 
 KEY POINTS:
-${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'None'}
+${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'None'}
             `.trim();
         } else if (activeTab === 'transcript' && meeting.transcript) {
             textToCopy = meeting.transcript.map(t => `[${formatTime(t.timestamp)}] ${t.speaker === 'user' ? 'Me' : 'Them'}: ${t.text}`).join('\n');
@@ -255,7 +295,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                         {activeTab === 'summary' && (
                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                                 {/* Overview - Rendered as Markdown */}
-                                {meeting.detailedSummary?.overview && (
+                                {overviewText && (
                                 <div className="mb-6 pb-6 border-b border-border-subtle prose prose-sm max-w-none">
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
@@ -271,7 +311,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                             a: ({ node, ...props }) => <a className="text-blue-500 hover:underline" {...props} />,
                                         }}
                                     >
-                                        {meeting.detailedSummary?.overview || ''}
+                                        {cleanMarkdown(overviewText)}
                                     </ReactMarkdown>
                                 </div>
                                 )}

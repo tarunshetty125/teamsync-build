@@ -946,7 +946,7 @@ CRITICAL RULES:
       const deduped = modesMgr.getActiveModeDeduped();
       activeModePromptSuffix = deduped.suffix ?? '';
       activeTemplateType = deduped.templateType;
-      modeContextBlock = modesMgr.buildActiveModeContextBlock() ?? '';
+      modeContextBlock = modesMgr.buildActiveModeContextBlock({ includeCustomContext: this.customNotesEnabled }) ?? '';
     } catch (_modeErr: any) {
       console.warn('[LLMHelper] ModesManager load failed in generateSuggestion (non-fatal):', _modeErr?.message);
     }
@@ -2399,18 +2399,26 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     imagePaths?: string[],
     context?: string,
     systemPromptOverride?: string, // Optional override (defaults to HARD_SYSTEM_PROMPT)
-    ignoreKnowledgeMode: boolean = false
+    ignoreKnowledgeMode: boolean = false,
+    runtimeOptions?: {
+      skipKnowledgeInjection?: boolean;
+      skipModeInjection?: boolean;
+      skipCustomNotesInjection?: boolean;
+    }
   ): AsyncGenerator<string, void, unknown> {
 
     // Preparation
     const isMultimodal = !!(imagePaths?.length);
     let isCodeHeavy = false;
     let hasExplicitSystemPromptOverride = systemPromptOverride !== undefined;
+    const skipKnowledgeInjection = ignoreKnowledgeMode || runtimeOptions?.skipKnowledgeInjection === true;
+    const skipModeInjection = runtimeOptions?.skipModeInjection === true;
+    const skipCustomNotesInjection = runtimeOptions?.skipCustomNotesInjection === true;
 
     // ============================================================
     // KNOWLEDGE MODE INTERCEPT (Streaming)
     // ============================================================
-    if (!ignoreKnowledgeMode && this.knowledgeOrchestrator?.isKnowledgeMode()) {
+    if (!skipKnowledgeInjection && this.knowledgeOrchestrator?.isKnowledgeMode()) {
       try {
         // Feed to depth scorer only (not negotiation tracker) — mirrors non-streaming path fix.
         this.knowledgeOrchestrator.feedForDepthScoring(message);
@@ -2462,17 +2470,21 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     //            Skips suffix entirely for General mode (base prompt covers it).
     // ============================================================
     try {
-      const { ModesManager } = require('./services/ModesManager');
-      const modesMgr = ModesManager.getInstance();
-      const { suffix: modeSuffix, templateType: activeTemplateType } = modesMgr.getActiveModeDeduped();
-      const modeContextBlock = modesMgr.buildActiveModeContextBlock();
+      let modeContextBlock = '';
 
-      if (modeSuffix && activeTemplateType !== 'general') {
-        // TOKEN-OPT: Use BASE_SYSTEM_PROMPT + deduped suffix instead of stacking full prompts.
-        // This avoids sending CORE_IDENTITY, EXECUTION_CONTRACT, etc. twice.
-        const baseForMode = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : BASE_SYSTEM_PROMPT;
-        systemPromptOverride = `${baseForMode}\n\n## ACTIVE MODE\n${modeSuffix}`;
-        hasExplicitSystemPromptOverride = true;
+      if (!skipModeInjection) {
+        const { ModesManager } = require('./services/ModesManager');
+        const modesMgr = ModesManager.getInstance();
+        const { suffix: modeSuffix, templateType: activeTemplateType } = modesMgr.getActiveModeDeduped();
+        modeContextBlock = modesMgr.buildActiveModeContextBlock({ includeCustomContext: this.customNotesEnabled });
+
+        if (modeSuffix && activeTemplateType !== 'general') {
+          // TOKEN-OPT: Use BASE_SYSTEM_PROMPT + deduped suffix instead of stacking full prompts.
+          // This avoids sending CORE_IDENTITY, EXECUTION_CONTRACT, etc. twice.
+          const baseForMode = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : BASE_SYSTEM_PROMPT;
+          systemPromptOverride = `${baseForMode}\n\n## ACTIVE MODE\n${modeSuffix}`;
+          hasExplicitSystemPromptOverride = true;
+        }
       }
 
       const totalText = (context || '') + (modeContextBlock || '');
@@ -2605,7 +2617,7 @@ Return only the final answer. No meta commentary.
 
     // Custom notes injection — appended after mode suffix, before language gate
     // Order: BASE → MODE SUFFIX → CUSTOM NOTES → language instruction
-    const customNotesBlock = (this.customNotesEnabled && this.customNotes?.trim())
+    const customNotesBlock = (!skipCustomNotesInjection && this.customNotesEnabled && this.customNotes?.trim())
       ? `\n\n<user_context>\n${this.customNotes.trim().slice(0, 1500)}\n</user_context>\nUse this context naturally if relevant. Never quote it verbatim.`
       : '';
     const shouldOmitSystemPrompt = hasExplicitSystemPromptOverride && !baseSystemPrompt.trim() && !customNotesBlock.trim();
@@ -2790,6 +2802,30 @@ Return only the final answer. No meta commentary.
     }
 
     throw new Error("No AI provider configured. Please add at least one API key in Settings.");
+  }
+
+  public streamStructuredPrompt(
+    prompt: { question: string; context?: string; systemPrompt?: string },
+    imagePaths?: string[],
+    runtimeOptions?: {
+      ignoreKnowledgeMode?: boolean;
+      skipKnowledgeInjection?: boolean;
+      skipModeInjection?: boolean;
+      skipCustomNotesInjection?: boolean;
+    }
+  ): AsyncGenerator<string, void, unknown> {
+    return this.streamChat(
+      prompt.question,
+      imagePaths,
+      prompt.context,
+      prompt.systemPrompt,
+      runtimeOptions?.ignoreKnowledgeMode ?? true,
+      {
+        skipKnowledgeInjection: runtimeOptions?.skipKnowledgeInjection,
+        skipModeInjection: runtimeOptions?.skipModeInjection,
+        skipCustomNotesInjection: runtimeOptions?.skipCustomNotesInjection,
+      }
+    );
   }
 
   /**

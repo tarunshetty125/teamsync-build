@@ -13,7 +13,7 @@ import { RECOGNITION_LANGUAGES } from '../config/languages';
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30000;
 const RECONNECT_MAX_ATTEMPTS = 10;
-const KEEPALIVE_INTERVAL_MS = 8000;
+const KEEPALIVE_INTERVAL_MS = 1000;
 
 export class DeepgramStreamingSTT extends EventEmitter {
     private apiKey: string;
@@ -31,6 +31,7 @@ export class DeepgramStreamingSTT extends EventEmitter {
     private keepAliveInterval: NodeJS.Timeout | null = null;
     private buffer: Buffer[] = [];
     private isConnecting = false;
+    private connectionGeneration = 0;
 
     constructor(apiKey: string) {
         super();
@@ -110,7 +111,16 @@ export class DeepgramStreamingSTT extends EventEmitter {
             this.buffer.push(chunk);
             if (this.buffer.length > 500) this.buffer.shift();
 
-            if (!this.isConnecting && this.shouldReconnect && !this.reconnectTimer) {
+            if (!this.shouldReconnect) {
+                return;
+            }
+
+            if (this.reconnectTimer) {
+                clearTimeout(this.reconnectTimer);
+                this.reconnectTimer = null;
+            }
+
+            if (!this.isConnecting) {
                 this.connect();
             }
             return;
@@ -133,8 +143,9 @@ export class DeepgramStreamingSTT extends EventEmitter {
             const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 
             const deepgram = createClient(this.apiKey);
+            const connectionGeneration = ++this.connectionGeneration;
 
-            this.live = deepgram.listen.live({
+            const connection = deepgram.listen.live({
                 model: 'nova-3',
                 language: this.languageCode,
                 smart_format: true,
@@ -146,14 +157,24 @@ export class DeepgramStreamingSTT extends EventEmitter {
                 utterance_end_ms: 1000,
                 vad_events: true,
             });
+            this.live = connection;
 
-            this.live.on(LiveTranscriptionEvents.Open, () => {
+            connection.on(LiveTranscriptionEvents.Open, () => {
+                if (this.live !== connection || this.connectionGeneration !== connectionGeneration || !this.shouldReconnect) {
+                    try { connection.requestClose(); } catch { }
+                    return;
+                }
+
                 this.isConnecting = false;
                 this.isOpen = true;
                 console.log('[DeepgramStreaming] Connected');
 
                 // Register Transcript inside Open per SDK README pattern
-                this.live.on(LiveTranscriptionEvents.Transcript, (data: any) => {
+                connection.on(LiveTranscriptionEvents.Transcript, (data: any) => {
+                    if (this.live !== connection || this.connectionGeneration !== connectionGeneration) {
+                        return;
+                    }
+
                     try {
                         const alt = data.channel?.alternatives?.[0];
                         const transcript = alt?.transcript;
@@ -173,35 +194,54 @@ export class DeepgramStreamingSTT extends EventEmitter {
                 // Flush buffered audio
                 const buffered = this.buffer.splice(0);
                 for (const chunk of buffered) {
-                    try { this.live?.send(chunk); } catch { }
+                    try { connection.send(chunk); } catch { }
                 }
                 if (buffered.length > 0) {
                     console.log(`[DeepgramStreaming] Flushed ${buffered.length} buffered chunks`);
                 }
 
-                // SDK keepAlive() every 8s prevents idle timeout (per Deepgram docs)
+                // Deepgram can close quiet streams quickly, so arm keepalive immediately.
+                try { connection.keepAlive(); } catch { }
                 this.keepAliveInterval = setInterval(() => {
-                    if (this.isOpen) {
-                        try { this.live?.keepAlive(); } catch { }
+                    if (this.isOpen && this.live === connection && this.connectionGeneration === connectionGeneration) {
+                        try { connection.keepAlive(); } catch { }
                     }
                 }, KEEPALIVE_INTERVAL_MS);
 
                 // Reset backoff only after 5s of stable connection
                 setTimeout(() => {
-                    if (this.isOpen) this.reconnectAttempts = 0;
+                    if (this.isOpen && this.live === connection && this.connectionGeneration === connectionGeneration) {
+                        this.reconnectAttempts = 0;
+                    }
                 }, 5000);
             });
 
-            this.live.on(LiveTranscriptionEvents.Error, (err: any) => {
+            connection.on(LiveTranscriptionEvents.Error, (err: any) => {
+                if (this.live !== connection || this.connectionGeneration !== connectionGeneration) {
+                    return;
+                }
+
                 console.error('[DeepgramStreaming] Error:', err);
                 this.emit('error', err instanceof Error ? err : new Error(String(err)));
             });
 
-            this.live.on(LiveTranscriptionEvents.Close, (event: any) => {
+            connection.on(LiveTranscriptionEvents.Unhandled, (event: any) => {
+                if (this.live !== connection || this.connectionGeneration !== connectionGeneration) {
+                    return;
+                }
+                console.log('[DeepgramStreaming] Unhandled event:', event);
+            });
+
+            connection.on(LiveTranscriptionEvents.Close, (event: any) => {
+                if (this.live !== connection || this.connectionGeneration !== connectionGeneration) {
+                    return;
+                }
+
                 const code = event?.code ?? 'unknown';
                 const reason = event?.reason || '(empty)';
                 console.log(`[DeepgramStreaming] Closed (code=${code}, reason=${reason})`);
 
+                this.live = null;
                 this.isOpen = false;
                 this.isConnecting = false;
                 this.clearTimers();

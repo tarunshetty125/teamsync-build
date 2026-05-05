@@ -37,6 +37,81 @@ export interface Meeting {
     isProcessed?: boolean;
 }
 
+const SUMMARY_PLACEHOLDER_VALUES = new Set([
+    '',
+    'See detailed summary',
+    'Generating summary...',
+]);
+
+const isRenderableSummary = (value: unknown): value is string =>
+    typeof value === 'string' && value.trim().length > 0 && !SUMMARY_PLACEHOLDER_VALUES.has(value.trim());
+
+const deriveOverviewFromDetailedSummary = (detailedSummary: any): string | undefined => {
+    if (!detailedSummary || typeof detailedSummary !== 'object') return undefined;
+
+    if (typeof detailedSummary.overview === 'string' && detailedSummary.overview.trim()) {
+        return detailedSummary.overview.trim();
+    }
+
+    if (typeof detailedSummary.summary === 'string' && detailedSummary.summary.trim()) {
+        return detailedSummary.summary.trim();
+    }
+
+    if (Array.isArray(detailedSummary.keyPoints) && detailedSummary.keyPoints.length > 0) {
+        return detailedSummary.keyPoints
+            .filter((item: unknown) => typeof item === 'string' && item.trim())
+            .slice(0, 2)
+            .join(' ');
+    }
+
+    if (Array.isArray(detailedSummary.sections)) {
+        const bullets = detailedSummary.sections
+            .flatMap((section: any) => Array.isArray(section?.bullets) ? section.bullets : [])
+            .filter((item: unknown) => typeof item === 'string' && item.trim())
+            .slice(0, 2);
+
+        if (bullets.length > 0) {
+            return bullets.join(' ');
+        }
+    }
+
+    if (Array.isArray(detailedSummary.actionItems) && detailedSummary.actionItems.length > 0) {
+        return detailedSummary.actionItems
+            .filter((item: unknown) => typeof item === 'string' && item.trim())
+            .slice(0, 1)
+            .join(' ');
+    }
+
+    return undefined;
+};
+
+const normalizeSummaryData = (summaryJson: string | null | undefined) => {
+    const parsed = JSON.parse(summaryJson || '{}');
+    const detailedSummary = parsed.detailedSummary && typeof parsed.detailedSummary === 'object'
+        ? parsed.detailedSummary
+        : undefined;
+
+    const derivedOverview = deriveOverviewFromDetailedSummary(detailedSummary);
+    const normalizedDetailedSummary = detailedSummary
+        ? {
+            ...detailedSummary,
+            overview: derivedOverview,
+            actionItems: Array.isArray(detailedSummary.actionItems) ? detailedSummary.actionItems : [],
+            keyPoints: Array.isArray(detailedSummary.keyPoints) ? detailedSummary.keyPoints : [],
+            sections: Array.isArray(detailedSummary.sections) ? detailedSummary.sections : undefined,
+        }
+        : undefined;
+
+    const summary = isRenderableSummary(parsed.legacySummary)
+        ? parsed.legacySummary.trim()
+        : (derivedOverview || '');
+
+    return {
+        summary,
+        detailedSummary: normalizedDetailedSummary,
+    };
+};
+
 export class DatabaseManager {
     private static instance: DatabaseManager;
     private db: Database.Database | null = null;
@@ -1120,7 +1195,7 @@ export class DatabaseManager {
         const rows = stmt.all(limit) as any[];
 
         return rows.map(row => {
-            const summaryData = JSON.parse(row.summary_json || '{}');
+            const summaryData = normalizeSummaryData(row.summary_json);
 
             // Format duration string if needed, but we typically store ms
             // Let's recreate the 'duration' string "MM:SS" from duration_ms
@@ -1133,7 +1208,7 @@ export class DatabaseManager {
                 title: row.title,
                 date: row.created_at, // Use the stored ISO string
                 duration: durationStr,
-                summary: summaryData.legacySummary || '',
+                summary: summaryData.summary,
                 detailedSummary: summaryData.detailedSummary,
                 calendarEventId: row.calendar_event_id,
                 source: row.source as any,
@@ -1161,7 +1236,7 @@ export class DatabaseManager {
         const usageRows = usageStmt.all(id) as any[];
 
         // Reconstruct
-        const summaryData = JSON.parse(meetingRow.summary_json || '{}');
+        const summaryData = normalizeSummaryData(meetingRow.summary_json);
         const minutes = Math.floor(meetingRow.duration_ms / 60000);
         const seconds = Math.floor((meetingRow.duration_ms % 60000) / 1000);
         const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -1201,7 +1276,7 @@ export class DatabaseManager {
             title: meetingRow.title,
             date: meetingRow.created_at,
             duration: durationStr,
-            summary: summaryData.legacySummary || '',
+            summary: summaryData.summary,
             detailedSummary: summaryData.detailedSummary,
             calendarEventId: meetingRow.calendar_event_id,
             source: meetingRow.source,
@@ -1239,7 +1314,7 @@ export class DatabaseManager {
         return rows.map(row => {
             // Reconstruct minimal meeting object for processing
             // We mainly need ID to fetch transcripts later
-            const summaryData = JSON.parse(row.summary_json || '{}');
+            const summaryData = normalizeSummaryData(row.summary_json);
             const minutes = Math.floor(row.duration_ms / 60000);
             const seconds = Math.floor((row.duration_ms % 60000) / 1000);
             const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -1249,7 +1324,7 @@ export class DatabaseManager {
                 title: row.title,
                 date: row.created_at,
                 duration: durationStr,
-                summary: summaryData.legacySummary || '',
+                summary: summaryData.summary,
                 detailedSummary: summaryData.detailedSummary,
                 calendarEventId: row.calendar_event_id,
                 source: row.source,
