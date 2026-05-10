@@ -1,0 +1,530 @@
+# TeamSync AI — Architecture Diagrams (PPT Ready)
+
+> All diagrams are Mermaid-compatible for direct embedding into slides, Notion, or Markdown renderers.
+
+---
+
+## 1. High-Level System Architecture
+
+```mermaid
+graph TB
+    subgraph "Electron Desktop App"
+        UI["React Frontend<br/>(Overlay UI)"]
+        IPC["IPC Bridge<br/>(preload.ts)"]
+        Main["Main Process<br/>(main.ts)"]
+    end
+
+    subgraph "Core Engine Layer"
+        IM["IntelligenceManager<br/>Session Lifecycle"]
+        IE["IntelligenceEngine<br/>Action Pipeline"]
+        ST["SessionTracker<br/>Transcript + State"]
+        LH["LLMHelper<br/>Generation Router"]
+    end
+
+    subgraph "Intelligence Layer"
+        QU["QuestionUnderstanding V2"]
+        RDE["ResponseDepthEstimator"]
+        PE["PlanningEngine"]
+        BL["Brain Layer<br/>(6 Domain Brains)"]
+        CPE["ContextPriorityEngine"]
+        QE["Quality Evaluator"]
+        RJA["Resume×JD Analyzer"]
+    end
+
+    subgraph "LLM Infrastructure"
+        PR["ProviderRegistry<br/>Multi-Provider"]
+        MR["ModelRouter<br/>Fallback Chains"]
+        TB["TokenBudget<br/>9K Cap Enforcer"]
+        IC["IntentClassifier<br/>Regex + SLM"]
+    end
+
+    subgraph "RAG Pipeline"
+        RM["RAGManager"]
+        EP["EmbeddingPipeline"]
+        VS["VectorStore<br/>(SQLite + sqlite-vec)"]
+        LI["LiveRAGIndexer<br/>JIT Indexing"]
+    end
+
+    subgraph "Audio / Vision"
+        AC["SystemAudioCapture"]
+        MC["MicrophoneCapture"]
+        STT["STT Providers<br/>(Deepgram/OpenAI/Google)"]
+        SH["ScreenshotHelper"]
+        VP["VisionPipeline<br/>OCR + Tesseract"]
+        SSL["ScreenScanLLM"]
+    end
+
+    subgraph "Persistence"
+        DB["SQLite (better-sqlite3)"]
+        MP["MeetingPersistence"]
+        CM["CalendarManager"]
+    end
+
+    UI --> IPC --> Main
+    Main --> IM --> IE
+    IE --> ST
+    IE --> LH
+    IE --> QU & RDE & PE & BL & CPE & QE
+    BL --> RJA
+    LH --> PR --> MR
+    LH --> TB
+    LH --> IC
+    IE -.->|RAG context| RM
+    RM --> EP --> VS
+    RM --> LI
+    AC & MC --> STT --> ST
+    SH --> VP --> SSL
+    ST --> MP --> DB
+    CM --> DB
+```
+
+---
+
+## 2. Intelligence Pipeline — `runAction()` Flow
+
+```mermaid
+flowchart TD
+    A["runAction(params)"] --> B{"Request Dedupe<br/>& Ownership Check"}
+    B -->|Duplicate| Z1["Return cached"]
+    B -->|New| C["AbortController + Signal"]
+    C --> D["buildContext()<br/>ActionContextBuilder"]
+    D --> E["QuestionUnderstandingV2<br/>Category + Confidence"]
+    E --> F["ResponseDepthEstimator<br/>short / medium / deep"]
+    F --> G{"PlanningEngine V1"}
+    G --> H{"isPlanConfident?<br/>(≥ 0.45)"}
+    H -->|Yes| I["Inject reasoningPlan<br/>into Brain input"]
+    H -->|No| J["Skip plan<br/>(fallback-safe)"]
+    I & J --> K["BrainSelector.select()<br/>Route to Domain Brain"]
+    K --> L["Brain.execute()<br/>Generate instructions"]
+    L --> M["ContextPriorityEngine<br/>Rank + Order sources"]
+    M --> N["Merge brain instructions<br/>into PromptObject"]
+    N --> O["TokenBudgetEnforcer<br/>9K cap"]
+    O --> P["PromptValidator"]
+    P --> Q["LLM Streaming<br/>(Multi-Provider)"]
+    Q --> R["ActionOutputValidator"]
+    R --> S{"Quality<br/>Acceptable?"}
+    S -->|Repair| T["buildRepairInstruction()<br/>+ Retry (max 1)"]
+    T --> Q
+    S -->|Pass| U["ResponseQualityEvaluator<br/>(Observation-only logging)"]
+    U --> V["Emit action_result<br/>+ Stream to UI"]
+
+    style G fill:#4a9eff,color:#fff
+    style K fill:#ff6b6b,color:#fff
+    style Q fill:#51cf66,color:#fff
+    style U fill:#ffd43b,color:#333
+```
+
+---
+
+## 3. Brain Layer Architecture
+
+```mermaid
+graph TB
+    subgraph "BrainSelector"
+        BS["select(analysis, options)"]
+        BS -->|coding| CB
+        BS -->|system_design| SDB
+        BS -->|behavioral| BB
+        BS -->|resume_jd| RB
+        BS -->|screen_scan| SAB
+        BS -->|general/fallback| GB
+    end
+
+    subgraph "Domain Brains"
+        CB["CodingBrain<br/>Algorithm + Complexity"]
+        SDB["SystemDesignBrain<br/>Architecture + Tradeoffs"]
+        BB["BehavioralBrain<br/>STAR Pattern"]
+        RB["ResumeBrain<br/>JD Alignment"]
+        SAB["ScreenAnalysisBrain<br/>Vision Context"]
+        GB["GeneralBrain<br/>Direct Answer"]
+    end
+
+    subgraph "Brain Output"
+        BO["BrainOutput"]
+        BO --- I1["instructions[]<br/>Namespaced keys"]
+        BO --- I2["contextPriority<br/>Source rankings"]
+        BO --- I3["streamStrategy<br/>adaptive/standard"]
+        BO --- I4["reasoningPlan?<br/>Plan-aware emphasis"]
+    end
+
+    CB & SDB & BB & RB & SAB & GB --> BO
+
+    subgraph "BrainRegistry"
+        BR["Registry<br/>id → Brain mapping"]
+        BR -->|get(id)| CB & SDB & BB & RB & SAB & GB
+    end
+
+    style BS fill:#4a9eff,color:#fff
+    style BO fill:#51cf66,color:#fff
+```
+
+---
+
+## 4. RAG Pipeline — Retrieval-Augmented Generation
+
+```mermaid
+flowchart TD
+    subgraph "Ingestion (Post-Meeting)"
+        T1["Raw Transcript<br/>Segments"] --> PP["TranscriptPreprocessor<br/>Clean + Normalize"]
+        PP --> SC["SemanticChunker<br/>Boundary Detection"]
+        SC --> VS1["VectorStore.saveChunks()"]
+        VS1 --> EQ["EmbeddingQueue<br/>(SQLite)"]
+        EQ --> EP1["EmbeddingPipeline<br/>Background Processing"]
+    end
+
+    subgraph "Embedding Providers"
+        EP1 --> GP["Gemini Embeddings"]
+        EP1 --> OP["OpenAI Embeddings"]
+        EP1 --> LP["Local MiniLM<br/>(On-device Fallback)"]
+        GP & OP & LP --> VS2["VectorStore<br/>storeEmbedding()"]
+    end
+
+    subgraph "JIT RAG (Live Meeting)"
+        LS["Live Segments"] --> LI1["LiveRAGIndexer"]
+        LI1 -->|"5-segment batches"| SC2["SemanticChunker"]
+        SC2 --> EP2["EmbeddingPipeline"]
+        EP2 --> VS2
+    end
+
+    subgraph "Retrieval (Query Time)"
+        Q["User Query"] --> RR["RAGRetriever"]
+        RR -->|Scope Detection| SD{"meeting or global?"}
+        SD -->|meeting| MR1["Meeting-scoped search"]
+        SD -->|global| GR["Cross-meeting search"]
+        MR1 & GR --> VSW["vectorSearchWorker<br/>(Worker Thread)"]
+        VSW --> VS2
+        VSW --> RC["Ranked Chunks"]
+        RC --> BP["buildRAGPrompt()"]
+        BP --> LLM["LLM Streaming"]
+    end
+
+    style LI1 fill:#ffd43b,color:#333
+    style VSW fill:#4a9eff,color:#fff
+    style LP fill:#ff6b6b,color:#fff
+```
+
+---
+
+## 5. OCR & Screen Capture Pipeline
+
+```mermaid
+flowchart TD
+    A["User Trigger<br/>(Hotkey / Button)"] --> B["ScreenshotHelper"]
+    B --> C{"Multi-Display?"}
+    C -->|Single| D["captureWithDesktopCapturer()<br/>Electron API"]
+    C -->|Multi| E["getDisplaysIntersectingSelection()"]
+    E --> F["stitchImages()<br/>Sharp compositing"]
+    D & F --> G["PNG saved to disk"]
+    G --> H["VisionPipeline"]
+
+    H --> I["extractScreenTextHybrid()"]
+    I --> J["Resize > 1600px → 1280px"]
+    J --> K["Hash-based dedup<br/>(lastScreenHash)"]
+    K -->|No change| L["Return __NO_CHANGE__"]
+    K -->|Changed| M["Tesseract OCR<br/>(Primary)"]
+    M --> N{"isLowQualityScreenText?"}
+    N -->|Good| O["Return OCR text"]
+    N -->|Bad| P["Python OCR Worker<br/>(Fallback subprocess)"]
+    P --> O
+
+    O --> Q["ScreenScanLLM"]
+    Q --> R["detectScreenContentMode()"]
+    R --> S{"Content Type"}
+    S -->|coding| T["Code Analysis Prompt"]
+    S -->|interview| U["Interview Answer Prompt"]
+    S -->|slides| V["Slide Intelligence Prompt"]
+    S -->|document| W["Document Insights Prompt"]
+    S -->|ui_general| X["General Screen Analysis"]
+
+    T & U & V & W & X --> Y{"isGoodOCR?"}
+    Y -->|Yes| Z1["Text + Image → LLM"]
+    Y -->|No| Z2["Vision Fallback<br/>(Image only → LLM)"]
+
+    style H fill:#4a9eff,color:#fff
+    style R fill:#ff6b6b,color:#fff
+    style P fill:#ffd43b,color:#333
+```
+
+---
+
+## 6. Knowledge Orchestration V2
+
+```mermaid
+flowchart TD
+    A["RetrieveContextParams<br/>(analysis, session, intent)"] --> B["KnowledgeOrchestratorV2"]
+    B --> C{"Priority Mode?"}
+
+    C -->|Legacy (Phase 3a)| D["Delegate to<br/>buildContext()"]
+    D --> E["builtLayersToContextBundle()<br/>Adapter"]
+    E --> F["ContextBundle"]
+
+    C -->|Priority (Phase 3b)| G["Build Sources<br/>Independently"]
+    G --> H["1. Transcript Source"]
+    G --> I["2. Profile Intelligence"]
+    G --> J["3. RAG Memory"]
+    G --> K["4. Supplemental Context"]
+    G --> L["5. Mode Custom Context"]
+
+    H & I & J & K & L --> M["ContextPrioritizer<br/>prioritizeSources()"]
+    M --> N["packIntoBudget()<br/>Greedy token packing"]
+    N --> F
+
+    F --> O["PromptAssembler<br/>→ PromptObject"]
+
+    style B fill:#4a9eff,color:#fff
+    style M fill:#ff6b6b,color:#fff
+    style F fill:#51cf66,color:#fff
+```
+
+---
+
+## 7. Multi-Provider LLM Routing
+
+```mermaid
+flowchart LR
+    subgraph "ProviderRegistry"
+        GC["Gemini<br/>(Flash / Pro)"]
+        OC["OpenAI<br/>(GPT-5.4)"]
+        CC["Claude<br/>(Sonnet 4-6)"]
+        GQ["Groq<br/>(Llama 3.3 70B)"]
+        OL["Ollama<br/>(Local)"]
+        NT["Natively API"]
+        CP["Custom / cURL"]
+    end
+
+    MR["ModelRouter"] --> PRI["prioritizeProviders()"]
+    PRI -->|"1. Natively (if key)"| NT
+    PRI -->|"2. User's selected"| GC & OC & CC & GQ
+    PRI -->|"3. Remaining"| OL & CP
+
+    MR --> SF["streamWithFallback()"]
+    SF -->|"Try provider"| P1["Provider 1"]
+    P1 -->|Fail| P2["Provider 2"]
+    P2 -->|Fail| P3["Provider 3"]
+    P3 -->|"All fail"| RETRY["Exponential Backoff<br/>+ Rotate (3x)"]
+
+    subgraph "ModelVersionManager"
+        MVM["Tiered Models<br/>(Tier 1 / Tier 2)"]
+        MVM --> T1["tier1: Latest stable"]
+        MVM --> T2["tier2: Fallback model"]
+    end
+
+    subgraph "RateLimiter"
+        RL["Per-provider<br/>rate limiting"]
+    end
+
+    style MR fill:#4a9eff,color:#fff
+    style SF fill:#51cf66,color:#fff
+```
+
+---
+
+## 8. Real-Time Audio → Transcript Pipeline
+
+```mermaid
+flowchart TD
+    subgraph "Audio Capture"
+        SA["SystemAudioCapture<br/>(Interviewer voice)"]
+        MC["MicrophoneCapture<br/>(User voice)"]
+    end
+
+    subgraph "STT Providers (Failover Chain)"
+        D1["Deepgram Streaming"]
+        D2["OpenAI Streaming"]
+        D3["Google STT"]
+        D4["ElevenLabs STT"]
+        D5["Soniox STT"]
+        D6["NativelyPro STT"]
+    end
+
+    SA --> D1 & D2 & D3 & D4 & D5 & D6
+    MC --> D1 & D2 & D3 & D4 & D5 & D6
+
+    D1 & D2 & D3 & D4 & D5 & D6 --> TS["TranscriptSegment<br/>{speaker, text, timestamp, final}"]
+
+    TS --> ST["SessionTracker"]
+
+    ST --> DG1["Session ID Guard<br/>(cross-contamination)"]
+    DG1 --> DG2["Chronological Guard<br/>(stale events)"]
+    DG2 --> DG3["Duplicate Burst Guard<br/>(hash-based dedup)"]
+    DG3 --> CI["Context Items[]<br/>(120s rolling window)"]
+    DG3 --> FT["Full Transcript[]<br/>(epoch-compacted)"]
+
+    FT --> EC{"Length > 1800?"}
+    EC -->|Yes| ES["Epoch Summarization<br/>(RecapLLM)"]
+    ES --> EP["Epoch Summaries[]<br/>(max 5)"]
+    EP --> FT2["Trim oldest 500"]
+
+    CI --> RW["getRollingWindowTranscript()<br/>(1600 token cap)"]
+    FT --> FS["getFullSessionContext()<br/>(2800 token cap)"]
+
+    style ST fill:#4a9eff,color:#fff
+    style DG3 fill:#ff6b6b,color:#fff
+    style ES fill:#ffd43b,color:#333
+```
+
+---
+
+## 9. V1 Intelligence Architecture (New)
+
+```mermaid
+flowchart TD
+    subgraph "Phase 1: Planning Engine"
+        Q["Question"] --> PR["PlanningRules<br/>(Regex pattern matching)"]
+        PR --> RS["ReasoningSteps[]<br/>(algorithm, STAR, tradeoffs...)"]
+        RS --> RP["ReasoningPlan<br/>{steps, confidence, category}"]
+        RP --> CG{"Confidence ≥ 0.45?"}
+        CG -->|Yes| INJ["Inject into Brain"]
+        CG -->|No| SKIP["Fallback: no plan"]
+    end
+
+    subgraph "Phase 2: Quality Evaluator"
+        RESP["Generated Response"] --> QR["14 Domain QualityRules<br/>+ 9 Plan-Aware Checks"]
+        QR --> QS["QualityScore<br/>(0-100)"]
+        QS --> ACC{"isAcceptable?<br/>(≥ 60)"}
+        ACC -->|Yes| LOG1["✅ Log OK"]
+        ACC -->|No| LOG2["⚠️ Log Warning<br/>(observation only)"]
+    end
+
+    subgraph "Phase 3: Resume × JD"
+        RES["Resume Text"] --> RJA["ResumeJDAnalyzer"]
+        JD["Job Description"] --> RJA
+        RJA --> SK["Matched Skills"]
+        RJA --> GAP["Missing Skills"]
+        RJA --> PROJ["Recommended Projects"]
+        RJA --> EMPH["Suggested Emphasis"]
+    end
+
+    subgraph "Production Safety"
+        TRY["try/catch wrapper"]
+        TRY --> SAFE["Non-fatal: silent fallback"]
+        DET["Deterministic: pure functions"]
+        SYNC["Synchronous: zero latency"]
+    end
+
+    style RP fill:#4a9eff,color:#fff
+    style QS fill:#ffd43b,color:#333
+    style RJA fill:#51cf66,color:#fff
+    style SAFE fill:#ff6b6b,color:#fff
+```
+
+---
+
+## 10. Token Budget & Context Priority
+
+```mermaid
+flowchart TD
+    subgraph "Token Budget System (9K Cap)"
+        direction TB
+        P6["🔒 Priority 6: User Message<br/>(NEVER dropped)"]
+        P5["🔒 Priority 5: Latest Transcript<br/>(NEVER dropped)"]
+        P4["Priority 4: RAG Knowledge"]
+        P3["Priority 3: Custom Context"]
+        P2["Priority 2: Resume / JD"]
+        P1["Priority 1: Full History<br/>(dropped FIRST)"]
+    end
+
+    P1 --> TBE["TokenBudgetEnforcer"]
+    P2 --> TBE
+    P3 --> TBE
+    P4 --> TBE
+    P5 --> TBE
+    P6 --> TBE
+
+    TBE --> D{"Total > 9K?"}
+    D -->|Yes| DROP["Drop lowest priority<br/>ENTIRE BLOCK<br/>(never slice strings)"]
+    DROP --> D
+    D -->|No| PASS["✅ Within budget"]
+
+    subgraph "ContextPriorityEngine"
+        CPE["Per-Brain Rankings"]
+        CPE --> CR["Coding: transcript > supplemental > screen"]
+        CPE --> BR["Behavioral: profile > transcript > rag"]
+        CPE --> SR["System Design: transcript > rag > profile"]
+        CPE --> RR["Resume: profile > jd > transcript"]
+    end
+
+    style P6 fill:#51cf66,color:#fff
+    style P5 fill:#51cf66,color:#fff
+    style DROP fill:#ff6b6b,color:#fff
+```
+
+---
+
+## 11. Intent Classification — Three-Tier System
+
+```mermaid
+flowchart TD
+    Q["Interviewer's Last Turn"] --> T1["Tier 1: Regex Fast-Path<br/>< 1ms, high confidence"]
+
+    T1 -->|Match| R1["coding / system_design / behavioral<br/>clarification / follow_up / etc."]
+    T1 -->|No match| T2["Tier 2: Zero-Shot SLM<br/>(MobileBERT MNLI)<br/>~10-50ms"]
+
+    T2 -->|Confidence ≥ 0.35| R2["SLM Classification"]
+    T2 -->|Low confidence| T3["Tier 3: Context Heuristic<br/>Conversation flow analysis"]
+
+    T3 --> R3["general / follow_up"]
+
+    R1 & R2 & R3 --> AS["Answer Shape Guidance<br/>(injected into prompt)"]
+
+    subgraph "Answer Shapes"
+        AS --> S1["coding → Full working code"]
+        AS --> S2["system_design → Architecture + tradeoffs"]
+        AS --> S3["behavioral → STAR pattern"]
+        AS --> S4["clarification → 1-2 sentences"]
+    end
+
+    style T1 fill:#51cf66,color:#fff
+    style T2 fill:#4a9eff,color:#fff
+    style T3 fill:#ffd43b,color:#333
+```
+
+---
+
+## 12. End-to-End Data Flow — Complete Request Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant U as User/Interviewer
+    participant Audio as Audio Capture
+    participant STT as STT Provider
+    participant ST as SessionTracker
+    participant IE as IntelligenceEngine
+    participant QU as QuestionUnderstanding
+    participant PE as PlanningEngine
+    participant Brain as Domain Brain
+    participant CPE as ContextPriority
+    participant TB as TokenBudget
+    participant LLM as LLM Provider
+    participant QE as QualityEvaluator
+    participant UI as React UI
+
+    U->>Audio: Speaks
+    Audio->>STT: Audio stream
+    STT->>ST: TranscriptSegment (final)
+    ST->>ST: Dedup + Session guards
+
+    Note over IE: User triggers action (hotkey)
+    IE->>IE: Dedupe + AbortController
+    IE->>IE: buildContext()
+    IE->>QU: Classify question
+    QU-->>IE: {category, confidence}
+    IE->>IE: estimateResponseDepth()
+    IE->>PE: planReasoning(question, category, depth)
+    PE-->>IE: ReasoningPlan
+
+    IE->>Brain: execute(prompt, plan, analysis)
+    Brain-->>IE: BrainOutput {instructions, priority}
+
+    IE->>CPE: deriveContextPriority()
+    CPE-->>IE: Source rankings + ordering
+
+    IE->>TB: enforceTokenBudget(9K)
+    IE->>LLM: Stream generation
+    LLM-->>UI: Token-by-token streaming
+
+    IE->>IE: Accumulate finalContent
+    IE->>QE: evaluateResponseQuality()
+    QE-->>IE: Score + issues (log only)
+    IE->>UI: action_result event
+```
