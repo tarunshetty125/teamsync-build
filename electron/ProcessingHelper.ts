@@ -3,6 +3,7 @@
 import { AppState } from "./main"
 import { LLMHelper } from "./LLMHelper"
 import { CredentialsManager } from "./services/CredentialsManager"
+import { GroqKeyManager } from "./services/GroqKeyManager"
 import { app } from "electron"
 // import dotenv from "dotenv" // Removed static import
 
@@ -67,6 +68,8 @@ export class ProcessingHelper {
     if (groqKey) {
       console.log("[ProcessingHelper] Loading stored Groq API Key from CredentialsManager");
       this.llmHelper.setGroqApiKey(groqKey);
+      // Also register in the key rotation pool
+      GroqKeyManager.getInstance().addKey(groqKey);
     }
 
     if (openaiKey) {

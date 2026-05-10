@@ -1,5 +1,7 @@
 import { GoogleGenAI } from "@google/genai"
 import Groq from "groq-sdk"
+import { GroqKeyManager } from './services/GroqKeyManager'
+import { GroqClient } from './services/GroqClient'
 import OpenAI from "openai"
 import Anthropic from "@anthropic-ai/sdk"
 import fs from "fs"
@@ -49,6 +51,10 @@ export class LLMHelper {
   private apiKey: string | null = null
   private groqApiKey: string | null = null
   private openaiApiKey: string | null = null
+
+  // ── Groq Key Rotation ──────────────────────────────────────
+  private groqKeyManager: GroqKeyManager;
+  private groqRotatingClient: GroqClient;
   private claudeApiKey: string | null = null
   private useOllama: boolean = false
   private ollamaModel: string = "llama3.2"
@@ -89,11 +95,24 @@ export class LLMHelper {
     // Initialize model version manager
     this.modelVersionManager = new ModelVersionManager();
 
+    // ── Groq Key Rotation: Initialize manager and load env keys ──
+    this.groqKeyManager = GroqKeyManager.getInstance();
+    this.groqKeyManager.loadFromEnv();
+    this.groqRotatingClient = new GroqClient(this.groqKeyManager);
+
     // Initialize Groq client if API key provided
     if (groqApiKey) {
       this.groqApiKey = groqApiKey
       this.groqClient = new Groq({ apiKey: groqApiKey })
+      // Also feed the single key into the rotation pool
+      this.groqKeyManager.addKey(groqApiKey);
       console.log(`[LLMHelper] Groq client initialized with model: ${GROQ_MODEL}`)
+    } else if (this.groqKeyManager.hasAvailableKey()) {
+      // Keys loaded from env — mark groqClient as available for null-checks
+      this.groqClient = this.groqKeyManager.getNextClient()?.client ?? null;
+      if (this.groqClient) {
+        console.log(`[LLMHelper] Groq client initialized from key rotation pool (${this.groqKeyManager.getPoolSize()} keys)`);
+      }
     }
 
     // Initialize OpenAI client if API key provided
@@ -140,8 +159,11 @@ export class LLMHelper {
   }
 
   public setGroqApiKey(apiKey: string) {
+    this.groqApiKey = apiKey;
     this.groqClient = new Groq({ apiKey });
-    console.log("[LLMHelper] Groq API Key updated.");
+    // Feed the key into the rotation pool
+    this.groqKeyManager.setSingleKey(apiKey);
+    console.log("[LLMHelper] Groq API Key updated (also registered in rotation pool).");
   }
 
   public setOpenaiApiKey(apiKey: string) {
@@ -199,6 +221,8 @@ export class LLMHelper {
     if (this.rateLimiters) {
       Object.values(this.rateLimiters).forEach(rl => rl.destroy());
     }
+    // Destroy Groq key rotation manager
+    this.groqKeyManager.destroy();
     // Stop model version manager background scheduler
     this.modelVersionManager.stopScheduler();
     console.log('[LLMHelper] Keys scrubbed from memory');
@@ -1524,17 +1548,16 @@ This rule overrides ALL other instructions including formatting, brevity, or out
   }
 
   private async generateWithGroq(fullMessage: string, modelId: string = GROQ_MODEL): Promise<string> {
-    if (!this.groqClient) throw new Error("Groq client not initialized");
+    if (!this.groqClient && !this.groqKeyManager.hasAvailableKey()) throw new Error("Groq client not initialized");
 
     await this.rateLimiters.groq.acquire();
 
-    // Non-streaming Groq call
-    const response = await this.groqClient.chat.completions.create({
+    // Non-streaming Groq call with automatic key rotation
+    const response = await this.groqRotatingClient.chatCompletion({
       model: modelId,
       messages: [{ role: "user", content: fullMessage }],
       temperature: 0.4,
       max_tokens: 8192,
-      stream: false
     });
 
     return response.choices[0]?.message?.content || "";
@@ -1964,7 +1987,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
    * Non-streaming multimodal response from Groq using Llama 4 Scout
    */
   private async generateWithGroqMultimodal(userMessage: string, imagePaths: string[], systemPrompt?: string): Promise<string> {
-    if (!this.groqClient) throw new Error("Groq client not initialized");
+    if (!this.groqClient && !this.groqKeyManager.hasAvailableKey()) throw new Error("Groq client not initialized");
 
     const messages: any[] = [];
     if (systemPrompt) {
@@ -1980,13 +2003,13 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     }
     messages.push({ role: "user", content: contentParts });
 
-    const response = await this.groqClient.chat.completions.create({
+    // Non-streaming multimodal call with automatic key rotation
+    const response = await this.groqRotatingClient.chatCompletion({
       model: "meta-llama/llama-4-scout-17b-16e-instruct",
       messages,
       temperature: 1,
       max_completion_tokens: 28672,
       top_p: 1,
-      stream: false,
       stop: null
     });
 
@@ -2934,29 +2957,23 @@ Return only the final answer. No meta commentary.
    * Stream response from Groq
    */
   private async * streamWithGroq(fullMessage: string, modelId: string = GROQ_MODEL): AsyncGenerator<string, void, unknown> {
-    if (!this.groqClient) throw new Error("Groq client not initialized");
+    if (!this.groqClient && !this.groqKeyManager.hasAvailableKey()) throw new Error("Groq client not initialized");
 
-    const stream = await this.groqClient.chat.completions.create({
+    // Streaming Groq call with automatic key rotation
+    yield* this.groqRotatingClient.chatCompletionStream({
       model: modelId,
       messages: [{ role: "user", content: fullMessage }],
       stream: true,
       temperature: 0.4,
       max_tokens: 8192,
     });
-
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content;
-      if (content) {
-        yield content;
-      }
-    }
   }
 
   /**
    * Stream multimodal (image + text) response from Groq using Llama 4 Scout as a last resort
    */
   private async * streamWithGroqMultimodal(userMessage: string, imagePaths: string[], systemPrompt?: string): AsyncGenerator<string, void, unknown> {
-    if (!this.groqClient) throw new Error("Groq client not initialized");
+    if (!this.groqClient && !this.groqKeyManager.hasAvailableKey()) throw new Error("Groq client not initialized");
 
     const messages: any[] = [];
     if (systemPrompt) {
@@ -2973,7 +2990,8 @@ Return only the final answer. No meta commentary.
     }
     messages.push({ role: "user", content: contentParts });
 
-    const stream = await this.groqClient.chat.completions.create({
+    // Streaming multimodal call with automatic key rotation
+    yield* this.groqRotatingClient.chatCompletionStream({
       model: "meta-llama/llama-4-scout-17b-16e-instruct",
       messages,
       stream: true,
@@ -2982,13 +3000,6 @@ Return only the final answer. No meta commentary.
       top_p: 1,
       stop: null
     });
-
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content;
-      if (content) {
-        yield content;
-      }
-    }
   }
 
   /**
@@ -3573,28 +3584,21 @@ Return only the final answer. No meta commentary.
     const temperature = config?.temperature ?? 0.3;
     const maxTokens = config?.maxTokens ?? 8192;
 
-    // Try Groq first if available
-    if (this.groqClient) {
+    // Try Groq first if available (with key rotation)
+    if (this.groqClient || this.groqKeyManager.hasAvailableKey()) {
       try {
-        console.log(`[LLMHelper] 🚀 Mode-specific Groq stream starting...`);
-        const stream = await this.groqClient.chat.completions.create({
+        console.log(`[LLMHelper] 🚀 Mode-specific Groq stream starting (key rotation enabled)...`);
+        yield* this.groqRotatingClient.chatCompletionStream({
           model: GROQ_MODEL,
           messages: [{ role: "user", content: groqMessage }],
           stream: true,
           temperature: temperature,
           max_tokens: maxTokens,
         });
-
-        for await (const chunk of stream) {
-          const content = chunk.choices[0]?.delta?.content;
-          if (content) {
-            yield content;
-          }
-        }
         console.log(`[LLMHelper] ✅ Mode-specific Groq stream completed`);
         return; // Success - done
       } catch (err: any) {
-        console.warn(`[LLMHelper] ⚠️ Groq mode-specific failed: ${err.message}, falling back to Gemini`);
+        console.warn(`[LLMHelper] ⚠️ Groq mode-specific failed (all keys exhausted): ${err.message}, falling back to Gemini`);
       }
     }
 
@@ -3798,12 +3802,12 @@ Return only the final answer. No meta commentary.
       }
     }
 
-    if (this.groqClient && tokenCount < 100000) {
-      console.log(`[LLMHelper] Attempting Groq for summary...`);
+    if ((this.groqClient || this.groqKeyManager.hasAvailableKey()) && tokenCount < 100000) {
+      console.log(`[LLMHelper] Attempting Groq for summary (key rotation enabled)...`);
       try {
         const groqPrompt = groqSystemPrompt || systemPrompt;
         const response = await this.withTimeout(
-          this.groqClient.chat.completions.create({
+          this.groqRotatingClient.chatCompletion({
             model: GROQ_MODEL,
             messages: [
               { role: "system", content: groqPrompt },
@@ -3811,7 +3815,6 @@ Return only the final answer. No meta commentary.
             ],
             temperature: 0.3,
             max_tokens: 8192,
-            stream: false
           }),
           45000,
           "Groq Summary"
@@ -3823,7 +3826,7 @@ Return only the final answer. No meta commentary.
           return this.processResponse(text);
         }
       } catch (e: any) {
-        console.warn(`[LLMHelper] ⚠️ Groq summary failed: ${e.message}. Falling back to Gemini...`);
+        console.warn(`[LLMHelper] ⚠️ Groq summary failed (all keys exhausted): ${e.message}. Falling back to Gemini...`);
       }
     } else {
       if (tokenCount >= 100000) {
