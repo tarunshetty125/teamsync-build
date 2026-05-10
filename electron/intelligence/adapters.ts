@@ -9,11 +9,10 @@
 // As legacy code is gradually replaced, these adapters will shrink and eventually be removed.
 
 import type { IntentResult, ConversationIntent } from '../llm/IntentClassifier';
-import type { QuestionCategory, QuestionDepth, ClassificationSource } from './types';
-import type { ResponseDepth } from './types';
-import type { QuestionAnalysis, createDefaultAnalysis } from './QuestionAnalysis';
+import type { QuestionCategory, QuestionDepth, ResponseDepth } from './types';
+import type { QuestionAnalysis } from './QuestionAnalysis';
 import type { ContextBundle, ContextSource } from './ContextBundle';
-import type { BuiltContextLayers, ProfilePolicy } from '../ActionContextBuilder';
+import type { BuiltContextLayers } from '../ActionContextBuilder';
 
 // ---------------------------------------------------------------------------
 // Intent → QuestionCategory mapping

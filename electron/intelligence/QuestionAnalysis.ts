@@ -1,6 +1,6 @@
 // electron/intelligence/QuestionAnalysis.ts
 // Output type of the QuestionUnderstandingEngine.
-// Consumed by: KnowledgeOrchestrator, ReasoningPlanner, BrainSelector.
+// Consumed by: KnowledgeOrchestrator, PlanningEngine, BrainSelector.
 //
 // This type UNIFIES the two previously disconnected classifiers:
 //   1. IntentClassifier.classifyIntent() → IntentResult (used only in runWhatShouldISay)

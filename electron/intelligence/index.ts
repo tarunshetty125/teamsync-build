@@ -67,6 +67,21 @@ export {
     getPriorityTable,
 } from './ContextPrioritizer';
 
+// ContextPriorityEngine (live prompt prioritization)
+export type {
+    ContextPrioritySource,
+    ContextPriorityLevel,
+    ContextPriorityResult,
+    ContextPriorityInput,
+    PromptContextOrderKey,
+} from './ContextPriorityEngine';
+export {
+    deriveContextPriority,
+    getOrderedContextSources,
+    getPromptContextOrder,
+    shouldExcludePromptSection,
+} from './ContextPriorityEngine';
+
 // KnowledgeOrchestratorV2 (Phase 3)
 export { KnowledgeOrchestratorV2 } from './KnowledgeOrchestratorV2';
 export type { KnowledgeOrchestratorLike, RetrieveContextParams } from './KnowledgeOrchestratorV2';
@@ -82,7 +97,31 @@ export {
     builtLayersToContextBundle,
 } from './adapters';
 
+// Planning (Brain Planning V1)
+export type { PlanStep, ReasoningPlan, PlanningInput } from './planning';
+export {
+    planReasoning,
+    isPlanConfident,
+    planContains,
+    planContainsAny,
+    planContainsAll,
+    createFallbackPlan,
+} from './planning';
+
+// Evaluation (Response Quality V1)
+export type { QualityIssue, QualityRule, QualityEvaluationInput, QualityEvaluationResult } from './evaluation';
+export {
+    evaluateResponseQuality,
+    isQualityAcceptable,
+    getMostCriticalIssue,
+    QUALITY_RULES,
+    getRulesForBrain,
+} from './evaluation';
+
+// Resume × JD Intelligence (V2)
+export type { FitSignal, ResumeJDAnalysis, ResumeJDInput } from './resume';
+export { analyzeResumeJDFit, isAnalysisUsable } from './resume';
+
 // Metrics & Observability (Phase 6)
 export type { BrainExecutionMetric, PipelineLatencyMetric } from './metrics';
 export { MetricCollector, getDefaultMetricCollector } from './metrics';
-

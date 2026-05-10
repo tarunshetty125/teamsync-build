@@ -19,7 +19,9 @@ import type { BrainId, StreamStrategy, SessionMode } from '../types';
 import type { QuestionAnalysis } from '../QuestionAnalysis';
 import type { ContextBundle } from '../ContextBundle';
 import type { ResponseStrategy } from '../ResponseStrategy';
+import type { ContextPriorityResult } from '../ContextPriorityEngine';
 import type { PromptInstruction } from '../../ActionContextBuilder';
+import type { ReasoningPlan } from '../planning/ReasoningPlan';
 
 // ---------------------------------------------------------------------------
 // BrainInput — everything a Brain needs to produce its output
@@ -41,6 +43,16 @@ export interface BrainInput {
 
     /** Current session mode (user-selected) */
     sessionMode: SessionMode;
+
+    /** Deterministic context priority result for prompt emphasis and ordering */
+    contextPriority?: ContextPriorityResult;
+
+    /**
+     * Deterministic reasoning plan from the PlanningEngine.
+     * If present, the Brain can adapt its instructions based on the planned steps.
+     * If absent, the Brain falls back to its default behavior (zero regression).
+     */
+    reasoningPlan?: ReasoningPlan;
 
     /** Previous assistant answer — for follow-up/refinement continuity */
     previousAnswer?: string;

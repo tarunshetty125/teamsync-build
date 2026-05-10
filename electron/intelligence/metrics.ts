@@ -51,6 +51,9 @@ export interface PipelineLatencyMetric {
     /** Brain selection + execution time */
     brainMs: number;
 
+    /** Planning engine time (optional — present when planning is wired) */
+    planningMs?: number;
+
     /** Token budget enforcement time */
     budgetEnforceMs: number;
 

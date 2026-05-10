@@ -23,7 +23,8 @@ export class BrainRegistry {
 
     /**
      * Register a Brain implementation.
-     * @throws if a brain with the same ID is already registered
+     * If a brain with the same ID is already registered, it will be overwritten
+     * with a warning. This is intentional for hot-reload safety.
      */
     register(brain: Brain): void {
         if (this.brains.has(brain.id)) {

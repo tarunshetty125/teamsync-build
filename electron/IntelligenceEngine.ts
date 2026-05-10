@@ -8,7 +8,9 @@ import { SessionTracker, TranscriptSegment, SuggestionTrigger, ContextItem } fro
 import {
     type ActionRagContext,
     buildContext,
+    getQuestionResponseProfile,
     serializePromptObject,
+    type PromptInstruction,
     type PromptObject,
     type ProfilePreference,
     type UnifiedActionIntent,
@@ -32,9 +34,25 @@ import type { ConversationIntent, ScreenContentMode } from './llm';
 
 // Brain layer (Phase 4/5) — domain-specific intelligence
 import { createBrainLayer, type BrainLayer } from './intelligence/brains/createBrainLayer';
-import { intentResultToQuestionAnalysis, questionDepthToResponseDepth } from './intelligence/adapters';
-import { defaultStrategy } from './intelligence/ResponseStrategy';
+import { builtLayersToContextBundle, intentResultToQuestionAnalysis, profileToCategory } from './intelligence/adapters';
+import { createStrategy, type ResponseStrategy } from './intelligence/ResponseStrategy';
 import type { BrainOutput } from './intelligence/brains/Brain';
+import type { QuestionAnalysis } from './intelligence/QuestionAnalysis';
+import type { QuestionCategory } from './intelligence/types';
+import { deriveQuestionUnderstandingV2 } from './intelligence/QuestionUnderstandingV2';
+import { estimateResponseDepth } from './intelligence/ResponseDepthEstimator';
+import {
+    deriveContextPriority,
+    getPromptContextOrder,
+    shouldExcludePromptSection,
+    type ContextPriorityLevel,
+    type ContextPriorityResult,
+    type ContextPrioritySource,
+} from './intelligence/ContextPriorityEngine';
+import { planReasoning, isPlanConfident } from './intelligence/planning';
+import type { ReasoningPlan } from './intelligence/planning';
+import { evaluateResponseQuality, isQualityAcceptable, getMostCriticalIssue } from './intelligence/evaluation';
+import type { QualityEvaluationResult } from './intelligence/evaluation';
 
 type UserControlledMode = Extract<ConversationIntent, 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design'>;
 
@@ -123,6 +141,80 @@ function buildUserControlledModeContext(mode: UserControlledMode): string {
         case 'general':
         default:
             return 'MODE: general\nAnswer directly and concisely without changing task type.';
+    }
+}
+
+function responseDepthToQuestionDepth(depth: 'short' | 'medium' | 'deep'): 'shallow' | 'moderate' | 'deep' {
+    switch (depth) {
+        case 'short':
+            return 'shallow';
+        case 'deep':
+            return 'deep';
+        case 'medium':
+        default:
+            return 'moderate';
+    }
+}
+
+function namespaceBrainInstructions(brainId: string, instructions: PromptInstruction[]): PromptInstruction[] {
+    return instructions.map((instruction) => ({
+        ...instruction,
+        key: `brain:${brainId}:${instruction.key}`,
+    }));
+}
+
+function formatContextPriorityLabel(source: ContextPrioritySource): string {
+    switch (source) {
+        case 'session_history':
+            return 'SESSION HISTORY';
+        case 'previous_response':
+            return 'PREVIOUS RESPONSE';
+        default:
+            return source.replace(/_/g, ' ').toUpperCase();
+    }
+}
+
+function buildContextPriorityInstruction(priorityResult: ContextPriorityResult): PromptInstruction {
+    const levels: ContextPriorityLevel[] = ['critical', 'high', 'medium', 'low'];
+    const lines = levels
+        .map((level) => {
+            const sources = (Object.entries(priorityResult.priorities) as Array<[ContextPrioritySource, ContextPriorityLevel]>)
+                .filter(([, candidateLevel]) => candidateLevel === level)
+                .map(([source]) => formatContextPriorityLabel(source));
+
+            return sources.length > 0
+                ? `${level.toUpperCase()}: ${sources.join(', ')}`
+                : '';
+        })
+        .filter(Boolean);
+
+    if (priorityResult.excludedSources.length > 0) {
+        lines.push(`IGNORE: ${priorityResult.excludedSources.map((source) => formatContextPriorityLabel(source)).join(', ')}`);
+    }
+
+    return {
+        key: 'context_priority_engine',
+        title: 'CONTEXT PRIORITY ENGINE',
+        content: lines.join('\n'),
+    };
+}
+
+function categoryToConversationIntent(category: QuestionCategory): ConversationIntent {
+    switch (category) {
+        case 'coding':
+            return 'coding';
+        case 'system_design':
+            return 'system_design';
+        case 'behavioral':
+        case 'resume_jd':
+            return 'behavioral';
+        case 'follow_up':
+            return 'follow_up';
+        case 'clarification':
+            return 'clarification';
+        case 'general':
+        default:
+            return 'general';
     }
 }
 
@@ -243,6 +335,106 @@ export class IntelligenceEngine extends EventEmitter {
         return this.currentClientRequestId;
     }
 
+    private buildBrainAnalysis(params: {
+        intent: UnifiedActionIntent;
+        mode: UserControlledMode;
+        question: string;
+    }): QuestionAnalysis {
+        const semanticResult = deriveQuestionUnderstandingV2({
+            question: params.question,
+            intent: params.intent,
+            mode: params.mode,
+        });
+        const modeIntent = getIntentResultForMode(params.mode);
+        const baseAnalysis = intentResultToQuestionAnalysis(modeIntent);
+        const responseProfile = getQuestionResponseProfile(params.question, params.mode, params.intent);
+        const legacyCategory = profileToCategory(responseProfile);
+        const category = semanticResult.category;
+        const depthEstimate = estimateResponseDepth({
+            question: params.question,
+            category,
+            sessionMode: params.mode,
+            intent: params.intent,
+            questionUnderstandingResult: semanticResult,
+        });
+        const rawIntent: ConversationIntent = semanticResult.fallbackUsed
+            ? (baseAnalysis.rawIntent as ConversationIntent)
+            : categoryToConversationIntent(category);
+        const answerShape = getAnswerShapeGuidance(rawIntent);
+
+        return {
+            ...baseAnalysis,
+            category,
+            confidence: semanticResult.confidence,
+            estimatedDepth: responseDepthToQuestionDepth(depthEstimate.depth),
+            isFollowUp: category === 'follow_up' || baseAnalysis.isFollowUp,
+            referencesContext: category === 'follow_up' || baseAnalysis.referencesContext,
+            answerShape,
+            rawIntent,
+            classificationSource: params.mode !== 'general'
+                ? 'user_override'
+                : semanticResult.fallbackUsed
+                    ? (legacyCategory === category ? 'context_heuristic' : baseAnalysis.classificationSource)
+                    : 'regex',
+        };
+    }
+
+    private buildBrainStrategy(params: {
+        intent: UnifiedActionIntent;
+        mode: UserControlledMode;
+        question: string;
+        analysis: QuestionAnalysis;
+    }): ResponseStrategy {
+        const questionUnderstandingResult = deriveQuestionUnderstandingV2({
+            question: params.question,
+            intent: params.intent,
+            mode: params.mode,
+        });
+        const estimate = estimateResponseDepth({
+            question: params.question,
+            category: params.analysis.category,
+            sessionMode: params.mode,
+            intent: params.intent,
+            questionUnderstandingResult,
+        });
+
+        const strategy = createStrategy(estimate.depth);
+
+        switch (params.analysis.category) {
+            case 'coding':
+                return createStrategy(estimate.depth, {
+                    tone: 'technical',
+                    includeComplexity: true,
+                    bulletRange: estimate.depth === 'short' ? [1, 3] : estimate.depth === 'deep' ? [4, 6] : [2, 4],
+                    maxWords: estimate.depth === 'short' ? 140 : estimate.depth === 'deep' ? 420 : 240,
+                });
+            case 'behavioral':
+                return createStrategy(estimate.depth, {
+                    tone: 'conversational',
+                    bulletRange: estimate.depth === 'short' ? [1, 2] : estimate.depth === 'deep' ? [3, 5] : [2, 3],
+                    maxWords: estimate.depth === 'short' ? 120 : estimate.depth === 'deep' ? 320 : 220,
+                });
+            case 'resume_jd':
+                return createStrategy(estimate.depth, {
+                    tone: 'conversational',
+                    bulletRange: estimate.depth === 'short' ? [1, 2] : estimate.depth === 'deep' ? [3, 5] : [2, 3],
+                    maxWords: estimate.depth === 'short' ? 130 : estimate.depth === 'deep' ? 320 : 220,
+                });
+            case 'system_design':
+                return createStrategy(estimate.depth, {
+                    tone: 'technical',
+                    bulletRange: estimate.depth === 'short' ? [2, 3] : estimate.depth === 'deep' ? [4, 6] : [3, 4],
+                    maxWords: estimate.depth === 'short' ? 180 : estimate.depth === 'deep' ? 500 : 300,
+                    includeComplexity: estimate.depth === 'deep',
+                });
+            case 'general':
+            case 'clarification':
+            case 'follow_up':
+            default:
+                return strategy;
+        }
+    }
+
     async runAction(params: {
         intent: UnifiedActionIntent;
         message?: string;
@@ -273,25 +465,27 @@ export class IntelligenceEngine extends EventEmitter {
             activeRequestId,
             getEngineModeForAction(params.intent),
             async (signal, generationId) => {
-                const builtContext = await buildContext({
-                    session: this.session,
-                    intent: params.intent,
-                    mode: sessionMode,
-                    profile: this.llmHelper.getKnowledgeOrchestrator?.() ?? null,
-                    message: params.message,
-                    imagePaths: params.imagePaths,
-                    profilePreference: params.profilePreference,
-                    additionalContext: params.additionalContext,
-                    rag: params.rag,
-                    includeModeCustomContext: this.llmHelper.getCustomNotesEnabled?.() ?? true,
-                    screenScanMode: params.screenScanMode,
-                });
-                const contextLayers = builtContext.layers;
                 const isOwnedRequest = () => this.isOwnedActionRequest(activeRequestId, generationId, signal, sessionIdSnapshot);
                 let inputTokens = 0;
                 let brainOutput: BrainOutput | null = null;
+                let contextLayers: Awaited<ReturnType<typeof buildContext>>['layers'] | null = null;
 
                 try {
+                    const builtContext = await buildContext({
+                        session: this.session,
+                        intent: params.intent,
+                        mode: sessionMode,
+                        profile: this.llmHelper.getKnowledgeOrchestrator?.() ?? null,
+                        message: params.message,
+                        imagePaths: params.imagePaths,
+                        profilePreference: params.profilePreference,
+                        additionalContext: params.additionalContext,
+                        rag: params.rag,
+                        includeModeCustomContext: this.llmHelper.getCustomNotesEnabled?.() ?? true,
+                        screenScanMode: params.screenScanMode,
+                    });
+                    contextLayers = builtContext.layers;
+
                     if (!isOwnedRequest()) {
                         return null;
                     }
@@ -307,36 +501,101 @@ export class IntelligenceEngine extends EventEmitter {
                     // The existing ActionContextBuilder instructions remain untouched.
                     if (this.useBrainLayer) {
                         try {
-                            const intentResult = { intent: sessionMode as ConversationIntent, confidence: 1, answerShape: '' };
-                            const analysis = intentResultToQuestionAnalysis(intentResult);
+                            const analysis = this.buildBrainAnalysis({
+                                intent: params.intent,
+                                mode: sessionMode,
+                                question: contextLayers.promptObject.question,
+                            });
+                            const strategy = this.buildBrainStrategy({
+                                intent: params.intent,
+                                mode: sessionMode,
+                                question: contextLayers.promptObject.question,
+                                analysis,
+                            });
                             const brain = this.brainLayer.selector.select(analysis, {
                                 isScreenScan: params.intent === 'screen_scan',
                                 hasImages: !!(params.imagePaths && params.imagePaths.length > 0),
                             });
+                            const contextPriority = deriveContextPriority({
+                                question: contextLayers.promptObject.question,
+                                questionCategory: analysis.category,
+                                responseDepth: strategy.depth,
+                                brainId: brain.id,
+                                intent: params.intent,
+                                sessionMode,
+                                hasScreenContext: params.intent === 'screen_scan'
+                                    || Boolean(params.imagePaths?.length)
+                                    || /screen mode:|screen ocr:|ocr/i.test(params.additionalContext ?? ''),
+                            });
+
+                            // ──── Planning Engine (V1) ────
+                            // Generate a deterministic reasoning plan BEFORE brain execution.
+                            // The plan tells the Brain which reasoning steps the answer should cover.
+                            // Safe: wrapped in try/catch, confidence-gated, < 1ms overhead.
+                            let reasoningPlan: ReasoningPlan | undefined;
+                            try {
+                                const questionUnderstandingResult = deriveQuestionUnderstandingV2({
+                                    question: contextLayers.promptObject.question,
+                                    intent: params.intent,
+                                    mode: sessionMode,
+                                });
+                                const depthEstimate = estimateResponseDepth({
+                                    question: contextLayers.promptObject.question,
+                                    category: analysis.category,
+                                    sessionMode,
+                                    intent: params.intent,
+                                    questionUnderstandingResult,
+                                });
+                                const plan = planReasoning({
+                                    question: contextLayers.promptObject.question,
+                                    category: analysis.category,
+                                    brainId: brain.id,
+                                    depthEstimate,
+                                    questionUnderstanding: questionUnderstandingResult,
+                                });
+                                if (isPlanConfident(plan)) {
+                                    reasoningPlan = plan;
+                                    console.log(`[PlanningEngine] ${brain.id}: plan=${plan.steps.join(',')} confidence=${plan.confidence} verbosity=${plan.estimatedVerbosity}`);
+                                } else {
+                                    console.log(`[PlanningEngine] ${brain.id}: low confidence (${plan.confidence}), skipping plan`);
+                                }
+                            } catch (planError: any) {
+                                // Planning failure is non-fatal — Brain uses default behavior
+                                console.warn('[PlanningEngine] Planning failed (non-fatal):', planError?.message);
+                                reasoningPlan = undefined;
+                            }
+                            // ──── End Planning Engine ────
 
                             brainOutput = brain.execute({
                                 analysis,
-                                context: {
-                                    sources: [],
-                                    totalTokens: 0,
-                                    profileApplied: contextLayers.profileApplied,
-                                    resolvedProfilePolicy: contextLayers.profilePolicy,
-                                    directResponse: contextLayers.directResponse,
-                                },
-                                strategy: defaultStrategy(questionDepthToResponseDepth(analysis.estimatedDepth)),
+                                context: builtLayersToContextBundle(contextLayers),
+                                strategy,
                                 sessionMode,
+                                contextPriority,
+                                reasoningPlan,
                                 previousAnswer: this.session.getLastAssistantMessage() ?? undefined,
-                                userMessage: params.message,
+                                userMessage: contextLayers.promptObject.question,
                                 imagePaths: params.imagePaths,
                             });
 
+                            contextLayers.promptObject.contextOrder = getPromptContextOrder(contextPriority);
+                            if (shouldExcludePromptSection(contextPriority, 'rag')) {
+                                contextLayers.promptObject.rag = null;
+                            }
+
+                            contextLayers.promptObject.instructions = [
+                                buildContextPriorityInstruction(contextPriority),
+                                ...contextLayers.promptObject.instructions,
+                            ];
+
                             // Prepend brain instructions to the prompt object
                             if (brainOutput.instructions.length > 0) {
+                                const namespacedInstructions = namespaceBrainInstructions(brain.id, brainOutput.instructions);
                                 contextLayers.promptObject.instructions = [
-                                    ...brainOutput.instructions,
+                                    ...namespacedInstructions,
                                     ...contextLayers.promptObject.instructions,
                                 ];
-                                console.log(`[IntelligenceEngine] Brain '${brain.id}' injected ${brainOutput.instructions.length} instructions (stream: ${brainOutput.streamStrategy})`);
+                                console.log(`[IntelligenceEngine] Brain '${brain.id}' injected ${namespacedInstructions.length} instructions (stream: ${brainOutput.streamStrategy})`);
                             }
                         } catch (brainError: any) {
                             // Brain layer failure is non-fatal — legacy path continues
@@ -449,6 +708,31 @@ export class IntelligenceEngine extends EventEmitter {
                     if (!isFailureResponseText(finalContent)) {
                         this.actionResponseCache.set(budgeted.prompt, sessionIdSnapshot, finalContent);
                     }
+
+                    // ──── Response Quality Evaluation (V1) ────
+                    // Post-generation quality check. Observation-only — does NOT modify
+                    // or block the response. Logs quality score for monitoring.
+                    try {
+                        const qualityResult = evaluateResponseQuality({
+                            question: budgeted.prompt.question,
+                            brainId: brainOutput?.instructions?.[0]?.key?.split(':')?.[1] ?? 'general',
+                            category: analysis?.category ?? 'general',
+                            responseDepth: strategy?.depth ?? 'medium',
+                            generatedResponse: finalContent,
+                            reasoningPlan: reasoningPlan,
+                        });
+                        if (!isQualityAcceptable(qualityResult)) {
+                            const worst = getMostCriticalIssue(qualityResult);
+                            console.warn(`[QualityEvaluator] Below threshold: score=${qualityResult.score} issue=${worst?.ruleId ?? 'unknown'} (${worst?.description ?? ''})`);
+                        } else {
+                            console.log(`[QualityEvaluator] OK: score=${qualityResult.score} rules=${qualityResult.rulesChecked}/${qualityResult.rulesPassed}`);
+                        }
+                    } catch (qualityError: any) {
+                        // Quality evaluation failure is non-fatal
+                        console.warn('[QualityEvaluator] Evaluation failed (non-fatal):', qualityError?.message);
+                    }
+                    // ──── End Response Quality Evaluation ────
+
                     await this.emitBufferedActionContent(
                         signal,
                         activeRequestId,
@@ -512,8 +796,8 @@ export class IntelligenceEngine extends EventEmitter {
                         retryCount: 0,
                         fallbackUsed: true,
                         profileUsed: false,
-                        profilePolicy: contextLayers.profilePolicy,
-                        transcriptStrategy: contextLayers.transcriptStrategy,
+                        profilePolicy: contextLayers?.profilePolicy ?? 'never',
+                        transcriptStrategy: contextLayers?.transcriptStrategy ?? 'rolling_window',
                         requestId: activeRequestId,
                     });
                     this.safeEmitAction(signal, activeRequestId, generationId, 'action_result', {

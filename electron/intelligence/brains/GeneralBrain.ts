@@ -5,6 +5,7 @@
 import type { BrainId } from '../types';
 import type { Brain, BrainInput, BrainOutput } from './Brain';
 import type { PromptInstruction } from '../../ActionContextBuilder';
+import { planContains, isPlanConfident } from '../planning';
 
 export class GeneralBrain implements Brain {
     readonly id: BrainId = 'general';
@@ -14,6 +15,7 @@ export class GeneralBrain implements Brain {
     execute(input: BrainInput): BrainOutput {
         const { analysis, strategy, context } = input;
         const instructions: PromptInstruction[] = [];
+        const previousPriority = input.contextPriority?.priorities.previous_response;
 
         // Core reasoning directive
         instructions.push({
@@ -59,6 +61,31 @@ export class GeneralBrain implements Brain {
             content: depthRules.join('\n'),
         });
 
+        // Plan-aware reasoning emphasis
+        const plan = input.reasoningPlan;
+        if (plan && isPlanConfident(plan)) {
+            const planHints: string[] = [];
+            if (planContains(plan, 'quick_definition')) {
+                planHints.push('Start with a clear, one-sentence definition.');
+            }
+            if (planContains(plan, 'comparison')) {
+                planHints.push('Structure the answer as a direct comparison with clear differentiators.');
+            }
+            if (planContains(plan, 'example')) {
+                planHints.push('Include a concrete, practical example.');
+            }
+            if (planContains(plan, 'tradeoffs')) {
+                planHints.push('Call out tradeoffs or when to prefer one option over another.');
+            }
+            if (planHints.length > 0) {
+                instructions.push({
+                    key: 'plan_emphasis',
+                    title: 'PLAN EMPHASIS',
+                    content: planHints.join('\n'),
+                });
+            }
+        }
+
         // Context priority rules
         if (context.profileApplied) {
             instructions.push({
@@ -66,6 +93,9 @@ export class GeneralBrain implements Brain {
                 title: 'CONTEXT PRIORITY',
                 content: [
                     'Answer the latest question first.',
+                    previousPriority === 'high' || previousPriority === 'critical'
+                        ? 'Use the previous response only to maintain continuity when it directly helps the latest question.'
+                        : 'Prefer the latest question over older assistant phrasing.',
                     'Use PROFILE INTELLIGENCE only when directly relevant.',
                     'Ignore unrelated resume, JD, salary, or negotiation details.',
                     'Prefer the freshest transcript turns over older context.',

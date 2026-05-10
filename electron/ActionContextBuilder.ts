@@ -110,6 +110,8 @@ export interface PromptContextSection {
     approxTokens: number;
 }
 
+export type PromptContextOrderKey = 'rag' | 'supplemental' | 'profile' | 'transcript';
+
 export interface PromptObject {
     mode: SessionActionMode;
     intent: UnifiedActionIntent;
@@ -119,6 +121,7 @@ export interface PromptObject {
     supplemental: PromptContextSection | null;
     rag: PromptContextSection | null;
     instructions: PromptInstruction[];
+    contextOrder?: PromptContextOrderKey[];
 }
 
 export interface BuiltContextLayers {
@@ -368,7 +371,7 @@ export function buildBaseContext(session: SessionTracker): BaseContextLayer {
     };
 }
 
-function getQuestionResponseProfile(
+export function getQuestionResponseProfile(
     question: string,
     mode: SessionActionMode,
     intent: UnifiedActionIntent
@@ -1099,25 +1102,31 @@ export async function buildContext(args: BuildContextArgs): Promise<BuiltActionC
 }
 
 export function serializePromptObject(promptObject: PromptObject): SerializedPrompt {
+    const defaultContextOrder: PromptContextOrderKey[] = ['rag', 'supplemental', 'profile', 'transcript'];
+    const orderedKeys = [...new Set([...(promptObject.contextOrder ?? []), ...defaultContextOrder])]
+        .filter((key): key is PromptContextOrderKey => defaultContextOrder.includes(key as PromptContextOrderKey));
+    const sectionMap: Record<PromptContextOrderKey, string> = {
+        rag: promptObject.rag?.content?.trim()
+            ? `[${promptObject.rag.title}]\n${promptObject.rag.content.trim()}`
+            : '',
+        supplemental: promptObject.supplemental?.content?.trim()
+            ? `[${promptObject.supplemental.title}]\n${promptObject.supplemental.content.trim()}`
+            : '',
+        profile: promptObject.profile?.context?.trim()
+            ? `[${promptObject.profile.title}]\n${promptObject.profile.context.trim()}`
+            : '',
+        transcript: promptObject.transcript.content.trim()
+            ? `[${promptObject.transcript.title}]\n${promptObject.transcript.content.trim()}`
+            : '',
+    };
     const systemPrompt = promptObject.instructions
         .map((section) => `## ${section.title}\n${section.content}`)
         .join('\n\n')
         .trim();
 
-    const contextSections = [
-        promptObject.rag?.content?.trim()
-            ? `[${promptObject.rag.title}]\n${promptObject.rag.content.trim()}`
-            : '',
-        promptObject.supplemental?.content?.trim()
-            ? `[${promptObject.supplemental.title}]\n${promptObject.supplemental.content.trim()}`
-            : '',
-        promptObject.profile?.context?.trim()
-            ? `[${promptObject.profile.title}]\n${promptObject.profile.context.trim()}`
-            : '',
-        promptObject.transcript.content.trim()
-            ? `[${promptObject.transcript.title}]\n${promptObject.transcript.content.trim()}`
-            : '',
-    ].filter(Boolean);
+    const contextSections = orderedKeys
+        .map((key) => sectionMap[key])
+        .filter(Boolean);
 
     const context = contextSections.join('\n\n').trim();
     const finalPrompt = [

@@ -5,6 +5,7 @@
 import type { BrainId } from '../types';
 import type { Brain, BrainInput, BrainOutput } from './Brain';
 import type { PromptInstruction } from '../../ActionContextBuilder';
+import { planContains, isPlanConfident } from '../planning';
 
 export class ResumeBrain implements Brain {
     readonly id: BrainId = 'resume';
@@ -14,6 +15,7 @@ export class ResumeBrain implements Brain {
     execute(input: BrainInput): BrainOutput {
         const { analysis, strategy, context } = input;
         const instructions: PromptInstruction[] = [];
+        const jdPriority = input.contextPriority?.priorities.jd;
 
         // Core reasoning directive
         instructions.push({
@@ -82,6 +84,39 @@ export class ResumeBrain implements Brain {
                     'No profile intelligence is available for this answer.',
                     'Provide a strong generic answer framework the user can fill in with their own details.',
                     'Use placeholder markers like "[Your Project Name]" where specifics are needed.',
+                ].join('\n'),
+            });
+        }
+
+        // Plan-aware reasoning emphasis
+        const plan = input.reasoningPlan;
+        if (plan && isPlanConfident(plan)) {
+            const planHints: string[] = [];
+            if (planContains(plan, 'jd_alignment')) {
+                planHints.push('Optimize the answer for role fit — mirror the JD requirements, stack, and responsibilities.');
+            }
+            if (planContains(plan, 'project_grounding')) {
+                planHints.push('Ground every claim in a specific project with measurable outcomes.');
+            }
+            if (planContains(plan, 'core_explanation')) {
+                planHints.push('Explain the technical depth of your contribution, not just the project summary.');
+            }
+            if (planHints.length > 0) {
+                instructions.push({
+                    key: 'plan_emphasis',
+                    title: 'PLAN EMPHASIS',
+                    content: planHints.join('\n'),
+                });
+            }
+        }
+
+        if (jdPriority === 'high' || jdPriority === 'critical') {
+            instructions.push({
+                key: 'jd_alignment',
+                title: 'JD ALIGNMENT',
+                content: [
+                    'Match the answer to the target role requirements when they are available.',
+                    'Mirror the most relevant stack, responsibilities, and business context from the JD.',
                 ].join('\n'),
             });
         }

@@ -14,6 +14,9 @@ import type { QuestionAnalysis } from '../QuestionAnalysis';
 import type { Brain } from './Brain';
 import { BrainRegistry } from './BrainRegistry';
 
+/** Set to true for verbose brain selection logging (dev only) */
+const VERBOSE = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
+
 // ---------------------------------------------------------------------------
 // Category → BrainId mapping
 // ---------------------------------------------------------------------------
@@ -50,7 +53,7 @@ export class BrainSelector {
      * Select the best Brain for a given QuestionAnalysis.
      *
      * Selection logic:
-     *   1. If imagePaths are present and no strong category signal → screen_analysis
+     *   1. If this is an explicit screen scan request → screen_analysis
      *   2. Map the analysis.category to a BrainId via the static table
      *   3. Look up the Brain in the registry
      *   4. If not found → fallback to GeneralBrain
@@ -66,7 +69,7 @@ export class BrainSelector {
         options?: {
             /** Force a specific brain ID (bypasses category mapping) */
             forceBrainId?: BrainId;
-            /** Whether the request has images attached */
+            /** Reserved for future image-aware routing. Currently unused. */
             hasImages?: boolean;
             /** Whether this is a screen scan request */
             isScreenScan?: boolean;
@@ -77,17 +80,17 @@ export class BrainSelector {
             if (options?.forceBrainId) {
                 const forced = this.registry.get(options.forceBrainId);
                 if (forced) {
-                    console.log(`[BrainSelector] Forced brain: ${options.forceBrainId}`);
+                    if (VERBOSE) console.log(`[BrainSelector] Forced brain: ${options.forceBrainId}`);
                     return forced;
                 }
                 console.warn(`[BrainSelector] Forced brain '${options.forceBrainId}' not found, falling back`);
             }
 
-            // 2. Screen scan override — images without strong category signal
+            // 2. Screen scan override
             if (options?.isScreenScan) {
                 const screenBrain = this.registry.get('screen_analysis');
                 if (screenBrain) {
-                    console.log(`[BrainSelector] Screen scan request → screen_analysis`);
+                    if (VERBOSE) console.log(`[BrainSelector] Screen scan request → screen_analysis`);
                     return screenBrain;
                 }
             }
@@ -97,7 +100,7 @@ export class BrainSelector {
             const brain = this.registry.get(brainId);
 
             if (brain) {
-                console.log(`[BrainSelector] ${analysis.category} → ${brainId} (confidence: ${analysis.confidence.toFixed(2)})`);
+                if (VERBOSE) console.log(`[BrainSelector] ${analysis.category} → ${brainId} (confidence: ${analysis.confidence.toFixed(2)})`);
                 return brain;
             }
 

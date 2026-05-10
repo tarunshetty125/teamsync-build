@@ -1,6 +1,10 @@
 // electron/intelligence/brains/ScreenAnalysisBrain.ts
 // Domain brain for screen/screenshot analysis — OCR-aware reasoning,
 // coding screenshot analysis, UI understanding, contextual suggestions.
+//
+// NOTE: This brain intentionally does NOT consume reasoningPlan.
+// Screen scan has its own specialized pipeline with coding detection
+// and OCR-aware prompt construction. Plan-awareness is not needed here.
 
 import type { BrainId } from '../types';
 import type { Brain, BrainInput, BrainOutput } from './Brain';
@@ -12,12 +16,15 @@ export class ScreenAnalysisBrain implements Brain {
     readonly latencyTarget = 700;
 
     execute(input: BrainInput): BrainOutput {
-        const { analysis, strategy, context, imagePaths } = input;
+        const { analysis, strategy, context, imagePaths, userMessage } = input;
         const instructions: PromptInstruction[] = [];
         const hasImages = !!(imagePaths && imagePaths.length > 0);
+        const previousPriority = input.contextPriority?.priorities.previous_response;
 
         // Detect if this is likely a coding problem on screen
-        const screenText = context.sources.find(s => s.type === 'screen_content')?.content ?? '';
+        const screenText = context.sources.find(s => s.type === 'screen_content')?.content
+            ?? userMessage
+            ?? '';
         const looksLikeCodingProblem = /\b(function|class|def |const |let |var |int |void |public |private |array|string|return|input|output|example|constraint|leetcode|hackerrank)\b/i.test(screenText);
 
         // Core reasoning directive
@@ -85,7 +92,9 @@ export class ScreenAnalysisBrain implements Brain {
             title: 'CONTEXT PRIORITY',
             content: [
                 'Screen content is your PRIMARY source — prioritize it over transcript.',
-                'Use transcript context only to understand what the user is working on.',
+                previousPriority === 'high' || previousPriority === 'critical'
+                    ? 'Use transcript or previous answer context only to continue the visible task, not to override the screen.'
+                    : 'Use transcript context only to understand what the user is working on.',
                 'Ignore unrelated earlier conversation.',
             ].join('\n'),
         });

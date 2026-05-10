@@ -42,7 +42,9 @@ export function createBrainLayer(): BrainLayer {
 
     const selector = new BrainSelector(registry);
 
-    console.log(registry.getSummary());
+    if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
+        console.log(registry.getSummary());
+    }
 
     return { registry, selector };
 }

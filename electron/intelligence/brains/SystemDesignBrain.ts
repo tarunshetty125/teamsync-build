@@ -5,6 +5,7 @@
 import type { BrainId } from '../types';
 import type { Brain, BrainInput, BrainOutput } from './Brain';
 import type { PromptInstruction } from '../../ActionContextBuilder';
+import { planContains, isPlanConfident } from '../planning';
 
 export class SystemDesignBrain implements Brain {
     readonly id: BrainId = 'system_design';
@@ -14,6 +15,8 @@ export class SystemDesignBrain implements Brain {
     execute(input: BrainInput): BrainOutput {
         const { analysis, strategy, context } = input;
         const instructions: PromptInstruction[] = [];
+        const ragPriority = input.contextPriority?.priorities.rag;
+        const screenPriority = input.contextPriority?.priorities.screen;
 
         // Core reasoning directive
         instructions.push({
@@ -32,9 +35,21 @@ export class SystemDesignBrain implements Brain {
 
         // Structured output based on depth
         const [minBullets, maxBullets] = strategy.bulletRange;
+        const isShort = strategy.depth === 'short';
         const isDeep = analysis.estimatedDepth === 'deep' || strategy.depth === 'deep';
 
-        if (isDeep) {
+        if (isShort) {
+            instructions.push({
+                key: 'output_contract',
+                title: 'OUTPUT CONTRACT',
+                content: [
+                    'Lead with one direct sentence stating the architecture direction.',
+                    `Then provide ${minBullets} to ${maxBullets} concise bullets covering the core components and primary tradeoff.`,
+                    'Mention scale or reliability only at a high level.',
+                    `Keep under ${strategy.maxWords} words.`,
+                ].join('\n'),
+            });
+        } else if (isDeep) {
             instructions.push({
                 key: 'output_contract',
                 title: 'OUTPUT CONTRACT',
@@ -66,6 +81,37 @@ export class SystemDesignBrain implements Brain {
             });
         }
 
+        // Plan-aware reasoning emphasis
+        const plan = input.reasoningPlan;
+        if (plan && isPlanConfident(plan)) {
+            const planHints: string[] = [];
+            if (planContains(plan, 'scale_estimation')) {
+                planHints.push('Include concrete scale assumptions: QPS, storage, bandwidth, latency targets.');
+            }
+            if (planContains(plan, 'failure_handling')) {
+                planHints.push('Explicitly address failure modes and recovery strategies.');
+            }
+            if (planContains(plan, 'database')) {
+                planHints.push('Discuss data model, schema choices, and database selection rationale.');
+            }
+            if (planContains(plan, 'cache')) {
+                planHints.push('Address caching strategy: what to cache, invalidation, TTL.');
+            }
+            if (planContains(plan, 'tradeoffs')) {
+                planHints.push('Call out at least 2 design alternatives with explicit tradeoffs.');
+            }
+            if (planContains(plan, 'requirements')) {
+                planHints.push('Start by clarifying functional and non-functional requirements before diving into design.');
+            }
+            if (planHints.length > 0) {
+                instructions.push({
+                    key: 'plan_emphasis',
+                    title: 'PLAN EMPHASIS',
+                    content: planHints.join('\n'),
+                });
+            }
+        }
+
         // Reasoning hints
         const hints: string[] = [];
         if (analysis.isFollowUp) {
@@ -89,6 +135,12 @@ export class SystemDesignBrain implements Brain {
             title: 'CONTEXT PRIORITY',
             content: [
                 'Answer the latest question first.',
+                ragPriority === 'high' || ragPriority === 'critical'
+                    ? 'If RAG MEMORY is present, use it for architecture-specific facts, constraints, or prior decisions.'
+                    : 'Use only the most relevant prior context that sharpens the design.',
+                screenPriority === 'high' || screenPriority === 'critical'
+                    ? 'Use visible diagrams or OCR text as current-state evidence when present.'
+                    : 'Use screen context only when it materially changes the architecture discussion.',
                 'Highlight architecture choices, tradeoffs, and open risks.',
                 'Prefer architecture alternatives over generic brainstorming.',
                 'Include operational tradeoffs for each option.',

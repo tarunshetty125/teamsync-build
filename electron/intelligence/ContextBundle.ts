@@ -1,6 +1,6 @@
 // electron/intelligence/ContextBundle.ts
 // Output type of the KnowledgeOrchestrator.
-// Consumed by: ReasoningPlanner, Brain.execute(), PromptAssembler.
+// Consumed by: PlanningEngine, Brain.execute(), PromptAssembler.
 //
 // Replaces the scattered context building currently split between:
 //   - ActionContextBuilder.buildContextLayers()

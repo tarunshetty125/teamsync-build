@@ -5,6 +5,7 @@
 import type { BrainId } from '../types';
 import type { Brain, BrainInput, BrainOutput } from './Brain';
 import type { PromptInstruction } from '../../ActionContextBuilder';
+import { planContains, isPlanConfident } from '../planning';
 
 export class CodingBrain implements Brain {
     readonly id: BrainId = 'coding';
@@ -14,6 +15,8 @@ export class CodingBrain implements Brain {
     execute(input: BrainInput): BrainOutput {
         const { analysis, strategy, context } = input;
         const instructions: PromptInstruction[] = [];
+        const screenPriority = input.contextPriority?.priorities.screen;
+        const previousResponsePriority = input.contextPriority?.priorities.previous_response;
 
         // Core reasoning directive
         instructions.push({
@@ -30,10 +33,23 @@ export class CodingBrain implements Brain {
         });
 
         // Structured output format
+        const isShortCoding = strategy.depth === 'short';
         const isDeepCoding = analysis.estimatedDepth === 'deep' || strategy.depth === 'deep';
         const [minBullets, maxBullets] = strategy.bulletRange;
 
-        if (isDeepCoding) {
+        if (isShortCoding) {
+            instructions.push({
+                key: 'output_contract',
+                title: 'OUTPUT CONTRACT',
+                content: [
+                    'Start with one direct answer sentence.',
+                    `Add ${minBullets} to ${maxBullets} short bullets for the key steps only.`,
+                    'Include one concise "Complexity:" line when algorithmic.',
+                    'Prefer the quickest correct fix over a long walkthrough.',
+                    `Keep the response under ${strategy.maxWords} words.`,
+                ].join('\n'),
+            });
+        } else if (isDeepCoding) {
             instructions.push({
                 key: 'output_contract',
                 title: 'OUTPUT CONTRACT',
@@ -41,11 +57,13 @@ export class CodingBrain implements Brain {
                     'Structure your answer in this order:',
                     '1. One direct answer sentence stating the approach.',
                     `2. "Approach:" section with ${minBullets} to ${maxBullets} bullet points describing the algorithm steps.`,
-                    '3. A complete, production-ready code solution in a fenced code block.',
-                    '4. "Complexity:" line with time and space analysis.',
+                    '3. "Edge Cases:" with the most important tricky inputs or failure modes.',
+                    '4. A complete, production-ready code solution in a fenced code block.',
+                    '5. "Complexity:" line with time and space analysis.',
                     '',
                     'The code must be COMPLETE — not pseudocode, not placeholders.',
                     'Add inline comments on non-obvious lines.',
+                    'Mention one alternative only if it clarifies a major tradeoff.',
                     `Target ${strategy.maxWords} words total (excluding code).`,
                 ].join('\n'),
             });
@@ -62,6 +80,31 @@ export class CodingBrain implements Brain {
                     `Keep the response under ${strategy.maxWords} words (excluding code).`,
                 ].join('\n'),
             });
+        }
+
+        // Plan-aware reasoning emphasis
+        const plan = input.reasoningPlan;
+        if (plan && isPlanConfident(plan)) {
+            const planHints: string[] = [];
+            if (planContains(plan, 'complexity_analysis')) {
+                planHints.push('Emphasize Big-O time and space complexity analysis.');
+            }
+            if (planContains(plan, 'edge_cases')) {
+                planHints.push('Explicitly reason through edge cases before finalizing the solution.');
+            }
+            if (planContains(plan, 'optimization')) {
+                planHints.push('Show the optimization path: brute-force → optimized, with complexity comparison.');
+            }
+            if (planContains(plan, 'algorithm')) {
+                planHints.push('Name the algorithm or technique being applied.');
+            }
+            if (planHints.length > 0) {
+                instructions.push({
+                    key: 'plan_emphasis',
+                    title: 'PLAN EMPHASIS',
+                    content: planHints.join('\n'),
+                });
+            }
         }
 
         // Reasoning hints based on question signals
@@ -87,7 +130,12 @@ export class CodingBrain implements Brain {
             title: 'CONTEXT PRIORITY',
             content: [
                 'Answer the latest question first.',
-                'Prefer screen content and code snippets over transcript when they conflict.',
+                screenPriority === 'critical' || screenPriority === 'high'
+                    ? 'Treat visible screen/OCR code as a primary artifact and prefer it over transcript when they conflict.'
+                    : 'Prefer screen content and code snippets over transcript when they conflict.',
+                previousResponsePriority === 'high' || previousResponsePriority === 'critical'
+                    ? 'Reuse the previous assistant answer only to continue the current reasoning, not to repeat it.'
+                    : 'Use previous responses only if they directly help the latest fix or implementation step.',
                 'Do not repeat setup the interviewer already knows.',
             ].join('\n'),
         });
