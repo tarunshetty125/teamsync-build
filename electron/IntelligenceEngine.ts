@@ -30,6 +30,12 @@ import {
 } from './llm';
 import type { ConversationIntent, ScreenContentMode } from './llm';
 
+// Brain layer (Phase 4/5) — domain-specific intelligence
+import { createBrainLayer, type BrainLayer } from './intelligence/brains/createBrainLayer';
+import { intentResultToQuestionAnalysis, questionDepthToResponseDepth } from './intelligence/adapters';
+import { defaultStrategy } from './intelligence/ResponseStrategy';
+import type { BrainOutput } from './intelligence/brains/Brain';
+
 type UserControlledMode = Extract<ConversationIntent, 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design'>;
 
 // Mode types
@@ -203,6 +209,10 @@ export class IntelligenceEngine extends EventEmitter {
     // Reference to SessionTracker for context
     private session: SessionTracker;
 
+    // Brain layer (Phase 4/5) — domain-specific intelligence
+    private brainLayer: BrainLayer;
+    private useBrainLayer: boolean = true;
+
     // Timestamps for tracking
     private lastTranscriptTime: number = 0;
     private lastTriggerTime: number = 0;
@@ -212,7 +222,17 @@ export class IntelligenceEngine extends EventEmitter {
         super();
         this.llmHelper = llmHelper;
         this.session = session;
+        this.brainLayer = createBrainLayer();
         this.initializeLLMs();
+    }
+
+    /**
+     * Enable or disable the Brain layer at runtime.
+     * When disabled, runAction() uses the legacy prompt path only.
+     */
+    setBrainLayerEnabled(enabled: boolean): void {
+        this.useBrainLayer = enabled;
+        console.log(`[IntelligenceEngine] Brain layer ${enabled ? 'ENABLED' : 'DISABLED'}`);
     }
 
     getLLMHelper(): LLMHelper {
@@ -269,6 +289,7 @@ export class IntelligenceEngine extends EventEmitter {
                 const contextLayers = builtContext.layers;
                 const isOwnedRequest = () => this.isOwnedActionRequest(activeRequestId, generationId, signal, sessionIdSnapshot);
                 let inputTokens = 0;
+                let brainOutput: BrainOutput | null = null;
 
                 try {
                     if (!isOwnedRequest()) {
@@ -278,6 +299,51 @@ export class IntelligenceEngine extends EventEmitter {
                     if ((params.intent === 'answer_now' || params.intent === 'manual_chat') && params.message?.trim()) {
                         this.session.addUserMessage(params.message.trim());
                     }
+
+                    // ──── Brain Layer Injection (Phase 5) ────
+                    // Runs the Brain layer to produce domain-specific prompt instructions.
+                    // These instructions are PREPENDED to the existing prompt instructions,
+                    // giving the Brain's domain expertise highest attention priority.
+                    // The existing ActionContextBuilder instructions remain untouched.
+                    if (this.useBrainLayer) {
+                        try {
+                            const intentResult = { intent: sessionMode as ConversationIntent, confidence: 1, answerShape: '' };
+                            const analysis = intentResultToQuestionAnalysis(intentResult);
+                            const brain = this.brainLayer.selector.select(analysis, {
+                                isScreenScan: params.intent === 'screen_scan',
+                                hasImages: !!(params.imagePaths && params.imagePaths.length > 0),
+                            });
+
+                            brainOutput = brain.execute({
+                                analysis,
+                                context: {
+                                    sources: [],
+                                    totalTokens: 0,
+                                    profileApplied: contextLayers.profileApplied,
+                                    resolvedProfilePolicy: contextLayers.profilePolicy,
+                                    directResponse: contextLayers.directResponse,
+                                },
+                                strategy: defaultStrategy(questionDepthToResponseDepth(analysis.estimatedDepth)),
+                                sessionMode,
+                                previousAnswer: this.session.getLastAssistantMessage() ?? undefined,
+                                userMessage: params.message,
+                                imagePaths: params.imagePaths,
+                            });
+
+                            // Prepend brain instructions to the prompt object
+                            if (brainOutput.instructions.length > 0) {
+                                contextLayers.promptObject.instructions = [
+                                    ...brainOutput.instructions,
+                                    ...contextLayers.promptObject.instructions,
+                                ];
+                                console.log(`[IntelligenceEngine] Brain '${brain.id}' injected ${brainOutput.instructions.length} instructions (stream: ${brainOutput.streamStrategy})`);
+                            }
+                        } catch (brainError: any) {
+                            // Brain layer failure is non-fatal — legacy path continues
+                            console.warn('[IntelligenceEngine] Brain layer failed (non-fatal):', brainError?.message);
+                        }
+                    }
+                    // ──── End Brain Layer Injection ────
 
                     const budgeted = enforceTokenBudget({
                         prompt: contextLayers.promptObject,
