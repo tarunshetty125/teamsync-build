@@ -38,7 +38,7 @@ import { builtLayersToContextBundle, intentResultToQuestionAnalysis, profileToCa
 import { createStrategy, type ResponseStrategy } from './intelligence/ResponseStrategy';
 import type { BrainOutput } from './intelligence/brains/Brain';
 import type { QuestionAnalysis } from './intelligence/QuestionAnalysis';
-import type { QuestionCategory } from './intelligence/types';
+import type { QuestionCategory, BrainId } from './intelligence/types';
 import { deriveQuestionUnderstandingV2 } from './intelligence/QuestionUnderstandingV2';
 import { estimateResponseDepth } from './intelligence/ResponseDepthEstimator';
 import {
@@ -103,7 +103,7 @@ function getEngineModeForAction(intent: UnifiedActionIntent): IntelligenceMode {
     }
 }
 
-const MAX_ACTION_PROMPT_TOKENS = 3200;
+const MAX_ACTION_PROMPT_TOKENS = 8000;
 const ACTION_CACHE_TTL_MS = 2 * 60 * 1000;
 const ACTION_DEBOUNCE_MS = 250;
 const ACTION_MAX_PRIMARY_ATTEMPTS = 2;
@@ -469,6 +469,9 @@ export class IntelligenceEngine extends EventEmitter {
                 let inputTokens = 0;
                 let brainOutput: BrainOutput | null = null;
                 let contextLayers: Awaited<ReturnType<typeof buildContext>>['layers'] | null = null;
+                let analysis: QuestionAnalysis | null = null;
+                let strategy: ResponseStrategy | null = null;
+                let reasoningPlan: ReasoningPlan | undefined;
 
                 try {
                     const builtContext = await buildContext({
@@ -501,12 +504,12 @@ export class IntelligenceEngine extends EventEmitter {
                     // The existing ActionContextBuilder instructions remain untouched.
                     if (this.useBrainLayer) {
                         try {
-                            const analysis = this.buildBrainAnalysis({
+                            analysis = this.buildBrainAnalysis({
                                 intent: params.intent,
                                 mode: sessionMode,
                                 question: contextLayers.promptObject.question,
                             });
-                            const strategy = this.buildBrainStrategy({
+                            strategy = this.buildBrainStrategy({
                                 intent: params.intent,
                                 mode: sessionMode,
                                 question: contextLayers.promptObject.question,
@@ -532,7 +535,7 @@ export class IntelligenceEngine extends EventEmitter {
                             // Generate a deterministic reasoning plan BEFORE brain execution.
                             // The plan tells the Brain which reasoning steps the answer should cover.
                             // Safe: wrapped in try/catch, confidence-gated, < 1ms overhead.
-                            let reasoningPlan: ReasoningPlan | undefined;
+                            reasoningPlan = undefined;
                             try {
                                 const questionUnderstandingResult = deriveQuestionUnderstandingV2({
                                     question: contextLayers.promptObject.question,
@@ -715,7 +718,7 @@ export class IntelligenceEngine extends EventEmitter {
                     try {
                         const qualityResult = evaluateResponseQuality({
                             question: budgeted.prompt.question,
-                            brainId: brainOutput?.instructions?.[0]?.key?.split(':')?.[1] ?? 'general',
+                            brainId: (brainOutput?.instructions?.[0]?.key?.split(':')?.[1] ?? 'general') as BrainId,
                             category: analysis?.category ?? 'general',
                             responseDepth: strategy?.depth ?? 'medium',
                             generatedResponse: finalContent,

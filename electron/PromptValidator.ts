@@ -28,12 +28,24 @@ export function validatePromptObject(
         withinTokenBudget: options?.maxTokens ? estimatedTokens <= options.maxTokens : true,
     };
 
-    const failures = Object.entries(result)
-        .filter(([, passed]) => !passed)
+    // Separate hard failures (missing required fields) from soft failures (token budget).
+    // Token budget overflow is non-fatal: the TokenBudgetEnforcer already trimmed what it
+    // could, and LLMs handle moderate overflows gracefully. Throwing here would crash the
+    // entire action pipeline and return a hardcoded fallback template to the user.
+    const softFailures = ['withinTokenBudget'];
+    const hardFailures = Object.entries(result)
+        .filter(([key, passed]) => !passed && !softFailures.includes(key))
+        .map(([key]) => key);
+    const warnFailures = Object.entries(result)
+        .filter(([key, passed]) => !passed && softFailures.includes(key))
         .map(([key]) => key);
 
-    if (failures.length > 0) {
-        throw new Error(`[PromptValidator] Invalid prompt: ${failures.join(', ')}`);
+    if (warnFailures.length > 0) {
+        console.warn(`[PromptValidator] Soft validation warning (non-fatal): ${warnFailures.join(', ')} — prompt may be oversized but will proceed to LLM`);
+    }
+
+    if (hardFailures.length > 0) {
+        throw new Error(`[PromptValidator] Invalid prompt: ${hardFailures.join(', ')}`);
     }
 
     return result;
