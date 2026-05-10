@@ -249,9 +249,20 @@ type OverlaySessionState = {
     currentMode: SessionMode;
 };
 
+// Dynamic button sets per mode — only 4 shown at a time (+ Answer = 5 total)
+// Brainstorm and Recap share the same slot; toggled via overlay settings
+function getQuickActionLabels(mode: SessionMode, brainstormEnabled: boolean): QuickActionLabel[] {
+    const dynamicSlot: QuickActionLabel = brainstormEnabled ? 'Brainstorm' : 'Recap';
+    if (mode === 'system_design') {
+        return ['What to answer?', 'Clarify', dynamicSlot, 'Follow Up'];
+    }
+    // coding, behavioral, general, follow_up
+    return ['What to answer?', 'Clarify', dynamicSlot, 'Follow Up'];
+}
+
+// Keep the old constant as fallback
 const STATIC_QUICK_ACTION_LABELS: QuickActionLabel[] = [
     'What to answer?',
-    'Recap',
     'Clarify',
     'Brainstorm',
     'Follow Up',
@@ -370,7 +381,7 @@ function normalizeTranscript(text: string) {
 }
 
 function detectQuestionType(
-    text: string, 
+    text: string,
     currentType: DetectedQuestionType,
     _lastStrongType: DetectedQuestionType
 ): { nextType: DetectedQuestionType; nextStrong?: DetectedQuestionType } {
@@ -408,7 +419,7 @@ function detectQuestionType(
     scores.coding += cap(REGEX_CODING_STRONG) * 2;
     scores.system_design += cap(REGEX_SYSTEM_STRONG) * 2;
     scores.behavioral += cap(REGEX_BEHAVIORAL_STRONG) * 2;
-    
+
     // Cross-pollination boosts for mixed queries (+1)
     scores.coding += cap(REGEX_CODING_BOOST);
     scores.system_design += cap(REGEX_SYSTEM_BOOST);
@@ -481,13 +492,13 @@ function intentReducer(state: IntentState, action: IntentAction): IntentState {
 
         case 'EVALUATE': {
             if (action.seq < state.seq) return state; // ignore stale updates
-            
+
             // Protect against empty / degenerate STT glitch resets
             if (!action.combinedText || action.combinedText.length < 5) return state;
 
             const { nextType, nextStrong } = detectQuestionType(
-                action.combinedText, 
-                state.detectedType, 
+                action.combinedText,
+                state.detectedType,
                 state.lastStrongType
             );
 
@@ -504,8 +515,8 @@ function intentReducer(state: IntentState, action: IntentAction): IntentState {
 
             // Optimization: avoid re-rendering if absolutely nothing changed
             if (
-                state.detectedType === nextType && 
-                state.lastStrongType === newLastStrongType && 
+                state.detectedType === nextType &&
+                state.lastStrongType === newLastStrongType &&
                 state.lastStrongAt === newLastStrongAt
             ) {
                 return { ...state, seq: action.seq }; // keep seq updated
@@ -592,7 +603,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         if (hasProContextAccess) {
             window.electronAPI?.getCustomNotesEnabled?.().then(res => {
                 if (res?.success) setCustomNotesEnabled(res.enabled);
-            }).catch(() => {});
+            }).catch(() => { });
         }
     }, [hasProContextAccess]);
 
@@ -634,7 +645,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 if (!mounted || !result?.mode) return;
                 setSession({ currentMode: result.mode });
             })
-            .catch(() => {});
+            .catch(() => { });
 
         const unsubscribe = window.electronAPI?.onSessionModeChanged?.((data) => {
             if (!data?.mode) return;
@@ -652,16 +663,16 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     const sourceStyleMap: Record<string, { light: string; dark: string }> = {
         'What to Answer': { light: 'bg-blue-100/80 text-blue-700 border-blue-200/60', dark: 'bg-blue-500/15 text-blue-300 border-blue-400/25' },
-        'Clarify':        { light: 'bg-amber-100/80 text-amber-700 border-amber-200/60', dark: 'bg-amber-500/15 text-amber-300 border-amber-400/25' },
-        'Follow Up':      { light: 'bg-emerald-100/80 text-emerald-700 border-emerald-200/60', dark: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
-        'Recap':          { light: 'bg-teal-100/80 text-teal-700 border-teal-200/60', dark: 'bg-teal-500/15 text-teal-300 border-teal-400/25' },
+        'Clarify': { light: 'bg-amber-100/80 text-amber-700 border-amber-200/60', dark: 'bg-amber-500/15 text-amber-300 border-amber-400/25' },
+        'Follow Up': { light: 'bg-emerald-100/80 text-emerald-700 border-emerald-200/60', dark: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
+        'Recap': { light: 'bg-teal-100/80 text-teal-700 border-teal-200/60', dark: 'bg-teal-500/15 text-teal-300 border-teal-400/25' },
         'Follow Up Questions': { light: 'bg-cyan-100/80 text-cyan-700 border-cyan-200/60', dark: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/25' },
-        'Code Hint':      { light: 'bg-purple-100/80 text-purple-700 border-purple-200/60', dark: 'bg-purple-500/15 text-purple-300 border-purple-400/25' },
-        'Brainstorm':     { light: 'bg-pink-100/80 text-pink-700 border-pink-200/60', dark: 'bg-pink-500/15 text-pink-300 border-pink-400/25' },
-        'Screen Scan':    { light: 'bg-orange-100/80 text-orange-700 border-orange-200/60', dark: 'bg-orange-500/15 text-orange-300 border-orange-400/25' },
+        'Code Hint': { light: 'bg-purple-100/80 text-purple-700 border-purple-200/60', dark: 'bg-purple-500/15 text-purple-300 border-purple-400/25' },
+        'Brainstorm': { light: 'bg-pink-100/80 text-pink-700 border-pink-200/60', dark: 'bg-pink-500/15 text-pink-300 border-pink-400/25' },
+        'Screen Scan': { light: 'bg-orange-100/80 text-orange-700 border-orange-200/60', dark: 'bg-orange-500/15 text-orange-300 border-orange-400/25' },
         'System Design Trade-offs': { light: 'bg-emerald-100/80 text-emerald-700 border-emerald-200/60', dark: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25' },
-        'Answer Now':     { light: 'bg-indigo-100/80 text-indigo-700 border-indigo-200/60', dark: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
-        'Manual Input':   { light: 'bg-slate-100/80 text-slate-600 border-slate-200/60', dark: 'bg-slate-500/15 text-slate-300 border-slate-400/25' },
+        'Answer Now': { light: 'bg-indigo-100/80 text-indigo-700 border-indigo-200/60', dark: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25' },
+        'Manual Input': { light: 'bg-slate-100/80 text-slate-600 border-slate-200/60', dark: 'bg-slate-500/15 text-slate-300 border-slate-400/25' },
     };
     const defaultSourceStyle = { light: 'bg-violet-100/80 text-violet-700 border-violet-200/60', dark: 'bg-violet-500/15 text-violet-300 border-violet-400/25' };
 
@@ -720,7 +731,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const screenScanDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const activeScanRequestIdRef = useRef<string | null>(null);
     const isScreenScanInFlightRef = useRef(false);
-    const handleScreenScanRef = useRef<() => Promise<void>>(async () => {});
+    const handleScreenScanRef = useRef<() => Promise<void>>(async () => { });
     const activeIntentRequestIdsRef = useRef<Record<string, string>>({});
     const activeChatRequestIdRef = useRef<string | null>(null);
     const activeRagRequestIdRef = useRef<string | null>(null);
@@ -1027,7 +1038,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         // Load initial active mode name
         window.electronAPI?.modesGetActive?.()
             .then((mode: { name: string } | null) => setActiveModeLabel(mode?.name ?? null))
-            .catch(() => {});
+            .catch(() => { });
         // Live-update whenever mode is activated/deactivated
         const unsub = window.electronAPI?.onModeChanged?.((data: { id: string | null; name: string | null }) => {
             setActiveModeLabel(data.name);
@@ -1048,15 +1059,41 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     });
     const [recommendedButton, setRecommendedButton] = useState<QuickActionLabel>('What to answer?');
     const recommendedButtonRef = useRef<QuickActionLabel>('What to answer?');
+
+    // Brainstorm/Recap toggle — persisted in localStorage
+    const [brainstormEnabled, setBrainstormEnabled] = useState<boolean>(() => {
+        try { return localStorage.getItem('natively_brainstorm_enabled') !== 'false'; } catch { return true; }
+    });
+    useEffect(() => {
+        localStorage.setItem('natively_brainstorm_enabled', String(brainstormEnabled));
+    }, [brainstormEnabled]);
+
+    // Cross-window sync: listen for Interview Mode toggle changes from SettingsPopup
+    useEffect(() => {
+        const handleStorage = () => {
+            const stored = localStorage.getItem('natively_brainstorm_enabled');
+            const val = stored !== 'false';
+            setBrainstormEnabled(val);
+        };
+        window.addEventListener('storage', handleStorage);
+        return () => window.removeEventListener('storage', handleStorage);
+    }, []);
+
     const recommendationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const recommendationLockTurnIdRef = useRef<string | null>(null);
     const screenContextTextRef = useRef('');
-    const fourthActionHandlerRef = useRef<() => void | Promise<void>>(() => {});
+    const fourthActionHandlerRef = useRef<() => void | Promise<void>>(() => { });
 
     const detectedQuestionType = intentState.detectedType;
     const currentSessionMode = session.currentMode;
     const recommendationMode: SessionMode =
         currentSessionMode === 'system_design' ? 'system_design' : detectedQuestionType;
+
+    // Compute dynamic button labels based on mode and brainstorm toggle
+    const activeQuickActionLabels = useMemo(
+        () => getQuickActionLabels(currentSessionMode, brainstormEnabled),
+        [currentSessionMode, brainstormEnabled]
+    );
 
     useEffect(() => {
         console.log('[Realtime Overlay] Session mode locked by user:', currentSessionMode);
@@ -1337,9 +1374,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const [isMousePassthrough, setIsMousePassthrough] = useState(false);
     const [localOpacity, setLocalOpacity] = useState(overlayOpacity);
     useEffect(() => {
-        window.electronAPI?.getOverlayMousePassthrough?.().then(setIsMousePassthrough).catch(() => {});
+        window.electronAPI?.getOverlayMousePassthrough?.().then(setIsMousePassthrough).catch(() => { });
         const unsub = window.electronAPI?.onOverlayMousePassthroughChanged?.((v) => setIsMousePassthrough(v));
-        
+
         const unsubOpacity = window.electronAPI?.onOverlayOpacityChanged?.((val) => setLocalOpacity(val));
 
         return () => {
@@ -1365,7 +1402,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         // Check current STT config on mount
         window.electronAPI?.getSttProvider?.().then((provider: string) => {
             if (mounted) setSttNotConfigured(provider === 'none');
-        }).catch(() => {});
+        }).catch(() => { });
 
         // Listen for live config changes (e.g. user saves a key in Settings while meeting is active)
         const unsub = window.electronAPI?.onSttConfigChanged?.((data: { configured: boolean; provider: string }) => {
@@ -1550,9 +1587,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         const unsubscribe = window.electronAPI.onSessionReset((payload) => {
             console.log('[NativelyInterface] Resetting session state...');
             activeOverlayAbortRef.current?.abort();
-            void window.electronAPI.cancelGeminiChatStream?.().catch(() => {});
-            void window.electronAPI.cancelIntelligenceRequest?.().catch(() => {});
-            void window.electronAPI.ragCancelQuery?.({ meetingId: 'live-meeting-current' }).catch(() => {});
+            void window.electronAPI.cancelGeminiChatStream?.().catch(() => { });
+            void window.electronAPI.cancelIntelligenceRequest?.().catch(() => { });
+            void window.electronAPI.ragCancelQuery?.({ meetingId: 'live-meeting-current' }).catch(() => { });
             setMessages([]);
             setInputValue('');
             setAttachedContext([]);
@@ -1631,7 +1668,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 user: state?.user || null,
                 interviewer: state?.interviewer || null,
             });
-        }).catch(() => {});
+        }).catch(() => { });
 
         cleanups.push(window.electronAPI.onSttTelemetry((data) => {
             setSttTelemetry((prev) => ({
@@ -1741,8 +1778,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 // C6 Fix: Partial transcripts appended to finalized ref — no data loss
                 setRollingTranscript(
                     finalizedTranscriptRef.current
-                        + (finalizedTranscriptRef.current ? '  ·  ' : '')
-                        + transcript.text
+                    + (finalizedTranscriptRef.current ? '  ·  ' : '')
+                    + transcript.text
                 );
             }
         }));
@@ -1978,7 +2015,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             }]);
         }));
         return () => cleanups.forEach(fn => fn());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [appendTokenToRequest, clearProcessingForRequest, finalizeRequestMessage, rememberIntentRequest, resolveSuggestedAnswerRequest]); // C2 Fix: mount-only — listeners must survive expand/collapse to prevent dropped tokens
 
     // Stable mount-only effect for screenshot listeners.
@@ -2029,7 +2066,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             cleanupToken();
             cleanupFinal();
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // intentionally empty — these listeners must survive isExpanded changes
 
     // Quick Actions - Updated to use new Intelligence APIs
@@ -2152,9 +2189,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                 hasScreenshot: true,
                 screenshotPreview: currentAttachments[0].preview
             }]);
-        	// Scroll to bottom when user sends message
-        	setTimeout(() => {
-        		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            // Scroll to bottom when user sends message
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
             }, 50);
         }
 
@@ -2374,7 +2411,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         handleFollowUpQuestions,
     ]);
 
-    fourthActionHandlerRef.current = getQuickActionHandler(STATIC_QUICK_ACTION_LABELS[3]);
+    fourthActionHandlerRef.current = getQuickActionHandler(activeQuickActionLabels[2]);
 
     // Setup Streaming Listeners
     useEffect(() => {
@@ -2453,7 +2490,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                         };
                         return updated;
                     }
-                } catch {}
+                } catch { }
                 return prev;
             });
             setMessages(prev => {
@@ -2542,7 +2579,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                             };
                             return updated;
                         }
-                    } catch {}
+                    } catch { }
                     return prev;
                 });
                 setMessages(prev => {
@@ -2576,7 +2613,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }
 
         return () => cleanups.forEach(fn => fn());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // C3 Fix: mount-only — model captured via ref, prevents listener teardown mid-stream
 
 
@@ -3217,7 +3254,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             else if (action === 'resetCancel') generalHandlers.resetCancel();
             else if (action === 'takeScreenshot') generalHandlers.takeScreenshot();
             else if (action === 'selectiveScreenshot') generalHandlers.selectiveScreenshot();
-            
+
             // Safety reset if it didn't trigger an expansion
             setTimeout(() => { isStealthRef.current = false; }, 500);
         });
@@ -3294,48 +3331,25 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                             onLogoClick={() => window.electronAPI?.setWindowMode?.('launcher')}
                         />
                         <div
-                            className={`relative w-[600px] max-w-full backdrop-blur-2xl border-l border-r border-b rounded-[24px] overflow-hidden flex flex-col draggable-area overlay-shell-surface ${overlayPanelClass}`}
-                            style={{ 
-                                ...appearance.shellStyle, 
-                                borderLeftColor: 'rgba(245, 158, 11, 0.2)',
-                                borderRightColor: 'rgba(245, 158, 11, 0.2)',
-                                borderBottomColor: 'rgba(245, 158, 11, 0.2)'
+                            className={`relative w-[600px] max-w-full backdrop-blur-2xl border border-white/[0.12] rounded-[24px] overflow-hidden flex flex-col draggable-area overlay-shell-surface ${overlayPanelClass}`}
+                            style={{
+                                ...appearance.shellStyle,
+                                borderColor: isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)',
                             }}
                         >
-                            {/* Constant Amber Line with Colliding Shines */}
-                            <div className="absolute top-0 left-0 w-full h-[3px] bg-[#F59E0B]/30 z-[100] rounded-t-[24px] overflow-hidden">
-                                {/* Left Shine */}
-                                <motion.div 
-                                    key="left-shine-slow"
-                                    animate={{ left: ['-50%', '30%', '-50%'] }}
-                                    transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-                                    className="absolute top-0 h-full w-[40%] bg-gradient-to-r from-transparent via-[#F59E0B] to-transparent"
-                                    style={{ boxShadow: '0 0 10px rgba(245,158,11,0.8)' }}
-                                />
-                                {/* Right Shine */}
-                                <motion.div 
-                                    key="right-shine-slow"
-                                    animate={{ right: ['-50%', '30%', '-50%'] }}
-                                    transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-                                    className="absolute top-0 h-full w-[40%] bg-gradient-to-l from-transparent via-[#F59E0B] to-transparent"
-                                    style={{ boxShadow: '0 0 10px rgba(245,158,11,0.8)' }}
+                            {/* Apple-style subtle top highlight */}
+                            <div className="absolute top-0 left-0 w-full h-[1px] z-[100] rounded-t-[24px] overflow-hidden" style={{ background: isLightTheme ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.15)' }}>
+                                {/* Subtle shimmer */}
+                                <motion.div
+                                    key="apple-shimmer"
+                                    animate={{ left: ['-40%', '100%'] }}
+                                    transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                                    className="absolute top-0 h-full w-[30%]"
+                                    style={{ background: isLightTheme ? 'linear-gradient(90deg, transparent, rgba(255,255,255,1), transparent)' : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)' }}
                                 />
                             </div>
 
-                            <ScreenScanOverlay
-                                visible={screenScanOverlay.visible}
-                                phase={screenScanOverlay.phase}
-                                mode={screenScanOverlay.mode}
-                                answer={screenScanOverlay.answer}
-                                chips={screenScanOverlay.chips}
-                                expanded={screenScanOverlay.expanded}
-                                onToggleExpanded={() => {
-                                    setScreenScanOverlay((prev) => prev.visible
-                                        ? { ...prev, expanded: !prev.expanded }
-                                        : prev);
-                                }}
-                                onClose={hideScreenScanOverlay}
-                            />
+                            {/* ScreenScanOverlay removed — screen scan results now appear only in the chat messages to avoid duplicate responses */}
 
 
 
@@ -3357,13 +3371,13 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
-                                        <button 
+                                        <button
                                             onClick={() => { window.electronAPI.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'); }}
                                             className="px-3 py-1.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-700 dark:text-yellow-500 text-[11px] font-semibold transition-all active:scale-95 border border-yellow-500/20 shadow-sm"
                                         >
                                             Open Settings
                                         </button>
-                                        <button 
+                                        <button
                                             onClick={() => setSystemAudioWarning(null)}
                                             className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-yellow-600/50 hover:text-yellow-700 dark:text-yellow-500/50 dark:hover:text-yellow-400 transition-colors absolute top-1 right-1 opacity-0 group-hover/warning:opacity-100"
                                             title="Dismiss"
@@ -3434,151 +3448,151 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                             {/* Chat History - Only show if there are messages OR active states */}
                             {(messages.length > 0 || isManualRecording || isProcessing) && (
                                 <>
-                                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[clamp(300px,35vh,450px)] no-drag" style={{ scrollbarWidth: 'none' }}>
-                                    {messages.map((msg) => (
-                                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up w-full`}>
-                                            <div className={`
-                                                ${msg.role === 'user' ? 'max-w-[72.25%] px-[13.6px] py-[10.2px] bg-blue-500/10 backdrop-blur-md border border-blue-500/20 text-blue-100 rounded-[20px] rounded-tr-[4px] shadow-sm font-medium' : msg.role === 'system' ? 'w-[85%]' : 'w-full'} 
+                                    <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[clamp(300px,35vh,450px)] no-drag" style={{ scrollbarWidth: 'none' }}>
+                                        {messages.map((msg) => (
+                                            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up w-full`}>
+                                                <div className={`
+                                                ${msg.role === 'user' ? `max-w-[72.25%] px-[13.6px] py-[10.2px] backdrop-blur-md rounded-[20px] rounded-tr-[4px] shadow-sm font-medium ${isLightTheme ? 'bg-[#007AFF]/10 border border-[#007AFF]/15 text-[#007AFF]' : 'bg-[#0A84FF]/12 border border-[#0A84FF]/20 text-blue-100'}` : msg.role === 'system' ? 'w-[85%]' : 'w-full'} 
                                                 text-[14px] leading-relaxed relative group whitespace-pre-wrap
                                                 ${msg.role === 'interviewer' ? 'overlay-text-muted italic pl-0 text-[13px] max-w-[85%]' : ''}
                                             `}>
-                                                {msg.role === 'interviewer' && (
-                                                    <div className="flex items-center gap-1.5 mb-1 text-[10px] font-medium uppercase tracking-wider overlay-text-muted">
-                                                        Interviewer
-                                                        {msg.isStreaming && <span className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />}
-                                                    </div>
-                                                )}
-                                                {msg.role === 'user' && msg.hasScreenshot && (
-                                                    <div className="flex items-center gap-1 text-[10px] opacity-70 mb-1 border-b pb-1 border-white/10">
-                                                        <Image className="w-2.5 h-2.5" />
-                                                        <span>Screenshot attached</span>
-                                                    </div>
-                                                )}
-                                                
-                                                {/* User & Interviewer Text Render */}
-                                                {msg.role !== 'system' && renderMessageText(msg)}
-
-                                                {/* Premium System Response Card */}
-                                                {msg.role === 'system' && (
-                                                    <div className="w-full relative group rounded-xl overflow-hidden bg-[#1A1512]/90 border border-[#F59E0B]/30 shadow-[0_4px_24px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-                                                        {/* Header */}
-                                                        {msg.source && (
-                                                            <div className="flex items-center justify-between px-4 py-2 border-b border-[#F59E0B]/15 bg-[#F59E0B]/5 relative z-10">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <span className="text-[11px] font-bold text-[#F59E0B] tracking-[0.08em] uppercase">
-                                                                        {sourceIconMap[msg.source] || '⚡'} {msg.source}
-                                                                    </span>
-                                                                </div>
-                                                                {msg.isStreaming ? (
-                                                                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#F59E0B]/10 border border-[#F59E0B]/20">
-                                                                        <div className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-pulse"></div>
-                                                                        <span className="text-[9px] font-bold text-[#F59E0B] tracking-wider uppercase">Live</span>
-                                                                    </div>
-                                                                ) : null}
-                                                            </div>
-                                                        )}
-                                                        
-                                                        {/* Body */}
-                                                        <div className="p-4 text-[#F3F4F6] text-[14px] leading-relaxed relative z-10">
-                                                            {!msg.isStreaming && (
-                                                                <button
-                                                                    onClick={() => handleCopy(msg.text)}
-                                                                    className="absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/90 border border-white/5"
-                                                                    title="Copy to clipboard"
-                                                                >
-                                                                    <Copy className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            )}
-                                                            {renderMessageText(msg)}
+                                                    {msg.role === 'interviewer' && (
+                                                        <div className="flex items-center gap-1.5 mb-1 text-[10px] font-medium uppercase tracking-wider overlay-text-muted">
+                                                            Interviewer
+                                                            {msg.isStreaming && <span className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />}
                                                         </div>
+                                                    )}
+                                                    {msg.role === 'user' && msg.hasScreenshot && (
+                                                        <div className="flex items-center gap-1 text-[10px] opacity-70 mb-1 border-b pb-1 border-white/10">
+                                                            <Image className="w-2.5 h-2.5" />
+                                                            <span>Screenshot attached</span>
+                                                        </div>
+                                                    )}
 
-                                                        {/* Response Chips */}
-                                                        {!msg.isStreaming && msg.chips && msg.chips.length > 0 && (
-                                                            <div className="flex flex-wrap gap-1.5 px-4 pb-3">
-                                                                {msg.chips.map((chip, i) => (
-                                                                    <span
-                                                                        key={i}
-                                                                        className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-tight border cursor-default select-none"
-                                                                        style={{
-                                                                            animationDelay: `${i * 60}ms`,
-                                                                            animation: 'fadeInUp 0.22s cubic-bezier(0.23,1,0.32,1) both',
-                                                                            ...(chip.variant === 'green'  ? { background: 'rgba(34,197,94,0.12)',  color: '#4ADE80', border: '1px solid rgba(34,197,94,0.28)' } :
-                                                                               chip.variant === 'amber'  ? { background: 'rgba(245,158,11,0.14)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.32)' } :
-                                                                               chip.variant === 'red'    ? { background: 'rgba(239,68,68,0.12)',  color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.28)' } :
-                                                                               chip.variant === 'blue'   ? { background: 'rgba(59,130,246,0.12)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.28)' } :
-                                                                               chip.variant === 'purple' ? { background: 'rgba(167,139,250,0.12)', color: '#C4B5FD', border: '1px solid rgba(167,139,250,0.28)' } :
-                                                                                                          { background: 'rgba(255,255,255,0.07)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.12)' })
-                                                                        }}
+                                                    {/* User & Interviewer Text Render */}
+                                                    {msg.role !== 'system' && renderMessageText(msg)}
+
+                                                    {/* Premium System Response Card */}
+                                                    {msg.role === 'system' && (
+                                                        <div className={`w-full relative group rounded-xl overflow-hidden backdrop-blur-xl ${isLightTheme ? 'bg-white/70 border border-black/[0.06] shadow-[0_2px_16px_rgba(0,0,0,0.06)]' : 'bg-white/[0.06] border border-white/[0.10] shadow-[0_4px_24px_rgba(0,0,0,0.3)]'}`}>
+                                                            {/* Header */}
+                                                            {msg.source && (
+                                                                <div className={`flex items-center justify-between px-4 py-2 border-b relative z-10 ${isLightTheme ? 'border-black/[0.05] bg-black/[0.02]' : 'border-white/[0.06] bg-white/[0.03]'}`}>
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className={`text-[11px] font-semibold tracking-[0.06em] uppercase ${isLightTheme ? 'text-gray-500' : 'text-white/60'}`}>
+                                                                            {sourceIconMap[msg.source] || '⚡'} {msg.source}
+                                                                        </span>
+                                                                    </div>
+                                                                    {msg.isStreaming ? (
+                                                                        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md ${isLightTheme ? 'bg-blue-500/10 border border-blue-500/15' : 'bg-white/[0.06] border border-white/[0.08]'}`}>
+                                                                            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isLightTheme ? 'bg-blue-500' : 'bg-white/70'}`}></div>
+                                                                            <span className={`text-[9px] font-bold tracking-wider uppercase ${isLightTheme ? 'text-blue-500' : 'text-white/60'}`}>Live</span>
+                                                                        </div>
+                                                                    ) : null}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Body */}
+                                                            <div className={`p-4 text-[14px] leading-relaxed relative z-10 ${isLightTheme ? 'text-gray-800' : 'text-[#F3F4F6]'}`}>
+                                                                {!msg.isStreaming && (
+                                                                    <button
+                                                                        onClick={() => handleCopy(msg.text)}
+                                                                        className={`absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity border ${isLightTheme ? 'bg-black/[0.03] hover:bg-black/[0.06] text-gray-400 hover:text-gray-600 border-black/[0.05]' : 'bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/90 border-white/5'}`}
+                                                                        title="Copy to clipboard"
                                                                     >
-                                                                        {chip.label}
-                                                                    </span>
-                                                                ))}
+                                                                        <Copy className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+                                                                {renderMessageText(msg)}
                                                             </div>
-                                                        )}
+
+                                                            {/* Response Chips */}
+                                                            {!msg.isStreaming && msg.chips && msg.chips.length > 0 && (
+                                                                <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+                                                                    {msg.chips.map((chip, i) => (
+                                                                        <span
+                                                                            key={i}
+                                                                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-tight border cursor-default select-none"
+                                                                            style={{
+                                                                                animationDelay: `${i * 60}ms`,
+                                                                                animation: 'fadeInUp 0.22s cubic-bezier(0.23,1,0.32,1) both',
+                                                                                ...(chip.variant === 'green' ? { background: 'rgba(34,197,94,0.12)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.28)' } :
+                                                                                    chip.variant === 'amber' ? { background: 'rgba(245,158,11,0.14)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.32)' } :
+                                                                                        chip.variant === 'red' ? { background: 'rgba(239,68,68,0.12)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.28)' } :
+                                                                                            chip.variant === 'blue' ? { background: 'rgba(59,130,246,0.12)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.28)' } :
+                                                                                                chip.variant === 'purple' ? { background: 'rgba(167,139,250,0.12)', color: '#C4B5FD', border: '1px solid rgba(167,139,250,0.28)' } :
+                                                                                                    { background: 'rgba(255,255,255,0.07)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.12)' })
+                                                                            }}
+                                                                        >
+                                                                            {chip.label}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {/* Active Recording State with Live Transcription */}
+                                        {isManualRecording && (
+                                            <div className="flex flex-col items-end gap-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                                {/* Live transcription preview */}
+                                                {(manualTranscript || voiceInput) && (
+                                                    <div className="max-w-[85%] px-3.5 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-[18px] rounded-tr-[4px]">
+                                                        <span className="text-[13px] text-emerald-300">
+                                                            {voiceInput}{voiceInput && manualTranscript ? ' ' : ''}{manualTranscript}
+                                                        </span>
                                                     </div>
                                                 )}
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {/* Active Recording State with Live Transcription */}
-                                    {isManualRecording && (
-                                        <div className="flex flex-col items-end gap-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                            {/* Live transcription preview */}
-                                            {(manualTranscript || voiceInput) && (
-                                                <div className="max-w-[85%] px-3.5 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-[18px] rounded-tr-[4px]">
-                                                    <span className="text-[13px] text-emerald-300">
-                                                        {voiceInput}{voiceInput && manualTranscript ? ' ' : ''}{manualTranscript}
-                                                    </span>
+                                                <div className="px-3 py-2 flex gap-1.5 items-center">
+                                                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                                    <span className="text-[10px] text-emerald-400/70 ml-1">Listening...</span>
                                                 </div>
-                                            )}
-                                            <div className="px-3 py-2 flex gap-1.5 items-center">
-                                                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                                <span className="text-[10px] text-emerald-400/70 ml-1">Listening...</span>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                                    {isProcessing && (
-                                        <div className="flex justify-start">
-                                            <div className="px-3 py-2 flex gap-1.5">
-                                                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                        {isProcessing && (
+                                            <div className="flex justify-start">
+                                                <div className="px-3 py-2 flex gap-1.5">
+                                                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
-                                    <div ref={messagesEndRef} />
-                                </div>
-
-                                {/* Jump to latest button */}
-                                {showJumpButton && (
-                                    <div className="flex justify-center py-1 no-drag">
-                                        <button
-                                            onClick={scrollToBottom}
-                                            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium overlay-chip-surface border border-transparent hover:border-white/10 hover:bg-white/[0.08] transition-all duration-200 overlay-text-muted hover:overlay-text-secondary"
-                                        >
-                                            <ChevronDown className="w-3 h-3" />
-                                            {unreadCount > 0 ? (
-                                                <>
-                                                    <span>{unreadCount} new</span>
-                                                    <span className="flex h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
-                                                </>
-                                            ) : (
-                                                'Latest'
-                                            )}
-                                        </button>
+                                        )}
+                                        <div ref={messagesEndRef} />
                                     </div>
-                                )}
+
+                                    {/* Jump to latest button */}
+                                    {showJumpButton && (
+                                        <div className="flex justify-center py-1 no-drag">
+                                            <button
+                                                onClick={scrollToBottom}
+                                                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium overlay-chip-surface border border-transparent hover:border-white/10 hover:bg-white/[0.08] transition-all duration-200 overlay-text-muted hover:overlay-text-secondary"
+                                            >
+                                                <ChevronDown className="w-3 h-3" />
+                                                {unreadCount > 0 ? (
+                                                    <>
+                                                        <span>{unreadCount} new</span>
+                                                        <span className="flex h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
+                                                    </>
+                                                ) : (
+                                                    'Latest'
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
                                 </>
                             )}
 
                             {/* Quick Actions - Static Buttons with Recommendation Glow */}
                             {(() => {
                                 type ActionDef = { label: QuickActionLabel; icon: string; handler: () => void | Promise<void> };
-                                const actions: ActionDef[] = STATIC_QUICK_ACTION_LABELS.map((label) => ({
+                                const actions: ActionDef[] = activeQuickActionLabels.map((label) => ({
                                     label,
                                     icon: QUICK_ACTION_ICONS[label],
                                     handler: getQuickActionHandler(label),
@@ -3586,21 +3600,22 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                 const isRecommendedAnswer = recommendedButton === 'Answer';
 
                                 return (
-                                    <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity }}>
+                                    <div className={`flex flex-nowrap justify-center items-center gap-2 px-3 pb-3 overflow-x-hidden transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity, width: '95%', margin: '0 auto' }}>
                                         <AnimatePresence mode="popLayout">
                                             {(() => {
-                                                const buttonColors: Record<string, { gradient: string; glow: string }> = {
-                                                    'What to answer?': { gradient: 'from-sky-400 via-sky-500 to-blue-600', glow: 'rgba(56,189,248,0.35)' },
-                                                    'Recap':           { gradient: 'from-slate-400 via-slate-500 to-gray-600', glow: 'rgba(148,163,184,0.3)' },
-                                                    'Clarify':         { gradient: 'from-cyan-400 via-cyan-500 to-teal-600', glow: 'rgba(34,211,238,0.35)' },
-                                                    'Brainstorm':      { gradient: 'from-amber-400 via-orange-500 to-orange-600', glow: 'rgba(251,146,60,0.35)' },
-                                                    'Follow Up':       { gradient: 'from-amber-400 via-yellow-500 to-amber-600', glow: 'rgba(245,158,11,0.35)' },
+                                                // macOS Control Center glassmorphism — Apple-style tinted glass per button
+                                                const glassColors: Record<string, { bg: string; border: string; tint: string }> = {
+                                                    'What to answer?': { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
+                                                    'Recap':           { bg: 'rgba(142,142,147,0.14)', border: 'rgba(142,142,147,0.25)', tint: 'rgba(142,142,147,0.06)' },
+                                                    'Clarify':         { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
+                                                    'Brainstorm':      { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
+                                                    'Follow Up':       { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
                                                 };
-                                                const fallbackColor = { gradient: 'from-indigo-400 via-indigo-500 to-blue-600', glow: 'rgba(99,102,241,0.35)' };
+                                                const fallbackGlass = { bg: 'rgba(255,255,255,0.08)', border: 'rgba(255,255,255,0.15)', tint: 'rgba(255,255,255,0.04)' };
 
                                                 return actions.map((action: ActionDef, idx: number) => {
                                                     const isRec = action.label === recommendedButton;
-                                                    const colors = buttonColors[action.label] || fallbackColor;
+                                                    const glass = glassColors[action.label] || fallbackGlass;
                                                     return (
                                                         <motion.button
                                                             key={`${currentQuestionTurnId}-${currentSessionMode}-${action.label}`}
@@ -3608,9 +3623,9 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                                             initial={{ opacity: 0, y: 6, scale: 0.92 }}
                                                             animate={{ opacity: 1, y: 0, scale: isRec ? 1.03 : 1 }}
                                                             exit={{ opacity: 0, y: -4, scale: 0.92 }}
-                                                            transition={{ duration: 0.2, delay: idx * 0.04, ease: [0.25, 1, 0.5, 1] }}
-                                                            whileHover={{ scale: isRec ? 1.07 : 1.05, y: -1, filter: 'brightness(1.12)' }}
-                                                            whileTap={{ scale: 0.95 }}
+                                                            transition={{ duration: 0.14, delay: idx * 0.03, ease: [0.25, 1, 0.5, 1] }}
+                                                            whileHover={{ scale: isRec ? 1.06 : 1.04, y: -1, transition: { duration: 0.12 } }}
+                                                            whileTap={{ scale: 0.96, transition: { duration: 0.08 } }}
                                                             onClick={() => {
                                                                 if (isProcessing) return;
                                                                 recommendationLockTurnIdRef.current = currentQuestionTurnIdRef.current;
@@ -3620,27 +3635,32 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                                                 }
                                                                 action.handler();
                                                             }}
-                                                            className={`group relative overflow-hidden flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium whitespace-nowrap shrink-0 no-drag text-white`}
+                                                            className={`group relative flex items-center justify-center gap-1.5 px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap flex-1 min-w-0 no-drag backdrop-blur-xl ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}
                                                             style={{
-                                                                boxShadow: `inset 0 1px 1px rgba(255,255,255,${isRec ? '0.5' : '0.3'}), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px ${colors.glow}, 0 0 0 1px rgba(255,255,255,${isRec ? '0.1' : '0.06'})`,
+                                                                background: isRec
+                                                                    ? `linear-gradient(135deg, ${glass.bg.replace(/[\d.]+\)$/, m => `${parseFloat(m) * 2.5})`)} 0%, ${glass.tint} 100%)`
+                                                                    : `linear-gradient(135deg, ${glass.bg} 0%, ${glass.tint} 100%)`,
+                                                                border: `1px solid ${isRec ? glass.border : glass.border.replace(/[\d.]+\)$/, m => `${parseFloat(m) * 0.7})`)}`,
+                                                                boxShadow: isRec
+                                                                    ? `0 2px 12px ${glass.bg}, inset 0 1px 0 rgba(255,255,255,0.12)`
+                                                                    : `inset 0 1px 0 rgba(255,255,255,0.06)`,
+                                                                transition: 'all 0.15s ease',
                                                             }}
                                                         >
-                                                            {/* Unique gradient per button */}
-                                                            <div className={`absolute inset-0 bg-gradient-to-b ${colors.gradient}`} />
-                                                            {/* Top highlight band */}
-                                                            <div className="absolute inset-x-2 top-0 h-[40%] bg-gradient-to-b from-white/30 to-transparent blur-[1.5px] rounded-b-lg pointer-events-none z-10" style={{ opacity: isRec ? 0.7 : 0.5 }} />
-                                                            {/* Hover glow */}
-                                                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-10" />
                                                             {/* Content */}
-                                                            <span className="relative z-20 text-[11px] leading-none">{action.icon}</span>
-                                                            <span className="relative z-20 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)]">{action.label}</span>
+                                                            <span className="relative z-20 text-[11px] leading-none shrink-0">{action.icon}</span>
+                                                            <span className={`relative z-20 drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)] truncate ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}>{
+                                                                currentSessionMode === 'system_design'
+                                                                    ? ({ 'What to answer?': 'Tradeoffs', 'Clarify': 'Clarify', 'Brainstorm': 'Approaches', 'Recap': 'Recap', 'Follow Up': 'Deep Dive' } as Record<string, string>)[action.label] ?? action.label
+                                                                    : ({ 'What to answer?': 'Suggest' } as Record<string, string>)[action.label] ?? action.label
+                                                            }</span>
                                                         </motion.button>
                                                     );
                                                 });
                                             })()}
                                         </AnimatePresence>
 
-                                        {/* Answer Button — jelly pill design */}
+                                        {/* Answer Button — glassmorphic pill */}
                                         <motion.button
                                             onClick={() => {
                                                 recommendationLockTurnIdRef.current = currentQuestionTurnIdRef.current;
@@ -3650,32 +3670,25 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                                 }
                                                 void handleAnswerNow();
                                             }}
-                                            whileHover={{ scale: 1.04, filter: 'brightness(1.12)' }}
-                                            whileTap={{ scale: 0.96 }}
-                                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                                            className="group relative overflow-hidden text-white px-3 py-1 rounded-full font-medium tracking-normal flex items-center justify-center gap-1 shrink-0 min-w-[64px] whitespace-nowrap no-drag text-[10px]"
+                                            whileHover={{ scale: 1.04, transition: { duration: 0.12 } }}
+                                            whileTap={{ scale: 0.96, transition: { duration: 0.08 } }}
+                                            transition={{ duration: 0.14, ease: 'easeOut' }}
+                                            className={`group relative px-3.5 py-[7px] rounded-full font-semibold tracking-normal flex items-center justify-center gap-1.5 flex-1 min-w-0 whitespace-nowrap no-drag text-[11px] backdrop-blur-xl ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}
                                             style={{
+                                                background: isManualRecording
+                                                    ? 'linear-gradient(135deg, rgba(239,68,68,0.22) 0%, rgba(239,68,68,0.08) 100%)'
+                                                    : `linear-gradient(135deg, rgba(16,185,129,${isRecommendedAnswer ? '0.28' : '0.14'}) 0%, rgba(16,185,129,0.06) 100%)`,
+                                                border: isManualRecording
+                                                    ? '1px solid rgba(239,68,68,0.35)'
+                                                    : `1px solid rgba(16,185,129,${isRecommendedAnswer ? '0.35' : '0.22'})`,
                                                 boxShadow: isManualRecording
-                                                    ? 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px rgba(239,68,68,0.4), 0 0 0 1px rgba(255,255,255,0.1)'
-                                                    : `inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 8px ${isRecommendedAnswer ? 'rgba(16,185,129,0.55)' : 'rgba(16,185,129,0.35)'}, 0 0 0 1px rgba(255,255,255,${isRecommendedAnswer ? '0.16' : '0.1'})`,
-                                                transition: 'box-shadow 0.4s ease-out',
+                                                    ? '0 2px 12px rgba(239,68,68,0.15), inset 0 1px 0 rgba(255,255,255,0.1)'
+                                                    : isRecommendedAnswer
+                                                        ? '0 2px 12px rgba(16,185,129,0.2), inset 0 1px 0 rgba(255,255,255,0.1)'
+                                                        : 'inset 0 1px 0 rgba(255,255,255,0.06)',
+                                                transition: 'all 0.35s ease',
                                             }}
                                         >
-                                            {/* Emerald gradient (Answer state) */}
-                                            <div
-                                                className="absolute inset-0 bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-600 transition-opacity duration-400 ease-out"
-                                                style={{ opacity: isManualRecording ? 0 : 1 }}
-                                            />
-                                            {/* Red gradient (Stop state) */}
-                                            <div
-                                                className="absolute inset-0 bg-gradient-to-b from-red-400 via-red-500 to-red-600 transition-opacity duration-400 ease-out"
-                                                style={{ opacity: isManualRecording ? 1 : 0 }}
-                                            />
-                                            {/* Top highlight band */}
-                                            <div className="absolute inset-x-2 top-0 h-[40%] bg-gradient-to-b from-white/35 to-transparent blur-[1.5px] rounded-b-lg opacity-70 pointer-events-none z-10" />
-                                            {/* Hover glow */}
-                                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-10" />
-
                                             {/* Content */}
                                             <div className="relative z-20 flex items-center gap-1.5">
                                                 <AnimatePresence mode="wait" initial={false}>
@@ -3761,19 +3774,19 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                         value={inputValue}
                                         onChange={(e) => setInputValue(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
-                                        className={`w-full bg-black/[0.15] border border-white/[0.08] hover:border-white/[0.15] focus:border-white/20 focus:ring-2 focus:ring-white/10 rounded-[12px] pl-3.5 pr-10 py-2.5 focus:outline-none transition-all duration-200 backdrop-blur-3xl shadow-sm text-[13px] placeholder-[#FDE68A]/40 ${inputClass}`}
-                                        style={{ ...appearance.inputStyle, color: '#FDE68A' }}
+                                        className={`w-full border rounded-[12px] pl-3.5 pr-10 py-2.5 focus:outline-none transition-all duration-200 backdrop-blur-3xl shadow-sm text-[13px] ${isLightTheme ? 'bg-black/[0.04] border-black/[0.08] hover:border-black/[0.12] focus:border-black/[0.18] focus:ring-2 focus:ring-black/[0.06] text-gray-800 placeholder-gray-400' : 'bg-white/[0.06] border-white/[0.08] hover:border-white/[0.14] focus:border-white/[0.22] focus:ring-2 focus:ring-white/[0.08] text-white/90 placeholder-white/30'} ${inputClass}`}
+                                        style={appearance.inputStyle}
                                     />
 
                                     {/* Custom Rich Placeholder */}
                                     {!inputValue && (
-                                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] text-[#FDE68A]/60">
+                                        <div className={`absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] ${isLightTheme ? 'text-gray-400' : 'text-white/40'}`}>
                                             <span>Ask anything on screen or conversation, or</span>
                                             <div className="flex items-center gap-1 opacity-80">
                                                 {(shortcuts.selectiveScreenshot || ['⌘', 'Shift', 'H']).map((key, i) => (
                                                     <React.Fragment key={i}>
                                                         {i > 0 && <span className="text-[10px]">+</span>}
-                                                        <kbd className="px-1.5 py-0.5 rounded border border-[#FDE68A]/20 bg-black/20 text-[10px] font-sans min-w-[20px] text-center text-[#FDE68A]/90">{key}</kbd>
+                                                        <kbd className={`px-1.5 py-0.5 rounded border text-[10px] font-sans min-w-[20px] text-center ${isLightTheme ? 'border-gray-300 bg-gray-100 text-gray-500' : 'border-white/15 bg-white/[0.06] text-white/60'}`}>{key}</kbd>
                                                     </React.Fragment>
                                                 ))}
                                             </div>
@@ -3806,13 +3819,13 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                             }}
                                             className={`
                                                 flex items-center justify-between px-3 py-1.5
-                                                bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.05]
                                                 rounded-[10px] transition-colors duration-150 shadow-sm
                                                 text-[12px] font-medium w-[140px] backdrop-blur-3xl
                                                 interaction-base interaction-press
+                                                ${isLightTheme ? 'bg-black/[0.04] hover:bg-black/[0.07] border border-black/[0.06] text-gray-600' : 'bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.08] text-white/80'}
                                                 ${controlSurfaceClass}
                                             `}
-                                            style={{ ...appearance.controlStyle, color: '#FDE68A' }}
+                                            style={appearance.controlStyle}
                                         >
                                             <span className="truncate min-w-0 flex-1">
                                                 {(() => {
@@ -3860,8 +3873,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                             w-7 h-7 flex items-center justify-center rounded-lg
                                             interaction-base interaction-press
                                             ${isSettingsOpen
-                                                    ? 'overlay-icon-surface overlay-icon-surface-hover overlay-text-primary'
-                                                    : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
+                                                        ? 'overlay-icon-surface overlay-icon-surface-hover overlay-text-primary'
+                                                        : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
                                         `}
 
                                                 style={appearance.iconStyle}
@@ -3910,10 +3923,10 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                                     setLocalOpacity(prev => {
                                                         // Fallback to 1.0 if prev is NaN or undefined somehow
                                                         if (!prev || isNaN(prev)) prev = 1.0;
-                                                        
+
                                                         const rounded = Math.round(prev * 100);
                                                         let nextOpacity = 1.0;
-                                                        
+
                                                         if (rounded >= 90) nextOpacity = 0.6;
                                                         else if (rounded >= 50) nextOpacity = 0.2;
                                                         else nextOpacity = 1.0;
@@ -3969,7 +3982,6 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                             </div>
                                         </div>
 
-                                        {/* Custom Context Toggle — Pro only */}
                                         {hasProContextAccess && (
                                             <div className="relative group">
                                                 <button
@@ -4001,11 +4013,12 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                             <motion.div
                                                 animate={{ rotate: 360 }}
                                                 transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                                                className="absolute inset-[-150%] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_300deg,#FDE68A_360deg)] opacity-60"
+                                                className="absolute inset-[-150%] opacity-70"
+                                                style={{ background: 'conic-gradient(from 0deg, transparent 0deg, transparent 290deg, #F59E0B 360deg)' }}
                                             />
                                             <button
                                                 onClick={handleScreenScan}
-                                                className="relative h-[26px] px-3.5 rounded-full flex items-center justify-center transition-all duration-200 bg-black hover:bg-black/90 text-[#FDE68A] shadow-sm interaction-base interaction-press text-[11px] font-bold tracking-wide whitespace-nowrap z-10"
+                                                className={`relative h-[26px] px-3.5 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm interaction-base interaction-press text-[11px] font-bold tracking-wide whitespace-nowrap z-10 ${isLightTheme ? 'bg-white text-[#007AFF] hover:bg-gray-50' : 'bg-[#1c1c1e] text-[#0A84FF] hover:bg-[#2c2c2e]'}`}
                                                 title="Capture and scan screen"
                                             >
                                                 Analyse Screen
@@ -4017,7 +4030,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                     <button
                                         onClick={handleManualSubmit}
                                         disabled={!inputValue.trim()}
-                                    className={`
+                                        className={`
                                     w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200
                                     interaction-base interaction-press
                                     ${inputValue.trim()
@@ -4025,7 +4038,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                                 : 'bg-white/[0.08] border border-white/[0.05] text-white/40 cursor-not-allowed'
                                             }
                                 `}
-                                    style={inputValue.trim() ? undefined : appearance.iconStyle}
+                                        style={inputValue.trim() ? undefined : appearance.iconStyle}
                                     >
                                         <ArrowRight className="w-3.5 h-3.5" />
                                     </button>

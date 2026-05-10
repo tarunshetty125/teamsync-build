@@ -1606,8 +1606,15 @@ export class IntelligenceEngine extends EventEmitter {
                     return fallback;
                 }
 
-                const detectedMode: ScreenContentMode = forcedMode
-                    ?? (screenText ? detectScreenContentMode(screenText) : 'ui_general');
+                // Always detect mode from actual screen content — never let frontend override
+                // The frontend sends session-based mode (e.g. 'ui_general' when in general mode)
+                // which prevents coding problem detection. The OCR text is the ground truth.
+                const heuristicMode: ScreenContentMode = screenText
+                    ? detectScreenContentMode(screenText)
+                    : 'ui_general';
+                const detectedMode: ScreenContentMode = heuristicMode !== 'ui_general'
+                    ? heuristicMode          // heuristic found something specific — trust it
+                    : (forcedMode || 'ui_general');  // heuristic inconclusive — fall back to frontend hint
 
                 const behavior = MODE_BEHAVIOR[detectedMode];
                 console.log(
@@ -1631,7 +1638,7 @@ export class IntelligenceEngine extends EventEmitter {
                         message: screenText,
                         imagePaths,
                         requestId: activeRequestId ?? undefined,
-                        modeOverride: detectedMode === 'coding' ? 'coding' : this.session.getMode(),
+                        modeOverride: (detectedMode === 'coding' || detectedMode === 'interview_question') ? 'coding' : this.session.getMode(),
                         profilePreference: 'force_off',
                         additionalContext: [
                             `SCREEN MODE: ${detectedMode}`,

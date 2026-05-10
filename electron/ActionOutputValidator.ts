@@ -138,14 +138,14 @@ function validateDirectAnswer(content: string): ActionOutputValidationResult {
 
 function validateCodingScreenScan(content: string): ActionOutputValidationResult {
     const trimmed = content.trim();
-    const hasProblem = /(^|\n)(problem|problem identification)\s*:?/i.test(trimmed);
-    const hasApproach = /(^|\n)approach\s*:?/i.test(trimmed);
-    const hasComplexity = /(^|\n)complexity\s*:?/i.test(trimmed)
-        || (/time complexity/i.test(trimmed) && /space complexity/i.test(trimmed));
+    // Lenient validation: accept the response if it has meaningful content.
+    // The old strict validation was rejecting real LLM answers and replacing
+    // them with template placeholder text — which is worse than any imperfect answer.
     const hasCodeBlock = /```[\s\S]+```/.test(trimmed);
+    const hasSubstantialContent = trimmed.length > 100;
 
-    const valid = hasProblem && hasApproach && hasComplexity && hasCodeBlock;
-    if (valid) {
+    // Accept if it has a code block OR substantial content
+    if (hasCodeBlock || hasSubstantialContent) {
         return {
             valid: true,
             correctedContent: trimmed,
@@ -154,16 +154,12 @@ function validateCodingScreenScan(content: string): ActionOutputValidationResult
         };
     }
 
+    // Only reject truly empty or trivially short responses
     return {
         valid: false,
         correctedContent: '',
         autoCorrected: false,
-        issues: [
-            !hasProblem ? 'screen_scan_missing_problem_section' : '',
-            !hasApproach ? 'screen_scan_missing_approach_section' : '',
-            !hasComplexity ? 'screen_scan_missing_complexity_section' : '',
-            !hasCodeBlock ? 'screen_scan_missing_code_block' : '',
-        ].filter(Boolean),
+        issues: ['screen_scan_response_too_short'],
     };
 }
 
@@ -250,17 +246,7 @@ export function buildSafeActionFallback(
             ].join('\n');
         case 'screen_scan':
             if (mode === 'coding') {
-                return [
-                    'Problem: Identify the exact coding problem in 1-2 lines.',
-                    'Approach:',
-                    '- State the algorithm clearly.',
-                    '- Mention the key insight or data structure.',
-                    'Complexity: Time O(n), Space O(1).',
-                    'Code:',
-                    '```python',
-                    '# complete optimized solution',
-                    '```',
-                ].join('\n');
+                return 'I could not fully analyze the screen content. Please try capturing the screen again with the coding problem clearly visible.';
             }
         case 'manual_chat':
             return `I would answer this directly using the strongest available evidence about ${question}.`;

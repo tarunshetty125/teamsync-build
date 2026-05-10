@@ -105,12 +105,10 @@ export const MODE_BEHAVIOR: Record<ScreenContentMode, {
 }> = {
     coding: {
         label: '⚡ Expert Code Analysis',
-        objective: 'Identify the problem, explain the optimal approach, provide step-by-step reasoning, and deliver complete working code.',
-        format: `• Problem Identification
-• Explanation & Approach
-• Step-by-Step Reasoning
-• Complete Code Solution
-• Follow-ups (Time/Space/Edge Cases)`,
+        objective: 'Detect the exact problem with its name/number, explain the optimal approach with complexity, and provide the complete working code solution.',
+        format: `• Problem (name, number, platform)
+• Approach (algorithm, complexity, why it works)
+• Solution (complete code block)`,
     },
     interview_question: {
         label: '🎯 Interview Answer',
@@ -229,40 +227,20 @@ const VISION_FALLBACK_PROMPT = `You are an expert coding interview assistant ana
 OCR text extraction failed or was too noisy. You MUST rely on the screenshot image directly.
 
 Use visual cues to identify the problem:
-- Platform UI (LeetCode, HackerRank) → identify by layout
-- Visible function signatures → infer problem from parameters
-- Visible test cases/examples → reconstruct the problem
+- Platform UI (LeetCode, HackerRank) — identify by layout
+- Visible function signatures — infer problem from parameters
+- Visible test cases/examples — reconstruct the problem
 
-Respond in this STRICT format:
+Your response must have three sections with bold headers:
 
-Problem:
-- Exact name if identifiable
-- Platform and number if visible
+Under "Problem:" — write the REAL problem name you identified from the screenshot (e.g., "Two Sum", "Valid Parentheses"). Include the platform and number if you can see them. Explain what the problem asks.
 
-Explanation:
-- Restate the problem clearly
-- State constraints and examples if visible
+Under "Approach:" — explain the actual algorithm you will use. Name the data structure/technique. State time and space complexity.
 
-Approach:
-- State the optimal strategy and WHY it works
+Under "Solution:" — write the COMPLETE working code in a fenced code block. Real code that compiles and solves the problem. Not placeholders.
 
-Steps:
-1. Step-by-step reasoning through the solution
+You must write REAL content. If you output placeholder text like "complete solution here" instead of actual code, you have failed.`;
 
-Code:
-\`\`\`javascript
-// Complete, correct, interview-ready solution
-// Handle ALL edge cases
-\`\`\`
-
-Complexity:
-- Time: O(...) — explain why
-- Space: O(...) — explain why
-
-Edge Cases:
-- List all important edge cases and how they are handled
-
-First identify the exact problem, then solve it completely. BE CONFIDENT.`;
 
 // ---------------------------------------------------------------------------
 // ScreenScanLLM
@@ -353,7 +331,7 @@ Extracted Content:
 ${signal}
 
 Task:
-First identify the exact problem (or closest match), then provide full solution.`;
+Identify the exact problem (name and number if possible), explain your algorithm approach, then write the COMPLETE working code. Write real content — not template placeholders.`;
             } else {
                 // Non-coding modes or no signal — use the standard message builder
                 const baseMessage = buildScreenScanMessage(mode, signal || null);

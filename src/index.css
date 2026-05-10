@@ -266,16 +266,16 @@
   filter: brightness(0) invert(1) !important;
 }
 
-/* Light mode: liquid-glass — clean frosted white panel */
+/* Light mode: liquid-glass \u2014 Apple macOS frosted white panel */
 [data-theme='light'] .liquid-glass {
-  background: rgba(255, 255, 255, 0.80);
-  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.06),
-    0 1px 4px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 1.0);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+    0 4px 24px rgba(0, 0, 0, 0.05),
+    0 1px 4px rgba(0, 0, 0, 0.03),
+    inset 0 0.5px 0 rgba(255, 255, 255, 1.0);
+  backdrop-filter: blur(50px) saturate(200%);
+  -webkit-backdrop-filter: blur(50px) saturate(200%);
 }
 
 /* ─── Light mode elevation system ────────────────────────────────────────
@@ -348,18 +348,17 @@ body {
   background: transparent;
 }
 
-/* Liquid Glass Effect Base - Refined Matte Look */
+/* Liquid Glass Effect Base — Apple macOS Control Centre style */
 /* Used for floating elements on top of the vibrant background */
 .liquid-glass {
-  background: rgba(30, 30, 30, 0.65);
-  /* Restored original opacity */
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(28, 28, 30, 0.72);
+  backdrop-filter: blur(40px) saturate(190%);
+  -webkit-backdrop-filter: blur(40px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 1.25rem;
   box-shadow:
-    0 20px 40px -10px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 20px 40px -10px rgba(0, 0, 0, 0.35),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
   position: relative;
   overflow: hidden;
 }
@@ -368,8 +367,8 @@ body {
   background: var(--overlay-panel-bg);
   border-color: var(--overlay-border);
   box-shadow: 0 24px 48px var(--overlay-panel-shadow);
-  backdrop-filter: blur(var(--overlay-shell-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--overlay-shell-blur)) saturate(140%);
+  backdrop-filter: blur(var(--overlay-shell-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--overlay-shell-blur)) saturate(180%);
 }
 
 [data-theme='light'] .overlay-shell-surface {
@@ -381,8 +380,8 @@ body {
   background: var(--overlay-pill-bg);
   border-color: var(--overlay-border);
   box-shadow: 0 12px 28px var(--overlay-pill-shadow);
-  backdrop-filter: blur(var(--overlay-pill-blur)) saturate(135%);
-  -webkit-backdrop-filter: blur(var(--overlay-pill-blur)) saturate(135%);
+  backdrop-filter: blur(var(--overlay-pill-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--overlay-pill-blur)) saturate(180%);
 }
 
 [data-theme='light'] .overlay-pill-surface {

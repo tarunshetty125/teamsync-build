@@ -99,6 +99,11 @@ const SettingsPopup = () => {
 
     const [actionButtonMode, setActionButtonModeState] = useState<'recap' | 'brainstorm'>('recap');
 
+    // Interview Mode (Brainstorm/Recap) — synced via localStorage
+    const [brainstormEnabled, setBrainstormEnabled] = useState(() => {
+        try { return localStorage.getItem('natively_brainstorm_enabled') !== 'false'; } catch { return true; }
+    });
+
     const [showTranscript, setShowTranscript] = useState(() => {
         const stored = localStorage.getItem('natively_interviewer_transcript');
         return stored !== 'false'; // Default to true if not set
@@ -299,6 +304,25 @@ const SettingsPopup = () => {
                             disabled={!profileAvailable}
                         >
                             <div className={`w-[15px] h-[15px] rounded-full transition-transform duration-300 ease-spring ${toggleKnobClass} ${profileModeOn ? 'translate-x-[12px]' : 'translate-x-0'}`} />
+                        </button>
+                    </div>
+
+                    {/* Interview Mode Toggle — swaps Recap ↔ Brainstorm in action buttons */}
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group cursor-default ${itemHoverClass}`}>
+                        <div className="flex items-center gap-3">
+                            <span className={`text-[14px] transition-opacity ${brainstormEnabled ? 'opacity-100' : 'opacity-50'}`}>🧠</span>
+                            <span className={`text-[12px] font-medium transition-colors ${brainstormEnabled ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Interview Mode</span>
+                        </div>
+                        <button
+                            onClick={() => {
+                                const next = !brainstormEnabled;
+                                setBrainstormEnabled(next);
+                                localStorage.setItem('natively_brainstorm_enabled', String(next));
+                                window.dispatchEvent(new Event('storage'));
+                            }}
+                            className={`w-[30px] h-[18px] rounded-full p-[1.5px] transition-all duration-300 ease-spring active:scale-[0.92] ${brainstormEnabled ? 'bg-amber-500 shadow-[0_2px_10px_rgba(245,158,11,0.3)]' : defaultToggleTrackClass}`}
+                        >
+                            <div className={`w-[15px] h-[15px] rounded-full transition-transform duration-300 ease-spring ${toggleKnobClass} ${brainstormEnabled ? 'translate-x-[12px]' : 'translate-x-0'}`} />
                         </button>
                     </div>
 

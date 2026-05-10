@@ -870,20 +870,33 @@ export function buildIntentPrompt(
                 ].join('\n')),
             ];
         case 'screen_scan':
-            if (screenScanMode === 'coding') {
+            if (screenScanMode === 'coding' || screenScanMode === 'interview_question') {
                 return [
                     createInstruction('intent', 'INTENT', basePrompt),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        'The screen is a coding problem.',
-                        'Return these sections in this exact order: Problem, Approach, Complexity, Code.',
-                        'Problem: 1 to 2 short sentences identifying the exact problem or closest match.',
-                        'Approach: 2 to 4 short bullets describing the algorithm.',
-                        'Complexity: include both time and space complexity explicitly.',
-                        'Code: return one complete optimized code block.',
-                        'Do not omit the code block.',
-                        'Do not put the explanation before the Problem section.',
-                        'No preamble.',
+                        'You are looking at a coding problem on screen. Your job is to SOLVE it completely.',
+                        '',
+                        'Your response MUST have exactly three sections in this order:',
+                        '',
+                        'SECTION 1 — Start with a bold header "Problem:" followed by the real problem name.',
+                        'Write the actual name like "Two Sum" or "Reverse Linked List" — include the LeetCode number or platform if you can see it.',
+                        'Then write 1-2 sentences explaining what the problem actually asks.',
+                        '',
+                        'SECTION 2 — Write a bold header "Approach:" then explain YOUR chosen algorithm.',
+                        'Use 3-5 bullet points describing the actual steps of the algorithm you will implement.',
+                        'Name the specific data structure (hash map, stack, two pointers, etc.) and explain why you chose it.',
+                        'State the actual time and space complexity with reasoning.',
+                        '',
+                        'SECTION 3 — Write a bold header "Solution:" then write the FULL working code.',
+                        'The code MUST be inside a fenced code block with the language tag.',
+                        'The code must be COMPLETE — a real implementation that compiles and runs correctly.',
+                        'Add inline comments on non-obvious lines explaining the logic.',
+                        'Use the programming language visible on screen, or Python/JavaScript by default.',
+                        '',
+                        'CRITICAL: Do NOT output placeholder text like "complete optimized solution" or "state the algorithm".',
+                        'You must write the REAL problem name, REAL algorithm explanation, and REAL working code.',
+                        'If you output template/placeholder text instead of real content, you have FAILED.',
                     ].join('\n')),
                 ];
             }
@@ -891,11 +904,17 @@ export function buildIntentPrompt(
                 createInstruction('intent', 'INTENT', basePrompt),
                 createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                 createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                    'If the screen contains a coding problem, identify it quickly and then return the full optimized code solution.',
-                    'Put the code before the explanation when code is required.',
-                    'Keep any explanation to 2 short notes max after the code.',
-                    'If the screen is not code-related, answer directly in the most useful concise format.',
-                    'No preamble.',
+                    'Analyze the screen content. If it contains a coding problem, you MUST solve it completely.',
+                    '',
+                    'For coding problems, respond with three sections:',
+                    '1. "Problem:" — the actual problem name/number and a 1-2 sentence description of what it asks.',
+                    '2. "Approach:" — your chosen algorithm with 3-5 bullets explaining the strategy and complexity.',
+                    '3. "Solution:" — the FULL working code in a fenced code block. Not pseudocode, not placeholders — real code.',
+                    '',
+                    'CRITICAL: Write REAL content — real problem names, real explanations, real working code.',
+                    'Never output template text or placeholders.',
+                    '',
+                    'If the screen is not code-related, answer directly in the most useful format.',
                 ].join('\n')),
             ];
         case 'what_to_answer':
