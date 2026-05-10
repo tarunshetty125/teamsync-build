@@ -43,6 +43,12 @@ function extractSentences(content: string): string[] {
 }
 
 function validateClarify(content: string): ActionOutputValidationResult {
+    const trimmed = content.trim();
+    // Accept any substantive response — a real LLM answer is always better
+    // than a hardcoded fallback template.
+    if (trimmed.length > 30) {
+        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+    }
     const questions = extractQuestions(content);
     if (questions.length === 1 && content.trim() === questions[0]) {
         return { valid: true, correctedContent: questions[0], autoCorrected: false, issues: [] };
@@ -57,6 +63,11 @@ function validateClarify(content: string): ActionOutputValidationResult {
 }
 
 function validateBulletQuestions(content: string): ActionOutputValidationResult {
+    const trimmed = content.trim();
+    // Accept any substantive response — don't reject real LLM answers
+    if (trimmed.length > 50) {
+        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+    }
     const questions = extractQuestions(content);
     const corrected = toBullets(questions.slice(0, 5).map((question) => ensureQuestion(question)));
     const valid = questions.length >= 1 && cleanLines(content).every((line) => line.startsWith('- ') && line.trim().endsWith('?'));
@@ -69,6 +80,11 @@ function validateBulletQuestions(content: string): ActionOutputValidationResult 
 }
 
 function validateRecap(content: string): ActionOutputValidationResult {
+    const trimmed = content.trim();
+    // Accept any substantive response — don't reject real LLM answers
+    if (trimmed.length > 50) {
+        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+    }
     const lines = cleanLines(content);
     const valid = lines.length >= 1 && lines.every((line) => line.startsWith('- '));
     if (valid) {
@@ -86,6 +102,11 @@ function validateRecap(content: string): ActionOutputValidationResult {
 }
 
 function validateBrainstorm(content: string): ActionOutputValidationResult {
+    const trimmed = content.trim();
+    // Accept any substantive response — don't reject real LLM answers
+    if (trimmed.length > 50) {
+        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+    }
     const lines = cleanLines(content);
     const valid = lines.length >= 2 && lines.every((line) => line.startsWith('- '));
     if (valid) {
@@ -102,27 +123,25 @@ function validateBrainstorm(content: string): ActionOutputValidationResult {
 }
 
 function validateStructuredAnswer(content: string): ActionOutputValidationResult {
-    const lines = cleanLines(content);
-    const bulletCount = lines.filter((line) => line.startsWith('- ')).length;
-    const valid = lines.length >= 3 && bulletCount >= 2;
-    if (valid) {
-        return { valid: true, correctedContent: content.trim(), autoCorrected: false, issues: [] };
+    const trimmed = content.trim();
+    // Lenient validation: accept any substantive response from the LLM.
+    // The old strict validation (requiring 3+ lines with 2+ bullets) was rejecting
+    // real LLM answers and replacing them with hardcoded template placeholder text
+    // — which is worse than any imperfect answer.
+    if (trimmed.length > 50) {
+        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
     }
 
-    const sentences = extractSentences(content);
-    const opening = sentences[0] || 'I would approach it directly.';
-    const middle = sentences.slice(1, 4);
-    const closing = sentences[4] || middle.pop() || 'That is how I would frame it.';
-    const corrected = [
-        opening,
-        ...middle.map((sentence) => `- ${sentence}`),
-        closing,
-    ].filter(Boolean).join('\n');
+    // Only reject truly empty or trivially short responses
+    if (trimmed.length > 0) {
+        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+    }
+
     return {
-        valid: Boolean(corrected),
-        correctedContent: corrected,
-        autoCorrected: true,
-        issues: ['answer_requires_structured_format'],
+        valid: false,
+        correctedContent: '',
+        autoCorrected: false,
+        issues: ['answer_too_short_or_empty'],
     };
 }
 
