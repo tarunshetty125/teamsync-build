@@ -1,5 +1,5 @@
 {
-  "name": "natively",
+  "name": "teamsync",
   "version": "2.5.0",
   "main": "dist-electron/electron/main.js",
   "description": "Natively is a meeting notes app that uses AI to generate notes from your meetings.",
@@ -25,7 +25,7 @@
     "generateUpdatesFilesForAllChannels": true,
     "appId": "com.electron.meeting-notes",
     "afterPack": "./scripts/ad-hoc-sign.js",
-    "productName": "Natively",
+    "productName": "TeamSync",
     "files": [
       "dist",
       "dist-electron",
