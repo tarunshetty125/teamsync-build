@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { ArrowLeft, Search, Mail, Link, ChevronDown, Play, ArrowUp, Copy, Check, MoreHorizontal, Settings, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MeetingChatOverlay from './MeetingChatOverlay';
@@ -101,7 +100,6 @@ interface MeetingDetailsProps {
 }
 
 const MeetingDetails: React.FC<MeetingDetailsProps> = ({ meeting: initialMeeting }) => {
-    const isLight = useResolvedTheme() === 'light';
     // We need local state for the meeting object to reflect optimistic updates
     const [meeting, setMeeting] = useState<Meeting>(initialMeeting);
     const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'usage'>('summary');
@@ -110,6 +108,15 @@ const MeetingDetails: React.FC<MeetingDetailsProps> = ({ meeting: initialMeeting
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [submittedQuery, setSubmittedQuery] = useState('');
     const overviewText = getMeetingOverview(meeting);
+    const tabOptions: Array<'summary' | 'transcript' | 'usage'> = ['summary', 'transcript', 'usage'];
+    const meetingDateLabel = new Date(meeting.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    const copyLabel = isCopied
+        ? 'Copied'
+        : activeTab === 'summary'
+            ? 'Copy full summary'
+            : activeTab === 'transcript'
+                ? 'Copy full transcript'
+                : 'Copy usage';
 
     const handleSubmitQuestion = () => {
         if (query.trim()) {
@@ -222,358 +229,349 @@ ${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'No
 
 
     return (
-        <div className="h-full w-full flex flex-col bg-bg-secondary text-text-secondary font-sans overflow-hidden">
-            {/* Main Content */}
-            <main className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="meeting-notes-screen relative h-full w-full overflow-hidden font-sans text-text-secondary">
+            <div className="meeting-notes-screen__ambient meeting-notes-screen__ambient--top" />
+            <div className="meeting-notes-screen__ambient meeting-notes-screen__ambient--bottom" />
+
+            <main className="relative z-10 flex-1 overflow-y-auto custom-scrollbar">
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1, duration: 0.3 }}
-                    className="max-w-4xl mx-auto px-8 py-8 pb-32" // Added pb-32 for floating footer clearance
+                    className="mx-auto max-w-5xl px-5 py-6 pb-36 sm:px-8 sm:py-8"
                 >
-                    {/* Meta Info & Actions Row */}
-                    <div className="flex items-start justify-between mb-6">
-                        <div className="w-full pr-4">
-                            {/* Date formatting could be improved to use meeting.date if it's an ISO string */}
-                            <div className="text-xs text-text-tertiary font-medium mb-1">
-                                {new Date(meeting.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                    <section className="meeting-glass-shell">
+                        <div className="meeting-glass-shell__glow" aria-hidden="true" />
+                        <div className="relative z-10 p-6 sm:p-8 md:p-10">
+                            <div className="mb-8 flex items-start justify-between gap-4">
+                                <div className="min-w-0 flex-1">
+                                    <p className="mb-2 text-[15px] font-medium tracking-[-0.01em] text-text-tertiary">
+                                        {meetingDateLabel}
+                                    </p>
+                                    <EditableTextBlock
+                                        initialValue={meeting.title}
+                                        onSave={handleTitleSave}
+                                        tagName="h1"
+                                        className="max-w-[18ch] -ml-2 rounded-2xl px-2 py-1 text-[2.25rem] font-semibold leading-[1.02] tracking-[-0.04em] text-text-primary transition-colors sm:text-[2.65rem]"
+                                        multiline={false}
+                                    />
+                                </div>
                             </div>
 
-                            {/* Editable Title */}
-                            <EditableTextBlock
-                                initialValue={meeting.title}
-                                onSave={handleTitleSave}
-                                tagName="h1"
-                                className="text-3xl font-bold text-text-primary tracking-tight -ml-2 px-2 py-1 rounded-md transition-colors"
-                                multiline={false}
-                            />
-                        </div>
+                            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="meeting-glass-tabs">
+                                    {tabOptions.map((tab) => (
+                                        <button
+                                            key={tab}
+                                            onClick={() => setActiveTab(tab)}
+                                            className={`meeting-glass-tab ${activeTab === tab ? 'text-text-primary' : 'text-text-tertiary hover:text-text-secondary'}`}
+                                        >
+                                            {activeTab === tab && (
+                                                <motion.div
+                                                    layoutId="activeTabBackground"
+                                                    className="meeting-glass-tab__active-surface"
+                                                    initial={false}
+                                                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                                                />
+                                            )}
+                                            <span className="relative z-10 capitalize">{tab}</span>
+                                        </button>
+                                    ))}
+                                </div>
 
-                        {/* Moved Actions: Follow-up & Share (REMOVED per user request) */}
-                        {/* <div className="flex items-center gap-2 mt-1"> ... </div> */}
-                    </div>
-
-                    {/* Tabs */}
-                    {/* Designing Tabs to match reference 1:1 (Dark Pill Container) */}
-                    <div className="flex items-center justify-between mb-8">
-                        <div className={`p-1 rounded-xl inline-flex items-center gap-0.5 ${isLight ? 'bg-[#E5E5EA] border border-black/[0.04]' : 'bg-[#121214] border border-white/[0.08]'}`}>
-                            {['summary', 'transcript', 'usage'].map((tab) => (
                                 <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab as any)}
-                                    className={`
-                                        relative px-3 py-1 text-[13px] font-medium rounded-lg transition-all duration-200 z-10
-                                        ${activeTab === tab ? (isLight ? 'text-black' : 'text-[#E9E9E9]') : `${isLight ? 'text-text-secondary' : 'text-text-tertiary'} hover:text-text-primary`}
-                                    `}
+                                    onClick={handleCopy}
+                                    className="meeting-glass-copy-button"
                                 >
-                                    {activeTab === tab && (
-                                        <motion.div
-                                            layoutId="activeTabBackground"
-                                            className={`absolute inset-0 rounded-lg -z-10 shadow-sm ${isLight ? 'bg-white' : 'bg-[#3A3A3C]'}`}
-                                            initial={false}
-                                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                                        />
-                                    )}
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                    {isCopied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                                    {copyLabel}
                                 </button>
-                            ))}
-                        </div>
+                            </div>
 
-                        {/* Copy Button - Inline with Tabs (Always visible) */}
-                        <button
-                            onClick={handleCopy}
-                            className="flex items-center gap-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
-                        >
-                            {isCopied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                            {isCopied ? 'Copied' : activeTab === 'summary' ? 'Copy full summary' : activeTab === 'transcript' ? 'Copy full transcript' : 'Copy usage'}
-                        </button>
-                    </div>
+                            <div className="space-y-5">
+                                {activeTab === 'summary' && (
+                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
+                                        {overviewText && (
+                                            <section className="meeting-glass-overview prose prose-sm max-w-none">
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={{
+                                                        h1: ({ node, ...props }) => <h1 className="mt-4 mb-2 text-xl font-bold text-text-primary" {...props} />,
+                                                        h2: ({ node, ...props }) => <h2 className="mt-4 mb-2 text-lg font-semibold text-text-primary" {...props} />,
+                                                        h3: ({ node, ...props }) => <h3 className="mt-3 mb-1 text-base font-semibold text-text-primary" {...props} />,
+                                                        p: ({ node, ...props }) => <p className="mb-2 text-[15px] leading-[1.85] text-text-secondary" {...props} />,
+                                                        ul: ({ node, ...props }) => <ul className="mb-2 ml-4 list-disc space-y-1" {...props} />,
+                                                        ol: ({ node, ...props }) => <ol className="mb-2 ml-4 list-decimal space-y-1" {...props} />,
+                                                        li: ({ node, ...props }) => <li className="text-[15px] text-text-secondary" {...props} />,
+                                                        strong: ({ node, ...props }) => <strong className="font-semibold text-text-primary" {...props} />,
+                                                        a: ({ node, ...props }) => <a className="text-blue-500 hover:underline" {...props} />,
+                                                    }}
+                                                >
+                                                    {cleanMarkdown(overviewText)}
+                                                </ReactMarkdown>
+                                            </section>
+                                        )}
 
-                    {/* Tab Content */}
-                    <div className="space-y-8">
-                        {/* Using standard divs for content, framer motion for layout */}
-                        {activeTab === 'summary' && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                {/* Overview - Rendered as Markdown */}
-                                {overviewText && (
-                                <div className="mb-6 pb-6 border-b border-border-subtle prose prose-sm max-w-none">
-                                    <ReactMarkdown
-                                        remarkPlugins={[remarkGfm]}
-                                        components={{
-                                            h1: ({ node, ...props }) => <h1 className="text-xl font-bold text-text-primary mt-4 mb-2" {...props} />,
-                                            h2: ({ node, ...props }) => <h2 className="text-lg font-semibold text-text-primary mt-4 mb-2" {...props} />,
-                                            h3: ({ node, ...props }) => <h3 className="text-base font-semibold text-text-primary mt-3 mb-1" {...props} />,
-                                            p: ({ node, ...props }) => <p className="text-sm text-text-secondary leading-relaxed mb-2" {...props} />,
-                                            ul: ({ node, ...props }) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
-                                            ol: ({ node, ...props }) => <ol className="list-decimal ml-4 mb-2 space-y-1" {...props} />,
-                                            li: ({ node, ...props }) => <li className="text-sm text-text-secondary" {...props} />,
-                                            strong: ({ node, ...props }) => <strong className="font-semibold text-text-primary" {...props} />,
-                                            a: ({ node, ...props }) => <a className="text-blue-500 hover:underline" {...props} />,
-                                        }}
-                                    >
-                                        {cleanMarkdown(overviewText)}
-                                    </ReactMarkdown>
-                                </div>
+                                        {meeting.detailedSummary?.actionItems && meeting.detailedSummary.actionItems.length > 0 && (
+                                            <section className="meeting-glass-section">
+                                                <div className="mb-4 flex items-center justify-between">
+                                                    <EditableTextBlock
+                                                        initialValue={meeting.detailedSummary?.actionItemsTitle || 'Action Items'}
+                                                        onSave={(val) => {
+                                                            setMeeting(prev => ({
+                                                                ...prev,
+                                                                detailedSummary: { ...prev.detailedSummary!, actionItemsTitle: val }
+                                                            }));
+                                                            window.electronAPI?.updateMeetingSummary(meeting.id, { actionItemsTitle: val });
+                                                        }}
+                                                        tagName="h2"
+                                                        className="-ml-2 rounded-xl px-2 py-1 text-[1.35rem] font-semibold tracking-[-0.03em] text-text-primary transition-colors"
+                                                        multiline={false}
+                                                    />
+                                                </div>
+                                                <ul className="space-y-3">
+                                                    {meeting.detailedSummary.actionItems.map((item, i) => (
+                                                        <li key={i} className="meeting-glass-list-row">
+                                                            <div className="meeting-glass-check">
+                                                                <Check size={13} strokeWidth={2.2} />
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <EditableTextBlock
+                                                                    initialValue={item}
+                                                                    onSave={(val) => handleActionItemSave(i, val)}
+                                                                    tagName="p"
+                                                                    className="-ml-2 rounded-xl px-2 py-1 text-[15px] leading-relaxed text-text-secondary transition-colors"
+                                                                    placeholder="Type an action item..."
+                                                                    onEnter={() => {
+                                                                        const newItems = [...(meeting.detailedSummary?.actionItems || [])];
+                                                                        newItems.splice(i + 1, 0, '');
+                                                                        setMeeting(prev => ({
+                                                                            ...prev,
+                                                                            detailedSummary: { ...prev.detailedSummary!, actionItems: newItems }
+                                                                        }));
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </section>
+                                        )}
+
+                                        {meeting.detailedSummary?.keyPoints && meeting.detailedSummary.keyPoints.length > 0 && (
+                                            <section className="meeting-glass-section">
+                                                <div className="mb-4 flex items-center justify-between">
+                                                    <EditableTextBlock
+                                                        initialValue={meeting.detailedSummary?.keyPointsTitle || 'Key Points'}
+                                                        onSave={(val) => {
+                                                            setMeeting(prev => ({
+                                                                ...prev,
+                                                                detailedSummary: { ...prev.detailedSummary!, keyPointsTitle: val }
+                                                            }));
+                                                            window.electronAPI?.updateMeetingSummary(meeting.id, { keyPointsTitle: val });
+                                                        }}
+                                                        tagName="h2"
+                                                        className="-ml-2 rounded-xl px-2 py-1 text-[1.35rem] font-semibold tracking-[-0.03em] text-text-primary transition-colors"
+                                                        multiline={false}
+                                                    />
+                                                </div>
+                                                <ul className="space-y-3">
+                                                    {meeting.detailedSummary.keyPoints.map((item, i) => (
+                                                        <li key={i} className="meeting-glass-list-row">
+                                                            <div className="meeting-glass-dot mt-3" />
+                                                            <div className="flex-1">
+                                                                <EditableTextBlock
+                                                                    initialValue={item}
+                                                                    onSave={(val) => handleKeyPointSave(i, val)}
+                                                                    tagName="p"
+                                                                    className="-ml-2 rounded-xl px-2 py-1 text-[15px] leading-relaxed text-text-secondary transition-colors"
+                                                                    placeholder="Type a key point..."
+                                                                    onEnter={() => {
+                                                                        const newItems = [...(meeting.detailedSummary?.keyPoints || [])];
+                                                                        newItems.splice(i + 1, 0, '');
+                                                                        setMeeting(prev => ({
+                                                                            ...prev,
+                                                                            detailedSummary: { ...prev.detailedSummary!, keyPoints: newItems }
+                                                                        }));
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </section>
+                                        )}
+
+                                        {meeting.detailedSummary?.sections && meeting.detailedSummary.sections.length > 0 && (
+                                            <div className="space-y-5">
+                                                {meeting.detailedSummary.sections.map((section, si) => (
+                                                    section.bullets.length > 0 && (
+                                                        <section key={si} className="meeting-glass-section">
+                                                            <div className="mb-4 flex items-center justify-between">
+                                                                <h2 className="text-[1.35rem] font-semibold tracking-[-0.03em] text-text-primary">{section.title}</h2>
+                                                            </div>
+                                                            <ul className="space-y-3">
+                                                                {section.bullets.map((bullet, bi) => (
+                                                                    <li key={bi} className="meeting-glass-list-row">
+                                                                        <div className="meeting-glass-dot mt-3" />
+                                                                        <p className="flex-1 text-[15px] leading-relaxed text-text-secondary">{bullet}</p>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </section>
+                                                    )
+                                                ))}
+                                            </div>
+                                        )}
+                                    </motion.div>
                                 )}
 
-                                {/* Action Items - Only show if there are items */}
-                                {meeting.detailedSummary?.actionItems && meeting.detailedSummary.actionItems.length > 0 && (
-                                    <section className="mb-8">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <EditableTextBlock
-                                                initialValue={meeting.detailedSummary?.actionItemsTitle || 'Action Items'}
-                                                onSave={(val) => {
-                                                    setMeeting(prev => ({
-                                                        ...prev,
-                                                        detailedSummary: { ...prev.detailedSummary!, actionItemsTitle: val }
-                                                    }));
-                                                    window.electronAPI?.updateMeetingSummary(meeting.id, { actionItemsTitle: val });
-                                                }}
-                                                tagName="h2"
-                                                className="text-lg font-semibold text-text-primary -ml-2 px-2 py-1 rounded-sm transition-colors"
-                                                multiline={false}
-                                            />
+                                {activeTab === 'transcript' && (
+                                    <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                        <div className="meeting-glass-section space-y-5">
+                                            {(() => {
+                                                console.log('Raw Transcript:', meeting.transcript);
+                                                const filteredTranscript = meeting.transcript?.filter(entry => {
+                                                    const isHidden = ['system', 'ai', 'assistant', 'model'].includes(entry.speaker?.toLowerCase());
+                                                    if (isHidden) console.log('Filtered out:', entry);
+                                                    return !isHidden;
+                                                }) || [];
+                                                console.log('Filtered Transcript:', filteredTranscript);
+
+                                                if (filteredTranscript.length === 0) {
+                                                    return <p className="text-[15px] text-text-tertiary">No transcript available.</p>;
+                                                }
+
+                                                return filteredTranscript.map((entry, i) => (
+                                                    <div key={i} className="meeting-glass-transcript-row">
+                                                        <div className="mb-2 flex items-center gap-2">
+                                                            <span className="text-[12px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                                                                {entry.speaker === 'user' ? 'Me' : 'Them'}
+                                                            </span>
+                                                            <span className="text-[12px] font-medium text-text-tertiary">{entry.timestamp ? formatTime(entry.timestamp) : '0:00'}</span>
+                                                        </div>
+                                                        <p className="cursor-text select-text text-[15px] leading-[1.85] text-text-secondary transition-colors">{entry.text}</p>
+                                                    </div>
+                                                ));
+                                            })()}
                                         </div>
-                                        <ul className="space-y-3">
-                                            {meeting.detailedSummary.actionItems.map((item, i) => (
-                                                <li key={i} className="flex items-start gap-3 group">
-                                                    <div className="mt-2 w-1.5 h-1.5 rounded-full bg-text-secondary group-hover:bg-blue-500 transition-colors shrink-0" />
-                                                    <div className="flex-1">
-                                                        <EditableTextBlock
-                                                            initialValue={item}
-                                                            onSave={(val) => handleActionItemSave(i, val)}
-                                                            tagName="p"
-                                                            className="text-sm text-text-secondary leading-relaxed -ml-2 px-2 rounded-sm transition-colors"
-                                                            placeholder="Type an action item..."
-                                                            onEnter={() => {
-                                                                const newItems = [...(meeting.detailedSummary?.actionItems || [])];
-                                                                newItems.splice(i + 1, 0, "");
-                                                                setMeeting(prev => ({
-                                                                    ...prev,
-                                                                    detailedSummary: { ...prev.detailedSummary!, actionItems: newItems }
-                                                                }));
-                                                            }}
-                                                        />
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </section>
+                                    </motion.section>
                                 )}
 
-                                {/* Key Points - Only show if there are items */}
-                                {meeting.detailedSummary?.keyPoints && meeting.detailedSummary.keyPoints.length > 0 && (
-                                    <section>
-                                        <div className="flex items-center justify-between mb-4">
-                                            <EditableTextBlock
-                                                initialValue={meeting.detailedSummary?.keyPointsTitle || 'Key Points'}
-                                                onSave={(val) => {
-                                                    setMeeting(prev => ({
-                                                        ...prev,
-                                                        detailedSummary: { ...prev.detailedSummary!, keyPointsTitle: val }
-                                                    }));
-                                                    window.electronAPI?.updateMeetingSummary(meeting.id, { keyPointsTitle: val });
-                                                }}
-                                                tagName="h2"
-                                                className="text-lg font-semibold text-text-primary -ml-2 px-2 py-1 rounded-sm transition-colors"
-                                                multiline={false}
-                                            />
-                                        </div>
-                                        <ul className="space-y-3">
-                                            {meeting.detailedSummary.keyPoints.map((item, i) => (
-                                                <li key={i} className="flex items-start gap-3 group">
-                                                    <div className="mt-2 w-1.5 h-1.5 rounded-full bg-text-secondary group-hover:bg-purple-500 transition-colors shrink-0" />
-                                                    <div className="flex-1">
-                                                        <EditableTextBlock
-                                                            initialValue={item}
-                                                            onSave={(val) => handleKeyPointSave(i, val)}
-                                                            tagName="p"
-                                                            className="text-sm text-text-secondary leading-relaxed -ml-2 px-2 rounded-sm transition-colors"
-                                                            placeholder="Type a key point..."
-                                                            onEnter={() => {
-                                                                const newItems = [...(meeting.detailedSummary?.keyPoints || [])];
-                                                                newItems.splice(i + 1, 0, "");
-                                                                setMeeting(prev => ({
-                                                                    ...prev,
-                                                                    detailedSummary: { ...prev.detailedSummary!, keyPoints: newItems }
-                                                                }));
-                                                            }}
-                                                        />
+                                {activeTab === 'usage' && (
+                                    <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5 pb-6">
+                                        {meeting.usage?.map((interaction, i) => (
+                                            <div key={i} className="meeting-glass-section space-y-4">
+                                                {interaction.question && (
+                                                    <div className="flex justify-end">
+                                                        <div className="meeting-glass-question-bubble">
+                                                            {interaction.question}
+                                                        </div>
                                                     </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </section>
-                                )}
+                                                )}
 
-                                {/* Mode-specific sections (when active mode has a notes template) */}
-                                {meeting.detailedSummary?.sections && meeting.detailedSummary.sections.length > 0 && (
-                                    <div className="space-y-8">
-                                        {meeting.detailedSummary.sections.map((section, si) => (
-                                            section.bullets.length > 0 && (
-                                                <section key={si}>
-                                                    <div className="flex items-center justify-between mb-4">
-                                                        <h2 className="text-lg font-semibold text-text-primary">{section.title}</h2>
+                                                {interaction.answer && (
+                                                    <div className="flex items-start gap-4">
+                                                        <div className="meeting-glass-avatar">
+                                                            <img src={NativelyLogo} alt="AI" className="force-black-icon h-4 w-4 object-contain opacity-60" />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-text-tertiary">{formatTime(interaction.timestamp)}</div>
+                                                            <div className="text-[15px] leading-relaxed text-text-secondary max-w-none">
+                                                                <ReactMarkdown
+                                                                    remarkPlugins={[remarkGfm]}
+                                                                    components={{
+                                                                        h1: ({ node, ...props }) => <p className="mb-2 whitespace-pre-wrap text-[15px] font-normal leading-relaxed text-text-secondary" {...props} />,
+                                                                        h2: ({ node, ...props }) => <p className="mb-2 whitespace-pre-wrap text-[15px] font-normal leading-relaxed text-text-secondary" {...props} />,
+                                                                        h3: ({ node, ...props }) => <p className="mb-2 whitespace-pre-wrap text-[15px] font-normal leading-relaxed text-text-secondary" {...props} />,
+                                                                        p: ({ node, ...props }) => <p className="mb-2 whitespace-pre-wrap text-[15px] font-normal leading-relaxed text-text-secondary" {...props} />,
+                                                                        ul: ({ node, ...props }) => <ul className="mb-2 ml-4 list-disc space-y-1" {...props} />,
+                                                                        ol: ({ node, ...props }) => <ol className="mb-2 ml-4 list-decimal space-y-1" {...props} />,
+                                                                        li: ({ node, ...props }) => <li className="text-[15px] font-normal text-text-secondary" {...props} />,
+                                                                        strong: ({ node, ...props }) => <span className="font-normal text-text-secondary" {...props} />,
+                                                                        a: ({ node, ...props }: any) => <a className="text-blue-500 hover:underline" {...props} />,
+                                                                        pre: ({ children }: any) => <div className="not-prose mb-4">{children}</div>,
+                                                                        code: ({ node, inline, className, children, ...props }: any) => {
+                                                                            const match = /language-(\w+)/.exec(className || '');
+                                                                            const isInline = inline ?? false;
+                                                                            const lang = match ? match[1] : '';
+
+                                                                            return !isInline ? (
+                                                                                <div className="my-3 overflow-hidden rounded-xl border border-white/[0.08] bg-zinc-800/60 shadow-lg backdrop-blur-md">
+                                                                                    <div className="border-b border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
+                                                                                        <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-white/40">
+                                                                                            {lang || 'CODE'}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div className="bg-transparent">
+                                                                                        <SyntaxHighlighter
+                                                                                            language={lang || 'text'}
+                                                                                            style={vscDarkPlus}
+                                                                                            customStyle={{
+                                                                                                margin: 0,
+                                                                                                borderRadius: 0,
+                                                                                                fontSize: '13px',
+                                                                                                lineHeight: '1.6',
+                                                                                                background: 'transparent',
+                                                                                                padding: '16px',
+                                                                                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+                                                                                            }}
+                                                                                            wrapLongLines={true}
+                                                                                            showLineNumbers={true}
+                                                                                            lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: 'rgba(255,255,255,0.2)', textAlign: 'right', fontSize: '11px' }}
+                                                                                            {...props}
+                                                                                        >
+                                                                                            {String(children).replace(/\n$/, '')}
+                                                                                        </SyntaxHighlighter>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <code className="rounded border border-border-subtle bg-bg-input px-1.5 py-0.5 font-mono text-[13px] text-text-primary whitespace-pre-wrap" {...props}>
+                                                                                    {children}
+                                                                                </code>
+                                                                            );
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    {cleanMarkdown(interaction.answer || '')}
+                                                                </ReactMarkdown>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <ul className="space-y-3">
-                                                        {section.bullets.map((bullet, bi) => (
-                                                            <li key={bi} className="flex items-start gap-3 group">
-                                                                <div className="mt-2 w-1.5 h-1.5 rounded-full bg-text-secondary shrink-0" />
-                                                                <p className="text-sm text-text-secondary leading-relaxed">{bullet}</p>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </section>
-                                            )
+                                                )}
+                                            </div>
                                         ))}
-                                    </div>
+                                        {!meeting.usage?.length && (
+                                            <div className="meeting-glass-section">
+                                                <p className="text-[15px] text-text-tertiary">No usage history.</p>
+                                            </div>
+                                        )}
+                                    </motion.section>
                                 )}
-                            </motion.div>
-                        )}
-
-                        {activeTab === 'transcript' && (
-                            <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                                <div className="space-y-6">
-                                    {(() => {
-                                        console.log('Raw Transcript:', meeting.transcript);
-                                        const filteredTranscript = meeting.transcript?.filter(entry => {
-                                            const isHidden = ['system', 'ai', 'assistant', 'model'].includes(entry.speaker?.toLowerCase());
-                                            if (isHidden) console.log('Filtered out:', entry);
-                                            return !isHidden;
-                                        }) || [];
-                                        console.log('Filtered Transcript:', filteredTranscript);
-
-                                        if (filteredTranscript.length === 0) {
-                                            return <p className="text-text-tertiary">No transcript available.</p>;
-                                        }
-
-                                        return filteredTranscript.map((entry, i) => (
-                                            <div key={i} className="group">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="text-xs font-semibold text-text-secondary">
-                                                        {entry.speaker === 'user' ? 'Me' : 'Them'}
-                                                    </span>
-                                                    <span className="text-xs text-text-tertiary font-mono">{entry.timestamp ? formatTime(entry.timestamp) : '0:00'}</span>
-                                                </div>
-                                                <p className="text-text-secondary text-[15px] leading-relaxed transition-colors select-text cursor-text">{entry.text}</p>
-                                            </div>
-                                        ));
-                                    })()}
-                                </div>
-                            </motion.section>
-                        )}
-
-                        {activeTab === 'usage' && (
-                            <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8 pb-10">
-                                {meeting.usage?.map((interaction, i) => (
-                                    <div key={i} className="space-y-4">
-                                        {/* User Question */}
-                                        {interaction.question && (
-                                            <div className="flex justify-end">
-                                                <div className="bg-accent-primary text-white px-5 py-2.5 rounded-2xl rounded-tr-sm max-w-[80%] text-[15px] leading-relaxed shadow-sm">
-                                                    {interaction.question}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* AI Answer */}
-                                        {interaction.answer && (
-                                            <div className="flex items-start gap-4">
-                                                <div className="mt-1 w-6 h-6 rounded-full bg-bg-input flex items-center justify-center border border-border-subtle shrink-0">
-                                                    <img src={NativelyLogo} alt="AI" className="w-4 h-4 opacity-50 object-contain force-black-icon" />
-                                                </div>
-                                                <div>
-                                                    <div className="text-[11px] text-text-tertiary mb-1.5 font-medium">{formatTime(interaction.timestamp)}</div>
-                                                    <div className="text-text-secondary text-[15px] leading-relaxed max-w-none">
-                                                        <ReactMarkdown
-                                                            remarkPlugins={[remarkGfm]}
-                                                            components={{
-                                                                h1: ({ node, ...props }) => <p className="text-[15px] text-text-secondary font-normal leading-relaxed mb-2 whitespace-pre-wrap" {...props} />,
-                                                                h2: ({ node, ...props }) => <p className="text-[15px] text-text-secondary font-normal leading-relaxed mb-2 whitespace-pre-wrap" {...props} />,
-                                                                h3: ({ node, ...props }) => <p className="text-[15px] text-text-secondary font-normal leading-relaxed mb-2 whitespace-pre-wrap" {...props} />,
-                                                                p: ({ node, ...props }) => <p className="text-[15px] text-text-secondary font-normal leading-relaxed mb-2 whitespace-pre-wrap" {...props} />,
-                                                                ul: ({ node, ...props }) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
-                                                                ol: ({ node, ...props }) => <ol className="list-decimal ml-4 mb-2 space-y-1" {...props} />,
-                                                                li: ({ node, ...props }) => <li className="text-[15px] text-text-secondary font-normal" {...props} />,
-                                                                strong: ({ node, ...props }) => <span className="font-normal text-text-secondary" {...props} />,
-                                                                a: ({ node, ...props }: any) => <a className="text-blue-500 hover:underline" {...props} />,
-                                                                pre: ({ children }: any) => <div className="not-prose mb-4">{children}</div>,
-                                                                code: ({ node, inline, className, children, ...props }: any) => {
-                                                                    const match = /language-(\w+)/.exec(className || '');
-                                                                    const isInline = inline ?? false;
-                                                                    const lang = match ? match[1] : '';
-
-                                                                    return !isInline ? (
-                                                                        <div className="my-3 rounded-xl overflow-hidden border border-white/[0.08] shadow-lg bg-zinc-800/60 backdrop-blur-md">
-                                                                            <div className="bg-white/[0.04] px-3 py-1.5 border-b border-white/[0.08]">
-                                                                                <span className="text-[10px] uppercase tracking-widest font-semibold text-white/40 font-mono">
-                                                                                    {lang || 'CODE'}
-                                                                                </span>
-                                                                            </div>
-                                                                            <div className="bg-transparent">
-                                                                                <SyntaxHighlighter
-                                                                                    language={lang || 'text'}
-                                                                                    style={vscDarkPlus}
-                                                                                    customStyle={{
-                                                                                        margin: 0,
-                                                                                        borderRadius: 0,
-                                                                                        fontSize: '13px',
-                                                                                        lineHeight: '1.6',
-                                                                                        background: 'transparent',
-                                                                                        padding: '16px',
-                                                                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
-                                                                                    }}
-                                                                                    wrapLongLines={true}
-                                                                                    showLineNumbers={true}
-                                                                                    lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: 'rgba(255,255,255,0.2)', textAlign: 'right', fontSize: '11px' }}
-                                                                                    {...props}
-                                                                                >
-                                                                                    {String(children).replace(/\n$/, '')}
-                                                                                </SyntaxHighlighter>
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <code className="bg-bg-tertiary px-1.5 py-0.5 rounded text-[13px] font-mono text-text-primary border border-border-subtle whitespace-pre-wrap" {...props}>
-                                                                            {children}
-                                                                        </code>
-                                                                    );
-                                                                }
-                                                            }}
-                                                        >
-                                                            {cleanMarkdown(interaction.answer || '')}
-                                                        </ReactMarkdown>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                                {!meeting.usage?.length && <p className="text-text-tertiary">No usage history.</p>}
-                            </motion.section>
-                        )}
-                    </div>
+                            </div>
+                        </div>
+                    </section>
                 </motion.div>
             </main>
 
-            {/* Floating Footer (Ask Bar) */}
-            <div className={`absolute bottom-0 left-0 right-0 p-6 flex justify-center pointer-events-none ${isChatOpen ? 'z-50' : 'z-20'}`}>
-                <div className="w-full max-w-[440px] relative group pointer-events-auto">
-                    {/* Dark Glass Effect Input (Matching Reference) */}
-                    <input
-                        type="text"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        onKeyDown={handleInputKeyDown}
-                        placeholder="Ask about this meeting..."
-                        className="w-full pl-5 pr-12 py-3 bg-transparent backdrop-blur-[24px] backdrop-saturate-[140%] shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 rounded-full text-sm text-text-primary placeholder-text-tertiary/70 focus:outline-none transition-shadow duration-200"
-                    />
-                    <button
-                        onClick={handleSubmitQuestion}
-                        className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-all duration-200 border border-white/5 ${query.trim() ? 'bg-text-primary text-bg-primary hover:scale-105' : 'bg-bg-item-active text-text-primary hover:bg-bg-item-hover'
-                            }`}
-                    >
-                        <ArrowUp size={16} className="transform rotate-45" />
-                    </button>
+            <div className={`absolute bottom-0 left-0 right-0 flex justify-center p-6 pointer-events-none ${isChatOpen ? 'z-50' : 'z-20'}`}>
+                <div className="pointer-events-auto relative w-full max-w-[570px]">
+                    <div className="meeting-glass-askbar">
+                        <input
+                            type="text"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            onKeyDown={handleInputKeyDown}
+                            placeholder="Ask about this meeting..."
+                            className="meeting-glass-askbar__input"
+                        />
+                        <button
+                            onClick={handleSubmitQuestion}
+                            className={`meeting-glass-askbar__button ${query.trim() ? 'meeting-glass-askbar__button--ready' : ''}`}
+                        >
+                            <ArrowUp size={16} className="rotate-45 transform" />
+                        </button>
+                    </div>
                 </div>
             </div>
 

@@ -92,6 +92,33 @@
   --overlay-pill-blur: calc(1px + (var(--overlay-opacity) * 12px));
   --overlay-transcript-blur: calc(var(--overlay-opacity) * 6px);
 
+  --meeting-screen-bg: linear-gradient(180deg, #181b21 0%, #101318 100%);
+  --meeting-screen-orb-a: rgba(160, 171, 197, 0.18);
+  --meeting-screen-orb-b: rgba(118, 127, 148, 0.14);
+  --meeting-glass-shell-bg: linear-gradient(180deg, rgba(31, 36, 44, 0.78) 0%, rgba(15, 17, 21, 0.64) 100%);
+  --meeting-glass-shell-border: rgba(255, 255, 255, 0.12);
+  --meeting-glass-shell-shadow: 0 32px 90px rgba(0, 0, 0, 0.42);
+  --meeting-glass-shell-highlight: rgba(255, 255, 255, 0.20);
+  --meeting-glass-section-bg: rgba(255, 255, 255, 0.04);
+  --meeting-glass-section-border: rgba(255, 255, 255, 0.08);
+  --meeting-glass-divider: rgba(255, 255, 255, 0.09);
+  --meeting-glass-tab-track-bg: rgba(255, 255, 255, 0.08);
+  --meeting-glass-tab-track-border: rgba(255, 255, 255, 0.10);
+  --meeting-glass-tab-active-bg: rgba(255, 255, 255, 0.92);
+  --meeting-glass-tab-active-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  --meeting-glass-copy-bg: rgba(255, 255, 255, 0.05);
+  --meeting-glass-copy-border: rgba(255, 255, 255, 0.10);
+  --meeting-glass-check-bg: rgba(255, 255, 255, 0.08);
+  --meeting-glass-check-border: rgba(255, 255, 255, 0.10);
+  --meeting-glass-dot-color: rgba(255, 255, 255, 0.58);
+  --meeting-glass-bubble-bg: rgba(96, 165, 250, 0.18);
+  --meeting-glass-bubble-border: rgba(147, 197, 253, 0.22);
+  --meeting-glass-avatar-bg: rgba(255, 255, 255, 0.06);
+  --meeting-glass-avatar-border: rgba(255, 255, 255, 0.12);
+  --meeting-glass-ask-bg: rgba(20, 23, 30, 0.58);
+  --meeting-glass-ask-border: rgba(255, 255, 255, 0.14);
+  --meeting-glass-ask-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+
   /* Primary Action Button Defaults (Dark) */
   --btn-primary-bg: #2563EB; /* blue-600 */
   --btn-primary-hover: #3b82f6; /* blue-500 */
@@ -181,6 +208,33 @@
   --overlay-pill-blur:       calc(2px + (var(--overlay-opacity) * 12px));
   --overlay-transcript-blur: calc(var(--overlay-opacity) * 5px);
 
+  --meeting-screen-bg: linear-gradient(180deg, #f7f8fb 0%, #e9edf5 100%);
+  --meeting-screen-orb-a: rgba(255, 255, 255, 0.82);
+  --meeting-screen-orb-b: rgba(213, 223, 243, 0.72);
+  --meeting-glass-shell-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.76) 0%, rgba(248, 250, 255, 0.58) 100%);
+  --meeting-glass-shell-border: rgba(255, 255, 255, 0.72);
+  --meeting-glass-shell-shadow: 0 34px 88px rgba(129, 139, 158, 0.24);
+  --meeting-glass-shell-highlight: rgba(255, 255, 255, 0.92);
+  --meeting-glass-section-bg: rgba(255, 255, 255, 0.34);
+  --meeting-glass-section-border: rgba(255, 255, 255, 0.52);
+  --meeting-glass-divider: rgba(148, 163, 184, 0.24);
+  --meeting-glass-tab-track-bg: rgba(229, 232, 240, 0.82);
+  --meeting-glass-tab-track-border: rgba(255, 255, 255, 0.66);
+  --meeting-glass-tab-active-bg: rgba(255, 255, 255, 0.96);
+  --meeting-glass-tab-active-shadow: 0 10px 20px rgba(130, 139, 156, 0.16);
+  --meeting-glass-copy-bg: rgba(255, 255, 255, 0.28);
+  --meeting-glass-copy-border: rgba(255, 255, 255, 0.52);
+  --meeting-glass-check-bg: rgba(255, 255, 255, 0.48);
+  --meeting-glass-check-border: rgba(255, 255, 255, 0.66);
+  --meeting-glass-dot-color: rgba(75, 85, 99, 0.70);
+  --meeting-glass-bubble-bg: rgba(219, 234, 254, 0.78);
+  --meeting-glass-bubble-border: rgba(191, 219, 254, 0.92);
+  --meeting-glass-avatar-bg: rgba(255, 255, 255, 0.42);
+  --meeting-glass-avatar-border: rgba(255, 255, 255, 0.58);
+  --meeting-glass-ask-bg: rgba(255, 255, 255, 0.54);
+  --meeting-glass-ask-border: rgba(255, 255, 255, 0.72);
+  --meeting-glass-ask-shadow: 0 20px 52px rgba(134, 141, 156, 0.22);
+
   /* Primary Action Button (Light) */
   --btn-primary-bg: #2563EB; /* blue-600 */
   --btn-primary-hover: #1d4ed8; /* blue-700 */
@@ -248,6 +302,33 @@
   --overlay-shell-blur:      calc(2px + (var(--overlay-opacity) * 18px));
   --overlay-pill-blur:       calc(1px + (var(--overlay-opacity) * 12px));
   --overlay-transcript-blur: calc(var(--overlay-opacity) * 6px);
+
+  --meeting-screen-bg: linear-gradient(180deg, #181b21 0%, #101318 100%);
+  --meeting-screen-orb-a: rgba(160, 171, 197, 0.18);
+  --meeting-screen-orb-b: rgba(118, 127, 148, 0.14);
+  --meeting-glass-shell-bg: linear-gradient(180deg, rgba(31, 36, 44, 0.78) 0%, rgba(15, 17, 21, 0.64) 100%);
+  --meeting-glass-shell-border: rgba(255, 255, 255, 0.12);
+  --meeting-glass-shell-shadow: 0 32px 90px rgba(0, 0, 0, 0.42);
+  --meeting-glass-shell-highlight: rgba(255, 255, 255, 0.20);
+  --meeting-glass-section-bg: rgba(255, 255, 255, 0.04);
+  --meeting-glass-section-border: rgba(255, 255, 255, 0.08);
+  --meeting-glass-divider: rgba(255, 255, 255, 0.09);
+  --meeting-glass-tab-track-bg: rgba(255, 255, 255, 0.08);
+  --meeting-glass-tab-track-border: rgba(255, 255, 255, 0.10);
+  --meeting-glass-tab-active-bg: rgba(61, 67, 78, 0.92);
+  --meeting-glass-tab-active-shadow: 0 8px 18px rgba(0, 0, 0, 0.20);
+  --meeting-glass-copy-bg: rgba(255, 255, 255, 0.05);
+  --meeting-glass-copy-border: rgba(255, 255, 255, 0.10);
+  --meeting-glass-check-bg: rgba(255, 255, 255, 0.08);
+  --meeting-glass-check-border: rgba(255, 255, 255, 0.10);
+  --meeting-glass-dot-color: rgba(255, 255, 255, 0.58);
+  --meeting-glass-bubble-bg: rgba(59, 130, 246, 0.16);
+  --meeting-glass-bubble-border: rgba(96, 165, 250, 0.18);
+  --meeting-glass-avatar-bg: rgba(255, 255, 255, 0.06);
+  --meeting-glass-avatar-border: rgba(255, 255, 255, 0.12);
+  --meeting-glass-ask-bg: rgba(20, 23, 30, 0.58);
+  --meeting-glass-ask-border: rgba(255, 255, 255, 0.14);
+  --meeting-glass-ask-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
 
   /* Primary Action Button (Dark) */
   --btn-primary-bg: #2563EB;
@@ -607,6 +688,292 @@ body {
 
 .overlay-input-text::placeholder {
   color: var(--overlay-text-placeholder);
+}
+
+.meeting-notes-screen {
+  display: flex;
+  flex-direction: column;
+  background: var(--meeting-screen-bg);
+}
+
+.meeting-notes-screen__ambient {
+  pointer-events: none;
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(18px);
+  opacity: 0.9;
+}
+
+.meeting-notes-screen__ambient--top {
+  top: -8rem;
+  left: 4rem;
+  width: 30rem;
+  height: 30rem;
+  background: radial-gradient(circle, var(--meeting-screen-orb-a) 0%, transparent 72%);
+}
+
+.meeting-notes-screen__ambient--bottom {
+  right: 3rem;
+  bottom: -10rem;
+  width: 28rem;
+  height: 28rem;
+  background: radial-gradient(circle, var(--meeting-screen-orb-b) 0%, transparent 72%);
+}
+
+.meeting-glass-shell {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--meeting-glass-shell-border);
+  border-radius: 2.5rem;
+  background: var(--meeting-glass-shell-bg);
+  box-shadow: var(--meeting-glass-shell-shadow);
+  backdrop-filter: blur(34px) saturate(180%);
+  -webkit-backdrop-filter: blur(34px) saturate(180%);
+}
+
+.meeting-glass-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.30) 0%, rgba(255, 255, 255, 0.05) 18%, transparent 42%),
+    linear-gradient(180deg, transparent 70%, rgba(255, 255, 255, 0.06) 100%);
+  pointer-events: none;
+}
+
+.meeting-glass-shell::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: calc(2.5rem - 1px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  mask: linear-gradient(180deg, #000 0%, transparent 26%);
+  pointer-events: none;
+}
+
+.meeting-glass-shell__glow {
+  position: absolute;
+  top: -8rem;
+  left: 35%;
+  width: 16rem;
+  height: 16rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--meeting-glass-shell-highlight) 0%, transparent 70%);
+  filter: blur(24px);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.meeting-glass-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem;
+  border-radius: 999px;
+  border: 1px solid var(--meeting-glass-tab-track-border);
+  background: var(--meeting-glass-tab-track-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+}
+
+.meeting-glass-tab {
+  position: relative;
+  padding: 0.625rem 1.25rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  transition: color 200ms cubic-bezier(0.25, 1, 0.5, 1), transform 200ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.meeting-glass-tab:hover {
+  transform: translateY(-0.5px);
+}
+
+.meeting-glass-tab__active-surface {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--meeting-glass-tab-active-bg);
+  box-shadow: var(--meeting-glass-tab-active-shadow);
+}
+
+.meeting-glass-copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  padding: 0.75rem 0.95rem;
+  border: 1px solid var(--meeting-glass-copy-border);
+  border-radius: 999px;
+  background: var(--meeting-glass-copy-bg);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  transition: color 200ms cubic-bezier(0.25, 1, 0.5, 1), transform 200ms cubic-bezier(0.25, 1, 0.5, 1), border-color 200ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.meeting-glass-copy-button:hover {
+  color: var(--text-primary);
+  transform: translateY(-0.5px);
+}
+
+.meeting-glass-overview {
+  padding-bottom: 1.9rem;
+  border-bottom: 1px solid var(--meeting-glass-divider);
+}
+
+.meeting-glass-section {
+  padding: 1.4rem 1.3rem;
+  border: 1px solid var(--meeting-glass-section-border);
+  border-radius: 1.75rem;
+  background: var(--meeting-glass-section-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.meeting-glass-list-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.meeting-glass-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  border: 1px solid var(--meeting-glass-check-border);
+  border-radius: 0.7rem;
+  background: var(--meeting-glass-check-bg);
+  color: #22c55e;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.meeting-glass-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--meeting-glass-dot-color);
+}
+
+.meeting-glass-transcript-row:not(:last-child) {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--meeting-glass-divider);
+}
+
+.meeting-glass-question-bubble {
+  max-width: 80%;
+  padding: 0.85rem 1.05rem;
+  border: 1px solid var(--meeting-glass-bubble-border);
+  border-radius: 1.35rem 1.35rem 0.65rem 1.35rem;
+  background: var(--meeting-glass-bubble-bg);
+  color: var(--text-primary);
+  font-size: 0.94rem;
+  line-height: 1.6;
+  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+}
+
+.meeting-glass-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  border: 1px solid var(--meeting-glass-avatar-border);
+  border-radius: 999px;
+  background: var(--meeting-glass-avatar-bg);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+}
+
+.meeting-glass-askbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  border: 1px solid var(--meeting-glass-ask-border);
+  border-radius: 999px;
+  background: var(--meeting-glass-ask-bg);
+  box-shadow: var(--meeting-glass-ask-shadow);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+}
+
+.meeting-glass-askbar__input {
+  width: 100%;
+  padding: 0.95rem 0.95rem 0.95rem 1.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  outline: none;
+}
+
+.meeting-glass-askbar__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.meeting-glass-askbar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+  color: var(--text-secondary);
+  transition: transform 200ms cubic-bezier(0.25, 1, 0.5, 1), background-color 200ms cubic-bezier(0.25, 1, 0.5, 1), color 200ms cubic-bezier(0.25, 1, 0.5, 1), border-color 200ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.meeting-glass-askbar__button:hover {
+  transform: scale(1.03);
+}
+
+.meeting-glass-askbar__button--ready {
+  border-color: rgba(17, 24, 39, 0.08);
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+[data-theme='dark'] .meeting-glass-askbar__button {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+[data-theme='dark'] .meeting-glass-askbar__button--ready {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.92);
+  color: #101318;
+}
+
+@media (min-width: 640px) {
+  .meeting-glass-shell {
+    border-radius: 3rem;
+  }
+
+  .meeting-glass-shell::after {
+    border-radius: calc(3rem - 1px);
+  }
+
+  .meeting-glass-section {
+    padding: 1.55rem 1.5rem;
+    border-radius: 2rem;
+  }
 }
 
 /* Interaction Utilities - Reusable */
