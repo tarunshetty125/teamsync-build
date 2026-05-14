@@ -225,13 +225,10 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             window.electronAPI.seedDemo().catch(err => console.error("Failed to seed demo:", err));
         }
 
-        // Onboarding Check
-        const hasSeenModesOnboarding = localStorage.getItem('natively_seen_modes_onboarding_v5');
-        if (!hasSeenModesOnboarding) {
-            setTimeout(() => {
-                if (mounted) setShowModesOnboarding(true);
-            }, 8000); // Increased delay so it doesn't overlap with other startup notifications
-        }
+        // Modes onboarding should appear on each launcher open rather than only once.
+        setTimeout(() => {
+            if (mounted) setShowModesOnboarding(true);
+        }, 8000); // Increased delay so it doesn't overlap with other startup notifications
 
         // Sync initial undetectable state
         if (window.electronAPI?.getUndetectable) {
@@ -577,7 +574,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                         <button
                             onClick={() => {
                                 setShowModesOnboarding(false);
-                                localStorage.setItem('natively_seen_modes_onboarding_v5', 'true');
                                 onOpenModes?.();
                             }}
                             title="Modes"
@@ -640,7 +636,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         setShowModesOnboarding(false);
-                                                        localStorage.setItem('natively_seen_modes_onboarding_v5', 'true');
                                                     }}
                                                     className={`text-[12px] font-medium px-3.5 py-[6px] rounded-full transition-all active:scale-95 ${isLight
                                                         ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/60'
@@ -654,7 +649,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                         e.stopPropagation();
                                                         onOpenModes?.();
                                                         setShowModesOnboarding(false);
-                                                        localStorage.setItem('natively_seen_modes_onboarding_v5', 'true');
                                                     }}
                                                     className={`text-[12px] font-medium px-4 py-[6px] rounded-full transition-all active:scale-95 shadow-sm ${isLight
                                                         ? 'bg-slate-900 text-white hover:bg-slate-800'
