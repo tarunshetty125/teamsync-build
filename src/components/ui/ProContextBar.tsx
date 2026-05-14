@@ -15,6 +15,7 @@
  */
 import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Flame } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -281,58 +282,77 @@ const ProContextBar: React.FC<ProContextBarProps> = ({
                                 initial="hidden"
                                 animate="visible"
                                 exit="exit"
-                                layout
                                 disabled={negotiationLoading || !onToggleNegotiation}
                                 onClick={() => onToggleNegotiation?.(!negotiationEnabled)}
-                                className="no-drag transition-all disabled:cursor-wait disabled:opacity-60"
+                                className="no-drag disabled:cursor-wait disabled:opacity-60"
                                 aria-pressed={negotiationEnabled}
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: '8px',
-                                    minWidth: '118px',
-                                    background: negotiationEnabled ? 'rgba(16, 185, 129, 0.14)' : 'rgba(239, 68, 68, 0.14)',
-                                    padding: '4px 8px 4px 10px',
+                                    gap: '7px',
+                                    background: negotiationEnabled ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255,255,255,0.045)',
+                                    padding: '4px 10px',
                                     borderRadius: '999px',
                                     fontSize: '11px',
-                                    color: negotiationEnabled ? '#D1FAE5' : '#FCA5A5',
+                                    color: negotiationEnabled ? '#D1FAE5' : 'rgba(255,255,255,0.78)',
                                     fontWeight: 600,
-                                    border: negotiationEnabled ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(239, 68, 68, 0.3)',
-                                    boxShadow: negotiationEnabled ? 'inset 0 1px 0 rgba(255,255,255,0.05), 0 6px 18px rgba(16,185,129,0.12)' : 'inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 18px rgba(239,68,68,0.08)',
+                                    border: negotiationEnabled ? '1px solid rgba(16, 185, 129, 0.34)' : '1px solid rgba(255,255,255,0.08)',
+                                    boxShadow: negotiationEnabled
+                                        ? 'inset 0 1px 0 rgba(255,255,255,0.05), 0 0 0 1px rgba(16,185,129,0.08), 0 0 24px rgba(16,185,129,0.18), 0 10px 26px rgba(16,185,129,0.16)'
+                                        : 'inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 18px rgba(0,0,0,0.12)',
                                     whiteSpace: 'nowrap',
                                     flexShrink: 0,
+                                    transition: 'background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 180ms ease, transform 140ms cubic-bezier(0.23, 1, 0.32, 1)',
                                 }}
                             >
                                 <span style={{ letterSpacing: '0.01em' }}>
-                                    {negotiationLoading ? 'Updating negotiation' : 'Negotiation'}
+                                    Negotiation
+                                </span>
+                                <span
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        minWidth: '28px',
+                                        height: '18px',
+                                        padding: '0 6px',
+                                        borderRadius: '999px',
+                                        background: negotiationEnabled ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255,255,255,0.055)',
+                                        border: negotiationEnabled ? '1px solid rgba(52, 211, 153, 0.34)' : '1px solid rgba(255,255,255,0.08)',
+                                        color: negotiationEnabled ? '#A7F3D0' : 'rgba(255,255,255,0.55)',
+                                        fontSize: '9px',
+                                        fontWeight: 700,
+                                        letterSpacing: '0.08em',
+                                        lineHeight: 1,
+                                        textTransform: 'uppercase',
+                                    }}
+                                >
+                                    {negotiationEnabled ? 'On' : 'Off'}
                                 </span>
                                 <span
                                     aria-hidden="true"
                                     style={{
-                                        position: 'relative',
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        width: '28px',
+                                        justifyContent: 'center',
+                                        width: '18px',
                                         height: '18px',
                                         borderRadius: '999px',
-                                        background: negotiationEnabled ? '#1FD39A' : '#EF4444',
-                                        border: negotiationEnabled ? '1px solid rgba(31, 211, 154, 0.6)' : '1px solid rgba(248, 113, 113, 0.55)',
-                                        transition: 'background 180ms ease, border-color 180ms ease',
+                                        background: negotiationEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.04)',
+                                        border: negotiationEnabled ? '1px solid rgba(52, 211, 153, 0.44)' : '1px solid rgba(255,255,255,0.06)',
+                                        boxShadow: negotiationEnabled ? '0 0 16px rgba(16,185,129,0.3)' : 'none',
+                                        transition: 'background 160ms ease, border-color 160ms ease, box-shadow 180ms ease',
                                         flexShrink: 0,
                                     }}
                                 >
-                                    <span
+                                    <Flame
+                                        size={10}
+                                        strokeWidth={2.2}
+                                        className={negotiationEnabled ? 'animate-flame' : ''}
                                         style={{
-                                            position: 'absolute',
-                                            top: '1px',
-                                            left: negotiationEnabled ? '11px' : '1px',
-                                            width: '14px',
-                                            height: '14px',
-                                            borderRadius: '999px',
-                                            background: '#050505',
-                                            boxShadow: '0 1px 4px rgba(0,0,0,0.28)',
-                                            transition: 'left 180ms cubic-bezier(0.23, 1, 0.32, 1)',
+                                            color: negotiationEnabled ? '#34D399' : 'rgba(255,255,255,0.45)',
+                                            filter: negotiationEnabled ? 'drop-shadow(0 0 8px rgba(52,211,153,0.34))' : 'none',
+                                            transition: 'color 160ms ease, filter 180ms ease',
                                         }}
                                     />
                                 </span>

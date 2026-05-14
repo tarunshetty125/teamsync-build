@@ -100,6 +100,14 @@ interface ScreenScanOverlayState {
     expanded: boolean;
 }
 
+function hasNegotiationScriptAvailable(aotState?: any, profileData?: any): boolean {
+    return Boolean(
+        aotState?.negotiation?.exists ||
+        profileData?.aot?.negotiation_script ||
+        profileData?.negotiationScript
+    );
+}
+
 function generateResponseChips(text: string, _intent?: string): ResponseChip[] {
     if (!text || text.length < 40) return [];
     const chips: ResponseChip[] = [];
@@ -562,14 +570,16 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }
 
         try {
-            const [negotiationState, aotState] = await Promise.all([
+            const [negotiationState, aotState, profileData] = await Promise.all([
                 window.electronAPI?.profileGetNegotiationState?.(),
                 window.electronAPI?.getAOTState?.(),
+                window.electronAPI?.profileGetProfile?.(),
             ]);
             setNegotiationContextEnabled(Boolean(negotiationState?.enabled ?? negotiationState?.isActive));
-            setHasNegotiationScript(Boolean(aotState?.negotiation?.exists));
+            setHasNegotiationScript(hasNegotiationScriptAvailable(aotState, profileData));
         } catch {
             setNegotiationContextEnabled(false);
+            setHasNegotiationScript(false);
         }
     }, [hasProContextAccess]);
 
@@ -630,6 +640,11 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
         }
         if (window.electronAPI?.onKnowledgeEngineReady) {
             unsubscribers.push(window.electronAPI.onKnowledgeEngineReady(() => {
+                void refreshNegotiationContextState();
+            }));
+        }
+        if (window.electronAPI?.onProfileUpdated) {
+            unsubscribers.push(window.electronAPI.onProfileUpdated(() => {
                 void refreshNegotiationContextState();
             }));
         }
@@ -3330,24 +3345,45 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                             appearance={appearance}
                             onLogoClick={() => window.electronAPI?.setWindowMode?.('launcher')}
                         />
-                        <div
-                            className={`relative w-[600px] max-w-full backdrop-blur-2xl border border-white/[0.12] rounded-[24px] overflow-hidden flex flex-col draggable-area overlay-shell-surface ${overlayPanelClass}`}
-                            style={{
-                                ...appearance.shellStyle,
-                                borderColor: isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)',
-                            }}
-                        >
-                            {/* Apple-style subtle top highlight */}
-                            <div className="absolute top-0 left-0 w-full h-[1px] z-[100] rounded-t-[24px] overflow-hidden" style={{ background: isLightTheme ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.15)' }}>
-                                {/* Subtle shimmer */}
-                                <motion.div
-                                    key="apple-shimmer"
-                                    animate={{ left: ['-40%', '100%'] }}
-                                    transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-                                    className="absolute top-0 h-full w-[30%]"
-                                    style={{ background: isLightTheme ? 'linear-gradient(90deg, transparent, rgba(255,255,255,1), transparent)' : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)' }}
+                        <div className="relative w-[600px] max-w-full">
+                            <motion.div
+                                aria-hidden="true"
+                                className="pointer-events-none absolute inset-x-[7.5%] top-[-2px] z-[110] h-[18px] overflow-visible"
+                                animate={{
+                                    opacity: [0.62, 1, 0.62],
+                                    scaleX: [0.985, 1.01, 0.985],
+                                    y: [0, -1, 0],
+                                }}
+                                transition={{
+                                    duration: 3.4,
+                                    repeat: Infinity,
+                                    ease: [0.4, 0, 0.2, 1],
+                                }}
+                                style={{ transformOrigin: 'center top' }}
+                            >
+                                <div
+                                    className="absolute inset-x-0 top-[1px] h-[4px] rounded-full"
+                                    style={{
+                                        background: 'linear-gradient(90deg, rgba(255,140,41,0) 0%, rgba(255,140,41,0.20) 8%, rgba(255,140,41,0.76) 18%, rgba(255,198,108,1) 50%, rgba(255,140,41,0.76) 82%, rgba(255,140,41,0.20) 92%, rgba(255,140,41,0) 100%)',
+                                        boxShadow: '0 0 6px rgba(255,140,41,0.22)',
+                                    }}
                                 />
-                            </div>
+                                <div
+                                    className="absolute inset-x-[8%] top-[2px] h-[1px] rounded-full"
+                                    style={{
+                                        background: 'linear-gradient(90deg, rgba(255,220,166,0), rgba(255,234,196,0.92) 50%, rgba(255,220,166,0))',
+                                        opacity: 0.8,
+                                    }}
+                                />
+                            </motion.div>
+                            <div
+                                className={`relative w-full backdrop-blur-2xl border border-white/[0.12] rounded-[24px] overflow-hidden flex flex-col draggable-area overlay-shell-surface ${overlayPanelClass}`}
+                                style={{
+                                    ...appearance.shellStyle,
+                                    borderColor: isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.12)',
+                                    borderTopColor: 'transparent',
+                                }}
+                            >
 
                             {/* ScreenScanOverlay removed — screen scan results now appear only in the chat messages to avoid duplicate responses */}
 
@@ -3600,7 +3636,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                 const isRecommendedAnswer = recommendedButton === 'Answer';
 
                                 return (
-                                    <div className={`flex flex-nowrap justify-center items-center gap-2 px-3 pb-3 overflow-x-hidden transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity, width: '95%', margin: '0 auto' }}>
+                                    <div className={`flex flex-nowrap justify-center items-center gap-2 px-3 pb-3 overflow-x-auto scrollbar-none transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity, width: '95%', margin: '0 auto' }}>
                                         <AnimatePresence mode="popLayout">
                                             {(() => {
                                                 // macOS Control Center glassmorphism — Apple-style tinted glass per button
@@ -3635,7 +3671,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                                                 }
                                                                 action.handler();
                                                             }}
-                                                            className={`group relative flex items-center justify-center gap-1.5 px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap flex-1 min-w-0 no-drag backdrop-blur-xl ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}
+                                                            className={`group relative flex items-center justify-center gap-1.5 px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap flex-none min-w-fit no-drag backdrop-blur-xl ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}
                                                             style={{
                                                                 background: isRec
                                                                     ? `linear-gradient(135deg, ${glass.bg.replace(/[\d.]+\)$/, m => `${parseFloat(m) * 2.5})`)} 0%, ${glass.tint} 100%)`
@@ -3649,7 +3685,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                                         >
                                                             {/* Content */}
                                                             <span className="relative z-20 text-[11px] leading-none shrink-0">{action.icon}</span>
-                                                            <span className={`relative z-20 drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)] truncate ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}>{
+                                                            <span className={`relative z-20 drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)] ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}>{
                                                                 currentSessionMode === 'system_design'
                                                                     ? ({ 'What to answer?': 'Tradeoffs', 'Clarify': 'Clarify', 'Brainstorm': 'Approaches', 'Recap': 'Recap', 'Follow Up': 'Deep Dive' } as Record<string, string>)[action.label] ?? action.label
                                                                     : ({ 'What to answer?': 'Suggest' } as Record<string, string>)[action.label] ?? action.label
@@ -3673,7 +3709,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                             whileHover={{ scale: 1.04, transition: { duration: 0.12 } }}
                                             whileTap={{ scale: 0.96, transition: { duration: 0.08 } }}
                                             transition={{ duration: 0.14, ease: 'easeOut' }}
-                                            className={`group relative px-3.5 py-[7px] rounded-full font-semibold tracking-normal flex items-center justify-center gap-1.5 flex-1 min-w-0 whitespace-nowrap no-drag text-[11px] backdrop-blur-xl ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}
+                                            className={`group relative px-3.5 py-[7px] rounded-full font-semibold tracking-normal flex items-center justify-center gap-1.5 flex-none min-w-fit whitespace-nowrap no-drag text-[11px] backdrop-blur-xl ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}
                                             style={{
                                                 background: isManualRecording
                                                     ? 'linear-gradient(135deg, rgba(239,68,68,0.22) 0%, rgba(239,68,68,0.08) 100%)'
@@ -4018,9 +4054,18 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                             />
                                             <button
                                                 onClick={handleScreenScan}
-                                                className={`relative h-[26px] px-3.5 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm interaction-base interaction-press text-[11px] font-bold tracking-wide whitespace-nowrap z-10 ${isLightTheme ? 'bg-white text-[#007AFF] hover:bg-gray-50' : 'bg-[#1c1c1e] text-[#0A84FF] hover:bg-[#2c2c2e]'}`}
+                                                className={`relative h-[26px] px-3.5 rounded-full flex items-center justify-center gap-1.5 transition-all duration-200 shadow-sm interaction-base interaction-press text-[11px] font-bold tracking-wide whitespace-nowrap z-10 ${isLightTheme ? 'text-[#B76E79]' : 'text-[#E6B7B0]'}`}
+                                                style={{
+                                                    background: isLightTheme
+                                                        ? 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,248,252,0.94))'
+                                                        : 'linear-gradient(180deg, rgba(28,28,30,0.98), rgba(35,35,38,0.94))',
+                                                    boxShadow: isLightTheme
+                                                        ? 'inset 0 1px 0 rgba(255,255,255,0.92), 0 1px 0 rgba(255,255,255,0.55)'
+                                                        : 'inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.22)',
+                                                }}
                                                 title="Capture and scan screen"
                                             >
+                                                <Camera className={`w-3 h-3 ${isLightTheme ? 'text-[#C47A86]' : 'text-[#EBC0B8]'}`} />
                                                 Analyse Screen
                                             </button>
                                         </div>
@@ -4043,6 +4088,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                                         <ArrowRight className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
+                            </div>
                             </div>
                         </div>
 
