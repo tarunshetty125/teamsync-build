@@ -422,6 +422,39 @@ function buildContextPriorityRules(profileApplied: boolean): string[] {
     return rules;
 }
 
+function shouldUseTranscriptForManualChat(
+    question: string,
+    profile: QuestionResponseProfile
+): boolean {
+    const normalized = question.trim().toLowerCase();
+    if (!normalized) return true;
+
+    if (profile === 'follow_up') {
+        return true;
+    }
+
+    const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+    const explicitFollowUpPatterns = [
+        /\b(continue|elaborate|expand|go deeper|follow up|follow-up|what about|and what|and how|again)\b/i,
+        /\b(that|this|it|they|those|these|earlier|previous|above)\b/i,
+    ];
+
+    if (explicitFollowUpPatterns.some((pattern) => pattern.test(normalized))) {
+        return true;
+    }
+
+    const standaloneQuestionPatterns = [
+        /^(who|what|when|where|why|how|can|could|should|would|do|does|did|is|are|am|will)\b/i,
+        /^(help|explain|define|compare|summarize|rewrite|fix|debug|optimize)\b/i,
+    ];
+
+    if (wordCount <= 14 && standaloneQuestionPatterns.some((pattern) => pattern.test(normalized))) {
+        return false;
+    }
+
+    return true;
+}
+
 export function buildTranscriptContext(
     session: SessionTracker,
     intent: UnifiedActionIntent,
@@ -441,6 +474,15 @@ export function buildTranscriptContext(
     }
 
     if (intent === 'manual_chat') {
+        if (!shouldUseTranscriptForManualChat(question, profile)) {
+            return {
+                title: 'TRANSCRIPT',
+                content: '[NO TRANSCRIPT AVAILABLE]',
+                strategy: 'rolling_window',
+                approxTokens: 0,
+            };
+        }
+
         const transcriptConfig = (() => {
             switch (profile) {
                 case 'coding':

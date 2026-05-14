@@ -3944,7 +3944,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       const result = await showOpenDialogNormalized({
         properties: ['openFile'],
         filters: [
-          { name: 'Text & Documents', extensions: ['txt', 'md', 'pdf', 'docx', 'doc'] },
+          { name: 'Text & Documents', extensions: ['txt', 'md', 'pdf', 'docx'] },
           { name: 'All Files', extensions: ['*'] },
         ],
       });
@@ -3956,17 +3956,15 @@ export function initializeIpcHandlers(appState: AppState): void {
       const ext = path.extname(filePath).toLowerCase();
 
       let content = '';
-      if (ext === '.pdf') {
-        const pdfParse = require('pdf-parse');
-        const buffer = fs.readFileSync(filePath);
-        const data = await pdfParse(buffer);
-        content = data.text;
-      } else if (ext === '.docx' || ext === '.doc') {
-        const mammoth = require('mammoth');
-        const result2 = await mammoth.extractRawText({ path: filePath });
-        content = result2.value;
-      } else {
+      if (ext === '.md') {
         content = fs.readFileSync(filePath, 'utf8');
+      } else {
+        const { extractDocumentText } = require('../premium/electron/knowledge/DocumentReader');
+        content = await extractDocumentText(filePath);
+      }
+
+      if (!content.trim()) {
+        return { success: false, error: 'No readable text found in the selected file.' };
       }
 
       const { ModesManager } = require('./services/ModesManager');
