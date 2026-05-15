@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron"
+import type { ModeReferenceFile, ModesStateSnapshot, PublicModeTemplate } from "../src/lib/modes/types";
 
 // Types for the exposed Electron API
 interface ElectronAPI {
@@ -385,20 +386,24 @@ interface ElectronAPI {
   platform: NodeJS.Platform;
 
   // Modes API
+  modesGetState: () => Promise<ModesStateSnapshot>;
+  modesGetTemplates: () => Promise<PublicModeTemplate[]>;
   modesGetAll: () => Promise<Array<{ id: string; name: string; templateType: string; customContext: string; isActive: boolean; createdAt: string; referenceFileCount: number }>>;
   modesGetActive: () => Promise<{ id: string; name: string; templateType: string; customContext: string; isActive: boolean; createdAt: string } | null>;
-  modesCreate: (params: { name: string; templateType: string }) => Promise<{ success: boolean; mode?: any; error?: string }>;
-  modesUpdate: (id: string, updates: { name?: string; templateType?: string; customContext?: string }) => Promise<{ success: boolean; error?: string }>;
-  modesDelete: (id: string) => Promise<{ success: boolean; error?: string }>;
-  modesSetActive: (id: string | null) => Promise<{ success: boolean; error?: string }>;
-  modesGetReferenceFiles: (modeId: string) => Promise<Array<{ id: string; modeId: string; fileName: string; content: string; createdAt: string }>>;
-  modesUploadReferenceFile: (modeId: string) => Promise<{ success: boolean; cancelled?: boolean; file?: any; error?: string }>;
-  modesDeleteReferenceFile: (id: string) => Promise<{ success: boolean; error?: string }>;
+  modesCreate: (params: { name?: string; templateType?: string; templateId?: string }) => Promise<{ success: boolean; mode?: any; state?: ModesStateSnapshot; error?: string }>;
+  modesUpdate: (id: string, updates: { name?: string; templateType?: string; templateId?: string; customContext?: string; userPrompt?: string }) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
+  modesDelete: (id: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
+  modesSetSelected: (id: string | null) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
+  modesSetActive: (id: string | null) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
+  modesGetReferenceFiles: (modeId: string) => Promise<ModeReferenceFile[]>;
+  modesUploadReferenceFile: (modeId: string) => Promise<{ success: boolean; cancelled?: boolean; file?: ModeReferenceFile; state?: ModesStateSnapshot; error?: string }>;
+  modesDeleteReferenceFile: (id: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
   modesGetNoteSections: (modeId: string) => Promise<Array<{ id: string; modeId: string; title: string; description: string; sortOrder: number; createdAt: string }>>;
-  modesAddNoteSection: (modeId: string, title: string, description: string) => Promise<{ success: boolean; section?: any; error?: string }>;
-  modesUpdateNoteSection: (id: string, updates: { title?: string; description?: string }) => Promise<{ success: boolean; error?: string }>;
-  modesDeleteNoteSection: (id: string) => Promise<{ success: boolean; error?: string }>;
-  modesRemoveAllNoteSections: (modeId: string) => Promise<{ success: boolean; error?: string }>;
+  modesAddNoteSection: (modeId: string, title: string, description: string) => Promise<{ success: boolean; section?: any; state?: ModesStateSnapshot; error?: string }>;
+  modesUpdateNoteSection: (id: string, updates: { title?: string; description?: string }) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
+  modesDeleteNoteSection: (id: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
+  modesRemoveAllNoteSections: (modeId: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
+  modesResetNoteSections: (modeId: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
 }
 
 export const PROCESSING_EVENTS = {
@@ -609,6 +614,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }
   },
 
+  // Advanced Stealth Mode API
+  stealthEngage: () => ipcRenderer.invoke("stealth:engage"),
+  stealthDisengage: () => ipcRenderer.invoke("stealth:disengage"),
+  stealthGetState: () => ipcRenderer.invoke("stealth:get-state"),
+  stealthGetConfig: () => ipcRenderer.invoke("stealth:get-config"),
+  stealthUpdateConfig: (patch: Record<string, any>) => ipcRenderer.invoke("stealth:update-config", patch),
+  stealthIsEngaged: () => ipcRenderer.invoke("stealth:is-engaged"),
+  onStealthStateChanged: (callback: (state: any) => void) => {
+    const subscription = (_: any, state: any) => callback(state);
+    ipcRenderer.on('stealth-state-changed', subscription);
+    return () => { ipcRenderer.removeListener('stealth-state-changed', subscription); };
+  },
+
   onSettingsVisibilityChange: (callback: (isVisible: boolean) => void) => {
     const subscription = (_: any, isVisible: boolean) => callback(isVisible)
     ipcRenderer.on("settings-visibility-changed", subscription)
@@ -813,10 +831,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => { ipcRenderer.removeListener('action-button-mode-changed', subscription); };
   },
 
-  onModeChanged: (callback: (data: { id: string | null; name: string | null }) => void) => {
-    const subscription = (_: any, data: { id: string | null; name: string | null }) => callback(data);
+  onModeChanged: (callback: (data: { id: string | null; name: string | null; templateId?: string | null }) => void) => {
+    const subscription = (_: any, data: { id: string | null; name: string | null; templateId?: string | null }) => callback(data);
     ipcRenderer.on('mode-changed', subscription);
     return () => { ipcRenderer.removeListener('mode-changed', subscription); };
+  },
+
+  onModesStateChanged: (callback: (state: ModesStateSnapshot) => void) => {
+    const subscription = (_: any, state: ModesStateSnapshot) => callback(state);
+    ipcRenderer.on('modes-state-changed', subscription);
+    return () => { ipcRenderer.removeListener('modes-state-changed', subscription); };
   },
 
   // Meeting Lifecycle
@@ -1435,11 +1459,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   platform: process.platform,
 
   // Modes API
+  modesGetState: () => ipcRenderer.invoke('modes:get-state'),
+  modesGetTemplates: () => ipcRenderer.invoke('modes:get-templates'),
   modesGetAll: () => ipcRenderer.invoke('modes:get-all'),
   modesGetActive: () => ipcRenderer.invoke('modes:get-active'),
-  modesCreate: (params: { name: string; templateType: string }) => ipcRenderer.invoke('modes:create', params),
-  modesUpdate: (id: string, updates: { name?: string; templateType?: string; customContext?: string }) => ipcRenderer.invoke('modes:update', id, updates),
+  modesCreate: (params: { name?: string; templateType?: string; templateId?: string }) => ipcRenderer.invoke('modes:create', params),
+  modesUpdate: (id: string, updates: { name?: string; templateType?: string; templateId?: string; customContext?: string; userPrompt?: string }) => ipcRenderer.invoke('modes:update', id, updates),
   modesDelete: (id: string) => ipcRenderer.invoke('modes:delete', id),
+  modesSetSelected: (id: string | null) => ipcRenderer.invoke('modes:set-selected', id),
   modesSetActive: (id: string | null) => ipcRenderer.invoke('modes:set-active', id),
   modesGetReferenceFiles: (modeId: string) => ipcRenderer.invoke('modes:get-reference-files', modeId),
   modesUploadReferenceFile: (modeId: string) => ipcRenderer.invoke('modes:upload-reference-file', modeId),
@@ -1449,6 +1476,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   modesUpdateNoteSection: (id: string, updates: { title?: string; description?: string }) => ipcRenderer.invoke('modes:update-note-section', id, updates),
   modesDeleteNoteSection: (id: string) => ipcRenderer.invoke('modes:delete-note-section', id),
   modesRemoveAllNoteSections: (modeId: string) => ipcRenderer.invoke('modes:remove-all-note-sections', modeId),
+  modesResetNoteSections: (modeId: string) => ipcRenderer.invoke('modes:reset-note-sections', modeId),
 
   // Google Auth (Server-side OAuth + MongoDB)
   googleSignIn: () => ipcRenderer.invoke('auth:google-signin'),

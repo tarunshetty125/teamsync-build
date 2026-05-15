@@ -152,6 +152,7 @@ import { ModelSelectorWindowHelper } from "./ModelSelectorWindowHelper"
 import { CropperWindowHelper } from "./CropperWindowHelper"
 import { ScreenshotHelper } from "./ScreenshotHelper"
 import { KeybindManager } from "./services/KeybindManager"
+import { StealthManager } from "./services/StealthManager"
 import { ProcessingHelper } from "./ProcessingHelper"
 
 import { IntelligenceManager } from "./IntelligenceManager"
@@ -2882,6 +2883,20 @@ export class AppState {
       this._disguiseTimers = [];
     }
 
+    // --- Advanced Stealth Manager: engage/disengage ---
+    // The StealthManager handles L0-L4 hardening layers (process identity,
+    // env scrubbing, window protection, OS hiding, event blocking).
+    try {
+      const stealth = StealthManager.getInstance();
+      if (state) {
+        stealth.engage();
+      } else {
+        stealth.disengage();
+      }
+    } catch (e) {
+      console.warn('[Stealth] StealthManager engage/disengage error:', e);
+    }
+
     // Broadcast state change to all relevant windows
     this._broadcastToAllWindows('undetectable-changed', state);
 
@@ -3429,6 +3444,13 @@ async function initializeApp() {
 
     // Kill Ollama if we started it
     OllamaManager.getInstance().stop();
+
+    // Destroy StealthManager — stops watchdog timer, reverts process identity
+    try {
+      StealthManager.getInstance().destroy();
+    } catch (e) {
+      console.warn('[Main] StealthManager cleanup failed:', e);
+    }
 
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');

@@ -36,6 +36,19 @@ if (fs.existsSync(premiumDir)) {
   entryPoints.push(...findTs(premiumDir).map(f => path.relative(rootDir, f)));
 }
 
+// Include shared runtime modules imported by Electron from outside electron/.
+// Esbuild only emits entry points when bundling is disabled, so these files
+// must be listed explicitly to preserve the existing runtime import paths.
+const sharedRuntimeDirs = [
+  path.resolve(rootDir, 'src/lib/modes'),
+];
+
+for (const sharedDir of sharedRuntimeDirs) {
+  if (fs.existsSync(sharedDir)) {
+    entryPoints.push(...findTs(sharedDir).map(f => path.relative(rootDir, f)));
+  }
+}
+
 const start = Date.now();
 
 build({

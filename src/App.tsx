@@ -569,7 +569,7 @@ const App: React.FC = () => {
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.97, y: 8 }}
                         transition={{ duration: 0.18, ease: [0.19, 1, 0.22, 1] }}
-                        className="w-[820px] h-[600px] max-w-[95vw] max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-[#141414]"
+                        className="h-[62vh] w-[68vw] max-h-[680px] max-w-[960px] overflow-hidden rounded-[24px] border border-white/10 bg-[#141414] shadow-2xl"
                       >
                         <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('natively-api'); setIsSettingsOpen(true); }} />
                       </motion.div>

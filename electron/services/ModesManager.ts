@@ -1,45 +1,27 @@
-import { DatabaseManager } from '../db/DatabaseManager';
-import {
-    MODE_GENERAL_PROMPT,
-    MODE_LOOKING_FOR_WORK_PROMPT,
-    MODE_SALES_PROMPT,
-    MODE_RECRUITING_PROMPT,
-    MODE_TEAM_MEET_PROMPT,
-    MODE_LECTURE_PROMPT,
-    MODE_TECHNICAL_INTERVIEW_PROMPT,
-    MODE_GENERAL_SUFFIX,
-    MODE_LOOKING_FOR_WORK_SUFFIX,
-    MODE_SALES_SUFFIX,
-    MODE_RECRUITING_SUFFIX,
-    MODE_TEAM_MEET_SUFFIX,
-    MODE_LECTURE_SUFFIX,
-    MODE_TECHNICAL_INTERVIEW_SUFFIX,
-} from '../llm/prompts';
+import Store from 'electron-store';
+import { randomUUID } from 'crypto';
+import { cloneModeTemplateSections } from '../../src/lib/modes/templateCatalog';
+import type {
+    ModeReferenceFile,
+    ModesStateSnapshot,
+    ModeTemplateId,
+    PublicModeTemplate,
+    UserMode,
+    UserModeNoteSection,
+} from '../../src/lib/modes/types';
+import { getBuiltInModeTemplate, getPublicModeTemplates } from './modeTemplateRegistry';
 
-export type ModeTemplateType =
-    | 'general'
-    | 'looking-for-work'
-    | 'sales'
-    | 'recruiting'
-    | 'team-meet'
-    | 'lecture'
-    | 'technical-interview';
+export type ModeTemplateType = ModeTemplateId;
 
 export interface Mode {
     id: string;
     name: string;
     templateType: ModeTemplateType;
+    userPrompt: string;
     customContext: string;
     isActive: boolean;
     createdAt: string;
-}
-
-export interface ModeReferenceFile {
-    id: string;
-    modeId: string;
-    fileName: string;
-    content: string;
-    createdAt: string;
+    updatedAt: string;
 }
 
 export interface ModeNoteSection {
@@ -55,126 +37,119 @@ export const MODE_TEMPLATES: Array<{
     type: ModeTemplateType;
     label: string;
     description: string;
-}> = [
-    { type: 'sales',            label: 'Sales',            description: 'Close deals with strategic discovery and objection handling.' },
-    { type: 'recruiting',       label: 'Recruiting',       description: 'Evaluate candidates with structured interview insights.' },
-    { type: 'team-meet',        label: 'Team Meet',        description: 'Track action items and key decisions from meetings.' },
-    { type: 'looking-for-work', label: 'Looking for work', description: 'Answer interview questions with confidence and clarity.' },
-    { type: 'lecture',          label: 'Lecture',          description: 'Capture key concepts and content from lectures.' },
-];
+}> = getPublicModeTemplates().map((template) => ({
+    type: template.id,
+    label: template.name,
+    description: template.description,
+}));
 
-// Default note sections seeded when a mode is created from a template
-export const TEMPLATE_NOTE_SECTIONS: Record<ModeTemplateType, Array<{ title: string; description: string }>> = {
-    general: [
-        { title: 'Summary',      description: 'High-level summary of the conversation.' },
-        { title: 'Action items', description: 'Tasks and follow-ups identified.' },
-        { title: 'Key points',   description: 'Important points discussed.' },
-    ],
-    'looking-for-work': [
-        { title: 'Follow-up actions',      description: 'Next interview steps or additional materials I said I would send if applicable.' },
-        { title: 'Overview',               description: 'Overview of the interview, the company, and general structure.' },
-        { title: 'Questions and responses', description: 'All questions asked to me during the interview and answers that gave.' },
-        { title: 'Areas to improve',       description: 'What I could have done better during the interview.' },
-        { title: 'Role details',           description: 'Anything discussed about the position, salary expectations, etc.' },
-    ],
-    sales: [
-        { title: 'Action Items',         description: 'All action items that were said I would do after the meeting.' },
-        { title: 'Outcome',              description: 'Did I close the sale and what was the outcome of the conversation.' },
-        { title: 'Prospect background',  description: 'Background and context on who I was selling to.' },
-        { title: 'Discovery',            description: 'What the prospect said during discovery.' },
-        { title: 'Product',              description: "How I pitched the product and the prospect's reaction." },
-        { title: 'Objections',           description: 'Objections from the prospect if there were any.' },
-    ],
-    recruiting: [
-        { title: 'Action Items',          description: 'All action items that I have to do after the meeting.' },
-        { title: 'Experience and skills', description: "Candidate's previous work experience and skills discussed." },
-        { title: 'Quality of responses',  description: 'If there were questions asked, how well and how accurately the candidate answered each question.' },
-        { title: 'Interest in company',   description: 'What the candidate said about their interest in the company.' },
-        { title: 'Role expectations',     description: 'Anything discussed about the position, salary expectations, etc.' },
-    ],
-    'team-meet': [
-        { title: 'Action Items',          description: 'All action items that were said I would do after the meeting.' },
-        { title: 'Announcements',         description: 'Any team-wide announcements from the meeting.' },
-        { title: 'Team updates',          description: "Each team member's progress, accomplishments, and current focus." },
-        { title: 'Challenges or blockers', description: 'Any issues or obstacles raised that may affect progress.' },
-        { title: 'Decisions made',        description: 'Key decisions or agreements reached during the meeting.' },
-    ],
-    lecture: [
-        { title: 'Follow-up work',  description: 'Follow-up reading, assignments, or tasks to complete.' },
-        { title: 'Topic',           description: 'Main subject or theme of the lecture.' },
-        { title: 'Key concepts',    description: 'Core ideas or frameworks covered.' },
-        { title: 'Content',         description: 'All content from the lecture with incredibly detailed bullet notes.' },
-    ],
-    'technical-interview': [
-        { title: 'Problems covered',  description: 'Each problem asked, the approach used, and the outcome.' },
-        { title: 'Concepts tested',   description: 'Key algorithms, data structures, or system design concepts that came up.' },
-        { title: 'What went well',    description: 'Approaches or explanations that landed well.' },
-        { title: 'Areas to study',    description: 'Topics or gaps identified that need more preparation.' },
-        { title: 'Action items',      description: 'Follow-up steps — e.g. send code, study specific topics, await next round.' },
-    ],
-};
+export const TEMPLATE_NOTE_SECTIONS: Record<ModeTemplateType, Array<{ title: string; description: string }>> =
+    getPublicModeTemplates().reduce((acc, template) => {
+        acc[template.id] = template.notesTemplate.map((section) => ({
+            title: section.title,
+            description: section.description,
+        }));
+        return acc;
+    }, {} as Record<ModeTemplateType, Array<{ title: string; description: string }>>);
 
-const TEMPLATE_SYSTEM_PROMPTS: Record<ModeTemplateType, string> = {
-    // General = universal adaptive copilot (own prompt, not technical interview)
-    general: MODE_GENERAL_PROMPT,
-    'technical-interview': MODE_TECHNICAL_INTERVIEW_PROMPT,
+interface PersistedModesState {
+    version: number;
+    selectedModeId: string | null;
+    activeModeId: string | null;
+    userModes: UserMode[];
+    legacyMigrated: boolean;
+}
 
-    'looking-for-work': MODE_LOOKING_FOR_WORK_PROMPT,
-    sales: MODE_SALES_PROMPT,
-    recruiting: MODE_RECRUITING_PROMPT,
-    'team-meet': MODE_TEAM_MEET_PROMPT,
-    lecture: MODE_LECTURE_PROMPT,
-};
+const STORE_VERSION = 1;
+const STORE_NAME = 'teamsync-modes';
+const MAX_FILE_CHARS = 12_000;
+const MAX_TOTAL_CHARS = 40_000;
 
-// Deduped mode suffixes — mode-specific body WITHOUT shared blocks (CORE_IDENTITY etc.)
-// Used by LLMHelper when stacking with BASE_SYSTEM_PROMPT to avoid duplication.
-const TEMPLATE_SUFFIX_PROMPTS: Record<ModeTemplateType, string> = {
-    general: MODE_GENERAL_SUFFIX,
-    'technical-interview': MODE_TECHNICAL_INTERVIEW_SUFFIX,
-    'looking-for-work': MODE_LOOKING_FOR_WORK_SUFFIX,
-    sales: MODE_SALES_SUFFIX,
-    recruiting: MODE_RECRUITING_SUFFIX,
-    'team-meet': MODE_TEAM_MEET_SUFFIX,
-    lecture: MODE_LECTURE_SUFFIX,
-};
+function isoNow(): string {
+    return new Date().toISOString();
+}
 
+function makeId(prefix: string): string {
+    return `${prefix}_${randomUUID()}`;
+}
 
-function rowToMode(row: any): Mode {
+function cloneTemplateSections(templateId: ModeTemplateType): UserModeNoteSection[] {
+    return cloneModeTemplateSections(templateId).map((section) => ({
+        ...section,
+        id: makeId('section'),
+    }));
+}
+
+function sanitizeName(name: string | undefined, fallback: string): string {
+    return name?.trim() ? name.trim() : fallback;
+}
+
+function toMode(mode: UserMode, activeModeId: string | null): Mode {
     return {
-        id: row.id,
-        name: row.name,
-        templateType: row.template_type as ModeTemplateType,
-        customContext: row.custom_context ?? '',
-        isActive: row.is_active === 1,
-        createdAt: row.created_at,
+        id: mode.id,
+        name: mode.name,
+        templateType: mode.templateId,
+        userPrompt: mode.userPrompt,
+        customContext: mode.userPrompt,
+        isActive: mode.id === activeModeId,
+        createdAt: mode.createdAt,
+        updatedAt: mode.updatedAt,
     };
 }
 
-function rowToFile(row: any): ModeReferenceFile {
+function toModeNoteSection(modeId: string, section: UserModeNoteSection, sortOrder: number): ModeNoteSection {
     return {
-        id: row.id,
-        modeId: row.mode_id,
-        fileName: row.file_name,
-        content: row.content ?? '',
-        createdAt: row.created_at,
+        id: section.id,
+        modeId,
+        title: section.title,
+        description: section.description,
+        sortOrder,
+        createdAt: isoNow(),
     };
 }
 
-function rowToSection(row: any): ModeNoteSection {
+function sortModes(userModes: UserMode[]): UserMode[] {
+    return [...userModes].sort((a, b) => {
+        if (a.templateId === 'general' && b.templateId !== 'general') return -1;
+        if (b.templateId === 'general' && a.templateId !== 'general') return 1;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+}
+
+function createModeInstance(templateId: ModeTemplateType, name?: string): UserMode {
+    const template = getBuiltInModeTemplate(templateId);
+    const now = isoNow();
     return {
-        id: row.id,
-        modeId: row.mode_id,
-        title: row.title,
-        description: row.description ?? '',
-        sortOrder: row.sort_order ?? 0,
-        createdAt: row.created_at,
+        id: makeId('mode'),
+        templateId,
+        name: sanitizeName(name, template.name),
+        userPrompt: '',
+        referenceFiles: [],
+        notesTemplate: cloneTemplateSections(templateId),
+        createdAt: now,
+        updatedAt: now,
     };
 }
 
 export class ModesManager {
     private static instance: ModesManager;
+    private readonly store: Store<PersistedModesState>;
 
-    private constructor() {}
+    private constructor() {
+        this.store = new Store<PersistedModesState>({
+            name: STORE_NAME,
+            defaults: {
+                version: STORE_VERSION,
+                selectedModeId: null,
+                activeModeId: null,
+                userModes: [],
+                legacyMigrated: false,
+            },
+        });
+
+        this.migrateLegacyModesIfNeeded();
+        this.ensureValidState();
+    }
 
     public static getInstance(): ModesManager {
         if (!ModesManager.instance) {
@@ -183,207 +158,428 @@ export class ModesManager {
         return ModesManager.instance;
     }
 
-    // ── Modes ─────────────────────────────────────────────────────
+    private migrateLegacyModesIfNeeded(): void {
+        if (this.store.get('legacyMigrated')) return;
+        if (this.store.get('userModes').length > 0) {
+            this.store.set('legacyMigrated', true);
+            return;
+        }
+
+        try {
+            // Best-effort migration from the legacy sqlite-backed modes manager.
+            // Keeps existing user-entered prompts/files/sections when available.
+            // Failure is non-fatal: we fall back to a fresh General mode.
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { DatabaseManager } = require('../db/DatabaseManager');
+            const db = DatabaseManager.getInstance();
+            const legacyModes = Array.isArray(db.getModes?.()) ? db.getModes() : [];
+            if (!legacyModes.length) {
+                this.store.set('legacyMigrated', true);
+                return;
+            }
+
+            const migratedModes: UserMode[] = legacyModes.map((legacyMode: any) => {
+                const templateId = (legacyMode.template_type || 'general') as ModeTemplateType;
+                const legacyFiles = Array.isArray(db.getReferenceFiles?.(legacyMode.id)) ? db.getReferenceFiles(legacyMode.id) : [];
+                const legacySections = Array.isArray(db.getNoteSections?.(legacyMode.id)) ? db.getNoteSections(legacyMode.id) : [];
+
+                return {
+                    id: legacyMode.id || makeId('mode'),
+                    templateId,
+                    name: sanitizeName(legacyMode.name, getBuiltInModeTemplate(templateId).name),
+                    userPrompt: legacyMode.custom_context ?? '',
+                    referenceFiles: legacyFiles.map((file: any): ModeReferenceFile => ({
+                        id: file.id || makeId('ref'),
+                        fileName: file.file_name || 'Reference file',
+                        filePath: null as string | null,
+                        content: file.content ?? '',
+                        createdAt: file.created_at || isoNow(),
+                    })),
+                    notesTemplate: legacySections.length > 0
+                        ? legacySections.map((section: any) => ({
+                            id: section.id || makeId('section'),
+                            title: section.title || 'Section',
+                            description: section.description ?? '',
+                        }))
+                        : cloneTemplateSections(templateId),
+                    createdAt: legacyMode.created_at || isoNow(),
+                    updatedAt: legacyMode.updated_at || legacyMode.created_at || isoNow(),
+                };
+            });
+
+            const activeLegacyMode = db.getActiveMode?.();
+            this.store.set({
+                userModes: migratedModes,
+                selectedModeId: activeLegacyMode?.id ?? migratedModes[0]?.id ?? null,
+                activeModeId: activeLegacyMode?.id ?? migratedModes[0]?.id ?? null,
+                legacyMigrated: true,
+                version: STORE_VERSION,
+            });
+        } catch (error: any) {
+            console.warn('[ModesManager] Legacy modes migration skipped:', error?.message || error);
+            this.store.set('legacyMigrated', true);
+        }
+    }
+
+    private ensureValidState(): PersistedModesState {
+        let state = this.readState();
+
+        if (!state.userModes.length) {
+            const generalMode = createModeInstance('general');
+            state = {
+                ...state,
+                userModes: [generalMode],
+                selectedModeId: generalMode.id,
+                activeModeId: generalMode.id,
+            };
+        }
+
+        const modeIds = new Set(state.userModes.map((mode) => mode.id));
+
+        if (!state.selectedModeId || !modeIds.has(state.selectedModeId)) {
+            state.selectedModeId = state.activeModeId && modeIds.has(state.activeModeId)
+                ? state.activeModeId
+                : state.userModes[0]?.id ?? null;
+        }
+
+        if (!state.activeModeId || !modeIds.has(state.activeModeId)) {
+            state.activeModeId = state.userModes[0]?.id ?? null;
+        }
+
+        const sortedModes = sortModes(state.userModes);
+        if (JSON.stringify(sortedModes) !== JSON.stringify(state.userModes)) {
+            state.userModes = sortedModes;
+        }
+
+        this.writeState(state);
+        return state;
+    }
+
+    private readState(): PersistedModesState {
+        return {
+            version: this.store.get('version', STORE_VERSION),
+            selectedModeId: this.store.get('selectedModeId', null),
+            activeModeId: this.store.get('activeModeId', null),
+            userModes: this.store.get('userModes', []),
+            legacyMigrated: this.store.get('legacyMigrated', false),
+        };
+    }
+
+    private writeState(nextState: PersistedModesState): void {
+        this.store.set({
+            ...nextState,
+            version: STORE_VERSION,
+            userModes: sortModes(nextState.userModes),
+        });
+    }
+
+    private mutateState(mutator: (state: PersistedModesState) => PersistedModesState): PersistedModesState {
+        const current = this.ensureValidState();
+        const next = mutator({
+            ...current,
+            userModes: current.userModes.map((mode) => ({
+                ...mode,
+                referenceFiles: mode.referenceFiles.map((file) => ({ ...file })),
+                notesTemplate: mode.notesTemplate.map((section) => ({ ...section })),
+            })),
+        });
+        this.writeState(next);
+        return this.ensureValidState();
+    }
+
+    private findMode(modeId: string): UserMode | undefined {
+        return this.ensureValidState().userModes.find((mode) => mode.id === modeId);
+    }
+
+    public getState(): ModesStateSnapshot {
+        const state = this.ensureValidState();
+        return {
+            templates: getPublicModeTemplates(),
+            userModes: state.userModes.map((mode) => ({
+                ...mode,
+                referenceFiles: mode.referenceFiles.map((file) => ({ ...file })),
+                notesTemplate: mode.notesTemplate.map((section) => ({ ...section })),
+            })),
+            selectedModeId: state.selectedModeId,
+            activeModeId: state.activeModeId,
+        };
+    }
+
+    public getTemplates(): PublicModeTemplate[] {
+        return getPublicModeTemplates();
+    }
 
     public getModes(): Mode[] {
-        const modes = DatabaseManager.getInstance().getModes().map(rowToMode);
-        
-        // Auto-seed the un-deletable General mode if it doesn't exist
-        if (!modes.some(m => m.templateType === 'general')) {
-            const generalMode = this.createMode({ name: 'General', templateType: 'general' });
-            modes.push(generalMode);
-        }
-        
-        // Always enforce 'general' at the very top of the list
-        modes.sort((a, b) => {
-            if (a.templateType === 'general') return -1;
-            if (b.templateType === 'general') return 1;
-            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); // oldest first or whatever default
-        });
-        
-        return modes;
+        const state = this.ensureValidState();
+        return state.userModes.map((mode) => toMode(mode, state.activeModeId));
+    }
+
+    public getSelectedModeId(): string | null {
+        return this.ensureValidState().selectedModeId;
+    }
+
+    public setSelectedMode(id: string | null): void {
+        this.mutateState((state) => ({
+            ...state,
+            selectedModeId: id,
+        }));
     }
 
     public getActiveMode(): Mode | null {
-        const row = DatabaseManager.getInstance().getActiveMode();
-        return row ? rowToMode(row) : null;
+        const state = this.ensureValidState();
+        const activeMode = state.userModes.find((mode) => mode.id === state.activeModeId);
+        return activeMode ? toMode(activeMode, state.activeModeId) : null;
     }
 
-    public createMode(params: { name: string; templateType: ModeTemplateType }): Mode {
-        const id = `mode_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        DatabaseManager.getInstance().createMode({
-            id,
-            name: params.name,
-            templateType: params.templateType,
-            customContext: '',
+    public createMode(params: { name?: string; templateType?: ModeTemplateType; templateId?: ModeTemplateType }): Mode {
+        const templateId = params.templateId ?? params.templateType ?? 'general';
+        let createdMode: UserMode | null = null;
+
+        const state = this.mutateState((current) => {
+            createdMode = createModeInstance(templateId, params.name);
+            return {
+                ...current,
+                userModes: [...current.userModes, createdMode],
+                selectedModeId: createdMode.id,
+            };
         });
-        // Seed default note sections for this template type
-        const defaultSections = TEMPLATE_NOTE_SECTIONS[params.templateType] ?? [];
-        defaultSections.forEach((s, i) => {
-            const sectionId = `ns_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`;
-            DatabaseManager.getInstance().addNoteSection({
-                id: sectionId,
-                modeId: id,
-                title: s.title,
-                description: s.description,
-                sortOrder: i,
-            });
-        });
-        return {
-            id,
-            name: params.name,
-            templateType: params.templateType,
-            customContext: '',
-            isActive: false,
-            createdAt: new Date().toISOString(),
-        };
+
+        const mode = createdMode ?? state.userModes[state.userModes.length - 1];
+        return toMode(mode, state.activeModeId);
     }
 
-    public updateMode(id: string, updates: { name?: string; templateType?: ModeTemplateType; customContext?: string }): void {
-        DatabaseManager.getInstance().updateMode(id, updates);
+    public updateMode(id: string, updates: {
+        name?: string;
+        templateType?: ModeTemplateType;
+        templateId?: ModeTemplateType;
+        customContext?: string;
+        userPrompt?: string;
+    }): void {
+        this.mutateState((state) => ({
+            ...state,
+            userModes: state.userModes.map((mode) => {
+                if (mode.id !== id) return mode;
+
+                const nextTemplateId = updates.templateId ?? updates.templateType ?? mode.templateId;
+                const nextUserPrompt = updates.userPrompt ?? updates.customContext ?? mode.userPrompt;
+
+                return {
+                    ...mode,
+                    templateId: nextTemplateId,
+                    name: updates.name !== undefined ? sanitizeName(updates.name, mode.name) : mode.name,
+                    userPrompt: nextUserPrompt,
+                    updatedAt: isoNow(),
+                };
+            }),
+        }));
     }
 
     public deleteMode(id: string): void {
-        DatabaseManager.getInstance().deleteMode(id);
+        this.mutateState((state) => {
+            const remainingModes = state.userModes.filter((mode) => mode.id !== id);
+
+            if (!remainingModes.length) {
+                const generalMode = createModeInstance('general');
+                return {
+                    ...state,
+                    userModes: [generalMode],
+                    selectedModeId: generalMode.id,
+                    activeModeId: generalMode.id,
+                };
+            }
+
+            return {
+                ...state,
+                userModes: remainingModes,
+                selectedModeId: state.selectedModeId === id ? remainingModes[0].id : state.selectedModeId,
+                activeModeId: state.activeModeId === id ? remainingModes[0].id : state.activeModeId,
+            };
+        });
     }
 
     public setActiveMode(id: string | null): void {
-        DatabaseManager.getInstance().setActiveMode(id);
+        this.mutateState((state) => ({
+            ...state,
+            activeModeId: id,
+            selectedModeId: id ?? state.selectedModeId,
+        }));
     }
-
-    // ── Reference Files ───────────────────────────────────────────
 
     public getReferenceFiles(modeId: string): ModeReferenceFile[] {
-        return DatabaseManager.getInstance().getReferenceFiles(modeId).map(rowToFile);
+        return this.findMode(modeId)?.referenceFiles.map((file) => ({ ...file })) ?? [];
     }
 
-    public addReferenceFile(params: { modeId: string; fileName: string; content: string }): ModeReferenceFile {
-        const id = `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        DatabaseManager.getInstance().addReferenceFile({
-            id,
-            modeId: params.modeId,
+    public addReferenceFile(params: {
+        modeId: string;
+        fileName: string;
+        content: string;
+        filePath?: string | null;
+    }): ModeReferenceFile {
+        const file: ModeReferenceFile = {
+            id: makeId('ref'),
             fileName: params.fileName,
+            filePath: params.filePath ?? null,
             content: params.content,
-        });
-        return {
-            id,
-            modeId: params.modeId,
-            fileName: params.fileName,
-            content: params.content,
-            createdAt: new Date().toISOString(),
+            createdAt: isoNow(),
         };
+
+        this.mutateState((state) => ({
+            ...state,
+            userModes: state.userModes.map((mode) => {
+                if (mode.id !== params.modeId) return mode;
+                return {
+                    ...mode,
+                    referenceFiles: [...mode.referenceFiles, file],
+                    updatedAt: isoNow(),
+                };
+            }),
+        }));
+
+        return file;
     }
 
     public deleteReferenceFile(id: string): void {
-        DatabaseManager.getInstance().deleteReferenceFile(id);
+        this.mutateState((state) => ({
+            ...state,
+            userModes: state.userModes.map((mode) => {
+                const nextFiles = mode.referenceFiles.filter((file) => file.id !== id);
+                if (nextFiles.length === mode.referenceFiles.length) return mode;
+                return {
+                    ...mode,
+                    referenceFiles: nextFiles,
+                    updatedAt: isoNow(),
+                };
+            }),
+        }));
     }
 
-    // ── Note Sections ─────────────────────────────────────────────
-
     public getNoteSections(modeId: string): ModeNoteSection[] {
-        return DatabaseManager.getInstance().getNoteSections(modeId).map(rowToSection);
+        const mode = this.findMode(modeId);
+        if (!mode) return [];
+        return mode.notesTemplate.map((section, index) => toModeNoteSection(mode.id, section, index));
     }
 
     public addNoteSection(params: { modeId: string; title: string; description: string }): ModeNoteSection {
-        const existingSections = this.getNoteSections(params.modeId);
-        const sortOrder = existingSections.length;
-        const id = `ns_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        DatabaseManager.getInstance().addNoteSection({
-            id,
-            modeId: params.modeId,
+        const section: UserModeNoteSection = {
+            id: makeId('section'),
             title: params.title,
             description: params.description,
-            sortOrder,
-        });
-        return {
-            id,
-            modeId: params.modeId,
-            title: params.title,
-            description: params.description,
-            sortOrder,
-            createdAt: new Date().toISOString(),
         };
+
+        this.mutateState((state) => ({
+            ...state,
+            userModes: state.userModes.map((mode) => {
+                if (mode.id !== params.modeId) return mode;
+                return {
+                    ...mode,
+                    notesTemplate: [...mode.notesTemplate, section],
+                    updatedAt: isoNow(),
+                };
+            }),
+        }));
+
+        const mode = this.findMode(params.modeId);
+        return toModeNoteSection(params.modeId, section, mode?.notesTemplate.length ? mode.notesTemplate.length - 1 : 0);
     }
 
     public updateNoteSection(id: string, updates: { title?: string; description?: string }): void {
-        DatabaseManager.getInstance().updateNoteSection(id, updates);
+        this.mutateState((state) => ({
+            ...state,
+            userModes: state.userModes.map((mode) => {
+                const nextSections = mode.notesTemplate.map((section) => (
+                    section.id === id
+                        ? {
+                            ...section,
+                            title: updates.title ?? section.title,
+                            description: updates.description ?? section.description,
+                        }
+                        : section
+                ));
+
+                const changed = nextSections.some((section, index) => section !== mode.notesTemplate[index]);
+                return changed
+                    ? { ...mode, notesTemplate: nextSections, updatedAt: isoNow() }
+                    : mode;
+            }),
+        }));
     }
 
     public deleteNoteSection(id: string): void {
-        DatabaseManager.getInstance().deleteNoteSection(id);
+        this.mutateState((state) => ({
+            ...state,
+            userModes: state.userModes.map((mode) => {
+                const nextSections = mode.notesTemplate.filter((section) => section.id !== id);
+                if (nextSections.length === mode.notesTemplate.length) return mode;
+                return {
+                    ...mode,
+                    notesTemplate: nextSections,
+                    updatedAt: isoNow(),
+                };
+            }),
+        }));
     }
 
     public removeAllNoteSections(modeId: string): void {
-        DatabaseManager.getInstance().deleteAllNoteSections(modeId);
+        this.mutateState((state) => ({
+            ...state,
+            userModes: state.userModes.map((mode) => (
+                mode.id === modeId
+                    ? { ...mode, notesTemplate: [], updatedAt: isoNow() }
+                    : mode
+            )),
+        }));
     }
 
-    // ── LLM Context ───────────────────────────────────────────────
+    public resetNoteSections(modeId: string): void {
+        this.mutateState((state) => ({
+            ...state,
+            userModes: state.userModes.map((mode) => (
+                mode.id === modeId
+                    ? { ...mode, notesTemplate: cloneTemplateSections(mode.templateId), updatedAt: isoNow() }
+                    : mode
+            )),
+        }));
+    }
 
-    /**
-     * Returns the system prompt suffix for the active mode's template type.
-     * Empty string if general or no active mode.
-     */
     public getActiveModeSystemPromptSuffix(): string {
-        const mode = this.getActiveMode();
-        if (!mode) return '';
-        return TEMPLATE_SYSTEM_PROMPTS[mode.templateType] ?? '';
+        const activeMode = this.getActiveMode();
+        if (!activeMode) return '';
+        return getBuiltInModeTemplate(activeMode.templateType).builtInPrompt;
     }
 
-    /**
-     * Returns the DEDUPED mode suffix (without shared blocks) for the active mode.
-     * Used by LLMHelper.streamChat to avoid sending CORE_IDENTITY etc. twice.
-     * Returns empty string for 'general' mode (handled by base prompt already).
-     */
     public getActiveModeDeduped(): { suffix: string; templateType: ModeTemplateType | null } {
-        const mode = this.getActiveMode();
-        if (!mode) return { suffix: '', templateType: null };
-        // General mode: skip suffix entirely — BASE_SYSTEM_PROMPT covers it
-        if (mode.templateType === 'general') {
-            return { suffix: '', templateType: 'general' };
-        }
+        const activeMode = this.getActiveMode();
+        if (!activeMode) return { suffix: '', templateType: null };
         return {
-            suffix: TEMPLATE_SUFFIX_PROMPTS[mode.templateType] ?? '',
-            templateType: mode.templateType,
+            suffix: getBuiltInModeTemplate(activeMode.templateType).builtInPromptSuffix,
+            templateType: activeMode.templateType,
         };
     }
 
-    /**
-     * Builds a context block to inject before the user message for the active mode.
-     * Includes custom context text and reference file contents.
-     *
-     * Limits: each file is capped at MAX_FILE_CHARS to prevent context window overflow.
-     * Total block is capped at MAX_TOTAL_CHARS across all files.
-     */
-    private static readonly MAX_FILE_CHARS = 12_000;
-    private static readonly MAX_TOTAL_CHARS = 40_000;
-
     public buildActiveModeContextBlock(options?: { includeCustomContext?: boolean }): string {
-        const mode = this.getActiveMode();
-        if (!mode) return '';
+        const state = this.ensureValidState();
+        const activeMode = state.userModes.find((mode) => mode.id === state.activeModeId);
+        if (!activeMode) return '';
 
         const parts: string[] = [];
         const includeCustomContext = options?.includeCustomContext !== false;
 
-        if (includeCustomContext && mode.customContext.trim()) {
-            parts.push(`<user_context>\n${mode.customContext.trim()}\n</user_context>`);
+        if (includeCustomContext && activeMode.userPrompt.trim()) {
+            parts.push(`<user_context>\n${activeMode.userPrompt.trim()}\n</user_context>`);
         }
 
-        const files = this.getReferenceFiles(mode.id);
         let totalChars = 0;
-
-        for (const file of files) {
+        for (const file of activeMode.referenceFiles) {
             const raw = file.content.trim();
             if (!raw) continue;
 
-            const remaining = ModesManager.MAX_TOTAL_CHARS - totalChars;
+            const remaining = MAX_TOTAL_CHARS - totalChars;
             if (remaining <= 0) break;
 
-            // Slice first, then append truncation marker so total never exceeds MAX_FILE_CHARS
-            const capped = raw.length > ModesManager.MAX_FILE_CHARS
-                ? raw.slice(0, ModesManager.MAX_FILE_CHARS - 14) + '\n[...truncated]'
+            const capped = raw.length > MAX_FILE_CHARS
+                ? `${raw.slice(0, MAX_FILE_CHARS - 14)}\n[...truncated]`
                 : raw;
-            const used = Math.min(capped.length, remaining);
-            const content = capped.slice(0, used);
+            const content = capped.slice(0, remaining);
 
             parts.push(`<reference_file name="${file.fileName}">\n${content}\n</reference_file>`);
             totalChars += content.length;
@@ -391,4 +587,5 @@ export class ModesManager {
 
         return parts.join('\n\n');
     }
+
 }

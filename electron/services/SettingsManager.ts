@@ -12,6 +12,16 @@ export interface AppSettings {
     actionButtonMode?: 'recap' | 'brainstorm';
     groqFastTextMode?: boolean;
     knowledgeMode?: boolean;
+    advancedStealth?: {
+        level?: 'off' | 'basic' | 'advanced';
+        processName?: string;
+        scrubEnvironment?: boolean;
+        blockAppleEvents?: boolean;
+        suppressCrashReporter?: boolean;
+        watchdogIntervalMs?: number;
+        hideFromScreenCapture?: boolean;
+        excludeFromMissionControl?: boolean;
+    };
 }
 
 export class SettingsManager {

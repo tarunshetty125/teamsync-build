@@ -1534,12 +1534,13 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
 
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             {([
-                                { name: 'Interview', desc: 'STAR-format answers, behavioral stories, step-by-step coding hints.' },
+                                { name: 'General', desc: 'Adaptive everyday copilot for broad conversations and quick context switching.' },
                                 { name: 'Sales', desc: 'Objection handling, discovery questions, product pitch frameworks.' },
                                 { name: 'Recruiting', desc: 'Candidate assessment, JD cross-referencing, structured evaluation.' },
                                 { name: 'Team Meet', desc: 'Action items, announcements, blockers, decisions — auto-extracted.' },
+                                { name: 'Looking for Work', desc: 'Interview storytelling, role fit answers, and company-specific prep.' },
                                 { name: 'Lecture', desc: 'Concept breakdowns, intuition-first explanations, formula notes.' },
-                                { name: 'Technical', desc: 'DSA / system design reasoning, edge cases, complexity analysis.' },
+                                { name: 'Technical Interview', desc: 'DSA / system design reasoning, edge cases, complexity analysis.' },
                             ] as Array<{ name: string; desc: string }>).map(({ name, desc }) => (
                                 <div key={name} className="p-3 rounded-xl border bg-bg-item-surface border-border-subtle">
                                     <h5 className="font-semibold text-sm text-text-primary mb-1">{name}</h5>
@@ -1580,10 +1581,10 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                                 <div className="p-4 rounded-xl border bg-bg-item-surface border-border-subtle">
                                     <h4 className="font-semibold text-sm mb-2 text-text-primary">Custom Modes</h4>
                                     <ul className="text-[11px] text-text-secondary space-y-1 list-disc pl-4">
-                                        <li>Click <strong>+ New Mode</strong> to create from scratch</li>
-                                        <li>Or use <strong>TeamSync Templates</strong> for a preset start</li>
-                                        <li>Write a custom real-time prompt for the AI</li>
-                                        <li>Add your own note section templates</li>
+                                        <li>Click <strong>+ New Mode</strong> to open the template library</li>
+                                        <li>Choose a TeamSync template or start from an empty General mode</li>
+                                        <li>Write your own real-time prompt on top of the hidden built-in intelligence</li>
+                                        <li>Edit reference files and note sections in one shared mode editor</li>
                                     </ul>
                                 </div>
                             </div>

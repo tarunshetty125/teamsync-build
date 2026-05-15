@@ -80,13 +80,38 @@ export function initializeIpcHandlers(appState: AppState): void {
   // and reference files stop being injected into LLM calls.
   const clearActiveModeOnLicenseLoss = (): void => {
     try {
-      const { DatabaseManager } = require('./db/DatabaseManager');
-      DatabaseManager.getInstance().setActiveMode(null);
+      const { ModesManager } = require('./services/ModesManager');
+      const manager = ModesManager.getInstance();
+      const fallbackGeneralMode = manager.getModes().find((mode: any) => mode.templateType === 'general');
+      manager.setSelectedMode(fallbackGeneralMode?.id ?? null);
+      manager.setActiveMode(fallbackGeneralMode?.id ?? null);
+      broadcastModesState();
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) win.webContents.send('modes-active-cleared');
       });
       console.log('[IPC] Active mode cleared due to license loss');
     } catch (e) { /* non-fatal */ }
+  };
+
+  const broadcastModesState = (): void => {
+    try {
+      const { ModesManager } = require('./services/ModesManager');
+      const manager = ModesManager.getInstance();
+      const state = manager.getState();
+      const activeMode = manager.getActiveMode();
+
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (win.isDestroyed()) return;
+        win.webContents.send('modes-state-changed', state);
+        win.webContents.send('mode-changed', {
+          id: activeMode?.id ?? null,
+          name: activeMode?.name ?? null,
+          templateId: activeMode?.templateType ?? null,
+        });
+      });
+    } catch (error) {
+      console.warn('[IPC] Failed to broadcast modes state:', error);
+    }
   };
 
   // --- NEW Test Helper ---
@@ -899,6 +924,60 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("get-disguise", async () => {
     return appState.getDisguise()
+  })
+
+  // ── Advanced Stealth Mode IPC ─────────────────────────────────────────────
+  const { StealthManager } = require('./services/StealthManager');
+
+  safeHandle("stealth:engage", async () => {
+    try {
+      StealthManager.getInstance().engage();
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  })
+
+  safeHandle("stealth:disengage", async () => {
+    try {
+      StealthManager.getInstance().disengage();
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  })
+
+  safeHandle("stealth:get-state", async () => {
+    try {
+      return StealthManager.getInstance().getState();
+    } catch (e: any) {
+      return { level: 'off', processDisguised: false, windowsProtected: false, dockHidden: false, eventsBlocked: false, watchdogActive: false };
+    }
+  })
+
+  safeHandle("stealth:get-config", async () => {
+    try {
+      return StealthManager.getInstance().getConfig();
+    } catch (e: any) {
+      return null;
+    }
+  })
+
+  safeHandle("stealth:update-config", async (_, patch: Record<string, any>) => {
+    try {
+      StealthManager.getInstance().updateConfig(patch);
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  })
+
+  safeHandle("stealth:is-engaged", async () => {
+    try {
+      return StealthManager.getInstance().isEngaged();
+    } catch {
+      return false;
+    }
   })
 
   safeHandle("set-open-at-login", async (_, openAtLogin: boolean) => {
@@ -3828,6 +3907,44 @@ export function initializeIpcHandlers(appState: AppState): void {
   // Modes IPC Handlers
   // ==========================================
 
+  const isGeneralModeId = (mgr: any, modeId: string): boolean =>
+    mgr.getModes().some((mode: any) => mode.id === modeId && mode.templateType === 'general');
+
+  const ownsGeneralSection = (mgr: any, sectionId: string): boolean =>
+    mgr.getState().userModes.some((mode: any) =>
+      mode.templateId === 'general' && mode.notesTemplate.some((section: any) => section.id === sectionId)
+    );
+
+  const ownsGeneralReferenceFile = (mgr: any, fileId: string): boolean =>
+    mgr.getState().userModes.some((mode: any) =>
+      mode.templateId === 'general' && mode.referenceFiles.some((file: any) => file.id === fileId)
+    );
+
+  safeHandle("modes:get-state", async () => {
+    try {
+      const { ModesManager } = require('./services/ModesManager');
+      return ModesManager.getInstance().getState();
+    } catch (e: any) {
+      console.error('[IPC] modes:get-state error:', e);
+      return {
+        templates: [],
+        userModes: [],
+        selectedModeId: null,
+        activeModeId: null,
+      };
+    }
+  });
+
+  safeHandle("modes:get-templates", async () => {
+    try {
+      const { ModesManager } = require('./services/ModesManager');
+      return ModesManager.getInstance().getTemplates();
+    } catch (e: any) {
+      console.error('[IPC] modes:get-templates error:', e);
+      return [];
+    }
+  });
+
   safeHandle("modes:get-all", async () => {
     try {
       const { ModesManager } = require('./services/ModesManager');
@@ -3854,29 +3971,32 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("modes:create", async (_, params: { name: string; templateType: string }) => {
+  safeHandle("modes:create", async (_, params: { name?: string; templateType?: string; templateId?: string }) => {
     try {
       if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
       const { ModesManager } = require('./services/ModesManager');
-      const mode = ModesManager.getInstance().createMode({
+      const mgr = ModesManager.getInstance();
+      const mode = mgr.createMode({
         name: params.name,
-        templateType: params.templateType as any,
+        templateId: (params.templateId ?? params.templateType ?? 'general') as any,
       });
-      return { success: true, mode };
+      broadcastModesState();
+      return { success: true, mode, state: mgr.getState() };
     } catch (e: any) {
       console.error('[IPC] modes:create error:', e);
       return { success: false, error: e.message };
     }
   });
 
-  safeHandle("modes:update", async (_, id: string, updates: { name?: string; templateType?: string; customContext?: string }) => {
+  safeHandle("modes:update", async (_, id: string, updates: { name?: string; templateType?: string; templateId?: string; customContext?: string; userPrompt?: string }) => {
     try {
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
       // Gate: changing templateType to a non-general template requires pro.
       // Also gate if the existing mode is already non-general (editing a pro mode requires pro).
       if (!isProOrTrialActive()) {
-        if (updates.templateType && updates.templateType !== 'general') {
+        const requestedTemplate = updates.templateId ?? updates.templateType;
+        if (requestedTemplate && requestedTemplate !== 'general') {
           return { success: false, error: 'pro_required' };
         }
         const existing = mgr.getModes().find((m: any) => m.id === id);
@@ -3885,7 +4005,8 @@ export function initializeIpcHandlers(appState: AppState): void {
         }
       }
       mgr.updateMode(id, updates);
-      return { success: true };
+      broadcastModesState();
+      return { success: true, state: mgr.getState() };
     } catch (e: any) {
       console.error('[IPC] modes:update error:', e);
       return { success: false, error: e.message };
@@ -3896,10 +4017,25 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
       const { ModesManager } = require('./services/ModesManager');
-      ModesManager.getInstance().deleteMode(id);
-      return { success: true };
+      const mgr = ModesManager.getInstance();
+      mgr.deleteMode(id);
+      broadcastModesState();
+      return { success: true, state: mgr.getState() };
     } catch (e: any) {
       console.error('[IPC] modes:delete error:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  safeHandle("modes:set-selected", async (_, id: string | null) => {
+    try {
+      const { ModesManager } = require('./services/ModesManager');
+      const mgr = ModesManager.getInstance();
+      mgr.setSelectedMode(id);
+      broadcastModesState();
+      return { success: true, state: mgr.getState() };
+    } catch (e: any) {
+      console.error('[IPC] modes:set-selected error:', e);
       return { success: false, error: e.message };
     }
   });
@@ -3915,13 +4051,10 @@ export function initializeIpcHandlers(appState: AppState): void {
         }
       }
       const { ModesManager } = require('./services/ModesManager');
-      ModesManager.getInstance().setActiveMode(id);
-      // Broadcast mode change to all windows so indicators update immediately
-      const activeName = id ? (ModesManager.getInstance().getActiveMode()?.name ?? null) : null;
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) win.webContents.send('mode-changed', { id, name: activeName });
-      });
-      return { success: true };
+      const mgr = ModesManager.getInstance();
+      mgr.setActiveMode(id);
+      broadcastModesState();
+      return { success: true, state: mgr.getState() };
     } catch (e: any) {
       console.error('[IPC] modes:set-active error:', e);
       return { success: false, error: e.message };
@@ -3940,7 +4073,9 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("modes:upload-reference-file", async (_, modeId: string) => {
     try {
-      if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
+      const { ModesManager } = require('./services/ModesManager');
+      const mgr = ModesManager.getInstance();
+      if (!isProOrTrialActive() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'pro_required' };
       const result = await showOpenDialogNormalized({
         properties: ['openFile'],
         filters: [
@@ -3967,9 +4102,9 @@ export function initializeIpcHandlers(appState: AppState): void {
         return { success: false, error: 'No readable text found in the selected file.' };
       }
 
-      const { ModesManager } = require('./services/ModesManager');
-      const file = ModesManager.getInstance().addReferenceFile({ modeId, fileName, content });
-      return { success: true, file };
+      const file = mgr.addReferenceFile({ modeId, fileName, content, filePath });
+      broadcastModesState();
+      return { success: true, file, state: mgr.getState() };
     } catch (e: any) {
       console.error('[IPC] modes:upload-reference-file error:', e);
       return { success: false, error: e.message };
@@ -3978,10 +4113,12 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("modes:delete-reference-file", async (_, id: string) => {
     try {
-      if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
       const { ModesManager } = require('./services/ModesManager');
-      ModesManager.getInstance().deleteReferenceFile(id);
-      return { success: true };
+      const mgr = ModesManager.getInstance();
+      if (!isProOrTrialActive() && !ownsGeneralReferenceFile(mgr, id)) return { success: false, error: 'pro_required' };
+      mgr.deleteReferenceFile(id);
+      broadcastModesState();
+      return { success: true, state: mgr.getState() };
     } catch (e: any) {
       console.error('[IPC] modes:delete-reference-file error:', e);
       return { success: false, error: e.message };
@@ -4002,10 +4139,12 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("modes:add-note-section", async (_, modeId: string, title: string, description: string) => {
     try {
-      if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
       const { ModesManager } = require('./services/ModesManager');
-      const section = ModesManager.getInstance().addNoteSection({ modeId, title, description });
-      return { success: true, section };
+      const mgr = ModesManager.getInstance();
+      if (!isProOrTrialActive() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'pro_required' };
+      const section = mgr.addNoteSection({ modeId, title, description });
+      broadcastModesState();
+      return { success: true, section, state: mgr.getState() };
     } catch (e: any) {
       console.error('[IPC] modes:add-note-section error:', e);
       return { success: false, error: e.message };
@@ -4014,10 +4153,12 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("modes:update-note-section", async (_, id: string, updates: { title?: string; description?: string }) => {
     try {
-      if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
       const { ModesManager } = require('./services/ModesManager');
-      ModesManager.getInstance().updateNoteSection(id, updates);
-      return { success: true };
+      const mgr = ModesManager.getInstance();
+      if (!isProOrTrialActive() && !ownsGeneralSection(mgr, id)) return { success: false, error: 'pro_required' };
+      mgr.updateNoteSection(id, updates);
+      broadcastModesState();
+      return { success: true, state: mgr.getState() };
     } catch (e: any) {
       console.error('[IPC] modes:update-note-section error:', e);
       return { success: false, error: e.message };
@@ -4026,10 +4167,12 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("modes:delete-note-section", async (_, id: string) => {
     try {
-      if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
       const { ModesManager } = require('./services/ModesManager');
-      ModesManager.getInstance().deleteNoteSection(id);
-      return { success: true };
+      const mgr = ModesManager.getInstance();
+      if (!isProOrTrialActive() && !ownsGeneralSection(mgr, id)) return { success: false, error: 'pro_required' };
+      mgr.deleteNoteSection(id);
+      broadcastModesState();
+      return { success: true, state: mgr.getState() };
     } catch (e: any) {
       console.error('[IPC] modes:delete-note-section error:', e);
       return { success: false, error: e.message };
@@ -4038,12 +4181,28 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("modes:remove-all-note-sections", async (_, modeId: string) => {
     try {
-      if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
       const { ModesManager } = require('./services/ModesManager');
-      ModesManager.getInstance().removeAllNoteSections(modeId);
-      return { success: true };
+      const mgr = ModesManager.getInstance();
+      if (!isProOrTrialActive() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'pro_required' };
+      mgr.removeAllNoteSections(modeId);
+      broadcastModesState();
+      return { success: true, state: mgr.getState() };
     } catch (e: any) {
       console.error('[IPC] modes:remove-all-note-sections error:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  safeHandle("modes:reset-note-sections", async (_, modeId: string) => {
+    try {
+      const { ModesManager } = require('./services/ModesManager');
+      const mgr = ModesManager.getInstance();
+      if (!isProOrTrialActive() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'pro_required' };
+      mgr.resetNoteSections(modeId);
+      broadcastModesState();
+      return { success: true, state: mgr.getState() };
+    } catch (e: any) {
+      console.error('[IPC] modes:reset-note-sections error:', e);
       return { success: false, error: e.message };
     }
   });

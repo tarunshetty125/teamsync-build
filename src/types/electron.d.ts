@@ -1,3 +1,5 @@
+import type { ModeReferenceFile, ModesStateSnapshot, PublicModeTemplate } from '../lib/modes/types';
+
 export interface ElectronAPI {
   updateContentDimensions: (dimensions: {
     width: number
@@ -179,23 +181,28 @@ export interface ElectronAPI {
   getActionButtonMode: () => Promise<'recap' | 'brainstorm'>
   setActionButtonMode: (mode: 'recap' | 'brainstorm') => Promise<{ success: boolean }>
   onActionButtonModeChanged: (callback: (mode: 'recap' | 'brainstorm') => void) => () => void
-  onModeChanged: (callback: (data: { id: string | null; name: string | null }) => void) => () => void
+  onModeChanged: (callback: (data: { id: string | null; name: string | null; templateId?: string | null }) => void) => () => void
+  onModesStateChanged: (callback: (state: ModesStateSnapshot) => void) => () => void
 
   // Modes
+  modesGetState: () => Promise<ModesStateSnapshot>
+  modesGetTemplates: () => Promise<PublicModeTemplate[]>
   modesGetAll: () => Promise<Array<{ id: string; name: string; templateType: string; customContext: string; isActive: boolean; createdAt: string; referenceFileCount: number }>>
   modesGetActive: () => Promise<{ id: string; name: string; templateType: string; customContext: string; isActive: boolean; createdAt: string } | null>
-  modesCreate: (params: { name: string; templateType: string }) => Promise<{ success: boolean; mode?: any; error?: string }>
-  modesUpdate: (id: string, updates: { name?: string; templateType?: string; customContext?: string }) => Promise<{ success: boolean; error?: string }>
-  modesDelete: (id: string) => Promise<{ success: boolean; error?: string }>
-  modesSetActive: (id: string | null) => Promise<{ success: boolean; error?: string }>
-  modesGetReferenceFiles: (modeId: string) => Promise<Array<{ id: string; modeId: string; fileName: string; content: string; createdAt: string }>>
-  modesUploadReferenceFile: (modeId: string) => Promise<{ success: boolean; file?: any; cancelled?: boolean; error?: string }>
-  modesDeleteReferenceFile: (id: string) => Promise<{ success: boolean; error?: string }>
+  modesCreate: (params: { name?: string; templateType?: string; templateId?: string }) => Promise<{ success: boolean; mode?: any; state?: ModesStateSnapshot; error?: string }>
+  modesUpdate: (id: string, updates: { name?: string; templateType?: string; templateId?: string; customContext?: string; userPrompt?: string }) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
+  modesDelete: (id: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
+  modesSetSelected: (id: string | null) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
+  modesSetActive: (id: string | null) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
+  modesGetReferenceFiles: (modeId: string) => Promise<ModeReferenceFile[]>
+  modesUploadReferenceFile: (modeId: string) => Promise<{ success: boolean; file?: ModeReferenceFile; state?: ModesStateSnapshot; cancelled?: boolean; error?: string }>
+  modesDeleteReferenceFile: (id: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
   modesGetNoteSections: (modeId: string) => Promise<Array<{ id: string; modeId: string; title: string; description: string; sortOrder: number }>>
-  modesAddNoteSection: (modeId: string, title: string, description: string) => Promise<{ success: boolean; section?: any; error?: string }>
-  modesUpdateNoteSection: (id: string, updates: { title?: string; description?: string }) => Promise<{ success: boolean; error?: string }>
-  modesDeleteNoteSection: (id: string) => Promise<{ success: boolean; error?: string }>
-  modesRemoveAllNoteSections: (modeId: string) => Promise<{ success: boolean; error?: string }>
+  modesAddNoteSection: (modeId: string, title: string, description: string) => Promise<{ success: boolean; section?: any; state?: ModesStateSnapshot; error?: string }>
+  modesUpdateNoteSection: (id: string, updates: { title?: string; description?: string }) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
+  modesDeleteNoteSection: (id: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
+  modesRemoveAllNoteSections: (modeId: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
+  modesResetNoteSections: (modeId: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
 
   // Meeting Lifecycle
   startMeeting: (metadata?: any) => Promise<{ success: boolean; error?: string }>
@@ -434,6 +441,38 @@ export interface ElectronAPI {
   // Overlay Opacity (Stealth Mode)
   setOverlayOpacity: (opacity: number) => Promise<void>;
   onOverlayOpacityChanged: (callback: (opacity: number) => void) => () => void;
+
+  // Advanced Stealth Mode
+  stealthEngage: () => Promise<{ success: boolean; error?: string }>;
+  stealthDisengage: () => Promise<{ success: boolean; error?: string }>;
+  stealthGetState: () => Promise<{
+    level: 'off' | 'basic' | 'advanced';
+    processDisguised: boolean;
+    windowsProtected: boolean;
+    dockHidden: boolean;
+    eventsBlocked: boolean;
+    watchdogActive: boolean;
+  }>;
+  stealthGetConfig: () => Promise<{
+    level: 'off' | 'basic' | 'advanced';
+    processName: string;
+    scrubEnvironment: boolean;
+    blockAppleEvents: boolean;
+    suppressCrashReporter: boolean;
+    watchdogIntervalMs: number;
+    hideFromScreenCapture: boolean;
+    excludeFromMissionControl: boolean;
+  } | null>;
+  stealthUpdateConfig: (patch: Record<string, any>) => Promise<{ success: boolean; error?: string }>;
+  stealthIsEngaged: () => Promise<boolean>;
+  onStealthStateChanged: (callback: (state: {
+    level: 'off' | 'basic' | 'advanced';
+    processDisguised: boolean;
+    windowsProtected: boolean;
+    dockHidden: boolean;
+    eventsBlocked: boolean;
+    watchdogActive: boolean;
+  }) => void) => () => void;
 
   // Verbose / Debug Logging
   getVerboseLogging: () => Promise<boolean>;
