@@ -1,5 +1,20 @@
 import { contextBridge, ipcRenderer } from "electron"
 import type { ModeReferenceFile, ModesStateSnapshot, PublicModeTemplate } from "../src/lib/modes/types";
+import type {
+  PermissionKind,
+  PermissionRequestResult,
+  PermissionSettingsResult,
+  PermissionStatusSnapshot,
+} from "../src/lib/permissions/types";
+
+interface PermissionsBridge {
+  getStatus: () => Promise<PermissionStatusSnapshot>
+  requestMicrophone: () => Promise<PermissionRequestResult>
+  requestScreenRecording: () => Promise<PermissionRequestResult>
+  requestAccessibility: () => Promise<PermissionRequestResult>
+  openSettings: (permission: PermissionKind) => Promise<PermissionSettingsResult>
+  onStatusChanged: (callback: (status: PermissionStatusSnapshot) => void) => () => void
+}
 
 // Types for the exposed Electron API
 interface ElectronAPI {
@@ -64,6 +79,9 @@ interface ElectronAPI {
   setNativelyApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   getNativelyUsage: () => Promise<{ ok: boolean; plan?: string; quota?: { transcription: { used: number; limit: number; remaining: number }; ai: { used: number; limit: number; remaining: number }; search: { used: number; limit: number; remaining: number }; resets_at: string }; member_since?: string; error?: string; status?: number }>
   getStoredCredentials: () => Promise<{ hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; hasNativelyKey: boolean; googleServiceAccountPath: string | null; sttProvider: string; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; hasSonioxKey: boolean }>
+  permissions: PermissionsBridge
+  checkPermissions: () => Promise<{ microphone: 'granted' | 'denied' | 'not-determined' | 'restricted'; screen: 'granted' | 'denied' | 'not-determined' | 'restricted'; platform: string }>
+  requestMicPermission: () => Promise<boolean>
   // Free Trial
   startTrial:     () => Promise<{ ok: boolean; trial_token?: string; started_at?: string; expires_at?: string; expired?: boolean; already_used?: boolean; converted_to?: string | null; usage?: { ai: number; stt_seconds: number; search: number }; limits?: { duration_ms: number; ai_requests: number; stt_minutes: number; search_requests: number }; error?: string; status?: number }>
   getTrialStatus: () => Promise<{ ok: boolean; expired?: boolean; remaining_ms?: number; started_at?: string; expires_at?: string; converted_to?: string | null; usage?: { ai: number; stt_seconds: number; search: number }; limits?: object; error?: string }>
@@ -423,6 +441,21 @@ export const PROCESSING_EVENTS = {
   DEBUG_ERROR: "debug-error"
 } as const
 
+function toLegacyPermissionStatus(status: PermissionStatusSnapshot["microphone"]): 'granted' | 'denied' | 'not-determined' | 'restricted' {
+  switch (status) {
+    case 'granted':
+      return 'granted';
+    case 'not_requested':
+      return 'not-determined';
+    case 'unsupported':
+      return 'restricted';
+    case 'restart_required':
+    case 'denied':
+    default:
+      return 'denied';
+  }
+}
+
 // Expose the Electron API to the renderer process
 contextBridge.exposeInMainWorld("electronAPI", {
   updateContentDimensions: (dimensions: { width: number; height: number }) =>
@@ -661,8 +694,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getStoredCredentials: () => ipcRenderer.invoke("get-stored-credentials"),
 
   // Permissions
-  checkPermissions:    () => ipcRenderer.invoke("permissions:check"),
-  requestMicPermission: () => ipcRenderer.invoke("permissions:request-mic"),
+  permissions: {
+    getStatus: () => ipcRenderer.invoke("permissions:getStatus"),
+    requestMicrophone: () => ipcRenderer.invoke("permissions:requestMicrophone"),
+    requestScreenRecording: () => ipcRenderer.invoke("permissions:requestScreenRecording"),
+    requestAccessibility: () => ipcRenderer.invoke("permissions:requestAccessibility"),
+    openSettings: (permission: PermissionKind) => ipcRenderer.invoke("permissions:openSettings", permission),
+    onStatusChanged: (callback: (status: PermissionStatusSnapshot) => void) => {
+      const subscription = (_: unknown, status: PermissionStatusSnapshot) => callback(status);
+      ipcRenderer.on("permissions:status-changed", subscription);
+      return () => {
+        ipcRenderer.removeListener("permissions:status-changed", subscription);
+      };
+    },
+  },
+  checkPermissions: async () => {
+    const status = await ipcRenderer.invoke("permissions:getStatus") as PermissionStatusSnapshot;
+    return {
+      microphone: toLegacyPermissionStatus(status.microphone),
+      screen: toLegacyPermissionStatus(status.screenRecording),
+      platform: status.platform,
+    };
+  },
+  requestMicPermission: async () => {
+    const result = await ipcRenderer.invoke("permissions:requestMicrophone") as PermissionRequestResult;
+    return result.status.microphone === 'granted';
+  },
 
   // Free Trial
   startTrial:       () => ipcRenderer.invoke("trial:start"),

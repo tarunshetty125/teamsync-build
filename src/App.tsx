@@ -14,7 +14,7 @@ import { NativelyQuotaBanner } from "./components/NativelyQuotaBanner"
 import { FreeTrialBanner }      from "./components/trial/FreeTrialBanner"
 import { FreeTrialModal }       from "./components/trial/FreeTrialModal"
 import { TrialPromoToaster }    from "./components/trial/TrialPromoToaster"
-import { PermissionsToaster }   from "./components/onboarding/PermissionsToaster"
+import { OnboardingFlow } from "./components/onboarding/OnboardingFlow"
 import GoogleSignIn from "./components/onboarding/GoogleSignIn"
 import { AlertCircle } from "lucide-react"
 import { clampOverlayOpacity, OVERLAY_OPACITY_DEFAULT, getDefaultOverlayOpacity } from "./lib/overlayAppearance"
@@ -31,6 +31,8 @@ import {
 import { analytics } from "./lib/analytics/analytics.service"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import ModesSettings from "./components/settings/ModesSettings"
+import { usePermissionsStore } from "./stores/usePermissionsStore"
+import { isPermissionStatusOperational } from "./lib/permissions/utils"
 
 const queryClient = new QueryClient()
 
@@ -136,8 +138,7 @@ const App: React.FC = () => {
   const [hasNativelyApi, setHasNativelyApi] = useState<boolean>(false);
 
   // ── Onboarding / promo toasters ───────────────────────────
-  const [showPermissionsToaster, setShowPermissionsToaster] = useState(false);
-  const [showTrialPromo,         setShowTrialPromo]         = useState(false);
+  const [showTrialPromo, setShowTrialPromo] = useState(false);
 
   // ── Free Trial global state ────────────────────────────────
   const [activeTrial, setActiveTrial] = useState<{
@@ -163,7 +164,17 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !showStartup && !isSettingsOpen && isLauncherMainView;
+  const permissionsStatus = usePermissionsStore((state) => state.status);
+  const onboardingCompleted = usePermissionsStore((state) => state.onboardingCompleted);
+  const initializePermissions = usePermissionsStore((state) => state.initialize);
+  const refreshPermissions = usePermissionsStore((state) => state.refreshPermissions);
+
+  const isPermissionsReady = isPermissionStatusOperational(permissionsStatus);
+  const shouldShowOnboarding =
+    (isLauncherWindow || isDefault) &&
+    !showStartup &&
+    (!onboardingCompleted || !isPermissionsReady);
+  const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !showStartup && !isSettingsOpen && isLauncherMainView && !shouldShowOnboarding;
   const { activeAd, dismissAd, previewAd } = useAdCampaigns(
     planDetails,
     hasProfile,
@@ -252,14 +263,10 @@ const App: React.FC = () => {
       setShowTrialExpiredModal(false);
     });
 
-    // ── Onboarding toasters ──────────────────────────────────
+    // ── Permissions onboarding + promo gating ───────────────
     if (isLauncherWindow || isDefault) {
-      const permsShown = localStorage.getItem('natively_perms_shown_v1');
-      if (!permsShown) {
-        // First ever launch — show permissions toaster
-        setShowPermissionsToaster(true);
-      } else {
-        // Subsequent launches — trial promo will self-gate via TrialPromoToaster
+      void initializePermissions();
+      if (usePermissionsStore.getState().onboardingCompleted) {
         setShowTrialPromo(true);
       }
     }
@@ -330,7 +337,7 @@ const App: React.FC = () => {
       if (removeTrialListener) removeTrialListener();
       if (removeOpenSettingsTab) removeOpenSettingsTab();
     }
-  }, [syncStartupState]);
+  }, [initializePermissions, isDefault, isLauncherWindow, syncStartupState]);
 
   // Listen for overlay opacity changes — scoped to overlay window only
   useEffect(() => {
@@ -365,6 +372,13 @@ const App: React.FC = () => {
 
   const handleStartMeeting = async () => {
     try {
+      await refreshPermissions();
+      const latestPermissions = usePermissionsStore.getState().status;
+      if (!isPermissionStatusOperational(latestPermissions)) {
+        usePermissionsStore.getState().setCurrentStep('permissions');
+        return;
+      }
+
       localStorage.setItem('natively_last_meeting_start', Date.now().toString());
       const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
       let outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
@@ -628,7 +642,7 @@ const App: React.FC = () => {
 
 
       {/* Free trial countdown banner — only in launcher window while trial is active */}
-      {(isLauncherWindow || isDefault) && activeTrial && (
+      {(isLauncherWindow || isDefault) && activeTrial && !shouldShowOnboarding && (
         <FreeTrialBanner
           expiresAt={activeTrial.expiresAt}
           usage={activeTrial.usage}
@@ -639,18 +653,8 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Permissions toaster — first ever launch */}
-      <PermissionsToaster
-        isOpen={showPermissionsToaster}
-        onDismiss={() => {
-          localStorage.setItem('natively_perms_shown_v1', '1');
-          setShowPermissionsToaster(false);
-          // After permissions, allow trial promo on next launch
-        }}
-      />
-
       {/* Trial promo toaster — 5s after restart (self-gates via localStorage + conditions) */}
-      <TrialPromoToaster
+      {!shouldShowOnboarding && <TrialPromoToaster
         isOpen={showTrialPromo}
         hasNativelyKey={hasNativelyApi}
         hasTrialToken={!!activeTrial}
@@ -668,10 +672,10 @@ const App: React.FC = () => {
           setSettingsInitialTab('api');
           setIsSettingsOpen(true);
         }}
-      />
+      />}
 
       {/* Post-trial upgrade modal — shown when trial expires */}
-      {(isLauncherWindow || isDefault) && showTrialExpiredModal && (
+      {(isLauncherWindow || isDefault) && showTrialExpiredModal && !shouldShowOnboarding && (
         <FreeTrialModal
           usage={activeTrial?.usage ?? { ai: 0, stt_seconds: 0, search: 0 }}
           onByok={async () => {
@@ -691,7 +695,7 @@ const App: React.FC = () => {
       )}
       {/* Ad toasters — render whenever activeAd is set (isLauncherMainView guard bypassed
           when triggered via preview shortcut so the card always surfaces) */}
-      {(isLauncherMainView || !!activeAd) && !isSettingsOpen && (
+      {(isLauncherMainView || !!activeAd) && !isSettingsOpen && !shouldShowOnboarding && (
         <NativelyApiPromoToaster
           isOpen={activeAd === 'natively_api'}
           onDismiss={() => dismissAd('natively_api')}
@@ -701,7 +705,7 @@ const App: React.FC = () => {
           }}
         />
       )}
-      {(isLauncherMainView || !!activeAd) && (
+      {(isLauncherMainView || !!activeAd) && !shouldShowOnboarding && (
         <>
           <ProfileFeatureToaster
             isOpen={activeAd === 'profile'}
@@ -765,6 +769,7 @@ const App: React.FC = () => {
         }}
         onDeactivated={() => { setIsPremiumActive(false); setPlanDetails({ isPremium: false }); }}
       />
+      <OnboardingFlow isOpen={shouldShowOnboarding} />
     </div>
     </ErrorBoundary>
   )

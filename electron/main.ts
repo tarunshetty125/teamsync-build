@@ -88,39 +88,6 @@ async function ensureMacMicrophoneAccess(context: string): Promise<boolean> {
   }
 }
 
-/**
- * Check macOS Screen Recording (kTCCServiceScreenCapture) permission status.
- *
- * Electron has no askForMediaAccess('screen') API — macOS only shows the TCC
- * dialog when the app actually calls a protected API (SCK / CoreAudio tap).
- * If the permission is 'denied', we cannot re-prompt; the user must re-enable
- * manually in System Settings → Privacy & Security → Screen Recording.
- *
- * Returns false only when the permission is explicitly 'denied'. All other
- * statuses ('granted', 'not-determined', 'restricted') return true because:
- *   - 'granted':         already allowed — nothing to do.
- *   - 'not-determined':  macOS will show the dialog when SCK/CoreAudio tap runs.
- *   - 'restricted':      managed device policy — nothing we can do programmatically.
- */
-function getMacScreenCaptureStatus(): 'granted' | 'denied' | 'not-determined' | 'restricted' {
-  if (process.platform !== 'darwin') return 'granted';
-  
-  // In development mode, macOS TCC often falsely reports 'denied' for the electron binary 
-  // even if the user has granted permission to their Terminal app.
-  if (!app.isPackaged) {
-    console.log('[Main] Ignoring screen capture permission check in development mode');
-    return 'granted';
-  }
-
-  try {
-    return systemPreferences.getMediaAccessStatus('screen') as
-      'granted' | 'denied' | 'not-determined' | 'restricted';
-  } catch (error) {
-    console.error('[Main] Failed to check screen recording permission:', error);
-    return 'not-determined';
-  }
-}
-
 console.log = (...args: any[]) => {
   const msg = args.map(a => (a instanceof Error) ? a.stack || a.message : (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
   logToFile('[LOG] ' + msg);
@@ -258,6 +225,8 @@ import { SettingsManager } from "./services/SettingsManager"
 import { setVerboseLoggingFlag } from "./verboseLog"
 import { ReleaseNotesManager } from "./update/ReleaseNotesManager"
 import { OllamaManager } from './services/OllamaManager'
+import { PermissionManager } from "./services/PermissionManager"
+import { formatBlockingPermissions, isPermissionStatusOperational } from "../src/lib/permissions/utils"
 import { GoogleAuthManager } from './services/GoogleAuthManager'
 
 export class AppState {
@@ -1860,28 +1829,15 @@ export class AppState {
       throw err;
     }
 
-    // Check Screen Recording permission required for system audio capture
-    // (CoreAudio Global Process Tap + ScreenCaptureKit both need this).
-    // NOTE: The 'not-determined' TCC dialog is triggered once at app startup
-    // (in initializeApp) so it never pops up mid-meeting here. We only act on
-    // explicit 'denied' — in that case warn the user but let the meeting continue
-    // with microphone-only transcription.
-    if (process.platform === 'darwin') {
-      const screenStatus = getMacScreenCaptureStatus();
-      console.log(`[Main] macOS screen recording permission status: ${screenStatus}`);
-      if (screenStatus === 'denied') {
-        // Permission was explicitly denied — warn the user via the UI but do NOT
-        // auto-open System Settings. Forcing that window open every meeting start
-        // is extremely disruptive, especially when mic transcription is still working.
-        // The UI will show a non-blocking banner; the user can fix it deliberately.
-        const message = 'Screen Recording permission denied. System audio will not be captured. To fix: System Settings → Privacy & Security → Screen Recording → enable Natively.';
-        console.warn('[Main]', message);
-        this.broadcast('system-audio-permission-denied', message);
-        // NOTE: Do NOT call shell.openExternal() here — it hijacks focus on every meeting
-        // start. The UI banner (system-audio-permission-denied IPC event) handles this.
-      }
-      // 'not-determined': Handled at startup. SCK/CoreAudio will trigger the TCC
-      // dialog itself when it first attempts to access screen content.
+    const permissionStatus = await PermissionManager.getInstance().getStatus();
+    if (!isPermissionStatusOperational(permissionStatus)) {
+      const message = permissionStatus.restartRequired
+        ? 'Please restart TeamSync to finish enabling screen access before starting a meeting.'
+        : `TeamSync needs ${formatBlockingPermissions(permissionStatus)} access before it can start a meeting.`;
+
+      console.warn('[Main] Meeting blocked by permissions:', permissionStatus);
+      this._isStarting = false;
+      throw new Error(message);
     }
 
     this.isMeetingActive = true;
@@ -3294,6 +3250,7 @@ async function initializeApp() {
   console.log("App is ready")
 
   appState.createWindow()
+  PermissionManager.getInstance().startMonitoring()
 
   // Apply initial stealth state based on isUndetectable setting.
   // NOTE: app.dock.hide() was already called pre-emptively before createWindow()
@@ -3308,73 +3265,6 @@ async function initializeApp() {
 
   // Pre-create settings window in background for faster first open
   appState.settingsWindowHelper.preloadWindow()
-
-  // One-time macOS screen recording permission prompt.
-  //
-  // We must fire this AFTER createWindow() so that:
-  //   1. The Natively launcher window is visible and focused when the TCC dialog
-  //      appears — macOS anchors the dialog to the frontmost app window on Ventura+.
-  //      Without a visible window the dialog can appear behind other apps (Sequoia).
-  //   2. In stealth/undetectable mode the dock icon is hidden, but the window is
-  //      still visible — the dialog still has a surface to attach to.
-  //
-  // The 800ms delay lets the launcher's ready-to-show animation complete so the
-  // window is fully composited before the system sheet appears above it.
-  //
-  // TCC caches the decision permanently after the first response — this block
-  // runs exactly ONCE on the first launch of each unique packaged binary.
-  // On every subsequent launch the status is 'granted' or 'denied', and we skip.
-  if (process.platform === 'darwin') {
-    setTimeout(async () => {
-      try {
-        const screenStatus = systemPreferences.getMediaAccessStatus('screen');
-        console.log(`[Init] Screen recording permission status at startup: ${screenStatus}`);
-
-        if (!app.isPackaged) {
-          console.log('[Init] Ignoring screen recording permission check in development mode');
-          return;
-        }
-
-        if (screenStatus === 'not-determined') {
-          // First launch: trigger the one-time TCC dialog by making a minimal
-          // desktopCapturer call. macOS will show the permission sheet anchored
-          // to our window. The user's response is stored permanently in the TCC
-          // database — we do NOT check status immediately after because the dialog
-          // is still open; the status will be read correctly next time `startMeeting`
-          // is called (which is the correct gate for system audio access).
-          console.log('[Init] Screen recording not-determined — showing one-time TCC dialog...');
-          try {
-            await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } });
-          } catch (e) {
-            // On some Electron builds getSources throws when permission is pending —
-            // that's fine; the TCC dialog has still been triggered.
-            console.log('[Init] getSources threw (expected during TCC pending state):', (e as Error).message);
-          }
-          // NOTE: Do NOT read afterStatus here — TCC response is async (dialog still open).
-          // startMeeting() reads the status when the user actually tries to use audio.
-
-        } else if (screenStatus === 'denied') {
-          // Returning user who previously denied — show the banner immediately at startup
-          // so they know system audio won't work before they even start a meeting.
-          console.warn('[Init] Screen recording was previously denied — notifying UI banner.');
-          const { BrowserWindow } = require('electron');
-          BrowserWindow.getAllWindows().forEach((win: Electron.BrowserWindow) => {
-            if (!win.isDestroyed()) {
-              win.webContents.send(
-                'system-audio-permission-denied',
-                'Screen Recording is disabled. System audio capture will not work. Click "Open Settings" to enable it, then restart Natively.'
-              );
-            }
-          });
-        } else {
-          // 'granted' or 'restricted' — nothing to do.
-          console.log(`[Init] Screen recording permission already resolved: ${screenStatus}`);
-        }
-      } catch (e) {
-        console.warn('[Init] Startup screen recording permission check failed:', e);
-      }
-    }, 800);
-  }
 
   // Initialize CalendarManager
   try {

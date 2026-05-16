@@ -37,6 +37,8 @@ export interface PublicModeTemplate {
   icon: ModeTemplateIcon;
   description: string;
   userPromptPlaceholder: string;
+  /** Pre-filled starter prompt shipped with TeamSync templates. Used as the initial userPrompt when creating a mode from this template. */
+  defaultUserPrompt?: string;
   notesTemplate: ModeNoteSectionTemplate[];
   suggestedReferenceFiles: string[];
   intelligenceType: ModeIntelligenceType;

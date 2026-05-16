@@ -8,6 +8,8 @@ import * as os from "os";
 import * as path from "path";
 import * as fs from "fs";
 import { AudioDevices } from "./audio/AudioDevices";
+import { PermissionManager } from "./services/PermissionManager";
+import type { PermissionKind } from "../src/lib/permissions/types";
 
 
 import { RECOGNITION_LANGUAGES, AI_RESPONSE_LANGUAGES } from "./config/languages"
@@ -17,6 +19,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, listener);
   };
+  const permissionManager = PermissionManager.getInstance();
   const { getCurrentUserPlan, hasActiveProPlan } = require('../premium/electron/auth/PlanService');
 
   const showOpenDialogNormalized = async (options: OpenDialogOptions): Promise<OpenDialogReturnValue> => {
@@ -3884,24 +3887,25 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // ── Permissions ──────────────────────────────────────────────
-  safeHandle("permissions:check", async () => {
-    if (process.platform === 'darwin') {
-      const mic    = systemPreferences.getMediaAccessStatus('microphone')
-      const screen = systemPreferences.getMediaAccessStatus('screen')
-      return { microphone: mic, screen, platform: 'darwin' }
-    }
-    // Windows/Linux: no TCC — permissions handled by OS at install/first-use time
-    return { microphone: 'granted', screen: 'granted', platform: process.platform }
-  })
+  safeHandle("permissions:getStatus", async () => {
+    return permissionManager.getStatus();
+  });
 
-  safeHandle("permissions:request-mic", async () => {
-    if (process.platform !== 'darwin') return true
-    try {
-      return await systemPreferences.askForMediaAccess('microphone')
-    } catch {
-      return false
-    }
-  })
+  safeHandle("permissions:requestMicrophone", async () => {
+    return permissionManager.requestMicrophonePermission();
+  });
+
+  safeHandle("permissions:requestScreenRecording", async () => {
+    return permissionManager.requestScreenRecordingPermission();
+  });
+
+  safeHandle("permissions:requestAccessibility", async () => {
+    return permissionManager.requestAccessibilityPermission();
+  });
+
+  safeHandle("permissions:openSettings", async (_, permission: PermissionKind) => {
+    return permissionManager.openSettings(permission);
+  });
 
   // ==========================================
   // Modes IPC Handlers

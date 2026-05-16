@@ -1,6 +1,6 @@
 import Store from 'electron-store';
 import { randomUUID } from 'crypto';
-import { cloneModeTemplateSections } from '../../src/lib/modes/templateCatalog';
+import { cloneModeTemplateSections, MODE_TEMPLATE_MAP } from '../../src/lib/modes/templateCatalog';
 import type {
     ModeReferenceFile,
     ModesStateSnapshot,
@@ -123,7 +123,7 @@ function createModeInstance(templateId: ModeTemplateType, name?: string): UserMo
         id: makeId('mode'),
         templateId,
         name: sanitizeName(name, template.name),
-        userPrompt: '',
+        userPrompt: MODE_TEMPLATE_MAP[templateId]?.defaultUserPrompt ?? '',
         referenceFiles: [],
         notesTemplate: cloneTemplateSections(templateId),
         createdAt: now,

@@ -1,4 +1,19 @@
 import type { ModeReferenceFile, ModesStateSnapshot, PublicModeTemplate } from '../lib/modes/types';
+import type {
+  PermissionKind,
+  PermissionRequestResult,
+  PermissionSettingsResult,
+  PermissionStatusSnapshot,
+} from '../lib/permissions/types';
+
+interface PermissionsBridge {
+  getStatus: () => Promise<PermissionStatusSnapshot>
+  requestMicrophone: () => Promise<PermissionRequestResult>
+  requestScreenRecording: () => Promise<PermissionRequestResult>
+  requestAccessibility: () => Promise<PermissionRequestResult>
+  openSettings: (permission: PermissionKind) => Promise<PermissionSettingsResult>
+  onStatusChanged: (callback: (status: PermissionStatusSnapshot) => void) => () => void
+}
 
 export interface ElectronAPI {
   updateContentDimensions: (dimensions: {
@@ -91,6 +106,7 @@ export interface ElectronAPI {
   getNativelyUsage: () => Promise<{ ok: boolean; error?: string; plan?: string; quota?: { transcription: { used: number; limit: number; remaining: number }; ai: { used: number; limit: number; remaining: number }; search: { used: number; limit: number; remaining: number }; resets_at: string }; member_since?: string }>
   getStoredCredentials: () => Promise<{ hasNativelyKey?: boolean; hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; googleServiceAccountPath: string | null; sttProvider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively'; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; groqSttModel?: string; hasSonioxKey?: boolean; hasTavilyKey?: boolean; geminiPreferredModel?: string; groqPreferredModel?: string; openaiPreferredModel?: string; claudePreferredModel?: string; sttGroqKey?: string; sttOpenaiKey?: string; sttDeepgramKey?: string; sttElevenLabsKey?: string; sttAzureKey?: string; sttIbmKey?: string; sttSonioxKey?: string }>
   // Permissions
+  permissions: PermissionsBridge
   checkPermissions:     () => Promise<{ microphone: 'granted'|'denied'|'not-determined'|'restricted'; screen: 'granted'|'denied'|'not-determined'|'restricted'; platform: string }>
   requestMicPermission: () => Promise<boolean>
 
