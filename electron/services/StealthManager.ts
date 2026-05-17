@@ -352,7 +352,7 @@ export class StealthManager {
 
     if (process.platform === 'win32') {
       try {
-        app.setAppUserModelId('com.natively.assistant');
+        app.setAppUserModelId('com.teamsync.assistant');
       } catch { /* ignore */ }
     }
 

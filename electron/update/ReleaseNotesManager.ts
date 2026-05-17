@@ -18,7 +18,7 @@ export class ReleaseNotesManager {
     private static instance: ReleaseNotesManager;
     private cachedNotes: ParsedReleaseNotes | null = null;
     private readonly repoOwner = "TarunShetty256";
-    private readonly repoName = "natively-cluely-ai-assistant";
+    private readonly repoName = "teamsync-cluely-ai-assistant";
 
     private constructor() { }
 

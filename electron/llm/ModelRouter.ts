@@ -5,7 +5,7 @@
 // This module owns:
 //   - Building ordered provider fallback chains (text-only vs multimodal)
 //   - User-selected provider prioritization
-//   - Natively API pinning (always first when configured)
+//   - TeamSync API pinning (always first when configured)
 //   - Tiered retry rotation construction for vision analysis
 
 import type { ProviderRegistry } from './ProviderRegistry';
@@ -65,7 +65,7 @@ export class ModelRouter {
      */
     getCurrentFamilyLabel(): string {
         const modelId = this.registry.currentModelId;
-        if (modelId === 'natively') return 'Natively';
+        if (modelId === 'teamsync') return 'TeamSync';
         if (this.registry.isClaudeModel(modelId)) return 'Claude';
         if (this.registry.isOpenAiModel(modelId)) return 'OpenAI';
         if (this.registry.isGroqModel(modelId)) return 'Groq';
@@ -76,7 +76,7 @@ export class ModelRouter {
     /**
      * Sort a list of streaming provider attempts to prioritize:
      *   1. The user's selected provider family (moved to front)
-     *   2. Natively API (always first when configured, regardless of selection)
+     *   2. TeamSync API (always first when configured, regardless of selection)
      */
     prioritizeProviders<T extends { name: string }>(providers: T[]): T[] {
         const familyLabel = this.getCurrentFamilyLabel();
@@ -89,9 +89,9 @@ export class ModelRouter {
             });
         }
 
-        // Natively is always first when configured
-        if (this.registry.hasNatively() && providers[0]?.name !== 'Natively API') {
-            const idx = providers.findIndex(p => p.name === 'Natively API');
+        // TeamSync is always first when configured
+        if (this.registry.hasTeamSync() && providers[0]?.name !== 'TeamSync API') {
+            const idx = providers.findIndex(p => p.name === 'TeamSync API');
             if (idx > 0) {
                 const [entry] = providers.splice(idx, 1);
                 providers.unshift(entry);

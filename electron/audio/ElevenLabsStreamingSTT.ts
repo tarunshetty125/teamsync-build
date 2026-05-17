@@ -56,7 +56,7 @@ export class ElevenLabsStreamingSTT extends EventEmitter {
     /** No-op - channel count is expected to be mono by ElevenLabs Scribe */
     public setAudioChannelCount(_count: number): void {}
 
-    /** Recognition language - maps Natively key to ISO-639-1 for ElevenLabs, or 'auto' to omit code */
+    /** Recognition language - maps TeamSync key to ISO-639-1 for ElevenLabs, or 'auto' to omit code */
     public setRecognitionLanguage(key: string): void {
         const newCode = key === 'auto' ? '' : (RECOGNITION_LANGUAGES[key]?.iso639 ?? this.languageCode);
         if (this.languageCode !== newCode) {
@@ -109,7 +109,7 @@ export class ElevenLabsStreamingSTT extends EventEmitter {
     /**
      * Write raw PCM audio data.
      * ElevenLabs WebSocket expects "input_audio_chunk" in base64 16-bit PCM.
-     * Note: Input from Natively DSP is 32-bit Float PCM (F32).
+     * Note: Input from TeamSync DSP is 32-bit Float PCM (F32).
      */
     public write(chunk: Buffer): void {
         if (!this.isActive) return;

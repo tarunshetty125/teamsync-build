@@ -2,8 +2,8 @@ import React from 'react';
 import { Monitor, Cpu, Info, Zap } from 'lucide-react';
 
 interface SidebarProps {
-    activeTab: 'general' | 'natively-api' | 'ai-providers' | 'about';
-    setActiveTab: (tab: 'general' | 'natively-api' | 'ai-providers' | 'about') => void;
+    activeTab: 'general' | 'teamsync-api' | 'ai-providers' | 'about';
+    setActiveTab: (tab: 'general' | 'teamsync-api' | 'ai-providers' | 'about') => void;
     onClose: () => void;
 }
 
@@ -20,8 +20,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onClo
                         <Monitor size={16} /> General
                     </button>
                     <button
-                        onClick={() => setActiveTab('natively-api')}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'natively-api' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                        onClick={() => setActiveTab('teamsync-api')}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'teamsync-api' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
                     >
                         <Zap size={16} className="text-blue-500" /> TeamSync API
                     </button>

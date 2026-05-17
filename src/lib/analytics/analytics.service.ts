@@ -140,10 +140,10 @@ class AnalyticsService {
 
         this.trackEvent('app_opened');
 
-        const hasLaunched = localStorage.getItem('natively_has_launched');
+        const hasLaunched = localStorage.getItem('teamsync_has_launched');
         if (!hasLaunched) {
             this.trackEvent('first_launch');
-            localStorage.setItem('natively_has_launched', 'true');
+            localStorage.setItem('teamsync_has_launched', 'true');
         }
     }
 

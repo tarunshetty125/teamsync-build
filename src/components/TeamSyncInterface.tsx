@@ -211,7 +211,7 @@ interface SttMetricsData {
     }>;
 }
 
-interface NativelyInterfaceProps {
+interface TeamSyncInterfaceProps {
     onEndMeeting?: () => void;
     overlayOpacity?: number;
     hasProContextAccess?: boolean;
@@ -550,7 +550,7 @@ function intentReducer(state: IntentState, action: IntentAction): IntentState {
     }
 }
 
-const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
+const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     onEndMeeting,
     overlayOpacity = OVERLAY_OPACITY_DEFAULT,
     hasProContextAccess = false,
@@ -737,7 +737,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     const [manualTranscript, setManualTranscript] = useState('');
     const manualTranscriptRef = useRef<string>('');
     const [showTranscript, setShowTranscript] = useState(() => {
-        const stored = localStorage.getItem('natively_interviewer_transcript');
+        const stored = localStorage.getItem('teamsync_interviewer_transcript');
         return stored !== 'false';
     });
 
@@ -998,7 +998,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     // Sync transcript setting
     useEffect(() => {
         const handleStorage = () => {
-            const stored = localStorage.getItem('natively_interviewer_transcript');
+            const stored = localStorage.getItem('teamsync_interviewer_transcript');
             setShowTranscript(stored !== 'false');
         };
         window.addEventListener('storage', handleStorage);
@@ -1046,7 +1046,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     // Settings State with Persistence
     const [isUndetectable, setIsUndetectable] = useState(false);
     const [hideChatHidesWidget, setHideChatHidesWidget] = useState(() => {
-        const stored = localStorage.getItem('natively_hideChatHidesWidget');
+        const stored = localStorage.getItem('teamsync_hideChatHidesWidget');
         return stored ? stored === 'true' : true;
     });
 
@@ -1081,16 +1081,16 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     // Brainstorm/Recap toggle — persisted in localStorage
     const [brainstormEnabled, setBrainstormEnabled] = useState<boolean>(() => {
-        try { return localStorage.getItem('natively_brainstorm_enabled') !== 'false'; } catch { return true; }
+        try { return localStorage.getItem('teamsync_brainstorm_enabled') !== 'false'; } catch { return true; }
     });
     useEffect(() => {
-        localStorage.setItem('natively_brainstorm_enabled', String(brainstormEnabled));
+        localStorage.setItem('teamsync_brainstorm_enabled', String(brainstormEnabled));
     }, [brainstormEnabled]);
 
     // Cross-window sync: listen for Interview Mode toggle changes from SettingsPopup
     useEffect(() => {
         const handleStorage = () => {
-            const stored = localStorage.getItem('natively_brainstorm_enabled');
+            const stored = localStorage.getItem('teamsync_brainstorm_enabled');
             const val = stored !== 'false';
             setBrainstormEnabled(val);
         };
@@ -1385,8 +1385,8 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     // Persist Settings
     useEffect(() => {
-        localStorage.setItem('natively_undetectable', String(isUndetectable));
-        localStorage.setItem('natively_hideChatHidesWidget', String(hideChatHidesWidget));
+        localStorage.setItem('teamsync_undetectable', String(isUndetectable));
+        localStorage.setItem('teamsync_hideChatHidesWidget', String(hideChatHidesWidget));
     }, [isUndetectable, hideChatHidesWidget]);
 
     // Mouse Passthrough State
@@ -1444,7 +1444,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
                 // Send exact dimensions to Electron
                 // Removed buffer to ensure tight fit
-                console.log('[NativelyInterface] ResizeObserver:', Math.ceil(rect.width), Math.ceil(rect.height));
+                console.log('[TeamSyncInterface] ResizeObserver:', Math.ceil(rect.width), Math.ceil(rect.height));
                 window.electronAPI?.updateContentDimensions({
                     width: Math.ceil(rect.width),
                     height: Math.ceil(rect.height)
@@ -1604,7 +1604,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     useEffect(() => {
         if (!window.electronAPI?.onSessionReset) return;
         const unsubscribe = window.electronAPI.onSessionReset((payload) => {
-            console.log('[NativelyInterface] Resetting session state...');
+            console.log('[TeamSyncInterface] Resetting session state...');
             activeOverlayAbortRef.current?.abort();
             void window.electronAPI.cancelGeminiChatStream?.().catch(() => { });
             void window.electronAPI.cancelIntelligenceRequest?.().catch(() => { });
@@ -2659,7 +2659,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             currentSourceRef.current = 'Answer Now';
 
             // Send manual finalization signal to STT Providers
-            window.electronAPI.finalizeMicSTT().catch(err => console.error('[NativelyInterface] Failed to send finalizeMicSTT:', err));
+            window.electronAPI.finalizeMicSTT().catch(err => console.error('[TeamSyncInterface] Failed to send finalizeMicSTT:', err));
 
             const currentAttachments = attachedContextRef.current;
             setAttachedContext([]); // Clear context immediately on send
@@ -4127,4 +4127,4 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
     );
 };
 
-export default NativelyInterface;
+export default TeamSyncInterface;

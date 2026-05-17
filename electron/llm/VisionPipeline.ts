@@ -62,7 +62,7 @@ export class VisionPipeline {
     }
 
     /**
-     * Read and encode image as base64 with optional compression for Natively API.
+     * Read and encode image as base64 with optional compression for TeamSync API.
      * Resize to max 1920px and JPEG 85% to stay within API body limits.
      */
     async compressForUpload(imagePath: string): Promise<{ mime_type: string; data: string } | null> {

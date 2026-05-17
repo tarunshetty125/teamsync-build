@@ -3,7 +3,7 @@
 // Extracted from LLMHelper to isolate provider concerns from streaming/generation logic.
 //
 // This module owns:
-//   - API key storage and client initialization (Gemini, Groq, OpenAI, Claude, Natively, Ollama, Custom/cURL)
+//   - API key storage and client initialization (Gemini, Groq, OpenAI, Claude, TeamSync, Ollama, Custom/cURL)
 //   - Model ID mapping (UI short codes → internal model IDs)
 //   - Model type checking (isOpenAiModel, isClaudeModel, etc.)
 //   - Provider switching logic
@@ -47,7 +47,7 @@ export class ProviderRegistry {
     private _groqApiKey: string | null = null;
     private _openaiApiKey: string | null = null;
     private _claudeApiKey: string | null = null;
-    private _nativelyKey: string | null = null;
+    private _teamsyncKey: string | null = null;
 
     // --- Ollama ---
     private _useOllama: boolean = false;
@@ -148,9 +148,9 @@ export class ProviderRegistry {
         console.log("[ProviderRegistry] Claude API Key updated.");
     }
 
-    setNativelyKey(key: string | null): void {
-        this._nativelyKey = key || null;
-        console.log(`[ProviderRegistry] Natively key ${key ? 'set' : 'cleared'}`);
+    setTeamSyncKey(key: string | null): void {
+        this._teamsyncKey = key || null;
+        console.log(`[ProviderRegistry] TeamSync key ${key ? 'set' : 'cleared'}`);
     }
 
     // -----------------------------------------------------------------------
@@ -161,7 +161,7 @@ export class ProviderRegistry {
     get groqClient(): Groq | null { return this._groqClient; }
     get openaiClient(): OpenAI | null { return this._openaiClient; }
     get claudeClient(): Anthropic | null { return this._claudeClient; }
-    get nativelyKey(): string | null { return this._nativelyKey; }
+    get teamsyncKey(): string | null { return this._teamsyncKey; }
     get rateLimiters(): ReturnType<typeof createProviderRateLimiters> { return this._rateLimiters; }
     get modelVersionManager(): ModelVersionManager { return this._modelVersionManager; }
 
@@ -242,8 +242,8 @@ export class ProviderRegistry {
         return modelId.startsWith("gemini-") || modelId.startsWith("models/");
     }
 
-    hasNatively(): boolean {
-        return !!this._nativelyKey;
+    hasTeamSync(): boolean {
+        return !!this._teamsyncKey;
     }
 
     hasGroq(): boolean { return this._groqClient !== null; }
@@ -352,7 +352,7 @@ export class ProviderRegistry {
         this._groqApiKey = null;
         this._openaiApiKey = null;
         this._claudeApiKey = null;
-        this._nativelyKey = null;
+        this._teamsyncKey = null;
         this._client = null;
         this._groqClient = null;
         this._openaiClient = null;

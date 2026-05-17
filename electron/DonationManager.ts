@@ -19,14 +19,14 @@ export class DonationManager {
 
     private constructor() {
         this.store = new Store<DonationState>({
-            name: 'natively-preferences-secure', // Different file than main config
+            name: 'teamsync-preferences-secure', // Different file than main config
             defaults: {
                 hasDonated: false,
                 lastShownAt: null,
                 lifetimeShows: 0
             },
             // Encryption in v8 worked fine, keeping it for "obvious tampering" protection
-            encryptionKey: 'natively-secure-storage-key'
+            encryptionKey: 'teamsync-secure-storage-key'
         });
     }
 

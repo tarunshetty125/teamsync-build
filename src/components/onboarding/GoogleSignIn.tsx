@@ -132,7 +132,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
 
   // Check if user is already authenticated
   useEffect(() => {
-    const token = localStorage.getItem('natively_auth_token');
+    const token = localStorage.getItem('teamsync_auth_token');
     if (token) {
       verifyExistingToken(token);
     }
@@ -154,7 +154,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
           isNewUser: false,
         });
       } else {
-        localStorage.removeItem('natively_auth_token');
+        localStorage.removeItem('teamsync_auth_token');
       }
     } catch {
       // Server not running — ignore, user can sign in manually
@@ -223,9 +223,9 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
         pollRef.current = null;
 
         if (data.success && data.token) {
-          localStorage.setItem('natively_auth_token', data.token);
+          localStorage.setItem('teamsync_auth_token', data.token);
           if (data.user) {
-            localStorage.setItem('natively_auth_user', JSON.stringify(data.user));
+            localStorage.setItem('teamsync_auth_user', JSON.stringify(data.user));
           }
           setState('success');
 
@@ -402,7 +402,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] as [number, number, number, number] }}
                   >
-                    {/* "Start Natively" style layering (structure), but keep existing colors */}
+                    {/* "Start TeamSync" style layering (structure), but keep existing colors */}
                     <div className="absolute inset-x-3 top-0 h-[42%] bg-gradient-to-b from-white/20 to-transparent blur-[2px] rounded-b-lg opacity-80 pointer-events-none z-10" />
                     <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none z-10" />
 

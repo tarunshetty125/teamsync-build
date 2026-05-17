@@ -202,8 +202,8 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                             </div>
                         </div>
                         <a
-                            href="https://natively-ai.vercel.app/"
-                            onClick={(e) => handleOpenLink(e, "https://natively-ai.vercel.app/")}
+                            href="https://teamsync-ai.vercel.app/"
+                            onClick={(e) => handleOpenLink(e, "https://teamsync-ai.vercel.app/")}
                             className="whitespace-nowrap px-4 py-2 bg-text-primary hover:bg-white/90 text-bg-main text-xs font-bold rounded-lg transition-all shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2"
                         >
                             <Globe size={14} />

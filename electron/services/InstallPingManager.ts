@@ -8,7 +8,7 @@
  * It exists solely to estimate total install counts for the open-source project.
  *
  * WHAT IS SENT (exactly):
- * - "app": "natively" (hardcoded app identifier)
+ * - "app": "teamsync" (hardcoded app identifier)
  * - "install_id": A random UUID generated once per install (NOT tied to user/hardware)
  * - "version": The app version from package.json
  * - "platform": "darwin" | "win32" | "linux"
@@ -45,7 +45,7 @@ import { v4 as uuidv4 } from 'uuid';
  * Anonymous install ping endpoint.
  * Replace this URL with your actual Cloudflare Worker endpoint.
  */
-const INSTALL_PING_URL = 'https://divine-sun-927d.natively.workers.dev';
+const INSTALL_PING_URL = 'https://divine-sun-927d.teamsync.workers.dev';
 
 // Local storage paths (inside user data directory)
 const INSTALL_ID_PATH = path.join(app.getPath('userData'), 'install_id.txt');
@@ -136,7 +136,7 @@ export async function sendAnonymousInstallPing(): Promise<void> {
         const platform = process.platform; // 'darwin' | 'win32' | 'linux'
 
         const payload = {
-            app: 'natively',
+            app: 'teamsync',
             install_id: installId,
             version: version,
             platform: platform

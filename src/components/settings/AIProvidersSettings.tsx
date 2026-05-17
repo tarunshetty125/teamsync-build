@@ -88,8 +88,8 @@ export const AIProvidersSettings: React.FC = () => {
     const [savedStatus, setSavedStatus] = useState<Record<string, boolean>>({});
     const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({});
     const [hasStoredKey, setHasStoredKey] = useState<Record<string, boolean>>({});
-    // Fast mode is available with a local Groq key OR via the Natively API (server-side Groq pool)
-    const canUseFastMode = !!(hasStoredKey.groq || hasStoredKey.natively);
+    // Fast mode is available with a local Groq key OR via the TeamSync API (server-side Groq pool)
+    const canUseFastMode = !!(hasStoredKey.groq || hasStoredKey.teamsync);
     const [testStatus, setTestStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
     const [testError, setTestError] = useState<Record<string, string>>({});
 
@@ -133,7 +133,7 @@ export const AIProvidersSettings: React.FC = () => {
                         groq: creds.hasGroqKey,
                         openai: creds.hasOpenaiKey,
                         claude: creds.hasClaudeKey,
-                        natively: creds.hasNativelyKey || false
+                        teamsync: creds.hasTeamSyncKey || false
                     });
                     // Load preferred models
                     const pm: Record<string, string> = {};
@@ -181,20 +181,20 @@ export const AIProvidersSettings: React.FC = () => {
             // @ts-ignore
             const unsubscribe = window.electronAPI.onGroqFastTextChanged((enabled: boolean) => {
                 setFastResponseMode(enabled);
-                localStorage.setItem('natively_groq_fast_text', String(enabled));
+                localStorage.setItem('teamsync_groq_fast_text', String(enabled));
             });
             return () => unsubscribe();
         }
     }, []);
 
-    // Effect to enforce fast mode disabled if neither Groq key nor Natively API is configured.
+    // Effect to enforce fast mode disabled if neither Groq key nor TeamSync API is configured.
     // Guard with credentialsLoaded so this never fires during the initial async load phase
     // (when hasStoredKey is still empty and canUseFastMode is incorrectly false).
     useEffect(() => {
         if (!credentialsLoaded) return;
         if (!canUseFastMode && fastResponseMode) {
             setFastResponseMode(false);
-            localStorage.setItem('natively_groq_fast_text', 'false');
+            localStorage.setItem('teamsync_groq_fast_text', 'false');
             // @ts-ignore
             window.electronAPI?.setGroqFastTextMode(false);
         }
@@ -476,8 +476,8 @@ export const AIProvidersSettings: React.FC = () => {
                         options={(() => {
                             const opts: { id: string; name: string }[] = [];
 
-                            if (hasStoredKey.natively) {
-                                opts.push({ id: 'natively', name: 'TeamSync API' });
+                            if (hasStoredKey.teamsync) {
+                                opts.push({ id: 'teamsync', name: 'TeamSync API' });
                             }
 
                             for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
@@ -542,7 +542,7 @@ export const AIProvidersSettings: React.FC = () => {
                             }
                             const newState = !fastResponseMode;
                             setFastResponseMode(newState);
-                            localStorage.setItem('natively_groq_fast_text', String(newState));
+                            localStorage.setItem('teamsync_groq_fast_text', String(newState));
                             // @ts-ignore
                             await window.electronAPI?.setGroqFastTextMode(newState);
                         }}

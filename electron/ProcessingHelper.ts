@@ -82,10 +82,10 @@ export class ProcessingHelper {
       this.llmHelper.setClaudeApiKey(claudeKey);
     }
 
-    const nativelyKey = credManager.getNativelyApiKey();
-    if (nativelyKey) {
-      console.log("[ProcessingHelper] Loading stored Natively API Key from CredentialsManager");
-      this.llmHelper.setNativelyKey(nativelyKey);
+    const teamsyncKey = credManager.getTeamSyncApiKey();
+    if (teamsyncKey) {
+      console.log("[ProcessingHelper] Loading stored TeamSync API Key from CredentialsManager");
+      this.llmHelper.setTeamSyncKey(teamsyncKey);
     }
 
     // CRITICAL: Re-initialize IntelligenceManager now that keys are loaded

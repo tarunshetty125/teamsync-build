@@ -111,7 +111,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     };
 
     const syncCalendarConnection = async () => {
-        const token = localStorage.getItem('natively_auth_token');
+        const token = localStorage.getItem('teamsync_auth_token');
 
         if (token) {
             try {
@@ -129,7 +129,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             }
         }
 
-        const storedUser = localStorage.getItem('natively_auth_user');
+        const storedUser = localStorage.getItem('teamsync_auth_user');
         if (!storedUser) {
             setIsCalendarConnected(false);
             return;
@@ -146,7 +146,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const fetchEvents = async () => {
         try {
             // Primary path: backend-auth Google calendar (token-based)
-            const token = localStorage.getItem('natively_auth_token');
+            const token = localStorage.getItem('teamsync_auth_token');
             if (token && window.electronAPI?.googleGetCalendarEvents) {
                 const result = await window.electronAPI.googleGetCalendarEvents(token);
                 if (result?.events && Array.isArray(result.events)) {
@@ -187,7 +187,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         try {
             setShowNotification(true);
 
-            const token = localStorage.getItem('natively_auth_token');
+            const token = localStorage.getItem('teamsync_auth_token');
             // If backend auth token exists, refresh from backend only.
             // This avoids noisy legacy CalendarManager "not connected" logs.
             if (!token && window.electronAPI?.calendarRefresh) {
@@ -253,7 +253,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             removeCalendarStatusListener = window.electronAPI.onCalendarStatusChanged((status) => {
                 if (!mounted) return;
 
-                const token = localStorage.getItem('natively_auth_token');
+                const token = localStorage.getItem('teamsync_auth_token');
                 // If we're authenticated via backend, ignore status broadcasts that don't include an email,
                 // because those come from the legacy CalendarManager which might falsely report 'connected'
                 // based on stale local tokens.
@@ -269,7 +269,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         const handleCalendarStatusSync = (event: Event) => {
             const customEvent = event as CustomEvent<{ connected: boolean }>;
             if (!mounted) return;
-            if (localStorage.getItem('natively_auth_token')) {
+            if (localStorage.getItem('teamsync_auth_token')) {
                 return;
             }
             if (customEvent.detail && typeof customEvent.detail.connected === 'boolean') {
@@ -278,7 +278,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             }
             void syncCalendarConnection();
         };
-        window.addEventListener('natively:calendar-status-changed', handleCalendarStatusSync as EventListener);
+        window.addEventListener('teamsync:calendar-status-changed', handleCalendarStatusSync as EventListener);
 
         // Sync initial meeting active state — guarded so unmounted component isn't written to
         if (window.electronAPI?.getMeetingActive) {
@@ -310,7 +310,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             if (removeUndetectableListener) removeUndetectableListener();
             if (removeMeetingStateListener) removeMeetingStateListener();
             if (removeCalendarStatusListener) removeCalendarStatusListener();
-            window.removeEventListener('natively:calendar-status-changed', handleCalendarStatusSync as EventListener);
+            window.removeEventListener('teamsync:calendar-status-changed', handleCalendarStatusSync as EventListener);
             clearInterval(interval);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -774,7 +774,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                             onClick={() => {
                                                 if (isMeetingActive) {
                                                     // inactive=true: overlay appears on top but doesn't activate
-                                                    // the Natively app or steal OS focus — preserves stealth.
+                                                    // the TeamSync app or steal OS focus — preserves stealth.
                                                     // setWindowMode (not showWindow) is required because
                                                     // logo-click set currentWindowMode='launcher', so showWindow()
                                                     // would re-show the launcher rather than switch to overlay.
@@ -782,7 +782,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                     analytics.trackCommandExecuted('resume_meeting_from_launcher');
                                                 } else {
                                                     onStartMeeting();
-                                                    analytics.trackCommandExecuted('start_natively_cta');
+                                                    analytics.trackCommandExecuted('start_teamsync_cta');
                                                 }
                                             }}
                                             whileHover={{ scale: 1.01, filter: 'brightness(1.1)' }}

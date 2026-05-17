@@ -16,8 +16,8 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
         let unsubscribe: (() => void) | undefined;
 
         const syncConnectionState = async () => {
-            const token = localStorage.getItem('natively_auth_token');
-            const storedUser = localStorage.getItem('natively_auth_user');
+            const token = localStorage.getItem('teamsync_auth_token');
+            const storedUser = localStorage.getItem('teamsync_auth_user');
 
             if (token) {
                 try {
@@ -78,13 +78,13 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
                 }
 
                 setConnected(status.connected);
-                const storedUser = localStorage.getItem('natively_auth_user');
+                const storedUser = localStorage.getItem('teamsync_auth_user');
                 if (storedUser) {
                     try {
                         const userData = JSON.parse(storedUser);
                         userData.calendarConnected = status.connected;
                         if (status.email) userData.email = status.email;
-                        localStorage.setItem('natively_auth_user', JSON.stringify(userData));
+                        localStorage.setItem('teamsync_auth_user', JSON.stringify(userData));
                     } catch {
                         // Ignore malformed local storage payload.
                     }
@@ -111,7 +111,7 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
         try {
             // Use the backend Google OAuth flow for calendar access
             // Get the logged-in user's email for login hint
-            const storedUser = localStorage.getItem('natively_auth_user');
+            const storedUser = localStorage.getItem('teamsync_auth_user');
             const email = storedUser ? JSON.parse(storedUser)?.email : undefined;
 
             // Open calendar auth in browser via backend
@@ -149,10 +149,10 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
                         props.onConnect?.();
                         // Update stored user data with calendar status
                         if (data.token) {
-                            localStorage.setItem('natively_auth_token', data.token);
+                            localStorage.setItem('teamsync_auth_token', data.token);
                         }
                         if (data.user) {
-                            localStorage.setItem('natively_auth_user', JSON.stringify(data.user));
+                            localStorage.setItem('teamsync_auth_user', JSON.stringify(data.user));
                         }
                         // Track calendar connection
                         import('../../lib/analytics/analytics.service').then(({ analytics }) => {

@@ -942,7 +942,7 @@ export class IntelligenceEngine extends EventEmitter {
         if (!lower.includes('gpt') && !lower.includes('openai') && this.llmHelper.hasOpenai()) candidates.push('gpt-4o-mini');
         if (!lower.includes('gemini')) candidates.push('gemini');
         if (!lower.includes('llama') && !lower.includes('groq') && this.llmHelper.hasGroq()) candidates.push('llama');
-        candidates.push('natively');
+        candidates.push('teamsync');
 
         return candidates.find((candidate) => candidate !== primaryModel) ?? null;
     }

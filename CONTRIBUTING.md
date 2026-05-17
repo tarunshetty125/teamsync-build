@@ -20,7 +20,7 @@ Following these guidelines helps to communicate that you respect the time of the
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by the [Natively Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to evinjohnn@gmail.com.
+This project and everyone participating in it is governed by the [Natively Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to tarunshetty125@gmail.com.
 
 ## How Can I Contribute?
 

@@ -4,15 +4,15 @@
 //
 // Premium Apple-inspired trial offer card.
 // Shows 5 seconds after launcher is visible on non-first launches,
-// when no Natively API key is stored and no trial is active.
+// when no TeamSync API key is stored and no trial is active.
 // Violet/purple accent — consistent with the trial brand throughout the app.
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { X, ArrowRight, Zap, Mic, Search, Clock } from 'lucide-react';
 
-const STORAGE_KEY      = 'natively_trial_promo_ts';
-const PERMS_KEY        = 'natively_perms_shown_v1';
+const STORAGE_KEY      = 'teamsync_trial_promo_ts';
+const PERMS_KEY        = 'teamsync_perms_shown_v1';
 const STARTUP_DELAY_MS = 10_000;
 const COOLDOWN_DAYS    = 7;
 
@@ -47,7 +47,7 @@ const ITEM    = {
 
 interface Props {
   isOpen:         boolean;
-  hasNativelyKey: boolean;
+  hasTeamSyncKey: boolean;
   hasTrialToken:  boolean;
   onDismiss:      () => void;
   onStartTrial:   () => Promise<void>;
@@ -55,7 +55,7 @@ interface Props {
 }
 
 export const TrialPromoToaster: React.FC<Props> = ({
-  isOpen, hasNativelyKey, hasTrialToken, onDismiss, onStartTrial, onManualSetup,
+  isOpen, hasTeamSyncKey, hasTrialToken, onDismiss, onStartTrial, onManualSetup,
 }) => {
   return null;
   const [visible,  setVisible]  = useState(false);
@@ -67,7 +67,7 @@ export const TrialPromoToaster: React.FC<Props> = ({
     if (!isOpen) { setVisible(false); return; }
 
     // Don't show if user has a key or trial already
-    if (hasNativelyKey || hasTrialToken) return;
+    if (hasTeamSyncKey || hasTrialToken) return;
 
     // Don't show on very first launch (permissions toaster shows instead)
     const permsShown = localStorage.getItem(PERMS_KEY);
@@ -79,7 +79,7 @@ export const TrialPromoToaster: React.FC<Props> = ({
 
     const t = setTimeout(() => setVisible(true), STARTUP_DELAY_MS);
     return () => clearTimeout(t);
-  }, [isOpen, hasNativelyKey, hasTrialToken]);
+  }, [isOpen, hasTeamSyncKey, hasTrialToken]);
 
   const handleDismiss = () => {
     localStorage.setItem(STORAGE_KEY, String(Date.now()));

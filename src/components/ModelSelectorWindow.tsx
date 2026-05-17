@@ -73,8 +73,8 @@ const ModelSelectorWindow = () => {
                 // Build the list
                 const models: ModelOption[] = [];
 
-                if (creds?.hasNativelyKey) {
-                    models.push({ id: 'natively', name: 'TeamSync API', type: 'cloud', provider: 'natively' });
+                if (creds?.hasTeamSyncKey) {
+                    models.push({ id: 'teamsync', name: 'TeamSync API', type: 'cloud', provider: 'teamsync' });
                 }
 
                 // Fetch dynamic models

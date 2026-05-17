@@ -1,5 +1,5 @@
-// src/components/NativelyQuotaBanner.tsx
-// Startup banner shown when any Natively quota bucket reaches ≥90% usage.
+// src/components/TeamSyncQuotaBanner.tsx
+// Startup banner shown when any TeamSync quota bucket reaches ≥90% usage.
 // Checks on every startup — no throttle.
 
 import React, { useEffect, useState } from 'react';
@@ -19,7 +19,7 @@ const STARTUP_DELAY_MS = 3000;
 const THRESHOLD_PCT    = 90;
 const UPGRADE_URL      = 'https://checkout.dodopayments.com/buy/pdt_0NbFixGmD8CSeawb5qvVl';
 
-export const NativelyQuotaBanner: React.FC = () => {
+export const TeamSyncQuotaBanner: React.FC = () => {
     const [nearLimitBuckets, setNearLimitBuckets] = useState<NearLimitBucket[]>([]);
     const [visible, setVisible] = useState(false);
 
@@ -31,11 +31,11 @@ export const NativelyQuotaBanner: React.FC = () => {
             if (cancelled) return;
 
             try {
-                const result = await window.electronAPI?.getNativelyUsage?.();
-                console.log('[NativelyQuotaBanner] usage:', JSON.stringify(result));
+                const result = await window.electronAPI?.getTeamSyncUsage?.();
+                console.log('[TeamSyncQuotaBanner] usage:', JSON.stringify(result));
 
                 if (cancelled || !result?.ok || !result.quota) {
-                    console.log('[NativelyQuotaBanner] no quota data — skipping');
+                    console.log('[TeamSyncQuotaBanner] no quota data — skipping');
                     return;
                 }
 
@@ -60,14 +60,14 @@ export const NativelyQuotaBanner: React.FC = () => {
                         pct:   Math.round((bucket.used / bucket.limit) * 100),
                     }));
 
-                console.log('[NativelyQuotaBanner] near-limit:', near);
+                console.log('[TeamSyncQuotaBanner] near-limit:', near);
 
                 if (near.length === 0) return;
 
                 setNearLimitBuckets(near);
                 setVisible(true);
             } catch (e: any) {
-                console.log('[NativelyQuotaBanner] error:', e?.message);
+                console.log('[TeamSyncQuotaBanner] error:', e?.message);
             }
         };
 

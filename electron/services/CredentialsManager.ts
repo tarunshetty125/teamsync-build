@@ -31,9 +31,9 @@ export interface StoredCredentials {
     customProviders?: CustomProvider[];
     curlProviders?: CurlProvider[];
     defaultModel?: string;
-    nativelyApiKey?: string;
+    teamsyncApiKey?: string;
     // STT Provider settings
-    sttProvider?: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively';
+    sttProvider?: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync';
     groqSttApiKey?: string;
     groqSttModel?: string;
     openAiSttApiKey?: string;
@@ -54,7 +54,7 @@ export interface StoredCredentials {
     openaiPreferredModel?: string;
     claudePreferredModel?: string;
     // Free trial state
-    trialToken?:     string;   // server-issued signed token (natively_trial_…)
+    trialToken?:     string;   // server-issued signed token (teamsync_trial_…)
     trialExpiresAt?: string;   // ISO timestamp — local copy for startup check
     trialStartedAt?: string;   // ISO timestamp
     trialClaimed?:   boolean;  // set true on first claim, never cleared — hides start card permanently
@@ -112,16 +112,16 @@ export class CredentialsManager {
         return this.credentials.customProviders || [];
     }
 
-    public getSttProvider(): 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively' {
+    public getSttProvider(): 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync' {
         const provider = this.credentials.sttProvider || 'none';
-        // Self-heal: if provider is 'none' but a Natively key exists, the user is in a
+        // Self-heal: if provider is 'none' but a TeamSync key exists, the user is in a
         // broken state (key cleared then re-entered via a path that skipped auto-promote,
-        // or credentials restored from backup). Silently restore to 'natively' so STT works.
-        if (provider === 'none' && this.credentials.nativelyApiKey) {
-            this.credentials.sttProvider = 'natively';
+        // or credentials restored from backup). Silently restore to 'teamsync' so STT works.
+        if (provider === 'none' && this.credentials.teamsyncApiKey) {
+            this.credentials.sttProvider = 'teamsync';
             this.saveCredentials();
-            console.log('[CredentialsManager] Self-healed sttProvider: none→natively (Natively key present)');
-            return 'natively';
+            console.log('[CredentialsManager] Self-healed sttProvider: none→teamsync (TeamSync key present)');
+            return 'teamsync';
         }
         return provider;
     }
@@ -181,8 +181,8 @@ export class CredentialsManager {
         return this.credentials.defaultModel || 'gemini-3.1-flash-lite-preview';
     }
 
-    public getNativelyApiKey(): string | undefined {
-        return this.credentials.nativelyApiKey;
+    public getTeamSyncApiKey(): string | undefined {
+        return this.credentials.teamsyncApiKey;
     }
 
     public getAllCredentials(): StoredCredentials {
@@ -223,7 +223,7 @@ export class CredentialsManager {
         console.log('[CredentialsManager] Google Service Account path updated');
     }
 
-    public setSttProvider(provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively'): void {
+    public setSttProvider(provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync'): void {
         this.credentials.sttProvider = provider;
         this.saveCredentials();
         console.log(`[CredentialsManager] STT Provider set to: ${provider}`);
@@ -313,12 +313,12 @@ export class CredentialsManager {
         console.log(`[CredentialsManager] Default Model set to: ${model}`);
     }
 
-    public setNativelyApiKey(key: string): void {
+    public setTeamSyncApiKey(key: string): void {
         const trimmed = key.trim();
-        this.credentials.nativelyApiKey = trimmed || undefined;
+        this.credentials.teamsyncApiKey = trimmed || undefined;
 
         if (trimmed) {
-            // Auto-promote natively to default model unless user already chose a non-Gemini/Groq model
+            // Auto-promote teamsync to default model unless user already chose a non-Gemini/Groq model
             const current = this.credentials.defaultModel || '';
             const isAutoDefault = !current
                 || current.startsWith('gemini-')
@@ -328,29 +328,29 @@ export class CredentialsManager {
                 || current === 'gemini'
                 || current === 'llama';
             if (isAutoDefault) {
-                this.credentials.defaultModel = 'natively';
-                console.log('[CredentialsManager] Auto-set default model to natively');
+                this.credentials.defaultModel = 'teamsync';
+                console.log('[CredentialsManager] Auto-set default model to teamsync');
             }
 
-            // Auto-promote natively STT if still on 'none' or the default Google STT
+            // Auto-promote teamsync STT if still on 'none' or the default Google STT
             if (!this.credentials.sttProvider || this.credentials.sttProvider === 'none' || this.credentials.sttProvider === 'google') {
-                this.credentials.sttProvider = 'natively';
-                console.log('[CredentialsManager] Auto-set STT provider to natively');
+                this.credentials.sttProvider = 'teamsync';
+                console.log('[CredentialsManager] Auto-set STT provider to teamsync');
             }
         } else {
-            // Key cleared — revert natively-auto-set defaults back to safe fallbacks
-            if (this.credentials.defaultModel === 'natively') {
+            // Key cleared — revert teamsync-auto-set defaults back to safe fallbacks
+            if (this.credentials.defaultModel === 'teamsync') {
                 this.credentials.defaultModel = 'gemini-3.1-flash-lite-preview';
-                console.log('[CredentialsManager] Natively key cleared — reset default model to Gemini Flash');
+                console.log('[CredentialsManager] TeamSync key cleared — reset default model to Gemini Flash');
             }
-            if (this.credentials.sttProvider === 'natively') {
+            if (this.credentials.sttProvider === 'teamsync') {
                 this.credentials.sttProvider = 'none';
-                console.log('[CredentialsManager] Natively key cleared — reset STT provider to none');
+                console.log('[CredentialsManager] TeamSync key cleared — reset STT provider to none');
             }
         }
 
         this.saveCredentials();
-        console.log('[CredentialsManager] Natively API Key updated');
+        console.log('[CredentialsManager] TeamSync API Key updated');
     }
 
     public getPreferredModel(provider: 'gemini' | 'groq' | 'openai' | 'claude'): string | undefined {

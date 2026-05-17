@@ -120,7 +120,7 @@ export class DatabaseManager {
 
     private constructor() {
         const userDataPath = app.getPath('userData');
-        this.dbPath = path.join(userDataPath, 'natively.db');
+        this.dbPath = path.join(userDataPath, 'teamsync.db');
         this.init();
     }
 
@@ -1503,7 +1503,7 @@ The credit can be used for Speech-to-Text and is sufficient for extended testing
 # Support
 
 If you need help with setup or usage, reach out anytime at:
-natively-ai.vercel.app`;
+teamsync-ai.vercel.app`;
 
         const demoMeeting: Meeting = {
             id: demoId,

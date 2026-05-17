@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client"
 import App from "./App"
 import "./index.css"
 
-const THEME_CACHE_KEY = 'natively_resolved_theme';
+const THEME_CACHE_KEY = 'teamsync_resolved_theme';
 
 // Set platform attribute synchronously — before React renders — so CSS selectors
 // like html[data-platform="win32"] work immediately without a flash on first paint.

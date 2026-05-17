@@ -3,7 +3,7 @@ import { ArrowLeft, Search, Mail, Link, ChevronDown, Play, ArrowUp, Copy, Check,
 import { motion, AnimatePresence } from 'framer-motion';
 import MeetingChatOverlay from './MeetingChatOverlay';
 import EditableTextBlock from './EditableTextBlock';
-import NativelyLogo from './icon.png';
+import TeamSyncLogo from './icon.png';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -473,7 +473,7 @@ ${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'No
                                                 {interaction.answer && (
                                                     <div className="flex items-start gap-4">
                                                         <div className="meeting-glass-avatar">
-                                                            <img src={NativelyLogo} alt="AI" className="force-black-icon h-4 w-4 object-contain opacity-60" />
+                                                            <img src={TeamSyncLogo} alt="AI" className="force-black-icon h-4 w-4 object-contain opacity-60" />
                                                         </div>
                                                         <div className="min-w-0 flex-1">
                                                             <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-text-tertiary">{formatTime(interaction.timestamp)}</div>

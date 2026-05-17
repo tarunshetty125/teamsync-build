@@ -5,7 +5,7 @@ import {
     RefreshCw, CalendarClock, Trash2, ArrowUpRight, Info,
     Zap, Clock, Sparkles
 } from 'lucide-react';
-import { NativelyLogoMark } from '../NativelyLogoMark';
+import { TeamSyncLogoMark } from '../TeamSyncLogoMark';
 import { FreeTrialModal } from '../trial/FreeTrialModal';
 import GlossyPillButton from '../ui/GlossyPillButton';
 
@@ -119,7 +119,7 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 }
 
 // ─── Component ───────────────────────────────────────────────
-export const NativelyApiSettings: React.FC = () => {
+export const TeamSyncApiSettings: React.FC = () => {
     const [apiKey,         setApiKey]         = useState('');
     const [isSaved,        setIsSaved]        = useState(false);
     const [isLoading,      setIsLoading]      = useState(true);
@@ -150,8 +150,8 @@ export const NativelyApiSettings: React.FC = () => {
         (async () => {
             try {
                 const creds = await window.electronAPI.getStoredCredentials();
-                if (creds.hasNativelyKey) { setApiKey('•'.repeat(24)); setIsSaved(true); }
-            } catch (e) { console.error('[NativelyApi]', e); }
+                if (creds.hasTeamSyncKey) { setApiKey('•'.repeat(24)); setIsSaved(true); }
+            } catch (e) { console.error('[TeamSyncApi]', e); }
             finally { setIsLoading(false); }
         })();
     }, []);
@@ -160,7 +160,7 @@ export const NativelyApiSettings: React.FC = () => {
         setIsLoadingUsage(true);
         setUsageError(null);
         try {
-            const r = await window.electronAPI.getNativelyUsage();
+            const r = await window.electronAPI.getTeamSyncUsage();
             if (r.ok && r.quota) {
                 setUsageData(r as UsageData);
             } else {
@@ -184,7 +184,7 @@ export const NativelyApiSettings: React.FC = () => {
         const res = await window.electronAPI?.getTrialStatus?.();
         if (!res?.ok) return;
 
-        localStorage.setItem('natively_trial_claimed', 'true');
+        localStorage.setItem('teamsync_trial_claimed', 'true');
 
         setTrialState({
             active:    !(res.expired ?? false),
@@ -207,11 +207,11 @@ export const NativelyApiSettings: React.FC = () => {
             try {
                 const local = await window.electronAPI?.getLocalTrial?.();
                 if (!local?.hasToken) {
-                    if (local?.trialClaimed) localStorage.setItem('natively_trial_claimed', 'true');
+                    if (local?.trialClaimed) localStorage.setItem('teamsync_trial_claimed', 'true');
                     return;
                 }
 
-                localStorage.setItem('natively_trial_claimed', 'true');
+                localStorage.setItem('teamsync_trial_claimed', 'true');
 
                 if (local.expired) {
                     // Token exists but expired locally — show modal immediately, confirm via server
@@ -244,7 +244,7 @@ export const NativelyApiSettings: React.FC = () => {
             const res = await window.electronAPI?.startTrial?.();
             if (!res?.ok) {
                 if (res?.error === 'trial_ip_limit' || res?.error === 'trial_start_rate_limited') {
-                    localStorage.setItem('natively_trial_claimed', 'true');
+                    localStorage.setItem('teamsync_trial_claimed', 'true');
                     setTrialState({ active: false, expired: true, expiresAt: '', startedAt: '', usage: { ai: 0, stt_seconds: 0, search: 0 } });
                     return;
                 }
@@ -255,7 +255,7 @@ export const NativelyApiSettings: React.FC = () => {
                 return;
             }
 
-            localStorage.setItem('natively_trial_claimed', 'true');
+            localStorage.setItem('teamsync_trial_claimed', 'true');
 
             if (res.already_used && res.expired) {
                 setTrialState({ active: false, expired: true, expiresAt: '', startedAt: '', usage: { ai: 0, stt_seconds: 0, search: 0 } });
@@ -292,14 +292,14 @@ export const NativelyApiSettings: React.FC = () => {
         if (!apiKey.trim() || apiKey.includes('•')) return;
         setIsSaving(true); setError(null);
         try {
-            const r = await window.electronAPI.setNativelyApiKey(apiKey.trim());
+            const r = await window.electronAPI.setTeamSyncApiKey(apiKey.trim());
             if (r.success) {
                 setApiKey('•'.repeat(24)); setIsSaved(true); setJustSaved(true);
                 setTimeout(() => setJustSaved(false), 2500);
                 // @ts-ignore
-                window.electronAPI?.setDefaultModel?.('natively').catch(console.error);
+                window.electronAPI?.setDefaultModel?.('teamsync').catch(console.error);
                 // @ts-ignore
-                window.electronAPI?.setSttProvider?.('natively').catch(console.error);
+                window.electronAPI?.setSttProvider?.('teamsync').catch(console.error);
             } else { setError(r.error || 'Failed to save API key'); }
         } catch (e: any) { setError(e.message || 'Unexpected error'); }
         finally { setIsSaving(false); }
@@ -307,7 +307,7 @@ export const NativelyApiSettings: React.FC = () => {
 
     const handleClear = () => {
         setApiKey(''); setIsSaved(false); setError(null); setUsageData(null); setUsageError(null);
-        window.electronAPI.setNativelyApiKey('').catch(() => {});
+        window.electronAPI.setTeamSyncApiKey('').catch(() => {});
     };
 
     const openExternal = (url: string) => { (window.electronAPI as any)?.openExternal?.(url); };
@@ -473,10 +473,10 @@ export const NativelyApiSettings: React.FC = () => {
                 return (
                     <Card className="shadow-sm border-violet-500/25">
                         <div className="px-5 pt-5 pb-5 space-y-4">
-                            {/* Header — same layout as "Try Natively API free" start card */}
+                            {/* Header — same layout as "Try TeamSync API free" start card */}
                             <div className="flex items-start gap-3.5">
                                 <div className="w-10 h-10 rounded-[11px] bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
-                                    <NativelyLogoMark size={18} className="text-violet-400" />
+                                    <TeamSyncLogoMark size={18} className="text-violet-400" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between">
@@ -511,7 +511,7 @@ export const NativelyApiSettings: React.FC = () => {
 
             {/* ── Free trial start card (no key, no active trial) ── */}
             {!isLoading && !isSaved && !isCheckingTrial && (!trialState || (trialState.expired && !trialState.active)) && (() => {
-                const isClaimed = trialState?.expired === true || localStorage.getItem('natively_trial_claimed') === 'true';
+                const isClaimed = trialState?.expired === true || localStorage.getItem('teamsync_trial_claimed') === 'true';
                 
                 if (isClaimed) {
                     return null;
@@ -522,7 +522,7 @@ export const NativelyApiSettings: React.FC = () => {
                         <div className="px-5 pt-5 pb-4 flex flex-col items-center justify-center text-center">
                             {/* Apple Promo Icon */}
                             <div className="w-[42px] h-[42px] mb-3 rounded-[12px] bg-bg-input border border-border-subtle shadow-[inset_0_1px_rgba(255,255,255,0.06),0_2px_8px_rgba(0,0,0,0.04)] flex items-center justify-center relative overflow-hidden">
-                                <NativelyLogoMark size={20} className={isClaimed ? "text-text-tertiary" : "text-text-primary drop-shadow-sm"} />
+                                <TeamSyncLogoMark size={20} className={isClaimed ? "text-text-tertiary" : "text-text-primary drop-shadow-sm"} />
                             </div>
                             
                             <h3 className="text-[14.5px] font-bold text-text-primary tracking-tight mb-1">TeamSync API. Try it free.</h3>
@@ -598,7 +598,7 @@ export const NativelyApiSettings: React.FC = () => {
                 <div className="flex items-center gap-3 px-5 pt-5 pb-4">
                     {/* Tinted icon well — Apple style */}
                     <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/20 flex items-center justify-center shrink-0">
-                        <NativelyLogoMark size={18} className="text-blue-400" />
+                        <TeamSyncLogoMark size={18} className="text-blue-400" />
                     </div>
                     <div className="min-w-0">
                         <p className="text-[13px] font-semibold text-text-primary">API Key</p>
@@ -772,7 +772,7 @@ export const NativelyApiSettings: React.FC = () => {
                             How it works
                         </p>
                         <button
-                            onClick={() => openExternal('https://natively-ai.vercel.app/pro')}
+                            onClick={() => openExternal('https://teamsync-ai.vercel.app/pro')}
                             className="flex items-center gap-1 text-[10px] font-semibold text-blue-400 hover:text-blue-300 uppercase tracking-widest transition-colors cursor-pointer"
                         >
                             Watch Demo <ArrowUpRight size={10} strokeWidth={2} />
@@ -835,7 +835,7 @@ export const NativelyApiSettings: React.FC = () => {
                         <div className="h-px bg-border-subtle mt-4 mb-3" />
                         
                         <p className="text-[11.5px] text-text-secondary leading-relaxed">
-                            To request a refund contact <span onClick={() => openExternal('mailto:natively.contact@gmail.com')} className="text-text-primary hover:text-text-secondary underline decoration-border-subtle underline-offset-[3px] cursor-pointer transition-colors">natively.contact@gmail.com</span> with your order ID.
+                            To request a refund contact <span onClick={() => openExternal('mailto:teamsync.contact@gmail.com')} className="text-text-primary hover:text-text-secondary underline decoration-border-subtle underline-offset-[3px] cursor-pointer transition-colors">teamsync.contact@gmail.com</span> with your order ID.
                         </p>
                     </div>
                 </div>

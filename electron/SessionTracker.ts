@@ -276,7 +276,7 @@ export class SessionTracker {
     addAssistantMessage(text: string, options?: { trackAsLastMessage?: boolean }): void {
         console.log(`[SessionTracker] addAssistantMessage called with:`, text.substring(0, 50));
 
-        // Natively-style filtering
+        // TeamSync-style filtering
         if (!text) return;
 
         const cleanText = text.trim();

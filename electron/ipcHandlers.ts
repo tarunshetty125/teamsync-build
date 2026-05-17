@@ -39,7 +39,7 @@ export function initializeIpcHandlers(appState: AppState): void {
    * Used to gate profile intelligence features (resume upload, JD upload, company research, etc.).
    */
   const isProOrTrialActive = (): boolean => {
-    // 1. Full premium license (Dodo / Gumroad / Natively API subscription)
+    // 1. Full premium license (Dodo / Gumroad / TeamSync API subscription)
     try {
       const { LicenseManager } = require('../premium/electron/services/LicenseManager');
       if (LicenseManager.getInstance().isPremium()) return true;
@@ -178,7 +178,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       console.log('[IPC] LicenseManager not available, trying MongoDB verification...');
     }
 
-    // Fallback: check key against MongoDB (natively.licenseverify)
+    // Fallback: check key against MongoDB (teamsync.licenseverify)
     // New key → register with this device's ID
     // Existing key + same device → already active, no worries
     // Existing key + different device → rejected
@@ -410,7 +410,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       } else if (
         overlayWin && !overlayWin.isDestroyed() && overlayWin.webContents.id === senderWebContents.id
       ) {
-        // NativelyInterface logic - Resize ONLY the overlay window using dedicated method
+        // TeamSyncInterface logic - Resize ONLY the overlay window using dedicated method
         appState.getWindowHelper().setOverlayDimensions(width, height)
       } else if (
         launcherWin && !launcherWin.isDestroyed() && launcherWin.webContents.id === senderWebContents.id
@@ -551,7 +551,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
 
-  // Generate suggestion from transcript - Natively-style text-only reasoning
+  // Generate suggestion from transcript - TeamSync-style text-only reasoning
   safeHandle("generate-suggestion", async (event, context: string, lastQuestion: string) => {
     try {
       const suggestion = await appState.getIntelligenceManager().handleAction('what_to_answer', {
@@ -1008,7 +1008,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("get-log-file-path", async () => {
     try {
-      return path.join(app.getPath('documents'), 'natively_debug.log');
+      return path.join(app.getPath('documents'), 'teamsync_debug.log');
     } catch {
       return null;
     }
@@ -1016,7 +1016,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("open-log-file", async () => {
     try {
-      const logPath = path.join(app.getPath('documents'), 'natively_debug.log');
+      const logPath = path.join(app.getPath('documents'), 'teamsync_debug.log');
       // Ensure the file exists before opening
       if (!fs.existsSync(logPath)) {
         fs.writeFileSync(logPath, '');
@@ -1243,16 +1243,16 @@ export function initializeIpcHandlers(appState: AppState): void {
   const _usageCache = new Map<string, { data: any; ts: number }>();
   const USAGE_CACHE_TTL_MS = 60_000;
 
-  safeHandle("set-natively-api-key", async (_, apiKey: string) => {
+  safeHandle("set-teamsync-api-key", async (_, apiKey: string) => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       const cm = CredentialsManager.getInstance();
       const prevSttProvider = cm.getSttProvider();
-      cm.setNativelyApiKey(apiKey);
+      cm.setTeamSyncApiKey(apiKey);
 
       // Update LLMHelper immediately (same pattern as other provider keys)
       const llmHelper = appState.processingHelper.getLLMHelper();
-      llmHelper.setNativelyKey(apiKey || null);
+      llmHelper.setTeamSyncKey(apiKey || null);
 
       // Sync the model into LLMHelper and notify the UI whenever the effective default changed
       const defaultModel = cm.getDefaultModel();
@@ -1262,48 +1262,48 @@ export function initializeIpcHandlers(appState: AppState): void {
         if (!win.isDestroyed()) win.webContents.send('model-changed', defaultModel);
       });
 
-      // If setNativelyApiKey auto-promoted the STT provider to 'natively', reconfigure
+      // If setTeamSyncApiKey auto-promoted the STT provider to 'teamsync', reconfigure
       // the audio pipeline immediately — without this, the in-memory pipeline still uses
       // the old STT provider (e.g. Google) until the app restarts.
       const newSttProvider = cm.getSttProvider();
       if (newSttProvider !== prevSttProvider) {
-        console.log(`[IPC] set-natively-api-key: STT provider changed ${prevSttProvider} → ${newSttProvider}, reconfiguring pipeline`);
+        console.log(`[IPC] set-teamsync-api-key: STT provider changed ${prevSttProvider} → ${newSttProvider}, reconfiguring pipeline`);
         await appState.reconfigureSttProvider();
       }
 
-      // Auto-activate Natively Pro for pro/max/ultra API plans.
+      // Auto-activate TeamSync Pro for pro/max/ultra API plans.
       // Skips silently if the user already has a Gumroad/Dodo lifetime license.
       if (apiKey) {
         try {
           const { LicenseManager } = require('../premium/electron/services/LicenseManager');
           const result = await LicenseManager.getInstance().activateWithApiKey(apiKey);
           if (result.success) {
-            console.log('[IPC] set-natively-api-key: Pro auto-activated via API plan.');
+            console.log('[IPC] set-teamsync-api-key: Pro auto-activated via API plan.');
             // Notify all windows so the license UI refreshes immediately
             const planState = getCurrentUserPlan();
             BrowserWindow.getAllWindows().forEach(win => {
               if (!win.isDestroyed()) win.webContents.send('license-status-changed', planState);
             });
           } else if (result.skipped) {
-            console.log('[IPC] set-natively-api-key: existing Gumroad/Dodo license preserved — Pro not overwritten.');
+            console.log('[IPC] set-teamsync-api-key: existing Gumroad/Dodo license preserved — Pro not overwritten.');
           } else {
-            console.log('[IPC] set-natively-api-key: Pro not activated —', result.error);
+            console.log('[IPC] set-teamsync-api-key: Pro not activated —', result.error);
           }
         } catch (e: any) {
           // LicenseManager not available in this build — non-fatal
-          console.warn('[IPC] set-natively-api-key: LicenseManager unavailable for Pro auto-activation:', e?.message);
+          console.warn('[IPC] set-teamsync-api-key: LicenseManager unavailable for Pro auto-activation:', e?.message);
         }
       } else {
-        // API key was cleared — deactivate any natively_api Pro license so premium is revoked.
+        // API key was cleared — deactivate any teamsync_api Pro license so premium is revoked.
         try {
           const { LicenseManager } = require('../premium/electron/services/LicenseManager');
           const lm = LicenseManager.getInstance();
-          // Only deactivate if the stored license is from a natively_api subscription.
+          // Only deactivate if the stored license is from a teamsync_api subscription.
           // Never touch Gumroad/Dodo lifetime licenses here.
           const details = lm.getLicenseDetails();
-          if (details.isPremium && details.provider === 'natively_api') {
+          if (details.isPremium && details.provider === 'teamsync_api') {
             await lm.deactivate();
-            console.log('[IPC] set-natively-api-key: key cleared — natively_api Pro license deactivated.');
+            console.log('[IPC] set-teamsync-api-key: key cleared — teamsync_api Pro license deactivated.');
             clearActiveModeOnLicenseLoss();
             const planState = getCurrentUserPlan();
             BrowserWindow.getAllWindows().forEach(win => {
@@ -1311,13 +1311,13 @@ export function initializeIpcHandlers(appState: AppState): void {
             });
           }
         } catch (e: any) {
-          console.warn('[IPC] set-natively-api-key: LicenseManager unavailable for Pro deactivation on key clear:', e?.message);
+          console.warn('[IPC] set-teamsync-api-key: LicenseManager unavailable for Pro deactivation on key clear:', e?.message);
         }
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error("Error saving Natively API key:", error);
+      console.error("Error saving TeamSync API key:", error);
       return { success: false, error: error.message };
     } finally {
       // Always bust the cache when the key changes so the next usage fetch is fresh
@@ -1326,10 +1326,10 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
 
-  safeHandle("get-natively-usage", async () => {
+  safeHandle("get-teamsync-usage", async () => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
-      const key = CredentialsManager.getInstance().getNativelyApiKey();
+      const key = CredentialsManager.getInstance().getTeamSyncApiKey();
       if (!key) return { ok: false, error: 'no_key' };
 
       // Return cached value if it's still fresh
@@ -1338,8 +1338,8 @@ export function initializeIpcHandlers(appState: AppState): void {
         return cached.data;
       }
 
-      const res = await fetch('https://api.natively-ai.vercel.app/v1/usage', {
-        headers: { 'x-natively-key': key },
+      const res = await fetch('https://api.teamsync-ai.vercel.app/v1/usage', {
+        headers: { 'x-teamsync-key': key },
         signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) {
@@ -1358,7 +1358,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // Allow other handlers to force-invalidate the usage cache (e.g. after key change)
-  safeHandle("invalidate-natively-usage-cache", () => {
+  safeHandle("invalidate-teamsync-usage-cache", () => {
     _usageCache.clear();
     return { ok: true };
   });
@@ -1378,7 +1378,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         hwid = LicenseManager.getInstance().getHardwareId() || 'unavailable';
       } catch { /* LicenseManager not available — fall back */ }
 
-      const res = await fetch('https://api.natively-ai.vercel.app/v1/trial/start', {
+      const res = await fetch('https://api.teamsync-ai.vercel.app/v1/trial/start', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ hwid }),
@@ -1395,15 +1395,15 @@ export function initializeIpcHandlers(appState: AppState): void {
       if (data.ok && data.trial_token && !data.expired) {
         cm.setTrialToken(data.trial_token, data.expires_at, data.started_at);
 
-        // Auto-configure natively as the model + STT provider during trial
+        // Auto-configure teamsync as the model + STT provider during trial
         const prevSttProvider = cm.getSttProvider();
-        cm.setNativelyApiKey('__trial__');   // sentinel — activates natively model routing
+        cm.setTeamSyncApiKey('__trial__');   // sentinel — activates teamsync model routing
         const newSttProvider = cm.getSttProvider();
         if (newSttProvider !== prevSttProvider) {
           await appState.reconfigureSttProvider();
         }
         const llmHelper = appState.processingHelper?.getLLMHelper?.();
-        if (llmHelper) llmHelper.setNativelyKey('__trial__');
+        if (llmHelper) llmHelper.setTeamSyncKey('__trial__');
       }
 
       return { ok: true, ...data };
@@ -1420,7 +1420,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       const token = CredentialsManager.getInstance().getTrialToken();
       if (!token) return { ok: false, error: 'no_trial_token' };
 
-      const res = await fetch('https://api.natively-ai.vercel.app/v1/trial/status', {
+      const res = await fetch('https://api.teamsync-ai.vercel.app/v1/trial/status', {
         headers: { 'x-trial-token': token },
         signal:  AbortSignal.timeout(8_000),
       });
@@ -1465,7 +1465,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       const token = CredentialsManager.getInstance().getTrialToken();
       if (!token) return { ok: true };  // no token to report
 
-      await fetch('https://api.natively-ai.vercel.app/v1/trial/convert', {
+      await fetch('https://api.teamsync-ai.vercel.app/v1/trial/convert', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'x-trial-token': token },
         body:    JSON.stringify({ choice }),
@@ -1478,7 +1478,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  // End trial via BYOK path: wipe Pro-ingested data, clear trial token + natively key.
+  // End trial via BYOK path: wipe Pro-ingested data, clear trial token + teamsync key.
   safeHandle("trial:end-byok", async () => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
@@ -1487,7 +1487,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       // 1. Fire-and-forget analytics (non-blocking)
       const token = cm.getTrialToken();
       if (token) {
-        fetch('https://api.natively-ai.vercel.app/v1/trial/convert', {
+        fetch('https://api.teamsync-ai.vercel.app/v1/trial/convert', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', 'x-trial-token': token },
           body:    JSON.stringify({ choice: 'byok' }),
@@ -1499,9 +1499,9 @@ export function initializeIpcHandlers(appState: AppState): void {
       cm.clearTrialToken();
 
       // 3. Clear the trial sentinel key + revert model / STT to open defaults
-      cm.setNativelyApiKey('');
+      cm.setTeamSyncApiKey('');
       const llmHelper = appState.processingHelper?.getLLMHelper?.();
-      if (llmHelper) llmHelper.setNativelyKey(null);
+      if (llmHelper) llmHelper.setTeamSyncKey(null);
       await appState.reconfigureSttProvider();
 
       // 4. Deactivate Pro license (removes license.enc)
@@ -1557,7 +1557,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // Wipe only Pro profile data (resume + JD + company dossiers) without clearing
-  // trial token or natively key. Called automatically when trial expires so that
+  // trial token or teamsync key. Called automatically when trial expires so that
   // profile intelligence data can't linger in SQLite after the trial window closes.
   safeHandle("trial:wipe-profile-data", async () => {
     try {
@@ -1754,7 +1754,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         hasGroqKey: hasKey(creds.groqApiKey),
         hasOpenaiKey: hasKey(creds.openaiApiKey),
         hasClaudeKey: hasKey(creds.claudeApiKey),
-        hasNativelyKey: hasKey(creds.nativelyApiKey),
+        hasTeamSyncKey: hasKey(creds.teamsyncApiKey),
         googleServiceAccountPath: creds.googleServiceAccountPath || null,
         sttProvider: creds.sttProvider || 'none',
         groqSttModel: creds.groqSttModel || 'whisper-large-v3-turbo',
@@ -1785,7 +1785,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         claudePreferredModel: creds.claudePreferredModel || undefined,
       };
     } catch (error: any) {
-      return { hasGeminiKey: false, hasGroqKey: false, hasOpenaiKey: false, hasClaudeKey: false, hasNativelyKey: false, googleServiceAccountPath: null, sttProvider: 'none', groqSttModel: 'whisper-large-v3-turbo', hasSttGroqKey: false, hasSttOpenaiKey: false, hasDeepgramKey: false, hasElevenLabsKey: false, hasAzureKey: false, azureRegion: 'eastus', hasIbmWatsonKey: false, ibmWatsonRegion: 'us-south', hasSonioxKey: false, hasTavilyKey: false, sttGroqKey: '', sttOpenaiKey: '', sttDeepgramKey: '', sttElevenLabsKey: '', sttAzureKey: '', sttIbmKey: '', sttSonioxKey: '' };
+      return { hasGeminiKey: false, hasGroqKey: false, hasOpenaiKey: false, hasClaudeKey: false, hasTeamSyncKey: false, googleServiceAccountPath: null, sttProvider: 'none', groqSttModel: 'whisper-large-v3-turbo', hasSttGroqKey: false, hasSttOpenaiKey: false, hasDeepgramKey: false, hasElevenLabsKey: false, hasAzureKey: false, azureRegion: 'eastus', hasIbmWatsonKey: false, ibmWatsonRegion: 'us-south', hasSonioxKey: false, hasTavilyKey: false, sttGroqKey: '', sttOpenaiKey: '', sttDeepgramKey: '', sttElevenLabsKey: '', sttAzureKey: '', sttIbmKey: '', sttSonioxKey: '' };
     }
   });
 
@@ -1833,7 +1833,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   // STT Provider Management Handlers
   // ==========================================
 
-  safeHandle("set-stt-provider", async (_, provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively') => {
+  safeHandle("set-stt-provider", async (_, provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync') => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setSttProvider(provider);
@@ -2416,7 +2416,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       // Close the selector window if open
       appState.modelSelectorWindowHelper.hideWindow();
 
-      // Broadcast to all windows so NativelyInterface can update its selector (session-only update)
+      // Broadcast to all windows so TeamSyncInterface can update its selector (session-only update)
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) {
           win.webContents.send('model-changed', modelId);
@@ -2447,7 +2447,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       // Close the selector window if open
       appState.modelSelectorWindowHelper.hideWindow();
 
-      // Broadcast to all windows so NativelyInterface can update its selector
+      // Broadcast to all windows so TeamSyncInterface can update its selector
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) {
           win.webContents.send('model-changed', modelId);

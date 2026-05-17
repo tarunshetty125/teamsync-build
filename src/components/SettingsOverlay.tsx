@@ -12,7 +12,7 @@ import { analytics } from '../lib/analytics/analytics.service';
 import { AboutSection } from './AboutSection';
 import { HelpSettings } from './settings/HelpSettings';
 import { AIProvidersSettings } from './settings/AIProvidersSettings';
-import { NativelyApiSettings } from './settings/NativelyApiSettings';
+import { TeamSyncApiSettings } from './settings/TeamSyncApiSettings';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
@@ -28,9 +28,9 @@ import { ProfileVisualizer, PremiumUpgradeModal, ResearchPanel } from '../premiu
 import icon from './icon.png';
 
 // ---------------------------------------------------------------------------
-// MockupNativelyInterface — fake in-meeting widget for the opacity preview
+// MockupTeamSyncInterface — fake in-meeting widget for the opacity preview
 // ---------------------------------------------------------------------------
-const MockupNativelyInterface = ({ opacity }: { opacity: number }) => {
+const MockupTeamSyncInterface = ({ opacity }: { opacity: number }) => {
     const resolvedTheme = useResolvedTheme();
     const appearance = useMemo(
         () => getOverlayAppearance(opacity, resolvedTheme),
@@ -39,9 +39,9 @@ const MockupNativelyInterface = ({ opacity }: { opacity: number }) => {
 
     return (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none bg-transparent">
-                {/* NativelyInterface Widget — opacity controlled by the slider */}
+                {/* TeamSyncInterface Widget — opacity controlled by the slider */}
                 <div
-                    id="mockup-natively-interface"
+                    id="mockup-teamsync-interface"
                     className="flex flex-col items-center pointer-events-none -mt-56"
                 >
                     {/* TopPill Replica */}
@@ -727,7 +727,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     }, [isThemeDropdownOpen, isAiLangDropdownOpen]);
 
     const [showTranscript, setShowTranscript] = useState(() => {
-        const stored = localStorage.getItem('natively_interviewer_transcript');
+        const stored = localStorage.getItem('teamsync_interviewer_transcript');
         return stored !== 'false';
     });
 
@@ -743,7 +743,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
 
     // Overlay Opacity state
     const [overlayOpacity, setOverlayOpacity] = useState<number>(() => {
-        const stored = localStorage.getItem('natively_overlay_opacity');
+        const stored = localStorage.getItem('teamsync_overlay_opacity');
         const parsed = stored ? parseFloat(stored) : NaN;
         // Treat missing value or the old default (0.65) as "not user-set"
         const isUserSet = Number.isFinite(parsed) && parsed !== OVERLAY_OPACITY_DEFAULT;
@@ -753,7 +753,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     // When the theme changes and the user hasn't saved a custom value, reset to theme-aware default
     const resolvedTheme = useResolvedTheme();
     useEffect(() => {
-        const stored = localStorage.getItem('natively_overlay_opacity');
+        const stored = localStorage.getItem('teamsync_overlay_opacity');
         const parsed = stored ? parseFloat(stored) : NaN;
         const isUserSet = Number.isFinite(parsed) && parsed !== OVERLAY_OPACITY_DEFAULT;
         if (!isUserSet) {
@@ -887,7 +887,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         // Only persist to localStorage here. IPC is handled real-time in handleOpacityChange
         // to avoid a redundant extra call 150ms after every drag ends.
         const timeoutId = setTimeout(() => {
-            localStorage.setItem('natively_overlay_opacity', String(overlayOpacity));
+            localStorage.setItem('teamsync_overlay_opacity', String(overlayOpacity));
         }, 150);
         return () => clearTimeout(timeoutId);
     }, [overlayOpacity]);
@@ -1014,7 +1014,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     // Sync transcript setting
     useEffect(() => {
         const handleStorage = () => {
-            const stored = localStorage.getItem('natively_interviewer_transcript');
+            const stored = localStorage.getItem('teamsync_interviewer_transcript');
             setShowTranscript(stored !== 'false');
         };
         window.addEventListener('storage', handleStorage);
@@ -1038,7 +1038,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [useExperimentalSck, setUseExperimentalSck] = useState(false);
 
     // STT Provider settings
-    const [sttProvider, setSttProvider] = useState<'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively'>('none');
+    const [sttProvider, setSttProvider] = useState<'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync'>('none');
     const [groqSttModel, setGroqSttModel] = useState('whisper-large-v3-turbo');
     const [sttGroqKey, setSttGroqKey] = useState('');
     const [sttOpenaiKey, setSttOpenaiKey] = useState('');
@@ -1052,7 +1052,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [sttSaving, setSttSaving] = useState(false);
     const [sttSaved, setSttSaved] = useState(false);
     const [googleServiceAccountPath, setGoogleServiceAccountPath] = useState<string | null>(null);
-    const [hasNativelyKey, setHasNativelyKey] = useState(false);
+    const [hasTeamSyncKey, setHasTeamSyncKey] = useState(false);
     const [hasStoredSttGroqKey, setHasStoredSttGroqKey] = useState(false);
     const [hasStoredSttOpenaiKey, setHasStoredSttOpenaiKey] = useState(false);
     const [hasStoredDeepgramKey, setHasStoredDeepgramKey] = useState(false);
@@ -1096,7 +1096,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                     setHasStoredIbmWatsonKey(creds.hasIbmWatsonKey);
                     setHasStoredSonioxKey(creds.hasSonioxKey || false);
                     setHasStoredTavilyKey(creds.hasTavilyKey || false);
-                    setHasNativelyKey(creds.hasNativelyKey || false);
+                    setHasTeamSyncKey(creds.hasTeamSyncKey || false);
                     // Populate key fields so switching providers doesn't make saved keys appear gone
                     if (creds.sttGroqKey) setSttGroqKey(creds.sttGroqKey);
                     if (creds.sttOpenaiKey) setSttOpenaiKey(creds.sttOpenaiKey);
@@ -1115,7 +1115,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
 
     // PR #173: Live-reload settings whenever the backend broadcasts a credentials change
     // (e.g., when the user saves an STT key in a different window, or main fires it after
-    // a provider auto-reconfigure like Natively key clear).
+    // a provider auto-reconfigure like TeamSync key clear).
     useEffect(() => {
         if (!window.electronAPI?.onCredentialsChanged) return;
         const unsubscribe = window.electronAPI.onCredentialsChanged(() => {
@@ -1125,7 +1125,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                     if (!creds) return;
                     setSttProvider(creds.sttProvider || 'none');
                     if (creds.groqSttModel) setGroqSttModel(creds.groqSttModel);
-                    setHasNativelyKey(creds.hasNativelyKey || false);
+                    setHasTeamSyncKey(creds.hasTeamSyncKey || false);
                     setHasStoredSttGroqKey(creds.hasSttGroqKey);
                     setHasStoredSttOpenaiKey(creds.hasSttOpenaiKey);
                     setHasStoredDeepgramKey(creds.hasDeepgramKey);
@@ -1140,7 +1140,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         return () => unsubscribe();
     }, []); // mount-once: isOpen is checked inside the callback
 
-    const handleSttProviderChange = async (provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively') => {
+    const handleSttProviderChange = async (provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync') => {
         setSttProvider(provider);
         setIsSttDropdownOpen(false);
         setSttTestStatus('idle');
@@ -1357,7 +1357,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     };
 
     const handleTestSttConnection = async () => {
-        if (sttProvider === 'none' || sttProvider === 'google' || sttProvider === 'natively') return;
+        if (sttProvider === 'none' || sttProvider === 'google' || sttProvider === 'teamsync') return;
         const keyMap: Record<string, string> = {
             groq: sttGroqKey, openai: sttOpenaiKey, deepgram: sttDeepgramKey,
             elevenlabs: sttElevenLabsKey, azure: sttAzureKey, ibmwatson: sttIbmKey,
@@ -1502,7 +1502,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             setUseExperimentalSck(savedSck);
 
             // Load Calendar Status — check localStorage first (backend auth), fallback to old CalendarManager
-            const storedUser = localStorage.getItem('natively_auth_user');
+            const storedUser = localStorage.getItem('teamsync_auth_user');
             if (storedUser) {
                 try {
                     const userData = JSON.parse(storedUser);
@@ -1523,19 +1523,19 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             // Listen for calendar status changes from other views (Launcher <-> Settings sync)
             const unsubCalendar = window.electronAPI?.onCalendarStatusChanged?.((status) => {
                 setCalendarStatus({ connected: status.connected, email: status.email || undefined });
-                const storedUser = localStorage.getItem('natively_auth_user');
+                const storedUser = localStorage.getItem('teamsync_auth_user');
                 if (storedUser) {
                     try {
                         const userData = JSON.parse(storedUser);
                         userData.calendarConnected = status.connected;
                         if (status.email) userData.email = status.email;
-                        localStorage.setItem('natively_auth_user', JSON.stringify(userData));
+                        localStorage.setItem('teamsync_auth_user', JSON.stringify(userData));
                     } catch {
                         // Ignore malformed local storage payload.
                     }
                 }
                 window.dispatchEvent(
-                    new CustomEvent('natively:calendar-status-changed', { detail: { connected: status.connected } })
+                    new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: status.connected } })
                 );
             });
 
@@ -1674,7 +1674,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                 <button
                                     onClick={async () => {
                                         // Sign out: clear auth tokens, call backend logout, reload to sign-in
-                                        const token = localStorage.getItem('natively_auth_token');
+                                        const token = localStorage.getItem('teamsync_auth_token');
                                         if (token) {
                                             try {
                                                 await fetch('http://localhost:3456/auth/logout', {
@@ -1686,8 +1686,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                 });
                                             } catch {} // Best effort
                                         }
-                                        localStorage.removeItem('natively_auth_token');
-                                        localStorage.removeItem('natively_auth_user');
+                                        localStorage.removeItem('teamsync_auth_token');
+                                        localStorage.removeItem('teamsync_auth_user');
                                         window.location.reload();
                                     }}
                                     className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-orange-400 hover:bg-orange-500/10 transition-colors flex items-center gap-3"
@@ -1847,7 +1847,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                                     <Terminal size={14} className="text-amber-400 shrink-0" />
                                                                     <p className="text-xs text-amber-200/80 leading-snug truncate">
-                                                                        Logs → <span className="font-mono text-amber-300">~/Documents/natively_debug.log</span>
+                                                                        Logs → <span className="font-mono text-amber-300">~/Documents/teamsync_debug.log</span>
                                                                     </p>
                                                                 </div>
                                                                 <button
@@ -1883,7 +1883,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                         onClick={() => {
                                                             const newState = !showTranscript;
                                                             setShowTranscript(newState);
-                                                            localStorage.setItem('natively_interviewer_transcript', String(newState));
+                                                            localStorage.setItem('teamsync_interviewer_transcript', String(newState));
                                                             window.dispatchEvent(new Event('storage'));
                                                         }}
                                                         className={`w-11 h-6 rounded-full relative transition-colors ${showTranscript ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
@@ -2933,7 +2933,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                     </div>
 
                                     {(() => {
-                                        const storedUser = localStorage.getItem('natively_auth_user');
+                                        const storedUser = localStorage.getItem('teamsync_auth_user');
                                         const user = storedUser ? JSON.parse(storedUser) : null;
                                         return user ? (
                                             <div className="bg-bg-card rounded-xl border border-border-subtle p-5 space-y-4">
@@ -2953,7 +2953,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                 <div className="pt-3 border-t border-border-subtle">
                                                     <button
                                                         onClick={async () => {
-                                                            const token = localStorage.getItem('natively_auth_token');
+                                                            const token = localStorage.getItem('teamsync_auth_token');
                                                             if (token) {
                                                                 try {
                                                                     await fetch('http://localhost:3456/auth/logout', {
@@ -2962,8 +2962,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                     });
                                                                 } catch {}
                                                             }
-                                                            localStorage.removeItem('natively_auth_token');
-                                                            localStorage.removeItem('natively_auth_user');
+                                                            localStorage.removeItem('teamsync_auth_token');
+                                                            localStorage.removeItem('teamsync_auth_user');
                                                             window.location.reload();
                                                         }}
                                                         className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 transition-all"
@@ -3153,7 +3153,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                         value={sttProvider}
                                                         onChange={(val) => handleSttProviderChange(val as any)}
                                                         options={[
-                                                            ...(hasNativelyKey ? [{ id: 'natively', label: 'TeamSync API', badge: 'Saved' as const, recommended: true, desc: 'Managed transcription via TeamSync backend', color: 'blue', icon: <Mic size={14} /> }] : []),
+                                                            ...(hasTeamSyncKey ? [{ id: 'teamsync', label: 'TeamSync API', badge: 'Saved' as const, recommended: true, desc: 'Managed transcription via TeamSync backend', color: 'blue', icon: <Mic size={14} /> }] : []),
                                                             { id: 'google', label: 'Google Cloud', badge: googleServiceAccountPath ? 'Saved' : null, recommended: true, desc: 'gRPC streaming via Service Account', color: 'blue', icon: <Mic size={14} /> },
                                                             { id: 'groq', label: 'Groq Whisper', badge: hasStoredSttGroqKey ? 'Saved' : null, recommended: true, desc: 'Ultra-fast REST transcription', color: 'orange', icon: <Mic size={14} /> },
                                                             { id: 'openai', label: 'OpenAI Whisper', badge: hasStoredSttOpenaiKey ? 'Saved' : null, desc: 'OpenAI-compatible Whisper API', color: 'green', icon: <Mic size={14} /> },
@@ -3598,21 +3598,21 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                     onClick={async () => {
                                                         setIsCalendarsLoading(true);
                                                         try {
-                                                            const token = localStorage.getItem('natively_auth_token') || undefined;
+                                                            const token = localStorage.getItem('teamsync_auth_token') || undefined;
                                                             await window.electronAPI.googleLogout?.(token);
                                                             await window.electronAPI.calendarDisconnect();
-                                                            const storedUser = localStorage.getItem('natively_auth_user');
+                                                            const storedUser = localStorage.getItem('teamsync_auth_user');
                                                             if (storedUser) {
                                                                 try {
                                                                     const userData = JSON.parse(storedUser);
                                                                     userData.calendarConnected = false;
-                                                                    localStorage.setItem('natively_auth_user', JSON.stringify(userData));
+                                                                    localStorage.setItem('teamsync_auth_user', JSON.stringify(userData));
                                                                 } catch {
                                                                     // Ignore malformed local storage payload.
                                                                 }
                                                             }
                                                             window.dispatchEvent(
-                                                                new CustomEvent('natively:calendar-status-changed', { detail: { connected: false } })
+                                                                new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: false } })
                                                             );
                                                             const status = await window.electronAPI.getCalendarStatus();
                                                             setCalendarStatus(status);
@@ -3641,7 +3641,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                         setIsCalendarsLoading(true);
                                                         try {
                                                             // Use backend OAuth flow for calendar
-                                                            const storedUser = localStorage.getItem('natively_auth_user');
+                                                            const storedUser = localStorage.getItem('teamsync_auth_user');
                                                             const email = storedUser ? JSON.parse(storedUser)?.email : undefined;
                                                             
                                                             const urlRes = await fetch('http://localhost:3456/auth/google/calendar' + 
@@ -3663,10 +3663,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                     
                                                                     clearInterval(poll);
                                                                     if (data.success && data.user?.calendarConnected) {
-                                                                        if (data.token) localStorage.setItem('natively_auth_token', data.token);
-                                                                        if (data.user) localStorage.setItem('natively_auth_user', JSON.stringify(data.user));
+                                                                        if (data.token) localStorage.setItem('teamsync_auth_token', data.token);
+                                                                        if (data.user) localStorage.setItem('teamsync_auth_user', JSON.stringify(data.user));
                                                                         window.dispatchEvent(
-                                                                            new CustomEvent('natively:calendar-status-changed', { detail: { connected: true } })
+                                                                            new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: true } })
                                                                         );
                                                                         const status = await window.electronAPI.getCalendarStatus();
                                                                         setCalendarStatus({ ...status, connected: true });
@@ -3742,7 +3742,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 className="fixed inset-0 z-[49] pointer-events-none transition-opacity duration-150"
                 style={{ opacity: isPreviewingOpacity ? 1 : 0 }}
             >
-                <MockupNativelyInterface opacity={previewOverlayOpacity} />
+                <MockupTeamSyncInterface opacity={previewOverlayOpacity} />
             </div>
         </AnimatePresence >
     );

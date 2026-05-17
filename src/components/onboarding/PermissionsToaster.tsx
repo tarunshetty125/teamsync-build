@@ -11,7 +11,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { X, Monitor, Mic, CheckCircle, AlertCircle, ExternalLink, ArrowRight } from 'lucide-react';
 
-const STORAGE_KEY  = 'natively_perms_shown_v1';
+const STORAGE_KEY  = 'teamsync_perms_shown_v1';
 const STARTUP_DELAY_MS = 1_400;
 
 // ─── Design tokens ────────────────────────────────────────────

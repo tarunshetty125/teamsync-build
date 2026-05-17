@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react" // forcing refresh
 import { QueryClient, QueryClientProvider } from "react-query"
 import { ToastProvider, ToastViewport } from "./components/ui/toast"
-import NativelyInterface from "./components/NativelyInterface"
+import TeamSyncInterface from "./components/TeamSyncInterface"
 import SettingsPopup from "./components/SettingsPopup" // Keeping for legacy/specific window support if needed
 import Launcher from "./components/Launcher"
 import ModelSelectorWindow from "./components/ModelSelectorWindow"
@@ -10,7 +10,7 @@ import StartupSequence from "./components/StartupSequence"
 import { AnimatePresence, motion } from "framer-motion"
 import UpdateBanner from "./components/UpdateBanner"
 import { SupportToaster } from "./components/SupportToaster"
-import { NativelyQuotaBanner } from "./components/NativelyQuotaBanner"
+import { TeamSyncQuotaBanner } from "./components/TeamSyncQuotaBanner"
 import { FreeTrialBanner } from "./components/trial/FreeTrialBanner"
 import { FreeTrialModal } from "./components/trial/FreeTrialModal"
 import { TrialPromoToaster } from "./components/trial/TrialPromoToaster"
@@ -24,7 +24,7 @@ import {
   PremiumPromoToaster,
   RemoteCampaignToaster,
   PremiumUpgradeModal,
-  NativelyApiPromoToaster,
+  TeamSyncApiPromoToaster,
   MaxUltraUpgradeToaster,
   useAdCampaigns
 } from './premium'
@@ -92,10 +92,10 @@ const App: React.FC = () => {
   // State
   const [showStartup, setShowStartup] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return !!localStorage.getItem('natively_auth_token');
+    return !!localStorage.getItem('teamsync_auth_token');
   });
   const [authUser, setAuthUser] = useState<{ name: string; email: string; picture?: string } | null>(() => {
-    const stored = localStorage.getItem('natively_auth_user');
+    const stored = localStorage.getItem('teamsync_auth_user');
     return stored ? JSON.parse(stored) : null;
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -110,7 +110,7 @@ const App: React.FC = () => {
   // Overlay opacity — only meaningful when isOverlayWindow, but stored centrally
   // so it can be initialized once from localStorage and updated via IPC.
   const [overlayOpacity, setOverlayOpacity] = useState<number>(() => {
-    const stored = localStorage.getItem('natively_overlay_opacity');
+    const stored = localStorage.getItem('teamsync_overlay_opacity');
     const parsed = stored ? parseFloat(stored) : NaN;
     // Treat missing value or the old default (0.65) as "not user-set"
     const isUserSet = Number.isFinite(parsed) && parsed !== OVERLAY_OPACITY_DEFAULT;
@@ -135,7 +135,7 @@ const App: React.FC = () => {
   const [incompatibleWarning, setIncompatibleWarning] = useState<{ count: number; oldProvider: string; newProvider: string } | null>(null);
 
   // API check
-  const [hasNativelyApi, setHasNativelyApi] = useState<boolean>(false);
+  const [hasTeamSyncApi, setHasTeamSyncApi] = useState<boolean>(false);
 
   // ── Onboarding / promo toasters ───────────────────────────
   const [showTrialPromo, setShowTrialPromo] = useState(false);
@@ -188,7 +188,7 @@ const App: React.FC = () => {
     appStartTime,
     lastMeetingEndTime,
     isProcessingMeeting,
-    hasNativelyApi
+    hasTeamSyncApi
   );
 
   // Preview shortcuts — Ctrl/Cmd+Shift+1-5 force-show any ad card.
@@ -197,7 +197,7 @@ const App: React.FC = () => {
     const CODE_MAP: Record<string, string> = {
       'Digit1': 'max_ultra_upgrade',
       'Digit2': 'promo',
-      'Digit3': 'natively_api',
+      'Digit3': 'teamsync_api',
       'Digit4': 'profile',
       'Digit5': 'jd',
     };
@@ -218,9 +218,9 @@ const App: React.FC = () => {
 
     void syncStartupState();
 
-    // Also check for Natively API key
+    // Also check for TeamSync API key
     window.electronAPI?.getStoredCredentials?.()
-      .then((creds) => setHasNativelyApi(!!creds?.hasNativelyKey))
+      .then((creds) => setHasTeamSyncApi(!!creds?.hasTeamSyncKey))
       .catch(() => { });
 
     // ── Trial: check stored token and start polling if active ──
@@ -383,7 +383,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isOverlayWindow || !window.electronAPI?.onThemeChanged) return;
     return window.electronAPI.onThemeChanged(() => {
-      const stored = localStorage.getItem('natively_overlay_opacity');
+      const stored = localStorage.getItem('teamsync_overlay_opacity');
       if (!stored) {
         setOverlayOpacity(getDefaultOverlayOpacity());
       }
@@ -412,7 +412,7 @@ const App: React.FC = () => {
         return false;
       }
 
-      localStorage.setItem('natively_last_meeting_start', Date.now().toString());
+      localStorage.setItem('teamsync_last_meeting_start', Date.now().toString());
       const inputDeviceId = metadata?.audio?.inputDeviceId ?? localStorage.getItem('preferredInputDeviceId');
       let outputDeviceId = metadata?.audio?.outputDeviceId ?? localStorage.getItem('preferredOutputDeviceId');
       const useExperimentalSck = localStorage.getItem('useExperimentalSckBackend') === 'true';
@@ -463,14 +463,14 @@ const App: React.FC = () => {
       await window.electronAPI.endMeeting();
       console.log("[App.tsx] endMeeting IPC completed");
 
-      const startStr = localStorage.getItem('natively_last_meeting_start');
+      const startStr = localStorage.getItem('teamsync_last_meeting_start');
       if (startStr) {
         const duration = Date.now() - parseInt(startStr, 10);
         const threshold = import.meta.env.DEV ? 10000 : 180000;
         if (duration >= threshold) {
-          localStorage.setItem('natively_show_profile_toaster', 'true');
+          localStorage.setItem('teamsync_show_profile_toaster', 'true');
         }
-        localStorage.removeItem('natively_last_meeting_start');
+        localStorage.removeItem('teamsync_last_meeting_start');
       }
 
       // Switch back to Native Launcher Mode
@@ -526,7 +526,7 @@ const App: React.FC = () => {
                   transition: 'background-color 75ms ease, border-color 75ms ease, box-shadow 75ms ease'
                 } as React.CSSProperties}
               >
-                <NativelyInterface
+                <TeamSyncInterface
                   onEndMeeting={handleEndMeeting}
                   overlayOpacity={overlayOpacity}
                   hasProContextAccess={isPremiumActive || !!activeTrial}
@@ -575,8 +575,8 @@ const App: React.FC = () => {
             >
               <GoogleSignIn
                 onSignInComplete={(userData) => {
-                  localStorage.setItem('natively_auth_token', userData.token);
-                  localStorage.setItem('natively_auth_user', JSON.stringify({
+                  localStorage.setItem('teamsync_auth_token', userData.token);
+                  localStorage.setItem('teamsync_auth_user', JSON.stringify({
                     name: userData.name,
                     email: userData.email,
                     picture: userData.picture,
@@ -640,7 +640,7 @@ const App: React.FC = () => {
                           transition={{ duration: 0.18, ease: [0.19, 1, 0.22, 1] }}
                           className="h-[66vh] w-[70vw] max-h-[720px] max-w-[980px] overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#0c0e14] shadow-2xl"
                         >
-                          <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
+                          <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
                         </motion.div>
                       </motion.div>
                     )}
@@ -692,7 +692,7 @@ const App: React.FC = () => {
 
         <UpdateBanner />
         <SupportToaster />
-        <NativelyQuotaBanner />
+        <TeamSyncQuotaBanner />
 
 
 
@@ -711,7 +711,7 @@ const App: React.FC = () => {
         {/* Trial promo toaster — 5s after restart (self-gates via localStorage + conditions) */}
         {!shouldShowOnboarding && <TrialPromoToaster
           isOpen={showTrialPromo}
-          hasNativelyKey={hasNativelyApi}
+          hasTeamSyncKey={hasTeamSyncApi}
           hasTrialToken={!!activeTrial}
           onDismiss={() => setShowTrialPromo(false)}
           onStartTrial={async () => {
@@ -751,9 +751,9 @@ const App: React.FC = () => {
         {/* Ad toasters — render whenever activeAd is set (isLauncherMainView guard bypassed
           when triggered via preview shortcut so the card always surfaces) */}
         {(isLauncherMainView || !!activeAd) && !isSettingsOpen && !shouldShowOnboarding && (
-          <NativelyApiPromoToaster
-            isOpen={activeAd === 'natively_api'}
-            onDismiss={() => dismissAd('natively_api')}
+          <TeamSyncApiPromoToaster
+            isOpen={activeAd === 'teamsync_api'}
+            onDismiss={() => dismissAd('teamsync_api')}
             onOpenSettings={(tab: string) => {
               setSettingsInitialTab(tab);
               setIsSettingsOpen(true);

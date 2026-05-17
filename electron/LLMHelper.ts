@@ -72,7 +72,7 @@ export class LLMHelper {
   private customNotesEnabled: boolean = true;
   private aiResponseLanguage: string = 'auto';
   private sttLanguage: string = 'english-us';
-  private nativelyKey: string | null = null;
+  private teamsyncKey: string | null = null;
   private lastOCRCache = new Map<string, string>();
   private ocrWorker: any = null;
   private ocrWorkerBuffer: string = '';
@@ -178,13 +178,13 @@ export class LLMHelper {
     console.log("[LLMHelper] Claude API Key updated.");
   }
 
-  public setNativelyKey(key: string | null): void {
-    this.nativelyKey = key || null;
-    console.log(`[LLMHelper] Natively key ${key ? 'set' : 'cleared'}`);
+  public setTeamSyncKey(key: string | null): void {
+    this.teamsyncKey = key || null;
+    console.log(`[LLMHelper] TeamSync key ${key ? 'set' : 'cleared'}`);
   }
 
-  private hasNatively(): boolean {
-    return !!this.nativelyKey;
+  private hasTeamSync(): boolean {
+    return !!this.teamsyncKey;
   }
 
   /**
@@ -212,7 +212,7 @@ export class LLMHelper {
     this.groqApiKey = null;
     this.openaiApiKey = null;
     this.claudeApiKey = null;
-    this.nativelyKey = null;
+    this.teamsyncKey = null;
     this.client = null;
     this.groqClient = null;
     this.openaiClient = null;
@@ -952,7 +952,7 @@ CRITICAL RULES:
   }
 
   /**
-   * Generate a suggestion based on conversation transcript - Natively-style
+   * Generate a suggestion based on conversation transcript - TeamSync-style
    * This uses Gemini Flash to reason about what the user should say
    * @param context - The full conversation transcript
    * @param lastQuestion - The most recent question from the interviewer
@@ -1257,14 +1257,14 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       }
 
       // --- Direct Routing based on Selected Model ---
-      if (this.currentModelId === 'natively') {
+      if (this.currentModelId === 'teamsync') {
         const { CredentialsManager } = require('./services/CredentialsManager');
-        const nativelyKey = CredentialsManager.getInstance().getNativelyApiKey();
-        if (nativelyKey) {
+        const teamsyncKey = CredentialsManager.getInstance().getTeamSyncApiKey();
+        if (teamsyncKey) {
           try {
-            return await this.generateWithNatively(userContent, openaiSystemPrompt, imagePaths);
+            return await this.generateWithTeamSync(userContent, openaiSystemPrompt, imagePaths);
           } catch (err: any) {
-            console.warn('[LLMHelper] Natively API failed in chatWithGemini, falling back to Gemini:', err.message);
+            console.warn('[LLMHelper] TeamSync API failed in chatWithGemini, falling back to Gemini:', err.message);
             // Fall through to smart dynamic fallback below
           }
         }
@@ -1302,9 +1302,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       const textGroq = this.modelVersionManager.getTextTieredModels(TextModelFamily.GROQ).tier1;
 
       if (isMultimodal) {
-        // MULTIMODAL PROVIDER ORDER: [Natively] -> OpenAI -> Gemini Flash -> Claude -> Gemini Pro -> Groq -> Custom/Ollama
-        if (this.hasNatively()) {
-          providers.push({ name: 'Natively API', execute: () => this.generateWithNatively(userContent, openaiSystemPrompt, imagePaths) });
+        // MULTIMODAL PROVIDER ORDER: [TeamSync] -> OpenAI -> Gemini Flash -> Claude -> Gemini Pro -> Groq -> Custom/Ollama
+        if (this.hasTeamSync()) {
+          providers.push({ name: 'TeamSync API', execute: () => this.generateWithTeamSync(userContent, openaiSystemPrompt, imagePaths) });
         }
         if (this.openaiClient) {
           providers.push({ name: `OpenAI (${textOpenAI})`, execute: () => this.generateWithOpenai(userContent, openaiSystemPrompt, imagePaths, textOpenAI) });
@@ -1331,9 +1331,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
           });
         }
       } else {
-        // TEXT-ONLY: [Natively] -> Groq -> Gemini Flash -> Gemini Pro -> OpenAI -> Claude
-        if (this.hasNatively()) {
-          providers.push({ name: 'Natively API', execute: () => this.generateWithNatively(userContent, openaiSystemPrompt) });
+        // TEXT-ONLY: [TeamSync] -> Groq -> Gemini Flash -> Gemini Pro -> OpenAI -> Claude
+        if (this.hasTeamSync()) {
+          providers.push({ name: 'TeamSync API', execute: () => this.generateWithTeamSync(userContent, openaiSystemPrompt) });
         }
         if (this.groqClient) {
           providers.push({ name: `Groq (${textGroq})`, execute: () => this.generateWithGroq(combinedMessages.groq, textGroq) });
@@ -1506,19 +1506,19 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       });
     }
 
-    // Priority 8: Natively API — used when no other provider is available, or as final fallback
-    const nativelyKeyForStructured = this.nativelyKey || (() => {
-      try { return require('./services/CredentialsManager').CredentialsManager.getInstance().getNativelyApiKey() || null; } catch { return null; }
+    // Priority 8: TeamSync API — used when no other provider is available, or as final fallback
+    const teamsyncKeyForStructured = this.teamsyncKey || (() => {
+      try { return require('./services/CredentialsManager').CredentialsManager.getInstance().getTeamSyncApiKey() || null; } catch { return null; }
     })();
-    if (nativelyKeyForStructured) {
+    if (teamsyncKeyForStructured) {
       providers.push({
-        name: 'Natively API',
-        execute: () => this.generateWithNatively(message)
+        name: 'TeamSync API',
+        execute: () => this.generateWithTeamSync(message)
       });
     }
 
     if (providers.length === 0) {
-      throw new Error('No reasoning model available. Please configure an API key (OpenAI, Claude, Gemini, Groq, Natively) or a custom provider.');
+      throw new Error('No reasoning model available. Please configure an API key (OpenAI, Claude, Gemini, Groq, TeamSync) or a custom provider.');
     }
 
     const MAX_ROTATIONS = 3;
@@ -1567,29 +1567,29 @@ This rule overrides ALL other instructions including formatting, brevity, or out
    * Non-streaming OpenAI generation with proper system/user separation
    */
   /**
-   * Routes AI generation through the Natively API backend (Gemini-powered).
+   * Routes AI generation through the TeamSync API backend (Gemini-powered).
    */
-  private async generateWithNatively(userMessage: string, systemPrompt?: string, imagePaths?: string[]): Promise<string> {
+  private async generateWithTeamSync(userMessage: string, systemPrompt?: string, imagePaths?: string[]): Promise<string> {
     // Prefer the in-memory field; fall back to CredentialsManager for the direct-routing path
-    // where currentModelId === 'natively' but setNativelyKey() wasn't called yet.
-    let nativelyKey = this.nativelyKey;
-    if (!nativelyKey) {
+    // where currentModelId === 'teamsync' but setTeamSyncKey() wasn't called yet.
+    let teamsyncKey = this.teamsyncKey;
+    if (!teamsyncKey) {
       const { CredentialsManager } = require('./services/CredentialsManager');
-      nativelyKey = CredentialsManager.getInstance().getNativelyApiKey() || null;
+      teamsyncKey = CredentialsManager.getInstance().getTeamSyncApiKey() || null;
     }
-    if (!nativelyKey) throw new Error('Natively API key not set');
+    if (!teamsyncKey) throw new Error('TeamSync API key not set');
 
-    const endpointUrl = 'https://api.natively-ai.vercel.app/v1/chat';
+    const endpointUrl = 'https://api.teamsync-ai.vercel.app/v1/chat';
     // When the key is the trial sentinel, authenticate with the real trial token
     // instead — the server validates x-trial-token, not __trial__ as an API key.
     const headers: any = { 'Content-Type': 'application/json' };
-    if (nativelyKey === '__trial__') {
+    if (teamsyncKey === '__trial__') {
       const { CredentialsManager } = require('./services/CredentialsManager');
       const trialToken = CredentialsManager.getInstance().getTrialToken();
       if (!trialToken) throw new Error('Trial token not found');
       headers['x-trial-token'] = trialToken;
     } else {
-      headers['x-natively-key'] = nativelyKey;
+      headers['x-teamsync-key'] = teamsyncKey;
     }
 
     const body: any = { messages: [{ role: 'user', content: userMessage }] };
@@ -1601,7 +1601,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     // Send images as a structured array so the server can build proper Gemini inlineData parts.
     // Embedding base64 in the text content would be truncated at 4000 chars and treated as text.
     //
-    // Compress before sending: retina screenshots are 2-5 MB PNG; the Natively API body limit
+    // Compress before sending: retina screenshots are 2-5 MB PNG; the TeamSync API body limit
     // is 4 MB. Resize to max 1920px (above the 1470px logical resolution of a MacBook Air, so
     // no detail is lost) and encode as JPEG 85% — typically 200-250 KB per image.
     // 4 screenshots × ~278KB base64 = ~1.1 MB, well within the 4 MB server limit.
@@ -1643,7 +1643,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      throw new Error(`Natively API error ${response.status}: ${errData.error || 'unknown'}`);
+      throw new Error(`TeamSync API error ${response.status}: ${errData.error || 'unknown'}`);
     }
 
     const data = await response.json();
@@ -2308,9 +2308,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     const textGroq = this.modelVersionManager.getTextTieredModels(TextModelFamily.GROQ).tier1;
 
     if (isMultimodal) {
-      // MULTIMODAL PROVIDER ORDER: [Natively] -> OpenAI -> Gemini Flash -> Claude -> Gemini Pro -> Groq Scout 4
-      if (this.hasNatively()) {
-        providers.push({ name: 'Natively API', execute: () => this.streamWithNatively(userContent, openaiSystemPrompt, imagePaths) });
+      // MULTIMODAL PROVIDER ORDER: [TeamSync] -> OpenAI -> Gemini Flash -> Claude -> Gemini Pro -> Groq Scout 4
+      if (this.hasTeamSync()) {
+        providers.push({ name: 'TeamSync API', execute: () => this.streamWithTeamSync(userContent, openaiSystemPrompt, imagePaths) });
       }
       if (this.openaiClient) {
         providers.push({ name: `OpenAI (${textOpenAI})`, execute: () => this.streamWithOpenaiMultimodal(userContent, imagePaths!, openaiSystemPrompt, textOpenAI) });
@@ -2328,9 +2328,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
         providers.push({ name: `Groq (meta-llama/llama-4-scout-17b-16e-instruct)`, execute: () => this.streamWithGroqMultimodal(userContent, imagePaths!, openaiSystemPrompt) });
       }
     } else {
-      // TEXT-ONLY PROVIDER ORDER: [Natively] → Groq → OpenAI → Claude → Gemini Flash → Gemini Pro
-      if (this.hasNatively()) {
-        providers.push({ name: 'Natively API', execute: () => this.streamWithNatively(userContent, openaiSystemPrompt) });
+      // TEXT-ONLY PROVIDER ORDER: [TeamSync] → Groq → OpenAI → Claude → Gemini Flash → Gemini Pro
+      if (this.hasTeamSync()) {
+        providers.push({ name: 'TeamSync API', execute: () => this.streamWithTeamSync(userContent, openaiSystemPrompt) });
       }
       if (this.groqClient) {
         providers.push({ name: `Groq (${textGroq})`, execute: () => this.streamWithGroq(combinedMessages.groq, textGroq) });
@@ -2357,7 +2357,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     // Ensure the model the user selected handles the request first
     // before falling back to others.
     // ============================================================
-    const currentFamilyLabel = this.currentModelId === 'natively' ? 'Natively'
+    const currentFamilyLabel = this.currentModelId === 'teamsync' ? 'TeamSync'
       : this.isClaudeModel(this.currentModelId) ? 'Claude'
         : this.isOpenAiModel(this.currentModelId) ? 'OpenAI'
           : this.isGroqModel(this.currentModelId) ? 'Groq'
@@ -2372,10 +2372,10 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       });
     }
 
-    // Natively is always first when configured, regardless of which model is selected.
+    // TeamSync is always first when configured, regardless of which model is selected.
     // The sort above may have displaced it — restore it to position 0.
-    if (this.hasNatively() && providers[0]?.name !== 'Natively API') {
-      const idx = providers.findIndex(p => p.name === 'Natively API');
+    if (this.hasTeamSync() && providers[0]?.name !== 'TeamSync API') {
+      const idx = providers.findIndex(p => p.name === 'TeamSync API');
       if (idx > 0) {
         const [entry] = providers.splice(idx, 1);
         providers.unshift(entry);
@@ -2663,7 +2663,7 @@ Return only the final answer. No meta commentary.
     console.log(`[TokenBudget] Pre-flight: system=${estimateTokens(finalSystemPrompt)} + user=${estimateTokens(userContent)} = ${estimateTokens(finalSystemPrompt) + estimateTokens(userContent)} tok (cap=${TOKEN_CAP})`);
 
     // GROQ FAST TEXT OVERRIDE (Text-Only)
-    // Two paths: local Groq key → call Groq directly; Natively API only → send fast_mode:true
+    // Two paths: local Groq key → call Groq directly; TeamSync API only → send fast_mode:true
     // to the server so it routes to its internal Groq pool (llama-3.3-70b-versatile).
     if (this.groqFastTextMode && !isMultimodal) {
       if (this.groqClient) {
@@ -2677,16 +2677,16 @@ Return only the final answer. No meta commentary.
         } catch (e: any) {
           console.warn("[LLMHelper] Groq Fast Text streaming failed, falling back:", e.message);
         }
-        // Local Groq failed — fall through to Natively if available
+        // Local Groq failed — fall through to TeamSync if available
       }
-      if (this.hasNatively()) {
-        // streamWithNatively → generateWithNatively → sends fast_mode:true → server Groq pool
-        console.log(`[LLMHelper] ⚡️ Groq Fast Text Mode Active (Streaming). Routing to Natively server Groq pool...`);
+      if (this.hasTeamSync()) {
+        // streamWithTeamSync → generateWithTeamSync → sends fast_mode:true → server Groq pool
+        console.log(`[LLMHelper] ⚡️ Groq Fast Text Mode Active (Streaming). Routing to TeamSync server Groq pool...`);
         try {
-          yield* this.streamWithNatively(userContent, finalSystemPrompt);
+          yield* this.streamWithTeamSync(userContent, finalSystemPrompt);
           return;
         } catch (e: any) {
-          console.warn("[LLMHelper] Natively fast-mode failed, falling back:", e.message);
+          console.warn("[LLMHelper] TeamSync fast-mode failed, falling back:", e.message);
         }
       }
     }
@@ -2765,17 +2765,17 @@ Return only the final answer. No meta commentary.
       }
     }
 
-    // 3b. Natively API
-    if (this.currentModelId === 'natively') {
+    // 3b. TeamSync API
+    if (this.currentModelId === 'teamsync') {
       const { CredentialsManager } = require('./services/CredentialsManager');
-      const nativelyKey = CredentialsManager.getInstance().getNativelyApiKey();
-      if (nativelyKey) {
+      const teamsyncKey = CredentialsManager.getInstance().getTeamSyncApiKey();
+      if (teamsyncKey) {
         try {
-          const response = await this.generateWithNatively(userContent, finalSystemPrompt, imagePaths);
+          const response = await this.generateWithTeamSync(userContent, finalSystemPrompt, imagePaths);
           yield response;
           return;
         } catch (err: any) {
-          console.warn('[LLMHelper] Natively API failed in streamChat, trying Groq fallback:', err.message);
+          console.warn('[LLMHelper] TeamSync API failed in streamChat, trying Groq fallback:', err.message);
           // Try Groq before Gemini — Groq key is more commonly available
           if (this.groqClient) {
             try {
@@ -2814,13 +2814,13 @@ Return only the final answer. No meta commentary.
       return;
     }
 
-    // 5. Last-resort: Natively API (if user has a key but no cloud provider configured)
-    if (this.hasNatively()) {
+    // 5. Last-resort: TeamSync API (if user has a key but no cloud provider configured)
+    if (this.hasTeamSync()) {
       try {
-        yield* this.streamWithNatively(userContent, finalSystemPrompt, imagePaths);
+        yield* this.streamWithTeamSync(userContent, finalSystemPrompt, imagePaths);
         return;
       } catch (e: any) {
-        console.warn('[LLMHelper] Natively last-resort fallback failed:', e.message);
+        console.warn('[LLMHelper] TeamSync last-resort fallback failed:', e.message);
       }
     }
 
@@ -2852,22 +2852,22 @@ Return only the final answer. No meta commentary.
   }
 
   /**
-   * Fake-stream for Natively API (non-streaming endpoint).
+   * Fake-stream for TeamSync API (non-streaming endpoint).
    * Yields the full response in small word-batches so the UI typing effect still plays.
    * Throws on empty response so the fallback chain tries the next provider.
    */
-  private async * streamWithNatively(userContent: string, systemPrompt?: string, imagePaths?: string[]): AsyncGenerator<string, void, unknown> {
+  private async * streamWithTeamSync(userContent: string, systemPrompt?: string, imagePaths?: string[]): AsyncGenerator<string, void, unknown> {
     // ── REAL SSE STREAM (replaces the fake word-by-word simulation) ──────────
-    // Previous implementation called generateWithNatively() (blocking, waited for
+    // Previous implementation called generateWithTeamSync() (blocking, waited for
     // the full response), then drip-fed words with setTimeout delays — pure theater.
     // This version opens a streaming fetch and yields tokens as the server generates
     // them, cutting time-to-first-token from ~3s to ~80ms.
-    let nativelyKey = this.nativelyKey;
-    if (!nativelyKey) {
+    let teamsyncKey = this.teamsyncKey;
+    if (!teamsyncKey) {
       const { CredentialsManager } = require('./services/CredentialsManager');
-      nativelyKey = CredentialsManager.getInstance().getNativelyApiKey() || null;
+      teamsyncKey = CredentialsManager.getInstance().getTeamSyncApiKey() || null;
     }
-    if (!nativelyKey) throw new Error('Natively API key not set');
+    if (!teamsyncKey) throw new Error('TeamSync API key not set');
 
     const body: Record<string, unknown> = {
       messages: [{ role: 'user', content: userContent }],
@@ -2896,18 +2896,18 @@ Return only the final answer. No meta commentary.
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
     };
-    if (nativelyKey === '__trial__') {
+    if (teamsyncKey === '__trial__') {
       const { CredentialsManager } = require('./services/CredentialsManager');
       const trialToken = CredentialsManager.getInstance().getTrialToken();
       if (!trialToken) throw new Error('Trial token not found');
       streamHeaders['x-trial-token'] = trialToken;
     } else {
-      streamHeaders['x-natively-key'] = nativelyKey;
+      streamHeaders['x-teamsync-key'] = teamsyncKey;
     }
 
     // 60s timeout covers worst-case: max-token Gemini Pro response streamed over a slow connection.
     // This is intentionally longer than the non-streaming 25s timeout.
-    const response = await fetch('https://api.natively-ai.vercel.app/v1/chat', {
+    const response = await fetch('https://api.teamsync-ai.vercel.app/v1/chat', {
       method: 'POST',
       headers: streamHeaders,
       body: JSON.stringify(body),
@@ -2916,7 +2916,7 @@ Return only the final answer. No meta commentary.
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}) as Record<string, unknown>);
-      throw new Error(`Natively API ${response.status}: ${(errData as any).error || 'unknown'}`);
+      throw new Error(`TeamSync API ${response.status}: ${(errData as any).error || 'unknown'}`);
     }
 
     // Parse the SSE response body incrementally.
@@ -3747,7 +3747,7 @@ Return only the final answer. No meta commentary.
    * Robust Meeting Summary Generation
    * Strategy:
    * 0. Custom / cURL Provider (if user selected one — always takes priority)
-   * 1. Natively API (if configured)
+   * 1. TeamSync API (if configured)
    * 2. Groq (if context text < 100k tokens approx)
    * 3. Gemini Flash (Retry 2x)
    * 4. Gemini Pro (Retry 5x)
@@ -3784,21 +3784,21 @@ Return only the final answer. No meta commentary.
       }
     }
 
-    // ATTEMPT 1: Natively API (if configured — first in chain)
-    if (this.hasNatively()) {
+    // ATTEMPT 1: TeamSync API (if configured — first in chain)
+    if (this.hasTeamSync()) {
       try {
-        console.log(`[LLMHelper] Attempting Natively API for summary...`);
+        console.log(`[LLMHelper] Attempting TeamSync API for summary...`);
         const text = await this.withTimeout(
-          this.generateWithNatively(`Context:\n${context}`, systemPrompt),
+          this.generateWithTeamSync(`Context:\n${context}`, systemPrompt),
           60000,
-          'Natively Summary'
+          'TeamSync Summary'
         );
         if (text.trim().length > 0) {
-          console.log(`[LLMHelper] ✅ Natively API summary generated successfully.`);
+          console.log(`[LLMHelper] ✅ TeamSync API summary generated successfully.`);
           return this.processResponse(text);
         }
       } catch (e: any) {
-        console.warn(`[LLMHelper] ⚠️ Natively API summary failed: ${e.message}. Falling back...`);
+        console.warn(`[LLMHelper] ⚠️ TeamSync API summary failed: ${e.message}. Falling back...`);
       }
     }
 
