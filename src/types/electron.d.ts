@@ -88,6 +88,7 @@ export interface ElectronAPI {
   closeAdvancedSettings: () => Promise<void>
   openSettingsTab: (tab: string) => Promise<void>
   onOpenSettingsTab: (callback: (tab: string) => void) => () => void
+  onPermissionRemediationRequired: (callback: (payload: { message: string }) => void) => () => void
 
   // LLM Model Management
   getCurrentLlmConfig: () => Promise<{ provider: "ollama" | "gemini"; model: string; isOllama: boolean }>

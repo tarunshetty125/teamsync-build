@@ -10,6 +10,7 @@ import { isPermissionStatusOperational } from '../lib/permissions/utils';
 interface PermissionsStoreState {
   status: PermissionStatusSnapshot | null;
   isChecking: boolean;
+  hasInitialized: boolean;
   onboardingCompleted: boolean;
   currentStep: OnboardingStep;
   lastError: string | null;
@@ -19,6 +20,7 @@ interface PermissionsStoreState {
   requestPermission: (permission: PermissionKind) => Promise<void>;
   openSettings: (permission: PermissionKind) => Promise<void>;
   setCurrentStep: (step: OnboardingStep) => void;
+  setLastError: (message: string | null) => void;
   completeOnboarding: () => void;
 }
 
@@ -55,6 +57,7 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
     (set, get) => ({
       status: null,
       isChecking: false,
+      hasInitialized: false,
       onboardingCompleted: false,
       currentStep: 'welcome',
       lastError: null,
@@ -66,6 +69,7 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
             set((state) => ({
               status,
               isChecking: false,
+              hasInitialized: true,
               currentStep: deriveStep(state.currentStep, state.onboardingCompleted, status),
             }));
           });
@@ -83,6 +87,7 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
         if (!window.electronAPI?.permissions?.getStatus) {
           set({
             isChecking: false,
+            hasInitialized: true,
             lastError: 'Permissions bridge is unavailable.',
           });
           return;
@@ -95,12 +100,14 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
           set((state) => ({
             status,
             isChecking: false,
+            hasInitialized: true,
             lastError: null,
             currentStep: deriveStep(state.currentStep, state.onboardingCompleted, status),
           }));
         } catch (error) {
           set({
             isChecking: false,
+            hasInitialized: true,
             lastError: error instanceof Error ? error.message : 'Unable to refresh permissions.',
           });
         }
@@ -129,6 +136,7 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
           set((state) => ({
             status: result.status,
             isChecking: false,
+            hasInitialized: true,
             activePermission: null,
             lastError: result.success ? null : result.message ?? null,
             currentStep: deriveStep(
@@ -140,6 +148,7 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
         } catch (error) {
           set({
             isChecking: false,
+            hasInitialized: true,
             activePermission: null,
             lastError: error instanceof Error ? error.message : 'Unable to request permission.',
           });
@@ -168,6 +177,10 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
 
       setCurrentStep: (step) => {
         set({ currentStep: step, lastError: null });
+      },
+
+      setLastError: (message) => {
+        set({ lastError: message });
       },
 
       completeOnboarding: () => {

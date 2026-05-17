@@ -772,7 +772,7 @@ export const NativelyApiSettings: React.FC = () => {
                             How it works
                         </p>
                         <button
-                            onClick={() => openExternal('https://natively.software/pro')}
+                            onClick={() => openExternal('https://natively-ai.vercel.app/pro')}
                             className="flex items-center gap-1 text-[10px] font-semibold text-blue-400 hover:text-blue-300 uppercase tracking-widest transition-colors cursor-pointer"
                         >
                             Watch Demo <ArrowUpRight size={10} strokeWidth={2} />

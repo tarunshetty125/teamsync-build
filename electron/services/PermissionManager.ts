@@ -13,7 +13,7 @@ import { arePermissionSnapshotsEqual } from '../../src/lib/permissions/utils';
 type MacMediaAccessStatus = 'granted' | 'denied' | 'not-determined' | 'restricted';
 
 interface PermissionStoreState {
-  accessibilityPrompted: boolean;
+  accessibilitySetupAttempted: boolean;
 }
 
 const STORE_NAME = 'teamsync-permissions';
@@ -29,7 +29,8 @@ export class PermissionManager extends EventEmitter {
 
   private monitoringTimer: NodeJS.Timeout | null = null;
   private listenersBound = false;
-  private hasSeenScreenDeniedDuringSession = false;
+  private screenPermissionSawNonGrantedState = false;
+  private screenPermissionRequiresRestart = false;
   private lastStatus: PermissionStatusSnapshot | null = null;
 
   private constructor() {
@@ -38,7 +39,7 @@ export class PermissionManager extends EventEmitter {
     this.store = new Store<PermissionStoreState>({
       name: STORE_NAME,
       defaults: {
-        accessibilityPrompted: false,
+        accessibilitySetupAttempted: false,
       },
     });
 
@@ -48,10 +49,7 @@ export class PermissionManager extends EventEmitter {
       process.env.TEAMSYNC_ENFORCE_MAC_PERMISSIONS !== '1';
 
     this.initialScreenStatus = this.readScreenStatus();
-
-    if (this.initialScreenStatus === 'denied' || this.initialScreenStatus === 'restricted') {
-      this.hasSeenScreenDeniedDuringSession = true;
-    }
+    this.screenPermissionSawNonGrantedState = this.initialScreenStatus !== 'granted';
   }
 
   public static getInstance(): PermissionManager {
@@ -89,9 +87,11 @@ export class PermissionManager extends EventEmitter {
   }
 
   public async getStatus(): Promise<PermissionStatusSnapshot> {
-    const status = this.buildStatusSnapshot();
-    this.lastStatus = status;
-    return status;
+    return this.buildStatusSnapshot();
+  }
+
+  public getStatusSync(): PermissionStatusSnapshot {
+    return this.buildStatusSnapshot();
   }
 
   public async requestMicrophonePermission(): Promise<PermissionRequestResult> {
@@ -176,7 +176,7 @@ export class PermissionManager extends EventEmitter {
       };
     }
 
-    this.store.set('accessibilityPrompted', true);
+    this.store.set('accessibilitySetupAttempted', true);
 
     let granted = false;
     try {
@@ -218,7 +218,7 @@ export class PermissionManager extends EventEmitter {
     try {
       await shell.openExternal(target);
       if (permission === 'accessibility') {
-        this.store.set('accessibilityPrompted', true);
+        this.store.set('accessibilitySetupAttempted', true);
       }
       return { success: true };
     } catch (error) {
@@ -239,8 +239,9 @@ export class PermissionManager extends EventEmitter {
   }
 
   private async refreshAndBroadcast(force = false): Promise<PermissionStatusSnapshot> {
+    const previousStatus = this.lastStatus;
     const nextStatus = this.buildStatusSnapshot();
-    const changed = force || !arePermissionSnapshotsEqual(this.lastStatus, nextStatus);
+    const changed = force || !arePermissionSnapshotsEqual(previousStatus, nextStatus);
 
     if (changed) {
       this.lastStatus = nextStatus;
@@ -275,14 +276,15 @@ export class PermissionManager extends EventEmitter {
     }
 
     const screenStatus = this.readScreenStatus();
-    if (screenStatus === 'denied' || screenStatus === 'restricted') {
-      this.hasSeenScreenDeniedDuringSession = true;
+    if (screenStatus !== 'granted') {
+      this.screenPermissionSawNonGrantedState = true;
     }
 
-    const restartRequired =
-      screenStatus === 'granted' &&
-      this.hasSeenScreenDeniedDuringSession &&
-      this.initialScreenStatus !== 'granted';
+    if (screenStatus === 'granted' && this.screenPermissionSawNonGrantedState) {
+      this.screenPermissionRequiresRestart = true;
+    }
+
+    const restartRequired = screenStatus === 'granted' && this.screenPermissionRequiresRestart;
 
     return {
       screenRecording: restartRequired
@@ -331,7 +333,7 @@ export class PermissionManager extends EventEmitter {
       console.error('[PermissionManager] Failed to read accessibility permission status:', error);
     }
 
-    return this.store.get('accessibilityPrompted') ? 'denied' : 'not_requested';
+    return this.store.get('accessibilitySetupAttempted') ? 'denied' : 'not_requested';
   }
 
   private mapScreenStatus(status: MacMediaAccessStatus): PermissionState {

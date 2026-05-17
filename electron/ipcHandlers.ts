@@ -1338,7 +1338,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         return cached.data;
       }
 
-      const res = await fetch('https://api.natively.software/v1/usage', {
+      const res = await fetch('https://api.natively-ai.vercel.app/v1/usage', {
         headers: { 'x-natively-key': key },
         signal: AbortSignal.timeout(8000),
       });
@@ -1378,7 +1378,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         hwid = LicenseManager.getInstance().getHardwareId() || 'unavailable';
       } catch { /* LicenseManager not available — fall back */ }
 
-      const res = await fetch('https://api.natively.software/v1/trial/start', {
+      const res = await fetch('https://api.natively-ai.vercel.app/v1/trial/start', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ hwid }),
@@ -1420,7 +1420,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       const token = CredentialsManager.getInstance().getTrialToken();
       if (!token) return { ok: false, error: 'no_trial_token' };
 
-      const res = await fetch('https://api.natively.software/v1/trial/status', {
+      const res = await fetch('https://api.natively-ai.vercel.app/v1/trial/status', {
         headers: { 'x-trial-token': token },
         signal:  AbortSignal.timeout(8_000),
       });
@@ -1465,7 +1465,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       const token = CredentialsManager.getInstance().getTrialToken();
       if (!token) return { ok: true };  // no token to report
 
-      await fetch('https://api.natively.software/v1/trial/convert', {
+      await fetch('https://api.natively-ai.vercel.app/v1/trial/convert', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'x-trial-token': token },
         body:    JSON.stringify({ choice }),
@@ -1487,7 +1487,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       // 1. Fire-and-forget analytics (non-blocking)
       const token = cm.getTrialToken();
       if (token) {
-        fetch('https://api.natively.software/v1/trial/convert', {
+        fetch('https://api.natively-ai.vercel.app/v1/trial/convert', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', 'x-trial-token': token },
           body:    JSON.stringify({ choice: 'byok' }),

@@ -32,7 +32,7 @@ import { analytics } from "./lib/analytics/analytics.service"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import ModesSettings from "./components/settings/ModesSettings"
 import { usePermissionsStore } from "./stores/usePermissionsStore"
-import { isPermissionStatusOperational } from "./lib/permissions/utils"
+import { formatBlockingPermissions, isPermissionStatusOperational } from "./lib/permissions/utils"
 
 const queryClient = new QueryClient()
 
@@ -139,6 +139,7 @@ const App: React.FC = () => {
 
   // ── Onboarding / promo toasters ───────────────────────────
   const [showTrialPromo, setShowTrialPromo] = useState(false);
+  const [hasPresentedLauncherWindow, setHasPresentedLauncherWindow] = useState(false);
 
   // ── Free Trial global state ────────────────────────────────
   const [activeTrial, setActiveTrial] = useState<{
@@ -165,16 +166,21 @@ const App: React.FC = () => {
   }, []);
 
   const permissionsStatus = usePermissionsStore((state) => state.status);
+  const permissionsInitialized = usePermissionsStore((state) => state.hasInitialized);
   const onboardingCompleted = usePermissionsStore((state) => state.onboardingCompleted);
   const initializePermissions = usePermissionsStore((state) => state.initialize);
   const refreshPermissions = usePermissionsStore((state) => state.refreshPermissions);
+  const setPermissionsStep = usePermissionsStore((state) => state.setCurrentStep);
+  const setPermissionsError = usePermissionsStore((state) => state.setLastError);
 
   const isPermissionsReady = isPermissionStatusOperational(permissionsStatus);
   const shouldShowOnboarding =
     (isLauncherWindow || isDefault) &&
-    !showStartup &&
+    permissionsInitialized &&
     (!onboardingCompleted || !isPermissionsReady);
-  const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !showStartup && !isSettingsOpen && isLauncherMainView && !shouldShowOnboarding;
+  const shouldHoldLauncherBoot = (isLauncherWindow || isDefault) && !permissionsInitialized;
+  const shouldRenderStartup = showStartup && !shouldShowOnboarding;
+  const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !shouldRenderStartup && !isSettingsOpen && isLauncherMainView && !shouldShowOnboarding;
   const { activeAd, dismissAd, previewAd } = useAdCampaigns(
     planDetails,
     hasProfile,
@@ -277,6 +283,12 @@ const App: React.FC = () => {
       setIsSettingsOpen(true);
     });
 
+    const removePermissionRemediation = window.electronAPI?.onPermissionRemediationRequired?.(({ message }) => {
+      setPermissionsStep('permissions');
+      setPermissionsError(message);
+      void refreshPermissions();
+    });
+
     // Listen for meeting processing completion to trigger post-meeting ads
     const removeMeetingsListener = window.electronAPI?.onMeetingsUpdated?.(() => {
       console.log("[App.tsx] Meetings updated (processing finished), starting ad delay timer");
@@ -336,8 +348,25 @@ const App: React.FC = () => {
       if (trialPollId) clearInterval(trialPollId);
       if (removeTrialListener) removeTrialListener();
       if (removeOpenSettingsTab) removeOpenSettingsTab();
+      if (removePermissionRemediation) removePermissionRemediation();
     }
-  }, [initializePermissions, isDefault, isLauncherWindow, syncStartupState]);
+  }, [initializePermissions, isDefault, isLauncherWindow, refreshPermissions, setPermissionsError, setPermissionsStep, syncStartupState]);
+
+  useEffect(() => {
+    if (!shouldShowOnboarding || !showStartup) return;
+    setShowStartup(false);
+  }, [shouldShowOnboarding, showStartup]);
+
+  useEffect(() => {
+    if (!(isLauncherWindow || isDefault)) return;
+    if (!permissionsInitialized || hasPresentedLauncherWindow) return;
+
+    window.electronAPI?.showWindow?.()
+      .catch((error) => {
+        console.error('Failed to present launcher window after permissions bootstrap:', error);
+      });
+    setHasPresentedLauncherWindow(true);
+  }, [hasPresentedLauncherWindow, isDefault, isLauncherWindow, permissionsInitialized]);
 
   // Listen for overlay opacity changes — scoped to overlay window only
   useEffect(() => {
@@ -370,18 +399,22 @@ const App: React.FC = () => {
     }
   };
 
-  const handleStartMeeting = async () => {
+  const handleStartMeeting = async (metadata?: any) => {
     try {
       await refreshPermissions();
       const latestPermissions = usePermissionsStore.getState().status;
       if (!isPermissionStatusOperational(latestPermissions)) {
-        usePermissionsStore.getState().setCurrentStep('permissions');
-        return;
+        const message = latestPermissions?.restartRequired
+          ? 'Please restart TeamSync to finish enabling screen access before starting a meeting.'
+          : `TeamSync needs ${formatBlockingPermissions(latestPermissions)} access before it can start a meeting.`;
+        setPermissionsStep('permissions');
+        setPermissionsError(message);
+        return false;
       }
 
       localStorage.setItem('natively_last_meeting_start', Date.now().toString());
-      const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
-      let outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
+      const inputDeviceId = metadata?.audio?.inputDeviceId ?? localStorage.getItem('preferredInputDeviceId');
+      let outputDeviceId = metadata?.audio?.outputDeviceId ?? localStorage.getItem('preferredOutputDeviceId');
       const useExperimentalSck = localStorage.getItem('useExperimentalSckBackend') === 'true';
 
       // Override output device ID to force SCK if experimental mode is enabled
@@ -394,9 +427,11 @@ const App: React.FC = () => {
       }
 
       const result = await window.electronAPI.startMeeting({
-        audio: { inputDeviceId, outputDeviceId }
+        ...(metadata ?? {}),
+        audio: { ...(metadata?.audio ?? {}), inputDeviceId, outputDeviceId }
       });
       if (result.success) {
+        setPermissionsError(null);
         analytics.trackMeetingStarted();
         // Switch to Overlay Mode via IPC
         // The main process handles window switching, but we can reinforce it or just trust main.
@@ -404,12 +439,20 @@ const App: React.FC = () => {
         // But we configured main.ts to not auto-switch?
         // Let's explicitly request mode change.
         await window.electronAPI.setWindowMode('overlay');
+        return true;
       } else {
         console.error("Failed to start meeting:", result.error);
+        await refreshPermissions();
+        const refreshedPermissions = usePermissionsStore.getState().status;
+        if (!isPermissionStatusOperational(refreshedPermissions)) {
+          setPermissionsStep('permissions');
+          setPermissionsError(result.error || 'Permissions are still blocking TeamSync.');
+        }
       }
     } catch (err) {
       console.error("Failed to start meeting:", err);
     }
+    return false;
   };
 
   const handleEndMeeting = async () => {
@@ -503,7 +546,19 @@ const App: React.FC = () => {
     <ErrorBoundary context="Launcher">
     <div className="h-full min-h-0 w-full relative bg-[#000000]">
       <AnimatePresence>
-        {showStartup ? (
+        {shouldHoldLauncherBoot ? (
+          <motion.div
+            key="permissions-bootstrap"
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            className="flex h-full w-full items-center justify-center bg-[#04070d]"
+          >
+            <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/66">
+              <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/70" />
+              Preparing TeamSync
+            </div>
+          </motion.div>
+        ) : shouldRenderStartup ? (
           <motion.div
             key="startup"
             initial={{ opacity: 1 }}
@@ -511,7 +566,7 @@ const App: React.FC = () => {
           >
             <StartupSequence isReady={bootstrapUiReady} onComplete={() => setShowStartup(false)} />
           </motion.div>
-        ) : !isAuthenticated ? (
+        ) : shouldShowOnboarding ? null : !isAuthenticated ? (
           <motion.div
             key="auth"
             initial={{ opacity: 0 }}

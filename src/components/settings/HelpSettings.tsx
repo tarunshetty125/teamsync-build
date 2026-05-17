@@ -1484,7 +1484,7 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                                         This is a TeamSync Pro feature. 
                                     </p>
                                     <ol className="text-[11px] text-text-secondary space-y-1 list-decimal pl-4 mb-0">
-                                        <li>Get a License at <button onClick={() => { (window as any).electronAPI?.openExternal('https://natively.software/') }} className="text-accent-primary hover:underline font-semibold">natively.software</button></li>
+                                        <li>Get a License at <button onClick={() => { (window as any).electronAPI?.openExternal('https://natively-ai.vercel.app/') }} className="text-accent-primary hover:underline font-semibold">natively-ai.vercel.app</button></li>
                                         <li>Drop your Resume PDF in the UI to activate injection.</li>
                                     </ol>
                                 </div>

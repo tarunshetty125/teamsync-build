@@ -40,26 +40,26 @@ If you’re looking for a hosted desktop recording API, consider checking out [R
 <br/>
 
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-blueviolet?style=flat-square)](https://github.com/Natively-AI-assistant/natively-cluely-ai-assistant/releases)
-[![Downloads](https://img.shields.io/github/downloads/evinjohnn/natively-cluely-ai-assistant/total?style=flat-square&color=success)](https://github.com/Natively-AI-assistant/natively-cluely-ai-assistant/releases)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-blueviolet?style=flat-square)](https://github.com/TarunShetty256/natively-cluely-ai-assistant/releases)
+[![Downloads](https://img.shields.io/github/downloads/TarunShetty256/teamsync-cluely-ai-assistant/total?style=flat-square&color=success)](https://github.com/TarunShetty256/natively-cluely-ai-assistant/releases)
 ![Repo Views](https://img.shields.io/badge/Views-250k-orange?style=flat-square)
-[![Stars](https://img.shields.io/github/stars/evinjohnn/natively-cluely-ai-assistant?style=flat-square&color=gold)](https://github.com/Natively-AI-assistant/natively-cluely-ai-assistant)
+[![Stars](https://img.shields.io/github/stars/TarunShetty256/teamsync-cluely-ai-assistant?style=flat-square&color=gold)](https://github.com/TarunShetty256/natively-cluely-ai-assistant)
 ![Status](https://img.shields.io/badge/Status-active-success?style=flat-square)
 [![X Community](https://img.shields.io/badge/Community-black?style=flat-square&logo=x&logoColor=white)](https://x.com/i/communities/2031398735515693507)
 
 > **Competitors charge $20–$149/month, store your data on their servers, and one already breached 83,000 users.** Natively costs $0, runs locally, and has never had a data breach. Your keys, your models, your machine.
 
 <p align="center">
-  <a href="https://natively.software">
+  <a href="https://natively-ai.vercel.app">
     <img src="https://img.shields.io/badge/Visit%20Website-22C55E?style=for-the-badge&logo=vercel&logoColor=white" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Natively-AI-assistant/natively-cluely-ai-assistant/releases/latest">
+  <a href="https://github.com/TarunShetty256/natively-cluely-ai-assistant/releases/latest">
     <img src="https://img.shields.io/badge/Download-macOS-007AFF?style=for-the-badge&logo=apple&logoColor=white" />
   </a>
-  <a href="https://github.com/Natively-AI-assistant/natively-cluely-ai-assistant/releases/latest">
+  <a href="https://github.com/TarunShetty256/natively-cluely-ai-assistant/releases/latest">
     <img src="https://img.shields.io/badge/Download-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" />
   </a>
 </p>
@@ -127,7 +127,7 @@ While other tools act as simple API wrappers, Natively is a complete, native int
 
 Every star pushes Natively higher in GitHub search, helping developers and job seekers find a free, private alternative instead of paying $149/month for tools that store their data on someone else's server.
 
-[![Star Natively](https://img.shields.io/github/stars/evinjohnn/natively-cluely-ai-assistant?style=for-the-badge&color=gold&label=Star%20on%20GitHub)](https://github.com/Natively-AI-assistant/natively-cluely-ai-assistant)
+[![Star Natively](https://img.shields.io/github/stars/TarunShetty256/teamsync-cluely-ai-assistant?style=for-the-badge&color=gold&label=Star%20on%20GitHub)](https://github.com/TarunShetty256/natively-cluely-ai-assistant)
 
 </div>
 
@@ -538,7 +538,7 @@ Setup Summary:
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/Natively-AI-assistant/natively-cluely-ai-assistant.git
+git clone https://github.com/TarunShetty256/natively-cluely-ai-assistant.git
 cd natively-cluely-ai-assistant
 ```
 
@@ -937,11 +937,11 @@ Creator rewards help cover **AI/API bills** and ongoing development costs.
 
 ## Star History
 
-<a href="https://star-history.com/#evinjohnn/natively-cluely-ai-assistant&Date">
+<a href="https://star-history.com/#TarunShetty256/teamsync-cluely-ai-assistant&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=evinjohnn/natively-cluely-ai-assistant&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=evinjohnn/natively-cluely-ai-assistant&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=evinjohnn/natively-cluely-ai-assistant&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=TarunShetty256/teamsync-cluely-ai-assistant&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=TarunShetty256/teamsync-cluely-ai-assistant&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=TarunShetty256/teamsync-cluely-ai-assistant&type=Date" />
  </picture>
 </a>
 

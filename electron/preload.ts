@@ -241,6 +241,7 @@ interface ElectronAPI {
   toggleAdvancedSettings: () => Promise<void>
   openSettingsTab: (tab: string) => Promise<void>
   onOpenSettingsTab: (callback: (tab: string) => void) => () => void
+  onPermissionRemediationRequired: (callback: (payload: { message: string }) => void) => () => void
   setOverlayMousePassthrough: (enabled: boolean) => Promise<{ success: boolean }>
   toggleOverlayMousePassthrough: () => Promise<{ success: boolean; enabled: boolean }>
   getOverlayMousePassthrough: () => Promise<boolean>
@@ -628,6 +629,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const subscription = (_: any, tab: string) => callback(tab)
     ipcRenderer.on('settings:open-tab', subscription)
     return () => { ipcRenderer.removeListener('settings:open-tab', subscription) }
+  },
+  onPermissionRemediationRequired: (callback: (payload: { message: string }) => void) => {
+    const subscription = (_: any, payload: { message: string }) => callback(payload);
+    ipcRenderer.on('permissions:remediation-required', subscription);
+    return () => { ipcRenderer.removeListener('permissions:remediation-required', subscription); };
   },
   openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
   setUndetectable: (state: boolean) => ipcRenderer.invoke("set-undetectable", state),

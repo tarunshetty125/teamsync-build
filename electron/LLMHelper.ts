@@ -1579,7 +1579,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     }
     if (!nativelyKey) throw new Error('Natively API key not set');
 
-    const endpointUrl = 'https://api.natively.software/v1/chat';
+    const endpointUrl = 'https://api.natively-ai.vercel.app/v1/chat';
     // When the key is the trial sentinel, authenticate with the real trial token
     // instead — the server validates x-trial-token, not __trial__ as an API key.
     const headers: any = { 'Content-Type': 'application/json' };
@@ -2907,7 +2907,7 @@ Return only the final answer. No meta commentary.
 
     // 60s timeout covers worst-case: max-token Gemini Pro response streamed over a slow connection.
     // This is intentionally longer than the non-streaming 25s timeout.
-    const response = await fetch('https://api.natively.software/v1/chat', {
+    const response = await fetch('https://api.natively-ai.vercel.app/v1/chat', {
       method: 'POST',
       headers: streamHeaders,
       body: JSON.stringify(body),

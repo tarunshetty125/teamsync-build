@@ -131,7 +131,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "Natively-AI-assistant",
+        "owner": "TarunShetty256",
         "repo": "natively-cluely-ai-assistant",
         "releaseType": "release"
       }

@@ -41,6 +41,7 @@ if (fs.existsSync(premiumDir)) {
 // must be listed explicitly to preserve the existing runtime import paths.
 const sharedRuntimeDirs = [
   path.resolve(rootDir, 'src/lib/modes'),
+  path.resolve(rootDir, 'src/lib/permissions'),
 ];
 
 for (const sharedDir of sharedRuntimeDirs) {

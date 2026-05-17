@@ -45,7 +45,7 @@ interface Meeting {
 }
 
 interface LauncherProps {
-    onStartMeeting: () => void;
+    onStartMeeting: (metadata?: any) => Promise<boolean> | boolean | void;
     onOpenSettings: (tab?: string) => void;
     onOpenModes?: () => void;
     onPageChange?: (isMain: boolean) => void;
@@ -85,8 +85,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const [isMeetingActive, setIsMeetingActive] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
     const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
-    const [isPrepared, setIsPrepared] = useState(false);
-    const [preparedEvent, setPreparedEvent] = useState<any>(null);
     const [isCalendarConnected, setIsCalendarConnected] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showEvents, setShowEvents] = useState(false);
@@ -220,7 +218,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     useEffect(() => {
         let mounted = true;
         console.log("Launcher mounted");
-        // Seed demo data if needed (safe to call always — runs ONCE on mount)
+        // Seed demo meeting on first launch so new users see an example in the launcher
         if (window.electronAPI && window.electronAPI.seedDemo) {
             window.electronAPI.seedDemo().catch(err => console.error("Failed to seed demo:", err));
         }
@@ -344,52 +342,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         };
     }, [isShortcutPressed]);
 
-    // Filter next meeting (within 60 mins)
-    const nextMeeting = upcomingEvents.find(e => {
-        const diff = new Date(e.startTime).getTime() - Date.now();
-        return diff > -5 * 60000 && diff < 60 * 60000; // -5 min to +60 min
-    });
     const upcomingCount = getEventsNext8Hours(upcomingEvents).length;
-
-    const handlePrepare = (event: any) => {
-        setPreparedEvent(event);
-        setIsPrepared(true);
-    };
-
-    const openMeetingLink = async (link?: string) => {
-        if (!link) return;
-        if (window.electronAPI?.openExternal) {
-            await window.electronAPI.openExternal(link);
-            return;
-        }
-
-        window.open(link, '_blank', 'noopener,noreferrer');
-    };
-
-    const handleStartPreparedMeeting = async () => {
-        if (!preparedEvent) return;
-        analytics.trackCommandExecuted('start_prepared_meeting');
-        try {
-            const meetingLink = preparedEvent.link || preparedEvent.meetingLink;
-            if (meetingLink) {
-                await openMeetingLink(meetingLink);
-                setIsPrepared(false);
-                return;
-            }
-            const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
-            const outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
-
-            await window.electronAPI.startMeeting({
-                title: preparedEvent.title,
-                calendarEventId: preparedEvent.id,
-                source: 'calendar',
-                audio: { inputDeviceId, outputDeviceId }
-            });
-            setIsPrepared(false);
-        } catch (e) {
-            console.error("Failed to start prepared meeting", e);
-        }
-    };
 
     if (!window.electronAPI) {
         return <div className="text-white p-10">Error: Electron API not initialized. Check preload script.</div>;
@@ -898,146 +851,45 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
                                     {/* 2. Hero Section Cards */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 h-[228px]">
-                                        {/* PREPARED STATE CARD */}
-                                        {isPrepared && preparedEvent ? (
-                                            <div className={`md:col-span-3 relative group rounded-xl overflow-hidden border border-emerald-500/30 ${isLight ? 'bg-bg-elevated' : 'bg-bg-secondary'} flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900/40 ${isLight ? 'via-bg-elevated to-bg-elevated' : 'via-bg-secondary to-bg-secondary'}`}>
-
-                                                <div className="absolute top-4 right-4 text-emerald-400">
-                                                    <Zap size={16} className="text-yellow-400" />
-                                                </div>
-
-                                                <div className="text-center max-w-lg z-10">
-                                                    <span className="inline-block px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold tracking-wider mb-4 border border-emerald-500/20">
-                                                        READY TO JOIN
-                                                    </span>
-                                                    <h2 className="text-2xl font-bold text-text-primary mb-2">{preparedEvent.title}</h2>
-                                                    <p className="text-xs text-text-secondary mb-6 flex items-center justify-center gap-2">
-                                                        <Calendar size={12} />
-                                                        {new Date(preparedEvent.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - {new Date(preparedEvent.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                                                        {preparedEvent.link && " • Link Ready"}
-                                                    </p>
-
-                                                    <div className="flex items-center gap-3 justify-center">
-                                                        <button
-                                                            onClick={handleStartPreparedMeeting}
-                                                            className="bg-emerald-500 hover:bg-emerald-400 text-white px-8 py-3 rounded-xl text-sm font-semibold transition-all shadow-lg hover:shadow-emerald-500/25 active:scale-95 flex items-center gap-2"
+                                        <div className="md:col-span-2 h-full">
+                                            <div className="relative h-full overflow-hidden">
+                                                <AnimatePresence mode="wait">
+                                                    {showEvents ? (
+                                                        <motion.div
+                                                            key="upcoming-events"
+                                                            initial={{ opacity: 0, transform: "translateY(22px) scale(0.98)", filter: "blur(6px)" }}
+                                                            animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
+                                                            exit={{ opacity: 0, transform: "translateY(12px) scale(0.98)", filter: "blur(6px)" }}
+                                                            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                                                            className="h-full"
                                                         >
-                                                            Start Meeting
-                                                            <ArrowRight size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setIsPrepared(false)}
-                                                            className="px-4 py-3 rounded-xl text-xs font-medium text-text-tertiary hover:text-white transition-colors"
+                                                            <UpcomingEventsPanel
+                                                                events={upcomingEvents}
+                                                                syncing={isSyncingCalendar || isRefreshing}
+                                                                onRefresh={handleRefresh}
+                                                                isLight={isLight}
+                                                            />
+                                                        </motion.div>
+                                                    ) : (
+                                                        <motion.div
+                                                            key="feature-spotlight"
+                                                            initial={{ opacity: 0, transform: "translateY(-12px) scale(0.98)", filter: "blur(6px)" }}
+                                                            animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
+                                                            exit={{ opacity: 0, transform: "translateY(-12px) scale(0.98)", filter: "blur(6px)" }}
+                                                            transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
+                                                            className="h-full"
                                                         >
-                                                            Cancel
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Glows */}
-                                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[300px] bg-emerald-500/10 blur-[100px] pointer-events-none" />
+                                                            <FeatureSpotlight />
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
                                             </div>
-                                        ) : (
-                                            /* Dynamic Next Meeting OR Default Intro */
-                                            nextMeeting ? (
-                                                <div className={`md:col-span-2 relative group rounded-xl overflow-hidden ${isLight ? 'bg-bg-elevated' : 'bg-bg-secondary'} flex flex-col shadow-[0_1px_3px_rgba(0,0,0,0.07),0_1px_2px_rgba(0,0,0,0.04)]`}>
-                                                    {/* Header */}
-                                                    <div className="p-5 flex-1 relative z-10">
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                                            <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Up Next</span>
-                                                            <span className="text-[11px] text-text-tertiary">• Starts in {Math.max(0, Math.ceil((new Date(nextMeeting.startTime).getTime() - Date.now()) / 60000))} min</span>
-                                                            <span
-                                                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isLight ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-white/10 text-white/80 border-white/10'
-                                                                    }`}
-                                                                title="Upcoming meetings in the next 8 hours"
-                                                            >
-                                                                Upcoming: {upcomingCount}
-                                                            </span>
-                                                        </div>
-
-                                                        <h2 className="text-xl font-bold text-text-primary leading-tight mb-1 line-clamp-2">
-                                                            {nextMeeting.title}
-                                                        </h2>
-
-                                                        <div className="flex items-center gap-2 text-text-secondary text-xs mt-2">
-                                                            <Calendar size={12} />
-                                                            <span>{new Date(nextMeeting.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - {new Date(nextMeeting.endTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                                                            {nextMeeting.link && (
-                                                                <>
-                                                                    <span className="opacity-20">|</span>
-                                                                    <LinkIcon size={12} />
-                                                                    <span className="truncate max-w-[150px]">Meeting Link Found</span>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Actions */}
-                                                    <div className="p-4 bg-bg-elevated/50 border-t border-border-subtle flex items-center gap-3">
-                                                        <button
-                                                            onClick={() => handlePrepare(nextMeeting)}
-                                                            className={`flex-1 border px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${isLight ? 'bg-bg-item-surface hover:bg-bg-item-active border-border-muted text-text-primary' : 'bg-white/10 hover:bg-white/20 border-white/10 text-white'}`}
-                                                        >
-                                                            <Zap size={13} className="text-yellow-400" />
-                                                            Prepare
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                onStartMeeting();
-                                                            }}
-                                                            className={`px-4 py-2 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary transition-all ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/5'}`}
-                                                        >
-                                                            Start now
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Background Decoration */}
-                                                    <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-emerald-500/10 blur-[60px] pointer-events-none" />
-                                                </div>
-                                            ) : (
-                                                <div className="md:col-span-2 h-full">
-                                                    <div className="relative h-full overflow-hidden">
-                                                        <AnimatePresence mode="wait">
-                                                            {showEvents ? (
-                                                                <motion.div
-                                                                    key="upcoming-events"
-                                                                    initial={{ opacity: 0, transform: "translateY(22px) scale(0.98)", filter: "blur(6px)" }}
-                                                                    animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
-                                                                    exit={{ opacity: 0, transform: "translateY(12px) scale(0.98)", filter: "blur(6px)" }}
-                                                                    transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-                                                                    className="h-full"
-                                                                >
-                                                                    <UpcomingEventsPanel
-                                                                        events={upcomingEvents}
-                                                                        syncing={isSyncingCalendar || isRefreshing}
-                                                                        onRefresh={handleRefresh}
-                                                                        isLight={isLight}
-                                                                    />
-                                                                </motion.div>
-                                                            ) : (
-                                                                <motion.div
-                                                                    key="feature-spotlight"
-                                                                    initial={{ opacity: 0, transform: "translateY(-12px) scale(0.98)", filter: "blur(6px)" }}
-                                                                    animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
-                                                                    exit={{ opacity: 0, transform: "translateY(-12px) scale(0.98)", filter: "blur(6px)" }}
-                                                                    transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
-                                                                    className="h-full"
-                                                                >
-                                                                    <FeatureSpotlight />
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
-                                                    </div>
-                                                </div>
-                                            )
-                                        )}
+                                        </div>
 
 
 
                                         {/* Right Secondary Card */}
-                                        {!isPrepared && (
-                                            <div className="md:col-span-1 rounded-xl overflow-hidden bg-bg-elevated relative group flex flex-col items-center pt-6 text-center">
+                                        <div className="md:col-span-1 rounded-xl overflow-hidden bg-bg-elevated relative group flex flex-col items-center pt-6 text-center">
                                                 {/* Backdrop Image */}
                                                 <div className="absolute inset-0">
                                                     <img src={calender} alt="" className="w-full h-full object-cover opacity-100 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] translate-x--1 translate-y-[1px] scale-105 group-hover:scale-[1.07]" />
@@ -1068,7 +920,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                     />
                                                 </div>
                                             </div>
-                                        )}
                                     </div>
                                 </div>
                             </section>

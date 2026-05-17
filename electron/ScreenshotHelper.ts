@@ -2,11 +2,12 @@
 
 import path from "node:path"
 import fs from "node:fs"
-import { app, desktopCapturer, screen, systemPreferences } from "electron"
+import { app, desktopCapturer, screen } from "electron"
 import { v4 as uuidv4 } from "uuid"
 import util from "util"
 import sharp from "sharp"
 import { exec as execShell } from "child_process"
+import { PermissionManager } from "./services/PermissionManager"
 
 // Module-level: promisified shell exec created once per process lifetime.
 // Uses the shell-capable exec variant (not execFile) because Linux screenshot
@@ -30,24 +31,20 @@ const shellExecAsync = util.promisify(execShell);
  */
 function assertScreenRecordingPermission(): void {
   if (process.platform !== 'darwin') return;
-  // In development mode, bypass the permission check so screenshots work without
-  // needing the app to be in the TCC whitelist (same policy as the startup check in main.ts).
-  if (!app.isPackaged) return;
-  const status = systemPreferences.getMediaAccessStatus('screen');
-  switch (status) {
+  const status = PermissionManager.getInstance().getStatusSync();
+  switch (status.screenRecording) {
     case 'granted':
       return;
+    case 'restart_required':
+      throw new Error(
+        'Screen Recording was granted, but TeamSync must restart before screen capture is safe to use.'
+      );
     case 'denied':
       throw new Error(
         'Screen Recording permission is denied. Enable it in System Settings > ' +
         'Privacy & Security > Screen Recording, then restart Natively.'
       );
-    case 'restricted':
-      throw new Error(
-        'Screen Recording is restricted by a device policy (MDM or parental controls). ' +
-        'Contact your administrator to allow screen capture.'
-      );
-    case 'not-determined':
+    case 'not_requested':
       // The one-time TCC prompt should have fired at app startup (initializeApp).
       // If we land here it means the prompt was cancelled/failed — a second
       // getSources() call without a focused window will create a worse UX (dialog
@@ -55,6 +52,10 @@ function assertScreenRecordingPermission(): void {
       throw new Error(
         'Screen Recording permission has not been granted yet. ' +
         'Please restart Natively — you will be prompted to grant access on next launch.'
+      );
+    case 'unsupported':
+      throw new Error(
+        'Screen Recording is unavailable on this platform configuration.'
       );
   }
 }

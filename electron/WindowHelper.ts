@@ -273,9 +273,10 @@ export class WindowHelper {
     })
 
     // --- 3. Startup Sequence ---
+    // The launcher stays hidden until the renderer classifies permissions and
+    // explicitly asks main to show the first appropriate surface.
     this.launcherWindow.once('ready-to-show', () => {
-      this.switchToLauncher()
-      this.isWindowVisible = true
+      console.log('[WindowHelper] Launcher ready-to-show; waiting for renderer startup gate');
     })
 
     this.setupWindowListeners()

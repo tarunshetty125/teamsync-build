@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, systemPreferences, screen, desktopCapturer } from "electron"
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, screen } from "electron"
 import path from "path"
 import fs from "fs"
 import { autoUpdater } from "electron-updater"
@@ -70,18 +70,9 @@ async function ensureMacMicrophoneAccess(context: string): Promise<boolean> {
   if (process.platform !== 'darwin') return true;
 
   try {
-    const currentStatus = systemPreferences.getMediaAccessStatus('microphone');
-    console.log(`[Main] macOS microphone permission before ${context}: ${currentStatus}`);
-
-    if (currentStatus === 'granted') {
-      return true;
-    }
-
-    const granted = await systemPreferences.askForMediaAccess('microphone');
-    console.log(
-      `[Main] macOS microphone permission request during ${context}: ${granted ? 'granted' : 'denied'}`
-    );
-    return granted;
+    const status = PermissionManager.getInstance().getStatusSync();
+    console.log(`[Main] macOS microphone permission before ${context}: ${status.microphone}`);
+    return status.microphone === 'granted';
   } catch (error) {
     console.error(`[Main] Failed to check macOS microphone permission during ${context}:`, error);
     return false;
@@ -525,6 +516,22 @@ export class AppState {
       if (!win.isDestroyed()) {
         win.webContents.send(channel, ...args);
       }
+    });
+  }
+
+  public async showPermissionRemediation(message?: string): Promise<void> {
+    const permissionStatus = await PermissionManager.getInstance().getStatus();
+    if (isPermissionStatusOperational(permissionStatus)) {
+      return;
+    }
+
+    this.centerAndShowWindow();
+    this.broadcast('permissions:remediation-required', {
+      message:
+        message ??
+        (permissionStatus.restartRequired
+          ? 'Please restart TeamSync to finish enabling screen access before starting a meeting.'
+          : `TeamSync needs ${formatBlockingPermissions(permissionStatus)} access before it can continue.`),
     });
   }
 
@@ -3249,8 +3256,8 @@ async function initializeApp() {
 
   console.log("App is ready")
 
-  appState.createWindow()
   PermissionManager.getInstance().startMonitoring()
+  appState.createWindow()
 
   // Apply initial stealth state based on isUndetectable setting.
   // NOTE: app.dock.hide() was already called pre-emptively before createWindow()
@@ -3274,12 +3281,21 @@ async function initializeApp() {
 
     calMgr.on('start-meeting-requested', (event: any) => {
       console.log('[Main] Start meeting requested from calendar notification', event);
-      appState.centerAndShowWindow();
-      appState.startMeeting({
-        title: event.title,
-        calendarEventId: event.id,
-        source: 'calendar'
-      });
+      void (async () => {
+        try {
+          appState.centerAndShowWindow();
+          await appState.startMeeting({
+            title: event.title,
+            calendarEventId: event.id,
+            source: 'calendar'
+          });
+        } catch (error) {
+          console.error('[Main] Calendar-triggered meeting start failed:', error);
+          await appState.showPermissionRemediation(
+            error instanceof Error ? error.message : 'TeamSync needs additional permissions before it can start a meeting.'
+          );
+        }
+      })();
     });
 
     calMgr.on('open-requested', () => {
