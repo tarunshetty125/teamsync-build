@@ -397,7 +397,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     // Trial users get the same profile access as premium users for the duration of the trial
     const hasProfileAccess = isPremium || isTrialActive;
     const hasResumeAndJd = profileStatus.hasProfile && Boolean(profileData?.hasActiveJD);
-    const canEnableProfileIntelligence = hasProfileAccess && hasResumeAndJd;
+    const canEnableProfileIntelligence = hasProfileAccess && profileStatus.hasProfile;
     const [jdUploading, setJdUploading] = useState(false);
     const [jdError, setJdError] = useState('');
     const [companyResearching, setCompanyResearching] = useState(false);
@@ -588,13 +588,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     }, [profileData?.hasActiveJD]);
 
     useEffect(() => {
-        if (!profileStatus.profileMode || hasResumeAndJd) return;
+        if (!profileStatus.profileMode || profileStatus.hasProfile) return;
 
         setProfileStatus((prev) => ({ ...prev, profileMode: false }));
         window.electronAPI?.profileSetMode?.(false).catch((error) => {
             console.error('Failed to auto-disable profile intelligence:', error);
         });
-    }, [hasResumeAndJd, profileStatus.profileMode]);
+    }, [profileStatus.hasProfile, profileStatus.profileMode]);
 
     useEffect(() => {
         const openPremiumUpgrade = () => setIsPremiumModalOpen(true);
@@ -2237,7 +2237,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                         {/* Profile Intelligence Toggle */}
                                                         <div
                                                             className={`flex items-center gap-2 bg-bg-input px-3 py-1.5 rounded-full border border-border-subtle ${!canEnableProfileIntelligence ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                                            title={!hasProfileAccess ? 'Requires Pro license' : !hasResumeAndJd ? 'Upload both a resume and a job description to enable Profile Intelligence' : ''}
+                                                            title={!hasProfileAccess ? 'Requires Pro license' : !profileStatus.hasProfile ? 'Upload a resume to enable Profile Intelligence' : ''}
                                                         >
                                                             <span className="text-xs font-medium text-text-secondary">Profile Intelligence</span>
                                                             <div
