@@ -681,20 +681,8 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 <RefreshCw size={18} />
                                             </button>
 
-                                            <AnimatePresence initial={false}>
-                                                {isSyncingCalendar && (
-                                                    <motion.div
-                                                        key="calendar-syncing-pill"
-                                                        initial={{ opacity: 0, transform: "translateY(6px) scale(0.98)", filter: "blur(4px)" }}
-                                                        animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
-                                                        exit={{ opacity: 0, transform: "translateY(-6px) scale(0.98)", filter: "blur(4px)" }}
-                                                        transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                                                        className="text-[11px] px-2.5 py-1 rounded-full border border-blue-400/30 bg-blue-500/10 text-blue-300"
-                                                    >
-                                                        🔄 Syncing calendar...
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
+
+
 
                                             {/* Detectable Toggle Pill */}
                                             <div className={`flex items-center gap-3 border rounded-full px-3 py-1.5 min-w-[140px] transition-colors ${isLight ? 'bg-bg-elevated border-border-muted shadow-sm' : 'bg-[#101011] border-border-muted'}`}>
@@ -890,36 +878,36 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
                                         {/* Right Secondary Card */}
                                         <div className="md:col-span-1 rounded-xl overflow-hidden bg-bg-elevated relative group flex flex-col items-center pt-6 text-center">
-                                                {/* Backdrop Image */}
-                                                <div className="absolute inset-0">
-                                                    <img src={calender} alt="" className="w-full h-full object-cover opacity-100 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] translate-x--1 translate-y-[1px] scale-105 group-hover:scale-[1.07]" />
-                                                    <div className={`absolute inset-0 ${isLight ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.02))]' : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.24),rgba(2,6,23,0.08))]'}`} />
-                                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(129,140,248,0.28),transparent_34%),radial-gradient(circle_at_50%_70%,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.12),transparent_36%)] opacity-95" />
-                                                    <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16),rgba(255,255,255,0))] opacity-40" />
-                                                </div>
-
-                                                {/* Content Layer */}
-                                                <div className="relative z-10 w-full flex flex-col items-center h-full">
-                                                    <h3 className="text-[19px] leading-tight mb-4 tracking-[-0.02em]">
-                                                        {isCalendarConnected ? (
-                                                            <>
-                                                                <span className="block font-semibold text-white">Calendar linked</span>
-                                                                <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">Events synced</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <span className="block font-semibold text-white">Link your calendar to</span>
-                                                                <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">see upcoming events</span>
-                                                            </>
-                                                        )}
-                                                    </h3>
-
-                                                    <ConnectCalendarButton
-                                                        className="-translate-x-0.5"
-                                                        onConnect={() => setIsCalendarConnected(true)}
-                                                    />
-                                                </div>
+                                            {/* Backdrop Image */}
+                                            <div className="absolute inset-0">
+                                                <img src={calender} alt="" className="w-full h-full object-cover opacity-100 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] translate-x--1 translate-y-[1px] scale-105 group-hover:scale-[1.07]" />
+                                                <div className={`absolute inset-0 ${isLight ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.02))]' : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.24),rgba(2,6,23,0.08))]'}`} />
+                                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(129,140,248,0.28),transparent_34%),radial-gradient(circle_at_50%_70%,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.12),transparent_36%)] opacity-95" />
+                                                <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16),rgba(255,255,255,0))] opacity-40" />
                                             </div>
+
+                                            {/* Content Layer */}
+                                            <div className="relative z-10 w-full flex flex-col items-center h-full">
+                                                <h3 className="text-[19px] leading-tight mb-4 tracking-[-0.02em]">
+                                                    {isCalendarConnected ? (
+                                                        <>
+                                                            <span className="block font-semibold text-white">Calendar linked</span>
+                                                            <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">Events synced</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span className="block font-semibold text-white">Link your calendar to</span>
+                                                            <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">see upcoming events</span>
+                                                        </>
+                                                    )}
+                                                </h3>
+
+                                                <ConnectCalendarButton
+                                                    className="-translate-x-0.5"
+                                                    onConnect={() => setIsCalendarConnected(true)}
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </section>

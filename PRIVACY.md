@@ -65,4 +65,4 @@ This project is open-source. The full source code is available for inspection on
 ## Contact
 
 If you have any questions or concerns about this privacy policy, please contact us at:
-**natively.contact@gmail.com**
+**teamsync.contact@gmail.com**

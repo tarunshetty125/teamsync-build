@@ -1,11 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { Loader2, RefreshCw } from "lucide-react";
-import { Clock3, ExternalLink, Video } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { getEventsNext8Hours, GoogleCalendarEventLike } from "../utils/filter";
-import { formatTimeRange, getEventDuration, getTimeLeft } from "../utils/time";
-
-type EventChangeType = "new" | "updated" | null;
+import { formatTimeRange, getEventDuration } from "../utils/time";
 
 interface UpcomingEventsPanelProps {
   events: GoogleCalendarEventLike[];
@@ -14,190 +10,368 @@ interface UpcomingEventsPanelProps {
   isLight?: boolean;
 }
 
-const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({
-  events,
-  syncing = false,
-  onRefresh,
-  isLight = false,
-}) => {
-  const [isPolling, setIsPolling] = useState(false);
-  const [changeMap, setChangeMap] = useState<Record<string, EventChangeType>>(
-    {},
+const PLATFORM_LABEL: Record<string, string> = { meet:"MEET", zoom:"ZOOM", teams:"TEAMS", other:"CALL" };
+
+function countdown(startTime: string, endTime: string) {
+  const now = Date.now();
+  const start = new Date(startTime).getTime();
+  const end = new Date(endTime).getTime();
+  if (now >= start && now <= end) return { h:0, m:0, isLive:true };
+  const diff = Math.max(0, start - now);
+  const totalMin = Math.floor(diff / 60_000);
+  return { h: Math.floor(totalMin / 60), m: totalMin % 60, isLive: false };
+}
+
+function progressRatio(startTime: string): number {
+  const windowMs = 8 * 60 * 60 * 1000;
+  const remaining = new Date(startTime).getTime() - Date.now();
+  return Math.min(1, Math.max(0, 1 - remaining / windowMs));
+}
+
+function RingIcon({ platform, progress }: { platform: string; progress: number }) {
+  const R = 36, circ = 2 * Math.PI * R;
+  const filled = circ * Math.min(progress + 0.12, 0.88);
+  const now = new Date();
+  const SYS = `-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif`;
+  return (
+    <svg width="88" height="88" viewBox="0 0 88 88">
+      <circle cx="44" cy="44" r={R} fill="rgba(34,197,94,0.07)" stroke="rgba(34,197,94,0.14)" strokeWidth="5"/>
+      <circle cx="44" cy="44" r={R} fill="none" stroke="#22c55e" strokeWidth="5" strokeLinecap="round"
+        strokeDasharray={`${filled} ${circ-filled}`} transform="rotate(-90 44 44)"
+        style={{filter:"drop-shadow(0 0 5px rgba(34,199,89,0.55))"}}/>
+      <text x="44" y="34" textAnchor="middle" fontSize="9" fontWeight="700" letterSpacing="1" fill="#f97316" fontFamily={SYS}>
+        {now.toLocaleString("en-US",{month:"short"}).toUpperCase()}
+      </text>
+      <text x="44" y="51" textAnchor="middle" fontSize="20" fontWeight="700" fill="#ffffff" fontFamily={SYS}>
+        {now.getDate()}
+      </text>
+      <text x="44" y="62" textAnchor="middle" fontSize="8" fontWeight="600" letterSpacing="0.8" fill="rgba(255,255,255,0.4)" fontFamily={SYS}>
+        {now.toLocaleString("en-US",{weekday:"short"}).toUpperCase()}
+      </text>
+    </svg>
   );
-  const previousSnapshotRef = useRef<Map<string, string>>(new Map());
+}
+
+const G = "#22c55e";
+const OUTER_BG = "#0d1117";
+const INNER_BG = "#0f1b13";
+const BORDER = "rgba(34,197,94,0.14)";
+const DIM = "rgba(255,255,255,0.45)";
+const SYS = `-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif`;
+
+const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, syncing=false, onRefresh }) => {
+  const [, tick] = useState(0);
+  const [showReminder, setShowReminder] = useState(false);
+  const [reminderSet, setReminderSet] = useState<number|null>(null);
+  const [copied, setCopied] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  // default pos so popover always mounts even if ref hasn't fired getBoundingClientRect yet
+  const [reminderPos, setReminderPos] = useState<{x:number;y:number}>({x:16, y:180});
+  const reminderBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => { const id = setInterval(()=>tick(t=>t+1),30_000); return ()=>clearInterval(id); }, []);
+  useEffect(() => { if(!onRefresh)return; const id=setInterval(()=>void onRefresh(),60_000); return ()=>clearInterval(id); },[onRefresh]);
+  useEffect(() => {
+    if (!showReminder) return;
+    const handler = () => setShowReminder(false);
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
+  }, [showReminder]);
 
   const filtered = useMemo(() => getEventsNext8Hours(events), [events]);
-  const nextUp = filtered[0] || null;
-  const upcomingCount = filtered.length;
-  const now = Date.now();
+  const nextUp = filtered[0] ?? null;
 
-  const handleOpenMeetingLink = async (link: string) => {
-    if (window.electronAPI?.openExternal) {
-      await window.electronAPI.openExternal(link);
-      return;
+  const openLink = (link: string) =>
+    window.electronAPI?.openExternal ? window.electronAPI.openExternal(link) : window.open(link,"_blank","noopener,noreferrer");
+
+  const scheduleReminder = (ev: typeof nextUp, min: number) => {
+    if (!ev) return;
+    const fire = () => {
+      try {
+        new Notification(`Upcoming: ${ev.summary}`, { body: `Starts in ${min} min` });
+      } catch (_) {}
+    };
+    const delay = new Date(ev.startTime).getTime() - min * 60_000 - Date.now();
+    if (delay > 0) {
+      if (Notification.permission === "granted") {
+        setTimeout(fire, delay);
+      } else {
+        Notification.requestPermission().then(p => { if (p === "granted") setTimeout(fire, delay); });
+      }
     }
-
-    window.open(link, "_blank", "noopener,noreferrer");
+    setReminderSet(min);
+    setShowReminder(false);
   };
 
-  useEffect(() => {
-    const nextSnapshot = new Map<string, string>();
-    const nextChanges: Record<string, EventChangeType> = {};
+  // Always open the popover immediately — don't gate on permission
+  const handleSetReminder = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (reminderBtnRef.current) {
+      const r = reminderBtnRef.current.getBoundingClientRect();
+      setReminderPos({ x: r.left, y: r.bottom + 8 });
+    }
+    setShowReminder(prev => !prev);
+  };
 
-    filtered.forEach((event) => {
-      const signature = JSON.stringify({
-        summary: event.summary,
-        description: event.description || "",
-        start: event.startTime,
-        end: event.endTime,
-        link: event.meetingLink || "",
-      });
-      nextSnapshot.set(event.id, signature);
-      const prev = previousSnapshotRef.current.get(event.id);
-      if (!prev) nextChanges[event.id] = "new";
-      else if (prev !== signature) nextChanges[event.id] = "updated";
-      else nextChanges[event.id] = null;
-    });
-
-    previousSnapshotRef.current = nextSnapshot;
-    setChangeMap(nextChanges);
-  }, [filtered]);
-
-  useEffect(() => {
-    if (!onRefresh) return;
-    const interval = setInterval(async () => {
-      setIsPolling(true);
-      try {
-        await onRefresh();
-      } finally {
-        setIsPolling(false);
-      }
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [onRefresh]);
+  const handleCopy = async (link: string) => {
+    await navigator.clipboard.writeText(link);
+    setCopied(true); setTimeout(()=>setCopied(false), 1800);
+  };
 
   return (
-    <motion.div
-      initial={{
-        opacity: 0,
-        transform: "translateY(20px) scale(0.98)",
-        filter: "blur(6px)",
-      }}
-      animate={{
-        opacity: 1,
-        transform: "translateY(0px) scale(1)",
-        filter: "blur(0px)",
-      }}
-      transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
-      className="h-auto w-full"
-    >
-      <div className={`relative w-full flex flex-col items-stretch overflow-hidden rounded-[28px] border ${isLight ? "border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.82))] shadow-[0_24px_80px_rgba(15,23,42,0.12)] ring-1 ring-white/50" : "border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.74),rgba(2,6,23,0.56))] shadow-[0_24px_84px_rgba(0,0,0,0.46)] ring-1 ring-white/5"}`}>
-        <motion.div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          animate={{ opacity: [0.45, 0.82, 0.55], scale: [1, 1.02, 1] }}
-          transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
-          style={{
-            background: isLight
-              ? "radial-gradient(circle at 14% 0%, rgba(34,197,94,0.18), transparent 26%), radial-gradient(circle at 84% 18%, rgba(99,102,241,0.10), transparent 24%), radial-gradient(circle at 50% 100%, rgba(14,165,233,0.08), transparent 34%), linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0))"
-              : "radial-gradient(circle at 14% 0%, rgba(34,197,94,0.16), transparent 26%), radial-gradient(circle at 84% 18%, rgba(168,85,247,0.12), transparent 24%), radial-gradient(circle at 50% 100%, rgba(16,185,129,0.12), transparent 34%), linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0))",
-          }}
-        />
-        <div className={`relative px-4 pt-4 pb-3 shrink-0 border-b ${isLight ? "border-slate-200/80 bg-white/30" : "border-white/10 bg-white/[0.02]"}`}>
-          <div className="flex items-center justify-between">
-            <h3 className={`text-xs font-semibold tracking-[0.02em] ${isLight ? "text-slate-900" : "text-white"}`}>
-              Next Up
-            </h3>
-            <div className="flex items-center gap-2">
-              <span
-                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border backdrop-blur-md ${isLight ? "bg-white/80 text-slate-600 border-slate-200 shadow-[0_2px_12px_rgba(15,23,42,0.06)]" : "bg-white/10 text-white/80 border-white/10"}`}
-                title="Upcoming meetings in the next 8 hours"
-              >
-                Upcoming meetings: {upcomingCount}
-              </span>
-              {(syncing || isPolling) && <Loader2 size={14} className="animate-spin text-blue-300" />}
-              <button
-                onClick={() => onRefresh?.()}
-                className={`p-1.5 rounded-md transition-all duration-300 ${isLight ? "bg-white/80 hover:bg-white text-slate-700 hover:shadow-[0_2px_10px_rgba(15,23,42,0.08)]" : "bg-white/10 hover:bg-white/20 text-white/90"}`}
-                title="Refresh events"
-              >
-                <RefreshCw size={13} />
-              </button>
-            </div>
-          </div>
-        </div>
+    <div className="h-full w-full flex flex-col overflow-hidden"
+      style={{ background:OUTER_BG, borderRadius:16, border:`1px solid ${BORDER}`, fontFamily:SYS }}>
 
-        <div className="relative w-full p-4">
-          {nextUp ? (
-            <div className={`relative w-full rounded-[22px] p-5 overflow-hidden ${isLight ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.86))] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]" : "bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.035))] shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]"}`}>
-              <motion.div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0"
-                animate={{ opacity: [0.45, 0.7, 0.5], x: [0, 8, 0] }}
-                transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-                style={{
-                  background: isLight
-                    ? "radial-gradient(circle at 18% 18%, rgba(34,197,94,0.14), transparent 30%), radial-gradient(circle at 84% 28%, rgba(129,140,248,0.10), transparent 26%), linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0))"
-                    : "radial-gradient(circle at 18% 18%, rgba(34,197,94,0.14), transparent 30%), radial-gradient(circle at 84% 28%, rgba(168,85,247,0.10), transparent 26%), linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0))",
-                }}
-              />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-500/12 via-transparent to-violet-500/10 opacity-80" />
-              <div className="relative flex w-full items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                    {nextUp.isInterview && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${isLight ? "bg-yellow-500/14 text-yellow-700" : "bg-yellow-500/20 text-yellow-300"}`}>🎯 Interview</span>
-                    )}
-                    {now >= new Date(nextUp.startTime).getTime() && now <= new Date(nextUp.endTime).getTime() && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${isLight ? "bg-emerald-500/16 text-emerald-800" : "bg-emerald-500/20 text-emerald-300"}`}>LIVE NOW</span>
-                    )}
-                    {changeMap[nextUp.id] && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${changeMap[nextUp.id] === "new" ? (isLight ? "bg-indigo-500/14 text-indigo-700" : "bg-indigo-500/20 text-indigo-300") : (isLight ? "bg-amber-500/14 text-amber-700" : "bg-amber-500/20 text-amber-300")}`}>
-                        {changeMap[nextUp.id] === "new" ? "New" : "Updated"}
-                      </span>
-                    )}
-                  </div>
-
-                  <h4 className={`text-sm font-semibold truncate tracking-[-0.02em] ${isLight ? "text-slate-900" : "text-white"}`}>{nextUp.summary}</h4>
-                  {nextUp.description && (
-                    <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${isLight ? "text-slate-600" : "text-white/65"}`}>{nextUp.description}</p>
-                  )}
-                </div>
-
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border shrink-0 backdrop-blur-md ${isLight ? "bg-white/82 text-slate-700 border-slate-200/90 shadow-[0_2px_10px_rgba(15,23,42,0.05)]" : "bg-white/10 text-white/80 border-white/20 shadow-[0_2px_16px_rgba(0,0,0,0.18)]"}`}>
-                  {nextUp.platform === "meet" ? "Meet" : nextUp.platform === "zoom" ? "Zoom" : nextUp.platform === "teams" ? "Teams" : "Call"}
-                </span>
-              </div>
-
-              <div className={`mt-3 flex w-full flex-wrap items-center gap-3 text-[11px] ${isLight ? "text-slate-700" : "text-white/72"}`}>
-                <span className="inline-flex items-center gap-1.5">
-                  <Clock3 size={12} />
-                  {formatTimeRange(nextUp.startTime, nextUp.endTime)}
-                </span>
-                <span className={`px-2 py-0.5 rounded-full border backdrop-blur-md ${isLight ? "bg-white/82 border-slate-200/80 shadow-[0_2px_8px_rgba(15,23,42,0.05)]" : "bg-white/5 border-white/10"}`}>{getEventDuration(nextUp.startTime, nextUp.endTime)}</span>
-                <span className={now >= new Date(nextUp.startTime).getTime() && now <= new Date(nextUp.endTime).getTime() ? (isLight ? "text-emerald-700" : "text-emerald-300") : (isLight ? "text-slate-600" : "text-white/70")}>{getTimeLeft(nextUp.startTime)}</span>
-              </div>
-
-              {nextUp.meetingLink && (
-                <button
-                  type="button"
-                  onClick={() => void handleOpenMeetingLink(nextUp.meetingLink!)}
-                  className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] backdrop-blur-md transition-all duration-300 ${isLight ? "bg-white/82 border-emerald-200/70 text-emerald-700 hover:bg-white hover:border-emerald-300 shadow-[0_2px_12px_rgba(15,23,42,0.06)]" : "bg-emerald-500/10 border-emerald-400/20 text-emerald-300 hover:bg-emerald-500/15 hover:border-emerald-300/25"}`}
-                >
-                  <Video size={12} />
-                  Join link
-                  <ExternalLink size={11} />
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className={`w-full rounded-xl px-4 py-8 text-center text-sm ${isLight ? "border border-slate-200/80 bg-white/75 text-slate-500" : "border border-white/20 bg-white/10 text-white/80"}`}>
-              No upcoming events in the next 8 hours.
-            </div>
+      {/* HEADER */}
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
+        <div className="flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+            <rect x="1" y="3.5" width="16" height="13" rx="2.5" stroke={G} strokeWidth="1.4"/>
+            <path d="M1 7.5h16" stroke={G} strokeWidth="1.4"/>
+            <rect x="5" y="1" width="1.4" height="4" rx="0.7" fill={G}/>
+            <rect x="11.6" y="1" width="1.4" height="4" rx="0.7" fill={G}/>
+          </svg>
+          <span style={{fontSize:14,fontWeight:700,color:"#fff",letterSpacing:"-0.02em"}}>Upcoming</span>
+          {filtered.length > 0 && (
+            <span style={{fontSize:11,fontWeight:700,color:DIM,background:"rgba(255,255,255,0.10)",borderRadius:999,padding:"1px 8px"}}>
+              {filtered.length}
+            </span>
           )}
         </div>
+        <motion.button whileTap={{scale:0.85,rotate:180}} transition={{duration:0.35}}
+          onClick={()=>void onRefresh?.()} style={{background:"none",border:"none",cursor:"pointer",padding:4,color:DIM}}>
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M16 9A7 7 0 1 1 9 2c2.3 0 4.3 1.1 5.6 2.7"/><path d="M14 2.5l1.6 2.2-2.3 1.3"/>
+          </svg>
+        </motion.button>
       </div>
-    </motion.div>
+
+      {/* BODY */}
+      <div className="flex-1 px-3 pb-3 flex flex-col gap-2 min-h-0 overflow-hidden">
+        <AnimatePresence mode="wait">
+          {nextUp ? (
+            <motion.div key={nextUp.id}
+              initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}
+              transition={{duration:0.28,ease:[0.32,0.72,0,1]}}
+              className="flex-1 flex flex-col min-h-0 relative"
+              style={{background:INNER_BG,borderRadius:12,border:`1px solid ${BORDER}`}}>
+
+              {/* THREE-COLUMN ROW */}
+              <div className="flex items-stretch flex-1 min-h-0 px-3 py-3 gap-3">
+                {/* LEFT */}
+                <div className="flex flex-col items-center gap-2 shrink-0">
+                  <RingIcon platform={nextUp.platform} progress={progressRatio(nextUp.startTime)}/>
+                  {(() => {
+                    const {isLive} = countdown(nextUp.startTime,nextUp.endTime);
+                    return <span style={{fontSize:10,fontWeight:700,color:G,background:"rgba(34,197,94,0.14)",border:`1px solid rgba(34,197,94,0.28)`,borderRadius:999,padding:"3px 10px"}}>{isLive?"Live":"Upcoming"}</span>;
+                  })()}
+                </div>
+
+                {/* CENTER */}
+                <div className="flex-1 min-w-0 flex flex-col gap-1.5 justify-center">
+                  <div className="flex items-center gap-2">
+                    <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.08em",color:G,background:"rgba(34,197,94,0.16)",border:`1px solid rgba(34,197,94,0.3)`,borderRadius:6,padding:"2px 8px"}}>
+                      {PLATFORM_LABEL[nextUp.platform]??"CALL"}
+                    </span>
+                    <span style={{fontSize:11,color:DIM,fontWeight:500}}>
+                      {countdown(nextUp.startTime,nextUp.endTime).isLive ? "Live now" : "Next up"}
+                    </span>
+                    {nextUp.isInterview && (
+                      <span style={{fontSize:9,fontWeight:700,color:"#f97316",background:"rgba(249,115,22,0.14)",border:"1px solid rgba(249,115,22,0.28)",borderRadius:6,padding:"2px 7px"}}>Interview</span>
+                    )}
+                  </div>
+                  <p style={{fontSize:17,fontWeight:700,color:"#fff",letterSpacing:"-0.025em",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nextUp.summary}</p>
+                  <div className="flex items-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <rect x="1" y="3" width="14" height="11" rx="2" stroke={DIM} strokeWidth="1.2"/>
+                      <path d="M1 6h14" stroke={DIM} strokeWidth="1.2"/>
+                      <rect x="4.5" y="1" width="1.2" height="3" rx="0.6" fill={DIM}/>
+                      <rect x="10.3" y="1" width="1.2" height="3" rx="0.6" fill={DIM}/>
+                    </svg>
+                    <span style={{fontSize:11,color:DIM,fontWeight:500,fontVariantNumeric:"tabular-nums"}}>{formatTimeRange(nextUp.startTime,nextUp.endTime)}</span>
+                  </div>
+                </div>
+
+                {/* DIVIDER */}
+                <div style={{width:1,background:"rgba(255,255,255,0.07)",flexShrink:0}}/>
+
+                {/* RIGHT */}
+                <div className="flex flex-col gap-1.5 shrink-0 items-start justify-center" style={{minWidth:84}}>
+                  {(() => {
+                    const {h,m,isLive} = countdown(nextUp.startTime,nextUp.endTime);
+                    const pr = progressRatio(nextUp.startTime);
+                    return (
+                      <>
+                        <span style={{fontSize:10,color:DIM,fontWeight:500}}>{isLive?"Now":"Starts in"}</span>
+                        <span style={{fontSize:22,fontWeight:700,color:G,letterSpacing:"-0.03em",fontVariantNumeric:"tabular-nums",lineHeight:1,textShadow:"0 0 14px rgba(34,197,94,0.45)"}}>
+                          {isLive?"LIVE":h>0?`${h}h ${m}m`:`${m}m`}
+                        </span>
+                        <div style={{width:80,height:5,borderRadius:99,background:"rgba(34,197,94,0.14)",overflow:"hidden"}}>
+                          <motion.div initial={{width:0}} animate={{width:`${Math.round(pr*100)}%`}}
+                            transition={{duration:1,ease:[0.32,0.72,0,1]}}
+                            style={{height:"100%",borderRadius:99,background:`linear-gradient(90deg,${G},#4ade80)`,boxShadow:"0 0 6px rgba(34,197,94,0.6)"}}/>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* DETAILS OVERLAY — slides up inside the card */}
+              <AnimatePresence>
+                {showDetails && (
+                  <motion.div
+                    initial={{y:"100%",opacity:0}} animate={{y:0,opacity:1}} exit={{y:"100%",opacity:0}}
+                    transition={{type:"spring",stiffness:380,damping:30}}
+                    style={{position:"absolute",inset:0,background:"#0a1510",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto",zIndex:10}}>
+                    {/* overlay header */}
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
+                      <span style={{fontSize:12,fontWeight:700,color:"#fff",letterSpacing:"-0.02em"}}>Event Details</span>
+                      <motion.button whileTap={{scale:0.9}} onClick={()=>setShowDetails(false)}
+                        style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:999,width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:DIM,fontSize:11}}>✕</motion.button>
+                    </div>
+
+                    {/* Title */}
+                    <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                      <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase"}}>Title</span>
+                      <span style={{fontSize:13,fontWeight:600,color:"#fff",lineHeight:1.3}}>{nextUp.summary}</span>
+                    </div>
+
+                    {/* Row: platform + duration + interview */}
+                    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                      <span style={{fontSize:9,fontWeight:800,letterSpacing:"0.07em",color:G,background:"rgba(34,197,94,0.14)",border:`1px solid rgba(34,197,94,0.28)`,borderRadius:6,padding:"2px 8px"}}>
+                        {PLATFORM_LABEL[nextUp.platform]??"CALL"}
+                      </span>
+                      <span style={{fontSize:10,color:DIM,fontWeight:500}}>· {getEventDuration(nextUp.startTime,nextUp.endTime)}</span>
+                      {nextUp.isInterview && (
+                        <span style={{fontSize:9,fontWeight:700,color:"#f97316",background:"rgba(249,115,22,0.14)",border:"1px solid rgba(249,115,22,0.3)",borderRadius:6,padding:"2px 7px"}}>Interview</span>
+                      )}
+                    </div>
+
+                    {/* Time */}
+                    <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                      <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase"}}>Time</span>
+                      <span style={{fontSize:11,color:DIM,fontVariantNumeric:"tabular-nums"}}>{formatTimeRange(nextUp.startTime,nextUp.endTime)}</span>
+                    </div>
+
+                    {/* Description */}
+                    {nextUp.description && (
+                      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                        <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase"}}>Description</span>
+                        <p style={{fontSize:11,color:"rgba(255,255,255,0.6)",lineHeight:1.5,margin:0,display:"-webkit-box",WebkitLineClamp:4,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+                          {nextUp.description}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Meeting link */}
+                    {nextUp.meetingLink && (
+                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                        <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase"}}>Meeting Link</span>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{fontSize:10,color:G,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,opacity:0.8}}>
+                            {nextUp.meetingLink.replace(/^https?:\/\//,"")}
+                          </span>
+                          <div style={{display:"flex",gap:4,flexShrink:0}}>
+                            <motion.button whileTap={{scale:0.9}} onClick={()=>handleCopy(nextUp.meetingLink!)}
+                              style={{background:copied?"rgba(34,197,94,0.18)":"rgba(255,255,255,0.08)",border:`1px solid ${copied?"rgba(34,197,94,0.3)":"rgba(255,255,255,0.1)"}`,borderRadius:999,padding:"3px 8px",cursor:"pointer",color:copied?G:DIM,fontSize:10,fontWeight:600}}>
+                              {copied?"✓ Copied":"Copy"}
+                            </motion.button>
+                            <motion.button whileTap={{scale:0.9}} onClick={()=>openLink(nextUp.meetingLink!)}
+                              style={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.28)",borderRadius:999,padding:"3px 8px",cursor:"pointer",color:G,fontSize:10,fontWeight:700}}>
+                              Open ↗
+                            </motion.button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* BOTTOM ACTION BAR */}
+              <div className="relative flex items-center justify-between px-3 py-2 shrink-0"
+                style={{borderTop:`1px solid rgba(34,197,94,0.10)`}}>
+
+                {/* SET REMINDER — popover goes UP via absolute */}
+                <div className="relative" onClick={e=>e.stopPropagation()}>
+                  <motion.button ref={reminderBtnRef} whileTap={{scale:0.94}}
+                    transition={{type:"spring",stiffness:400,damping:20}}
+                    onClick={handleSetReminder}
+                    style={{display:"flex",alignItems:"center",gap:6,background:reminderSet?"rgba(34,197,94,0.14)":"rgba(255,255,255,0.06)",border:`1px solid ${reminderSet?"rgba(34,197,94,0.3)":"rgba(255,255,255,0.1)"}`,borderRadius:999,padding:"4px 10px",cursor:"pointer",color:reminderSet?G:DIM,fontSize:10,fontWeight:600,transition:"all 0.2s ease"}}>
+                    {reminderSet ? (
+                      <><svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke={G} strokeWidth="2" strokeLinecap="round"><path d="M2 7l3.5 3.5L12 3"/></svg>{reminderSet}m before</>
+                    ) : (
+                      <><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M8 2a5 5 0 0 1 5 5v2.5l1 2H2l1-2V7a5 5 0 0 1 5-5z"/><path d="M6.5 13a1.5 1.5 0 0 0 3 0"/></svg>Set reminder</>
+                    )}
+                  </motion.button>
+
+                  {/* Popover anchored above the button */}
+                  <AnimatePresence>
+                    {showReminder && (
+                      <motion.div
+                        initial={{opacity:0,y:8,scale:0.95,filter:"blur(4px)"}}
+                        animate={{opacity:1,y:0,scale:1,filter:"blur(0px)"}}
+                        exit={{opacity:0,y:6,scale:0.97,filter:"blur(4px)"}}
+                        transition={{type:"spring",stiffness:420,damping:26}}
+                        onClick={e=>e.stopPropagation()}
+                        style={{position:"absolute",bottom:"calc(100% + 8px)",left:0,background:"#111c15",border:"1px solid rgba(34,197,94,0.22)",borderRadius:14,padding:"6px",display:"flex",flexDirection:"column",gap:2,minWidth:155,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",backdropFilter:"blur(20px)",zIndex:50}}>
+                        <p style={{fontSize:9,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)",padding:"2px 8px 4px",textTransform:"uppercase",margin:0}}>Remind me</p>
+                        {[5,10,15,30].map(min => (
+                          <motion.button key={min} whileHover={{background:"rgba(34,197,94,0.14)"}} whileTap={{scale:0.97}}
+                            onClick={()=>nextUp&&scheduleReminder(nextUp,min)}
+                            style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 10px",borderRadius:8,color:"#fff",fontSize:11,fontWeight:500,gap:16}}>
+                            <span>{min} min before</span>
+                            {reminderSet===min && <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke={G} strokeWidth="2.2" strokeLinecap="round"><path d="M2 7l3.5 3.5L12 3"/></svg>}
+                          </motion.button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* VIEW DETAILS + JOIN */}
+                <div className="flex items-center gap-1.5">
+                  {nextUp.meetingLink && (
+                    <motion.button whileTap={{scale:0.9}} onClick={()=>handleCopy(nextUp.meetingLink!)}
+                      style={{background:copied?"rgba(34,197,94,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${copied?"rgba(34,197,94,0.3)":"rgba(255,255,255,0.1)"}`,borderRadius:999,padding:"4px 8px",cursor:"pointer",display:"flex",alignItems:"center",gap:4,color:copied?G:DIM,fontSize:10,fontWeight:600,transition:"all 0.2s ease"}}>
+                      {copied ? <><svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M2 7l3.5 3.5L12 3"/></svg>Copied!</> : <>
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M11 5V3a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/></svg>Copy</>}
+                    </motion.button>
+                  )}
+                  <motion.button whileTap={{scale:0.94}}
+                    transition={{type:"spring",stiffness:400,damping:22}}
+                    onClick={()=>setShowDetails(v=>!v)}
+                    style={{background:showDetails?"rgba(34,197,94,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${showDetails?"rgba(34,197,94,0.3)":"rgba(255,255,255,0.1)"}`,borderRadius:999,padding:"4px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:4,color:showDetails?G:DIM,fontSize:10,fontWeight:600}}>
+                    Details
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d={showDetails?"M3 10l5-5 5 5":"M3 6l5 5 5-5"}/>
+                    </svg>
+                  </motion.button>
+                  {nextUp.meetingLink && (
+                    <motion.button whileTap={{scale:0.95}} transition={{type:"spring",stiffness:400,damping:22}}
+                      onClick={()=>openLink(nextUp.meetingLink!)}
+                      style={{background:"rgba(34,197,94,0.12)",border:"1px solid rgba(34,197,94,0.25)",borderRadius:999,padding:"4px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:4,color:G,fontSize:10,fontWeight:700}}>
+                      Join →
+                    </motion.button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div key="empty" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+              className="flex-1 flex flex-col items-center justify-center gap-2">
+              <div style={{width:40,height:40,borderRadius:12,background:"rgba(34,197,94,0.07)",border:`1px solid ${BORDER}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke={G} strokeWidth="1.3" strokeLinecap="round">
+                  <rect x="1" y="3.5" width="16" height="13" rx="2.5"/><path d="M1 7.5h16"/>
+                </svg>
+              </div>
+              <p style={{fontSize:11,color:DIM,textAlign:"center"}}>No events in the next 8 hours</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
   );
 };
 

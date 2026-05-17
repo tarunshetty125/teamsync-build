@@ -15,7 +15,7 @@ We take the security of our software seriously. If you have found a security vul
 
 ## Disclosure Process
 
-1.  Please email your report to **natively.contact@gmail.com**.
+1.  Please email your report to **teamsync.contact@gmail.com**.
 2.  In your report, please include:
     *   The type of issue (e.g., buffer overflow, SQL injection, cross-site scripting, etc.).
     *   Full paths of source file(s) related to the manifestation of the issue.
