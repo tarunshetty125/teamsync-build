@@ -638,7 +638,7 @@ const App: React.FC = () => {
                           animate={{ opacity: 1, scale: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.97, y: 8 }}
                           transition={{ duration: 0.18, ease: [0.19, 1, 0.22, 1] }}
-                          className="h-[66vh] w-[70vw] max-h-[720px] max-w-[980px] overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#0c0e14] shadow-2xl"
+                          className="h-[82vh] w-[70vw] max-h-[820px] max-w-[980px] overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#0c0e14] shadow-2xl"
                         >
                           <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
                         </motion.div>
