@@ -11,9 +11,9 @@ import { AnimatePresence, motion } from "framer-motion"
 import UpdateBanner from "./components/UpdateBanner"
 import { SupportToaster } from "./components/SupportToaster"
 import { NativelyQuotaBanner } from "./components/NativelyQuotaBanner"
-import { FreeTrialBanner }      from "./components/trial/FreeTrialBanner"
-import { FreeTrialModal }       from "./components/trial/FreeTrialModal"
-import { TrialPromoToaster }    from "./components/trial/TrialPromoToaster"
+import { FreeTrialBanner } from "./components/trial/FreeTrialBanner"
+import { FreeTrialModal } from "./components/trial/FreeTrialModal"
+import { TrialPromoToaster } from "./components/trial/TrialPromoToaster"
 import { OnboardingFlow } from "./components/onboarding/OnboardingFlow"
 import GoogleSignIn from "./components/onboarding/GoogleSignIn"
 import { AlertCircle } from "lucide-react"
@@ -116,7 +116,7 @@ const App: React.FC = () => {
     const isUserSet = Number.isFinite(parsed) && parsed !== OVERLAY_OPACITY_DEFAULT;
     return isUserSet ? clampOverlayOpacity(parsed) : getDefaultOverlayOpacity();
   });
-  
+
   // Profile state for ad targeting
   const [hasProfile, setHasProfile] = useState(false);
   const [isLauncherMainView, setIsLauncherMainView] = useState(true);
@@ -125,15 +125,15 @@ const App: React.FC = () => {
   const [appStartTime] = useState<number>(Date.now());
   const [lastMeetingEndTime, setLastMeetingEndTime] = useState<number | null>(null);
   const [isProcessingMeeting, setIsProcessingMeeting] = useState<boolean>(false);
-  
+
   // Ollama Auto-Pull State
   const [ollamaPullStatus, setOllamaPullStatus] = useState<'idle' | 'downloading' | 'complete' | 'failed'>('idle');
   const [ollamaPullPercent, setOllamaPullPercent] = useState<number>(0);
   const [ollamaPullMessage, setOllamaPullMessage] = useState<string>('');
 
   // Re-index State
-  const [incompatibleWarning, setIncompatibleWarning] = useState<{count: number; oldProvider: string; newProvider: string} | null>(null);
-  
+  const [incompatibleWarning, setIncompatibleWarning] = useState<{ count: number; oldProvider: string; newProvider: string } | null>(null);
+
   // API check
   const [hasNativelyApi, setHasNativelyApi] = useState<boolean>(false);
 
@@ -221,7 +221,7 @@ const App: React.FC = () => {
     // Also check for Natively API key
     window.electronAPI?.getStoredCredentials?.()
       .then((creds) => setHasNativelyApi(!!creds?.hasNativelyKey))
-      .catch(() => {});
+      .catch(() => { });
 
     // ── Trial: check stored token and start polling if active ──
     let trialPollId: ReturnType<typeof setInterval> | null = null;
@@ -236,14 +236,14 @@ const App: React.FC = () => {
           // resume/JD data doesn't linger in SQLite beyond the trial window.
           if (!profileWiped) {
             profileWiped = true;
-            window.electronAPI?.wipeTrialProfileData?.().catch(() => {});
+            window.electronAPI?.wipeTrialProfileData?.().catch(() => { });
           }
           setShowTrialExpiredModal(true);
           if (trialPollId) { clearInterval(trialPollId); trialPollId = null; }
         } else {
           setActiveTrial({
             expiresAt: res.expires_at ?? '',
-            usage:     res.usage     ?? { ai: 0, stt_seconds: 0, search: 0 },
+            usage: res.usage ?? { ai: 0, stt_seconds: 0, search: 0 },
           });
         }
       } catch { /* ignore — non-critical */ }
@@ -254,14 +254,14 @@ const App: React.FC = () => {
         // Already expired at launch — wipe immediately then show modal after a brief delay
         if (!profileWiped) {
           profileWiped = true;
-          window.electronAPI?.wipeTrialProfileData?.().catch(() => {});
+          window.electronAPI?.wipeTrialProfileData?.().catch(() => { });
         }
         setTimeout(() => setShowTrialExpiredModal(true), 10_000);
         return;
       }
       checkTrial();
       trialPollId = setInterval(checkTrial, 30_000);
-    }).catch(() => {});
+    }).catch(() => { });
 
     // Listen for trial-ended event (emitted by trial:end-byok IPC)
     const removeTrialListener = window.electronAPI?.onTrialEnded?.(() => {
@@ -462,7 +462,7 @@ const App: React.FC = () => {
     try {
       await window.electronAPI.endMeeting();
       console.log("[App.tsx] endMeeting IPC completed");
-      
+
       const startStr = localStorage.getItem('natively_last_meeting_start');
       if (startStr) {
         const duration = Date.now() - parseInt(startStr, 10);
@@ -544,288 +544,288 @@ const App: React.FC = () => {
   // Renders if window=launcher OR no param
   return (
     <ErrorBoundary context="Launcher">
-    <div className="h-full min-h-0 w-full relative bg-[#000000]">
-      <AnimatePresence>
-        {shouldHoldLauncherBoot ? (
-          <motion.div
-            key="permissions-bootstrap"
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 1 }}
-            className="flex h-full w-full items-center justify-center bg-[#04070d]"
-          >
-            <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/66">
-              <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/70" />
-              Preparing TeamSync
-            </div>
-          </motion.div>
-        ) : shouldRenderStartup ? (
-          <motion.div
-            key="startup"
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 1.1, pointerEvents: "none", transition: { duration: 0.6, ease: "easeInOut" } }}
-          >
-            <StartupSequence isReady={bootstrapUiReady} onComplete={() => setShowStartup(false)} />
-          </motion.div>
-        ) : shouldShowOnboarding ? null : !isAuthenticated ? (
-          <motion.div
-            key="auth"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 1.05, transition: { duration: 0.5, ease: "easeInOut" } }}
-          >
-            <GoogleSignIn
-              onSignInComplete={(userData) => {
-                localStorage.setItem('natively_auth_token', userData.token);
-                localStorage.setItem('natively_auth_user', JSON.stringify({
-                  name: userData.name,
-                  email: userData.email,
-                  picture: userData.picture,
-                }));
-                setAuthUser({ name: userData.name, email: userData.email, picture: userData.picture });
-                setIsAuthenticated(true);
+      <div className="h-full min-h-0 w-full relative bg-[#000000]">
+        <AnimatePresence>
+          {shouldHoldLauncherBoot ? (
+            <motion.div
+              key="permissions-bootstrap"
+              initial={{ opacity: 1 }}
+              animate={{ opacity: 1 }}
+              className="flex h-full w-full items-center justify-center bg-[#04070d]"
+            >
+              <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/66">
+                <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/70" />
+                Preparing TeamSync
+              </div>
+            </motion.div>
+          ) : shouldRenderStartup ? (
+            <motion.div
+              key="startup"
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0, scale: 1.1, pointerEvents: "none", transition: { duration: 0.6, ease: "easeInOut" } }}
+            >
+              <StartupSequence isReady={bootstrapUiReady} onComplete={() => setShowStartup(false)} />
+            </motion.div>
+          ) : shouldShowOnboarding ? null : !isAuthenticated ? (
+            <motion.div
+              key="auth"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, scale: 1.05, transition: { duration: 0.5, ease: "easeInOut" } }}
+            >
+              <GoogleSignIn
+                onSignInComplete={(userData) => {
+                  localStorage.setItem('natively_auth_token', userData.token);
+                  localStorage.setItem('natively_auth_user', JSON.stringify({
+                    name: userData.name,
+                    email: userData.email,
+                    picture: userData.picture,
+                  }));
+                  setAuthUser({ name: userData.name, email: userData.email, picture: userData.picture });
+                  setIsAuthenticated(true);
+                }}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="main"
+              className="h-full w-full"
+              initial={{ opacity: 0, scale: 0.98, y: 15 }} // "Linear" style entry: slightly down and scaled down
+              animate={{ opacity: 1, scale: 1, y: 0 }}      // Slide up and snap to place
+              transition={{
+                duration: 0.8,
+                ease: [0.19, 1, 0.22, 1], // Expo-out: snappy start, smooth landing
+                delay: 0.1
               }}
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="main"
-            className="h-full w-full"
-            initial={{ opacity: 0, scale: 0.98, y: 15 }} // "Linear" style entry: slightly down and scaled down
-            animate={{ opacity: 1, scale: 1, y: 0 }}      // Slide up and snap to place
-            transition={{
-              duration: 0.8,
-              ease: [0.19, 1, 0.22, 1], // Expo-out: snappy start, smooth landing
-              delay: 0.1
-            }}
-          >
-            <QueryClientProvider client={queryClient}>
-              <ToastProvider>
-                <div id="launcher-container" className="h-full w-full relative">
-                  <Launcher
-                    onStartMeeting={handleStartMeeting}
-                    onOpenSettings={(tab = 'general') => {
-                      setSettingsInitialTab(tab);
-                      setIsSettingsOpen(true);
+            >
+              <QueryClientProvider client={queryClient}>
+                <ToastProvider>
+                  <div id="launcher-container" className="h-full w-full relative">
+                    <Launcher
+                      onStartMeeting={handleStartMeeting}
+                      onOpenSettings={(tab = 'general') => {
+                        setSettingsInitialTab(tab);
+                        setIsSettingsOpen(true);
+                      }}
+                      onOpenModes={() => setIsModesOpen(true)}
+                      onPageChange={setIsLauncherMainView}
+                      ollamaPullStatus={ollamaPullStatus}
+                      ollamaPullPercent={ollamaPullPercent}
+                      ollamaPullMessage={ollamaPullMessage}
+                    />
+                  </div>
+                  <SettingsOverlay
+                    isOpen={isSettingsOpen}
+                    onClose={() => {
+                      setIsSettingsOpen(false);
                     }}
-                    onOpenModes={() => setIsModesOpen(true)}
-                    onPageChange={setIsLauncherMainView}
-                    ollamaPullStatus={ollamaPullStatus}
-                    ollamaPullPercent={ollamaPullPercent}
-                    ollamaPullMessage={ollamaPullMessage}
+                    initialTab={settingsInitialTab}
+                    isTrialActive={!!activeTrial}
                   />
-                </div>
-                <SettingsOverlay
-                  isOpen={isSettingsOpen}
-                  onClose={() => {
-                    setIsSettingsOpen(false);
-                  }}
-                  initialTab={settingsInitialTab}
-                  isTrialActive={!!activeTrial}
-                />
-                <AnimatePresence>
-                  {isModesOpen && (
-                    <motion.div
-                      key="modes-panel"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-                      onClick={(e) => { if (e.target === e.currentTarget) setIsModesOpen(false); }}
-                    >
+                  <AnimatePresence>
+                    {isModesOpen && (
                       <motion.div
-                        initial={{ opacity: 0, scale: 0.97, y: 8 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.97, y: 8 }}
-                        transition={{ duration: 0.18, ease: [0.19, 1, 0.22, 1] }}
-                        className="h-[62vh] w-[68vw] max-h-[680px] max-w-[960px] overflow-hidden rounded-[24px] border border-white/10 bg-[#141414] shadow-2xl"
+                        key="modes-panel"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                        onClick={(e) => { if (e.target === e.currentTarget) setIsModesOpen(false); }}
                       >
-                        <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('natively-api'); setIsSettingsOpen(true); }} />
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.97, y: 8 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.97, y: 8 }}
+                          transition={{ duration: 0.18, ease: [0.19, 1, 0.22, 1] }}
+                          className="h-[62vh] w-[68vw] max-h-[680px] max-w-[960px] overflow-hidden rounded-[24px] border border-white/10 bg-[#141414] shadow-2xl"
+                        >
+                          <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('natively-api'); setIsSettingsOpen(true); }} />
+                        </motion.div>
                       </motion.div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                <ToastViewport />
-              </ToastProvider>
-            </QueryClientProvider>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                    )}
+                  </AnimatePresence>
+                  <ToastViewport />
+                </ToastProvider>
+              </QueryClientProvider>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
 
-      <AnimatePresence>
-        {incompatibleWarning && isDefault && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed bottom-6 right-6 z-50 pointer-events-auto"
-          >
-            <div className="bg-[#1A1A1A] border border-[#ff3333]/30 shadow-2xl rounded-2xl p-5 max-w-[340px] flex flex-col gap-3">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-[#ff3333] shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="text-[#E0E0E0] font-medium text-sm">Provider Changed</h3>
-                  <p className="text-[#A0A0A0] text-xs mt-1 leading-relaxed">
-                    ⚠ {incompatibleWarning.count} meetings used your previous AI provider ({incompatibleWarning.oldProvider}) and won't appear in search results under {incompatibleWarning.newProvider}.
-                  </p>
+        <AnimatePresence>
+          {incompatibleWarning && isDefault && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed bottom-6 right-6 z-50 pointer-events-auto"
+            >
+              <div className="bg-[#1A1A1A] border border-[#ff3333]/30 shadow-2xl rounded-2xl p-5 max-w-[340px] flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-[#ff3333] shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="text-[#E0E0E0] font-medium text-sm">Provider Changed</h3>
+                    <p className="text-[#A0A0A0] text-xs mt-1 leading-relaxed">
+                      ⚠ {incompatibleWarning.count} meetings used your previous AI provider ({incompatibleWarning.oldProvider}) and won't appear in search results under {incompatibleWarning.newProvider}.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-1 justify-end">
+                  <button
+                    onClick={() => setIncompatibleWarning(null)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#A0A0A0] hover:text-white hover:bg-white/5 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    onClick={handleReindex}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#ff3333]/10 text-[#ff3333] hover:bg-[#ff3333]/20 transition-colors"
+                  >
+                    Re-index automatically
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-2 mt-1 justify-end">
-                <button 
-                  onClick={() => setIncompatibleWarning(null)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#A0A0A0] hover:text-white hover:bg-white/5 transition-colors"
-                >
-                  Dismiss
-                </button>
-                <button 
-                  onClick={handleReindex}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#ff3333]/10 text-[#ff3333] hover:bg-[#ff3333]/20 transition-colors"
-                >
-                  Re-index automatically
-                </button>
-              </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <UpdateBanner />
+        <SupportToaster />
+        <NativelyQuotaBanner />
+
+
+
+        {/* Free trial countdown banner — only in launcher window while trial is active */}
+        {(isLauncherWindow || isDefault) && activeTrial && !shouldShowOnboarding && (
+          <FreeTrialBanner
+            expiresAt={activeTrial.expiresAt}
+            usage={activeTrial.usage}
+            onUpgrade={() => {
+              setSettingsInitialTab('api');
+              setIsSettingsOpen(true);
+            }}
+          />
         )}
-      </AnimatePresence>
 
-      <UpdateBanner />
-      <SupportToaster />
-      <NativelyQuotaBanner />
-
-
-
-      {/* Free trial countdown banner — only in launcher window while trial is active */}
-      {(isLauncherWindow || isDefault) && activeTrial && !shouldShowOnboarding && (
-        <FreeTrialBanner
-          expiresAt={activeTrial.expiresAt}
-          usage={activeTrial.usage}
-          onUpgrade={() => {
+        {/* Trial promo toaster — 5s after restart (self-gates via localStorage + conditions) */}
+        {!shouldShowOnboarding && <TrialPromoToaster
+          isOpen={showTrialPromo}
+          hasNativelyKey={hasNativelyApi}
+          hasTrialToken={!!activeTrial}
+          onDismiss={() => setShowTrialPromo(false)}
+          onStartTrial={async () => {
+            const res = await window.electronAPI?.startTrial?.();
+            if (!res?.ok) throw new Error(res?.error || 'Could not start trial');
+            if (res.expires_at) {
+              setActiveTrial({ expiresAt: res.expires_at, usage: res.usage ?? { ai: 0, stt_seconds: 0, search: 0 } });
+            }
+            setShowTrialPromo(false);
+          }}
+          onManualSetup={() => {
+            setShowTrialPromo(false);
             setSettingsInitialTab('api');
             setIsSettingsOpen(true);
           }}
-        />
-      )}
+        />}
 
-      {/* Trial promo toaster — 5s after restart (self-gates via localStorage + conditions) */}
-      {!shouldShowOnboarding && <TrialPromoToaster
-        isOpen={showTrialPromo}
-        hasNativelyKey={hasNativelyApi}
-        hasTrialToken={!!activeTrial}
-        onDismiss={() => setShowTrialPromo(false)}
-        onStartTrial={async () => {
-          const res = await window.electronAPI?.startTrial?.();
-          if (!res?.ok) throw new Error(res?.error || 'Could not start trial');
-          if (res.expires_at) {
-            setActiveTrial({ expiresAt: res.expires_at, usage: res.usage ?? { ai: 0, stt_seconds: 0, search: 0 } });
-          }
-          setShowTrialPromo(false);
-        }}
-        onManualSetup={() => {
-          setShowTrialPromo(false);
-          setSettingsInitialTab('api');
-          setIsSettingsOpen(true);
-        }}
-      />}
+        {/* Post-trial upgrade modal — shown when trial expires */}
+        {(isLauncherWindow || isDefault) && showTrialExpiredModal && !shouldShowOnboarding && (
+          <FreeTrialModal
+            usage={activeTrial?.usage ?? { ai: 0, stt_seconds: 0, search: 0 }}
+            onByok={async () => {
+              await window.electronAPI?.endTrialByok?.();
+            }}
+            onStandard={async () => {
+              // Wipe resume + JD (orchestrator caches + SQLite) before checkout opens
+              await window.electronAPI?.wipeTrialProfileData?.().catch(() => { });
+              // Revert active mode to none — Standard plan has no modes access
+              await window.electronAPI?.modesSetActive?.(null).catch(() => { });
+            }}
+            onDone={() => {
+              setShowTrialExpiredModal(false);
+              setActiveTrial(null);
+            }}
+          />
+        )}
+        {/* Ad toasters — render whenever activeAd is set (isLauncherMainView guard bypassed
+          when triggered via preview shortcut so the card always surfaces) */}
+        {(isLauncherMainView || !!activeAd) && !isSettingsOpen && !shouldShowOnboarding && (
+          <NativelyApiPromoToaster
+            isOpen={activeAd === 'natively_api'}
+            onDismiss={() => dismissAd('natively_api')}
+            onOpenSettings={(tab: string) => {
+              setSettingsInitialTab(tab);
+              setIsSettingsOpen(true);
+            }}
+          />
+        )}
+        {(isLauncherMainView || !!activeAd) && !shouldShowOnboarding && (
+          <>
+            <ProfileFeatureToaster
+              isOpen={activeAd === 'profile'}
+              onDismiss={dismissAd}
+              onSetupProfile={() => {
+                setSettingsInitialTab('profile');
+                setIsSettingsOpen(true);
+              }}
+            />
+            <JDAwarenessToaster
+              isOpen={activeAd === 'jd'}
+              onDismiss={dismissAd}
+              onSetupJD={() => {
+                setSettingsInitialTab('profile');
+                setIsSettingsOpen(true);
+              }}
+            />
+            <PremiumPromoToaster
+              isOpen={activeAd === 'promo'}
+              onDismiss={dismissAd}
+              onUpgrade={() => {
+                setShowPremiumModal(true);
+              }}
+            />
+            <MaxUltraUpgradeToaster
+              isOpen={activeAd === 'max_ultra_upgrade'}
+              onDismiss={dismissAd}
+              onUpgrade={() => {
+                setShowPremiumModal(true);
+              }}
+            />
 
-      {/* Post-trial upgrade modal — shown when trial expires */}
-      {(isLauncherWindow || isDefault) && showTrialExpiredModal && !shouldShowOnboarding && (
-        <FreeTrialModal
-          usage={activeTrial?.usage ?? { ai: 0, stt_seconds: 0, search: 0 }}
-          onByok={async () => {
-            await window.electronAPI?.endTrialByok?.();
-          }}
-          onStandard={async () => {
-            // Wipe resume + JD (orchestrator caches + SQLite) before checkout opens
-            await window.electronAPI?.wipeTrialProfileData?.().catch(() => {});
-            // Revert active mode to none — Standard plan has no modes access
-            await window.electronAPI?.modesSetActive?.(null).catch(() => {});
-          }}
-          onDone={() => {
+            {/* Remote Campaigns Render Logic */}
+            <RemoteCampaignToaster
+              isOpen={typeof activeAd === 'object' && activeAd !== null}
+              campaign={typeof activeAd === 'object' && activeAd !== null ? activeAd : undefined as any}
+              onDismiss={dismissAd}
+            />
+          </>
+        )}
+
+        <PremiumUpgradeModal
+          isOpen={showPremiumModal}
+          onClose={() => setShowPremiumModal(false)}
+          isPremium={isPremiumActive}
+          onActivated={() => {
+            setIsPremiumActive(true);
+            // Refresh full plan details after activation so ad targeting reflects the new plan
+            window.electronAPI?.licenseGetDetails?.()
+              .then(d => setPlanDetails(d ?? { isPremium: true }))
+              .catch(() => setPlanDetails({ isPremium: true }));
+            setShowPremiumModal(false);
+            // If user activated during post-trial modal, close it — they have a plan now
             setShowTrialExpiredModal(false);
             setActiveTrial(null);
-          }}
-        />
-      )}
-      {/* Ad toasters — render whenever activeAd is set (isLauncherMainView guard bypassed
-          when triggered via preview shortcut so the card always surfaces) */}
-      {(isLauncherMainView || !!activeAd) && !isSettingsOpen && !shouldShowOnboarding && (
-        <NativelyApiPromoToaster
-          isOpen={activeAd === 'natively_api'}
-          onDismiss={() => dismissAd('natively_api')}
-          onOpenSettings={(tab: string) => {
-            setSettingsInitialTab(tab);
-            setIsSettingsOpen(true);
-          }}
-        />
-      )}
-      {(isLauncherMainView || !!activeAd) && !shouldShowOnboarding && (
-        <>
-          <ProfileFeatureToaster
-            isOpen={activeAd === 'profile'}
-            onDismiss={dismissAd}
-            onSetupProfile={() => {
+            // After activation, open settings to Profile Intelligence
+            setTimeout(() => {
               setSettingsInitialTab('profile');
               setIsSettingsOpen(true);
-            }}
-          />
-          <JDAwarenessToaster
-            isOpen={activeAd === 'jd'}
-            onDismiss={dismissAd}
-            onSetupJD={() => {
-              setSettingsInitialTab('profile');
-              setIsSettingsOpen(true);
-            }}
-          />
-          <PremiumPromoToaster
-            isOpen={activeAd === 'promo'}
-            onDismiss={dismissAd}
-            onUpgrade={() => {
-              setShowPremiumModal(true);
-            }}
-          />
-          <MaxUltraUpgradeToaster
-            isOpen={activeAd === 'max_ultra_upgrade'}
-            onDismiss={dismissAd}
-            onUpgrade={() => {
-              setShowPremiumModal(true);
-            }}
-          />
-
-          {/* Remote Campaigns Render Logic */}
-          <RemoteCampaignToaster
-            isOpen={typeof activeAd === 'object' && activeAd !== null}
-            campaign={typeof activeAd === 'object' && activeAd !== null ? activeAd : undefined as any}
-            onDismiss={dismissAd}
-          />
-        </>
-      )}
-
-      <PremiumUpgradeModal
-        isOpen={showPremiumModal}
-        onClose={() => setShowPremiumModal(false)}
-        isPremium={isPremiumActive}
-        onActivated={() => {
-          setIsPremiumActive(true);
-          // Refresh full plan details after activation so ad targeting reflects the new plan
-          window.electronAPI?.licenseGetDetails?.()
-            .then(d => setPlanDetails(d ?? { isPremium: true }))
-            .catch(() => setPlanDetails({ isPremium: true }));
-          setShowPremiumModal(false);
-          // If user activated during post-trial modal, close it — they have a plan now
-          setShowTrialExpiredModal(false);
-          setActiveTrial(null);
-          // After activation, open settings to Profile Intelligence
-          setTimeout(() => {
-            setSettingsInitialTab('profile');
-            setIsSettingsOpen(true);
-          }, 300);
-        }}
-        onDeactivated={() => { setIsPremiumActive(false); setPlanDetails({ isPremium: false }); }}
-      />
-      <OnboardingFlow isOpen={shouldShowOnboarding} />
-    </div>
+            }, 300);
+          }}
+          onDeactivated={() => { setIsPremiumActive(false); setPlanDetails({ isPremium: false }); }}
+        />
+        <OnboardingFlow isOpen={shouldShowOnboarding} />
+      </div>
     </ErrorBoundary>
   )
 }
