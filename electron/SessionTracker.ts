@@ -436,15 +436,37 @@ export class SessionTracker {
     }
 
     /**
-     * Get the last interviewer turn
+     * Get the last interviewer turn.
+     * Merges consecutive interviewer segments that are within a short gap
+     * (≤15s) so that a multi-segment question spoken with natural pauses
+     * is returned as a single cohesive turn instead of just the last fragment.
      */
     getLastInterviewerTurn(): string | null {
+        // Walk backwards through contextItems and collect consecutive interviewer turns
+        const segments: string[] = [];
+        let prevTimestamp: number | null = null;
+        const MAX_GAP_MS = 15_000; // 15 seconds — treat as same turn if gap is smaller
+
         for (let i = this.contextItems.length - 1; i >= 0; i--) {
-            if (this.contextItems[i].role === 'interviewer') {
-                return this.contextItems[i].text;
+            const item = this.contextItems[i];
+            if (item.role !== 'interviewer') {
+                // Hit a non-interviewer turn — stop if we already have segments
+                if (segments.length > 0) break;
+                // Otherwise keep scanning backwards to find the last interviewer block
+                continue;
             }
+
+            // If we already collected segments, check the gap
+            if (prevTimestamp !== null && (prevTimestamp - item.timestamp) > MAX_GAP_MS) {
+                break; // Gap too large — different speaking turn
+            }
+
+            segments.unshift(item.text);
+            prevTimestamp = item.timestamp;
         }
-        return null;
+
+        if (segments.length === 0) return null;
+        return segments.join(' ');
     }
 
     /**

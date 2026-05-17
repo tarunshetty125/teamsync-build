@@ -1007,10 +1007,14 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
 
     const [rollingTranscript, setRollingTranscript] = useState('');  // For interviewer rolling text bar
     const finalizedTranscriptRef = useRef(''); // C6 Fix: Tracks finalized transcript separately from partials
-    // Holds ONLY the last finalized STT sentence — shown in the transcript pill.
+    // Holds the merged interviewer turn (consecutive segments within a 15s gap).
     // Updated exclusively when transcript.final === true so interim partials never appear.
     const [lastFinalSentence, setLastFinalSentence] = useState('');
     const lastFinalSentenceRef = useRef(''); // stable ref for session-reset without stale closure
+    // Rolling turn accumulator: tracks timestamp of last finalized interviewer segment
+    // to decide whether to merge or start a new turn
+    const lastInterviewerFinalTimestampRef = useRef<number>(0);
+    const INTERVIEWER_TURN_GAP_MS = 15_000; // 15s — same as backend SessionTracker
     // Sentence-scoped dot state: currentSentenceId increments on every final STT segment.
     // lastResponseSentenceId is set when isProcessing falls to false (AI finished).
     // Dot is green when they differ (new unanswered question) and grey when they match.
@@ -1616,6 +1620,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             // Reset last-sentence pill so old question never leaks into new session
             setLastFinalSentence('');
             lastFinalSentenceRef.current = '';
+            lastInterviewerFinalTimestampRef.current = 0;
             currentQuestionTurnIdRef.current = null;
             setCurrentQuestionTurnId('question-init');
             // Reset sentence-response mapping so dot starts green in the new session
@@ -1763,6 +1768,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
             setIsInterviewerSpeaking(!transcript.final);
 
             if (transcript.final) {
+                const now = Date.now();
                 // C6 Fix: Append to finalized ref for correct partial handling
                 finalizedTranscriptRef.current += (finalizedTranscriptRef.current ? '  ·  ' : '') + transcript.text;
                 // C5 Fix: Cap transcript to prevent unbounded memory growth in long sessions
@@ -1770,9 +1776,20 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({
                     finalizedTranscriptRef.current = finalizedTranscriptRef.current.slice(-5000);
                 }
                 setRollingTranscript(finalizedTranscriptRef.current);
-                // Update pill to show ONLY this final sentence (no accumulation)
-                lastFinalSentenceRef.current = transcript.text;
-                setLastFinalSentence(transcript.text);
+
+                // Merge consecutive interviewer segments within a 15s gap
+                // so that natural pauses (2-3s) don't split a single question
+                const gapSinceLastFinal = now - lastInterviewerFinalTimestampRef.current;
+                if (lastInterviewerFinalTimestampRef.current > 0 && gapSinceLastFinal <= INTERVIEWER_TURN_GAP_MS) {
+                    // Same turn — append to existing merged text
+                    lastFinalSentenceRef.current = lastFinalSentenceRef.current + ' ' + transcript.text;
+                } else {
+                    // New turn — start fresh
+                    lastFinalSentenceRef.current = transcript.text;
+                }
+                lastInterviewerFinalTimestampRef.current = now;
+                setLastFinalSentence(lastFinalSentenceRef.current);
+
                 const questionTurnId = nextRequestId('question-turn');
                 currentQuestionTurnIdRef.current = questionTurnId;
                 setCurrentQuestionTurnId(questionTurnId);
