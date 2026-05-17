@@ -3515,8 +3515,10 @@ export function initializeIpcHandlers(appState: AppState): void {
       }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) return null;
+      const status = orchestrator.getStatus?.() || {};
       return {
         ...(orchestrator.getProfileData() || {}),
+        hasResume: !!(status as any).hasResume,
         engineReady: !!orchestrator.isEngineReady?.()
       };
     } catch (error: any) {

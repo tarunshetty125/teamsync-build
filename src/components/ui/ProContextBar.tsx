@@ -50,6 +50,7 @@ const CHIP_COLORS: Record<ChipColor, { bg: string; text: string; border: string 
 };
 
 interface ProfileData {
+    hasResume?: boolean;
     hasActiveJD?: boolean;
     activeJD?: {
         company?: string;
@@ -184,8 +185,12 @@ const ProContextBar: React.FC<ProContextBarProps> = ({
             }
         }
 
-        // Chip 2: Resume loaded (green)
-        result.push({ label: 'Resume loaded', color: 'green' });
+        // Chip 2: Resume status — only show "loaded" when actually uploaded
+        if (profileData?.hasResume) {
+            result.push({ label: 'Resume loaded', color: 'green' });
+        } else {
+            result.push({ label: 'No resume · enable Profile Intelligence', color: 'gold' });
+        }
 
         // Chip 3: X YOE · Domain (gold)
         if (profileData?.experienceCount && profileData.experienceCount > 0) {

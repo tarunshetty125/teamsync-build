@@ -187,7 +187,7 @@ export class ModesManager {
                     id: legacyMode.id || makeId('mode'),
                     templateId,
                     name: sanitizeName(legacyMode.name, getBuiltInModeTemplate(templateId).name),
-                    userPrompt: legacyMode.custom_context ?? '',
+                    userPrompt: legacyMode.custom_context || MODE_TEMPLATE_MAP[templateId]?.defaultUserPrompt || '',
                     referenceFiles: legacyFiles.map((file: any): ModeReferenceFile => ({
                         id: file.id || makeId('ref'),
                         fileName: file.file_name || 'Reference file',
@@ -247,8 +247,19 @@ export class ModesManager {
         }
 
         const sortedModes = sortModes(state.userModes);
-        if (JSON.stringify(sortedModes) !== JSON.stringify(state.userModes)) {
-            state.userModes = sortedModes;
+
+        // Backfill: ensure modes with empty prompts inherit the template default
+        let modesPatched = false;
+        const patchedModes = sortedModes.map((mode) => {
+            if (!mode.userPrompt && MODE_TEMPLATE_MAP[mode.templateId]?.defaultUserPrompt) {
+                modesPatched = true;
+                return { ...mode, userPrompt: MODE_TEMPLATE_MAP[mode.templateId].defaultUserPrompt };
+            }
+            return mode;
+        });
+
+        if (modesPatched || JSON.stringify(sortedModes) !== JSON.stringify(state.userModes)) {
+            state.userModes = patchedModes;
         }
 
         this.writeState(state);
