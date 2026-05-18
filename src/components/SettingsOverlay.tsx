@@ -39,96 +39,96 @@ const MockupTeamSyncInterface = ({ opacity }: { opacity: number }) => {
 
     return (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none bg-transparent">
-                {/* TeamSyncInterface Widget — opacity controlled by the slider */}
-                <div
-                    id="mockup-teamsync-interface"
-                    className="flex flex-col items-center pointer-events-none -mt-56"
-                >
-                    {/* TopPill Replica */}
-                    <div className="flex justify-center mb-2 select-none z-50">
-                        <div className="flex items-center gap-2 rounded-full overlay-pill-surface backdrop-blur-md pl-1.5 pr-1.5 py-1.5" style={appearance.pillStyle}>
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden overlay-icon-surface" style={appearance.iconStyle}>
-                                <img
-                                    src={icon}
-                                    alt="TeamSync"
-                                    className="w-[24px] h-[24px] object-contain opacity-95 scale-105 force-black-icon"
-                                    draggable="false"
-                                />
-                            </div>
-                            <div className="flex items-center gap-2 px-4 py-1.5 rounded-full text-[12px] font-medium border overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
-                                <ChevronUp className="w-3.5 h-3.5 opacity-70" />
-                                <span className="opacity-80 tracking-wide">Hide</span>
-                            </div>
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center overlay-icon-surface overlay-text-primary" style={appearance.iconStyle}>
-                                <div className="w-3.5 h-3.5 rounded-[3px] bg-red-400 opacity-80" />
+            {/* TeamSyncInterface Widget — opacity controlled by the slider */}
+            <div
+                id="mockup-teamsync-interface"
+                className="flex flex-col items-center pointer-events-none -mt-56"
+            >
+                {/* TopPill Replica */}
+                <div className="flex justify-center mb-2 select-none z-50">
+                    <div className="flex items-center gap-2 rounded-full overlay-pill-surface backdrop-blur-md pl-1.5 pr-1.5 py-1.5" style={appearance.pillStyle}>
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden overlay-icon-surface" style={appearance.iconStyle}>
+                            <img
+                                src={icon}
+                                alt="TeamSync"
+                                className="w-[24px] h-[24px] object-contain opacity-95 scale-105 force-black-icon"
+                                draggable="false"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full text-[12px] font-medium border overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
+                            <ChevronUp className="w-3.5 h-3.5 opacity-70" />
+                            <span className="opacity-80 tracking-wide">Hide</span>
+                        </div>
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center overlay-icon-surface overlay-text-primary" style={appearance.iconStyle}>
+                            <div className="w-3.5 h-3.5 rounded-[3px] bg-red-400 opacity-80" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Main Interface Window Replica */}
+                <div className="relative w-[600px] max-w-full overlay-shell-surface overlay-text-primary backdrop-blur-2xl border rounded-[24px] overflow-hidden flex flex-col pt-2 pb-3" style={appearance.shellStyle}>
+
+                    {/* Rolling Transcript Bar */}
+                    <div className="w-full flex justify-center py-2 px-4 border-b mb-1 overlay-transcript-surface" style={appearance.transcriptStyle}>
+                        <p className="text-[13px] truncate max-w-[90%] font-medium overlay-text-primary">
+                            <span className={`${resolvedTheme === 'light' ? 'text-blue-700' : 'text-blue-400'} mr-2 font-semibold`}>Interviewer</span>
+                            <span className="opacity-95">So how would you optimize the current algorithm?</span>
+                        </p>
+                    </div>
+
+                    {/* Chat History Mock */}
+                    <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">
+                        <div className="flex justify-start">
+                            <div className="max-w-[85%] px-4 py-3 text-[14px] leading-relaxed font-normal overlay-text-primary">
+                                <span className="font-semibold text-emerald-500 block mb-1">Suggestion</span>
+                                A good approach would be to use a hash map to cache the intermediate results, which brings the time complexity down from O(n²) to O(n).
                             </div>
                         </div>
                     </div>
 
-                    {/* Main Interface Window Replica */}
-                    <div className="relative w-[600px] max-w-full overlay-shell-surface overlay-text-primary backdrop-blur-2xl border rounded-[24px] overflow-hidden flex flex-col pt-2 pb-3" style={appearance.shellStyle}>
+                    {/* Quick Actions */}
+                    <div className="flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 pt-3">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border shrink-0 overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
+                            <Pencil className="w-3 h-3 opacity-70" /> What to answer?
+                        </div>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border shrink-0 overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
+                            <MessageSquare className="w-3 h-3 opacity-70" /> Clarify
+                        </div>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border shrink-0 overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
+                            <RefreshCw className="w-3 h-3 opacity-70" /> Recap
+                        </div>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border shrink-0 overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
+                            <HelpCircle className="w-3 h-3 opacity-70" /> Follow Up Question
+                        </div>
+                        <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium min-w-[74px] shrink-0 border overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
+                            <Zap className="w-3 h-3 opacity-70" /> Answer
+                        </div>
+                    </div>
 
-                        {/* Rolling Transcript Bar */}
-                        <div className="w-full flex justify-center py-2 px-4 border-b mb-1 overlay-transcript-surface" style={appearance.transcriptStyle}>
-                            <p className="text-[13px] truncate max-w-[90%] font-medium overlay-text-primary">
-                                <span className={`${resolvedTheme === 'light' ? 'text-blue-700' : 'text-blue-400'} mr-2 font-semibold`}>Interviewer</span>
-                                <span className="opacity-95">So how would you optimize the current algorithm?</span>
-                            </p>
+                    {/* Input Area */}
+                    <div className="px-3">
+                        <div className="relative group">
+                            <div className="w-full border rounded-xl pl-3 pr-10 py-2.5 h-[38px] flex items-center overlay-input-surface" style={appearance.inputStyle}>
+                                <span className="text-[13px] overlay-text-muted">Ask anything on screen or conversation</span>
+                            </div>
                         </div>
 
-                        {/* Chat History Mock */}
-                        <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">
-                            <div className="flex justify-start">
-                                <div className="max-w-[85%] px-4 py-3 text-[14px] leading-relaxed font-normal overlay-text-primary">
-                                    <span className="font-semibold text-emerald-500 block mb-1">Suggestion</span>
-                                    A good approach would be to use a hash map to cache the intermediate results, which brings the time complexity down from O(n²) to O(n).
+                        {/* Bottom Row */}
+                        <div className="flex items-center justify-between mt-3 px-0.5">
+                            <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-xs font-medium w-[140px] overlay-control-surface overlay-text-interactive" style={appearance.controlStyle}>
+                                    <span className="truncate min-w-0 flex-1">Gemini 3 Flash</span>
+                                    <ChevronDown size={14} className="shrink-0" />
                                 </div>
-                            </div>
-                        </div>
-
-                        {/* Quick Actions */}
-                        <div className="flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 pt-3">
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border shrink-0 overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
-                                <Pencil className="w-3 h-3 opacity-70" /> What to answer?
-                            </div>
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border shrink-0 overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
-                                <MessageSquare className="w-3 h-3 opacity-70" /> Clarify
-                            </div>
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border shrink-0 overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
-                                <RefreshCw className="w-3 h-3 opacity-70" /> Recap
-                            </div>
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border shrink-0 overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
-                                <HelpCircle className="w-3 h-3 opacity-70" /> Follow Up Question
-                            </div>
-                            <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium min-w-[74px] shrink-0 border overlay-chip-surface overlay-text-interactive" style={appearance.chipStyle}>
-                                <Zap className="w-3 h-3 opacity-70" /> Answer
-                            </div>
-                        </div>
-
-                        {/* Input Area */}
-                        <div className="px-3">
-                            <div className="relative group">
-                                <div className="w-full border rounded-xl pl-3 pr-10 py-2.5 h-[38px] flex items-center overlay-input-surface" style={appearance.inputStyle}>
-                                    <span className="text-[13px] overlay-text-muted">Ask anything on screen or conversation</span>
-                                </div>
-                            </div>
-
-                            {/* Bottom Row */}
-                            <div className="flex items-center justify-between mt-3 px-0.5">
-                                <div className="flex items-center gap-1.5">
-                                    <div className="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-xs font-medium w-[140px] overlay-control-surface overlay-text-interactive" style={appearance.controlStyle}>
-                                        <span className="truncate min-w-0 flex-1">Gemini 3 Flash</span>
-                                        <ChevronDown size={14} className="shrink-0" />
-                                    </div>
-                                    <div className="w-px h-3 mx-1" style={appearance.dividerStyle} />
-                                    <div className="w-7 h-7 flex items-center justify-center rounded-lg overlay-icon-surface overlay-text-muted" style={appearance.iconStyle}>
-                                        <SlidersHorizontal className="w-3.5 h-3.5" />
-                                    </div>
+                                <div className="w-px h-3 mx-1" style={appearance.dividerStyle} />
+                                <div className="w-7 h-7 flex items-center justify-center rounded-lg overlay-icon-surface overlay-text-muted" style={appearance.iconStyle}>
+                                    <SlidersHorizontal className="w-3.5 h-3.5" />
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
         </div>
     );
 };
@@ -347,12 +347,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const isLight = useResolvedTheme() === 'light';
     const [activeTab, setActiveTab] = useState(initialTab);
     const refreshProfileStateRef = React.useRef<((expectedGenerationId?: number) => Promise<void>) | null>(null);
-    
+
     // Sync active tab when modal opens
     useEffect(() => {
         if (isOpen && initialTab) {
             setActiveTab(initialTab);
-            
+
             // Proactively load profile data if starting on profile tab
             if (initialTab === 'profile') {
                 refreshProfileStateRef.current?.().catch(() => { });
@@ -362,7 +362,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             }
         }
     }, [isOpen, initialTab]);
-    
+
     const { shortcuts, updateShortcut, resetShortcuts } = useShortcuts();
     const [isUndetectable, setIsUndetectable] = useState(false);
     const [isMousePassthrough, setIsMousePassthrough] = useState(false);
@@ -530,7 +530,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
             } else {
                 window.electronAPI?.licenseCheckPremium?.().then(setIsPremium).catch(() => { });
             }
-            
+
             // Fetch true initial state from main process
             window.electronAPI?.getUndetectable?.().then(setIsUndetectable).catch(() => { });
             window.electronAPI?.getOverlayMousePassthrough?.().then(setIsMousePassthrough).catch(() => { });
@@ -775,7 +775,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         document.querySelectorAll('.opacity-percent-label').forEach(el => el.textContent = percentText);
         setPreviewOverlayOpacity(val);
         latestOpacityRef.current = val;
-        
+
         // Broadcast IPC in real-time so actual meeting overlay tracks slider instantly
         // (safe to do at 60fps, does not trigger React renders)
         window.electronAPI?.setOverlayOpacity?.(val);
@@ -802,7 +802,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
 
         // Direct DOM mutation for sub-millisecond instant hide (bypassing slow React tree diffs)
         document.body.classList.add('disable-transitions');
-        
+
         const backdrop = document.getElementById('settings-backdrop');
         const wrapper = document.getElementById('settings-panel-wrapper');
         const panel = document.getElementById('settings-panel');
@@ -826,7 +826,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         if (launcher) {
             launcher.style.visibility = 'hidden';
         }
-        
+
         if (card) {
             card.style.visibility = 'visible';
             card.style.position = 'relative';
@@ -1586,483 +1586,461 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                         initial={{ scale: 0.94, opacity: 0, y: 20 }}
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.94, opacity: 0, y: 20 }}
-                        transition={{ 
-                            type: "spring", 
-                            stiffness: 400, 
+                        transition={{
+                            type: "spring",
+                            stiffness: 400,
                             damping: 32,
                             mass: 1
                         }}
                         className="bg-bg-elevated w-full max-w-4xl h-[80vh] rounded-2xl border border-border-subtle shadow-2xl overflow-hidden relative"
                     >
-                        <div 
-                            id="settings-panel" 
+                        <div
+                            id="settings-panel"
                             className="flex w-full h-full"
                             style={{ visibility: isPreviewingOpacity ? 'hidden' : 'visible' }}
                         >
-                        {/* Sidebar */}
-                        <div className="w-64 bg-bg-sidebar flex flex-col border-r border-border-subtle">
-                            <div className="p-6">
-                                <h2 className="font-semibold text-gray-400 text-xs uppercase tracking-wider mb-2">Settings</h2>
-                                <nav className="space-y-1">
-                                    <button
-                                        onClick={() => setActiveTab('general')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'general' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                    >
-                                        <Monitor size={16} /> General
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('account')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'account' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                    >
-                                        <User size={16} /> Account
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setActiveTab('profile');
-                                            // Load profile status when switching to this tab
-                                            refreshProfileStateRef.current?.().catch(() => { });
-                                            window.electronAPI?.profileGetNotes?.().then(res => {
-                                                if (res?.success) setCustomNotes(res.content ?? '');
-                                            }).catch(() => { });
-                                        }}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'profile' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                    >
-                                        <User size={16} /> Profile Intelligence
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('ai-providers')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'ai-providers' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                    >
-                                        <FlaskConical size={16} /> AI Providers
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('calendar')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'calendar' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                    >
-                                        <Calendar size={16} /> Calendar
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('audio')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'audio' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                    >
-                                        <Mic size={16} /> Audio
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('keybinds')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'keybinds' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                    >
-                                        <Keyboard size={16} /> Keybinds
-                                    </button>
+                            {/* Sidebar */}
+                            <div className="w-64 bg-bg-sidebar flex flex-col border-r border-border-subtle">
+                                <div className="p-6">
+                                    <h2 className="font-semibold text-gray-400 text-xs uppercase tracking-wider mb-2">Settings</h2>
+                                    <nav className="space-y-1">
+                                        <button
+                                            onClick={() => setActiveTab('general')}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'general' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        >
+                                            <Monitor size={16} /> General
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('account')}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'account' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        >
+                                            <User size={16} /> Account
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setActiveTab('profile');
+                                                // Load profile status when switching to this tab
+                                                refreshProfileStateRef.current?.().catch(() => { });
+                                                window.electronAPI?.profileGetNotes?.().then(res => {
+                                                    if (res?.success) setCustomNotes(res.content ?? '');
+                                                }).catch(() => { });
+                                            }}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'profile' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        >
+                                            <User size={16} /> Profile Intelligence
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('ai-providers')}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'ai-providers' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        >
+                                            <FlaskConical size={16} /> AI Providers
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('calendar')}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'calendar' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        >
+                                            <Calendar size={16} /> Calendar
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('audio')}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'audio' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        >
+                                            <Mic size={16} /> Audio
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('keybinds')}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'keybinds' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        >
+                                            <Keyboard size={16} /> Keybinds
+                                        </button>
+
+                                        <button
+                                            onClick={() => setActiveTab('help')}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-3 ${activeTab === 'help' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        >
+                                            <HelpCircle size={16} /> Setup & Help
+                                        </button>
+
+                                        <button
+                                            onClick={() => setActiveTab('about')}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'about' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        >
+                                            <Info size={16} /> About
+                                        </button>
+                                    </nav>
+                                </div>
+
+                                <div className="mt-auto p-6 border-t border-border-subtle">
 
                                     <button
-                                        onClick={() => setActiveTab('help')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-3 ${activeTab === 'help' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
+                                        onClick={() => window.electronAPI.quitApp()}
+                                        className="w-full text-left px-3 py-2 mt-1 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3"
                                     >
-                                        <HelpCircle size={16} /> Setup & Help
+                                        <LogOut size={16} /> Quit TeamSync
                                     </button>
-
-                                    <button
-                                        onClick={() => setActiveTab('about')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'about' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                    >
-                                        <Info size={16} /> About
+                                    <button onClick={onClose} className="group mt-2 w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors flex items-center gap-3">
+                                        <X size={18} className="group-hover:text-red-500 transition-colors" /> Close
                                     </button>
-                                </nav>
+                                </div>
                             </div>
 
-                            <div className="mt-auto p-6 border-t border-border-subtle">
-                                <button
-                                    onClick={async () => {
-                                        // Sign out: clear auth tokens, call backend logout, reload to sign-in
-                                        const token = localStorage.getItem('teamsync_auth_token');
-                                        if (token) {
-                                            try {
-                                                await fetch('http://localhost:3456/auth/logout', {
-                                                    method: 'POST',
-                                                    headers: {
-                                                        'Authorization': `Bearer ${token}`,
-                                                        'Content-Type': 'application/json',
-                                                    },
-                                                });
-                                            } catch {} // Best effort
-                                        }
-                                        localStorage.removeItem('teamsync_auth_token');
-                                        localStorage.removeItem('teamsync_auth_user');
-                                        window.location.reload();
-                                    }}
-                                    className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-orange-400 hover:bg-orange-500/10 transition-colors flex items-center gap-3"
-                                >
-                                    {/* <LogOut size={16} /> Sign Out */}
-                                </button>
-                                <button
-                                    onClick={() => window.electronAPI.quitApp()}
-                                    className="w-full text-left px-3 py-2 mt-1 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3"
-                                >
-                                    <LogOut size={16} /> Quit TeamSync
-                                </button>
-                                <button onClick={onClose} className="group mt-2 w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors flex items-center gap-3">
-                                    <X size={18} className="group-hover:text-red-500 transition-colors" /> Close
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 bg-bg-main overflow-y-auto p-8">
-                            {activeTab === 'general' && (
-                                <div className="space-y-6 animated fadeIn">
-                                    <div className="space-y-3.5">
-                                        {/* UndetectableToggle */}
-                                        <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between transition-all ${isUndetectable ? 'shadow-lg shadow-blue-500/10' : ''}`}>
-                                            <div className="flex flex-col gap-1">
-                                                <div className="flex items-center gap-2">
-                                                    {isUndetectable ? (
-                                                        <svg
-                                                            width="18"
-                                                            height="18"
-                                                            viewBox="0 0 24 24"
-                                                            fill="none"
-                                                            stroke="currentColor"
-                                                            strokeWidth="2"
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            className="text-text-primary"
-                                                        >
-                                                            <path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" fill="currentColor" stroke="currentColor" />
-                                                            <path d="M9 10h.01" stroke="var(--bg-item-surface)" strokeWidth="2.5" />
-                                                            <path d="M15 10h.01" stroke="var(--bg-item-surface)" strokeWidth="2.5" />
-                                                        </svg>
-                                                    ) : (
-                                                        <Ghost size={18} className="text-text-primary" />
-                                                    )}
-                                                    <h3 className="text-lg font-bold text-text-primary">{isUndetectable ? 'Undetectable' : 'Detectable'}</h3>
-                                                </div>
-                                                <p className="text-xs text-text-secondary">
-                                                    TeamSync is currently {isUndetectable ? 'undetectable' : 'detectable'} by screen-sharing. <button className="text-blue-400 hover:underline">Supported apps here</button>
-                                                </p>
-                                            </div>
-                                            <div
-                                                onClick={() => {
-                                                    const newState = !isUndetectable;
-                                                    setIsUndetectable(newState);
-                                                    window.electronAPI?.setUndetectable(newState);
-                                                    // Analytics: Undetectable Mode Toggle
-                                                    analytics.trackModeSelected(newState ? 'undetectable' : 'overlay');
-                                                }}
-                                                className={`w-11 h-6 rounded-full relative transition-colors ${isUndetectable ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                            >
-                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${isUndetectable ? 'translate-x-5' : 'translate-x-0'}`} />
-                                            </div>
-                                        </div>
-
-                                        {/* Mouse Passthrough Toggle — Adapted from public PR #113 */}
-                                        <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between transition-all ${isMousePassthrough ? 'shadow-lg shadow-sky-500/10' : ''}`}>
-                                            <div className="flex flex-col gap-1">
-                                                <div className="flex items-center gap-2">
-                                                    <PointerOff size={18} className={isMousePassthrough ? 'text-sky-400' : 'text-text-primary'} />
-                                                    <h3 className="text-lg font-bold text-text-primary">Mouse Passthrough</h3>
-                                                </div>
-                                                <p className="text-xs text-text-secondary">
-                                                    Overlay stays visible but lets all mouse clicks pass through to the app beneath.
-                                                </p>
-                                            </div>
-                                            <div
-                                                onClick={() => {
-                                                    const newState = !isMousePassthrough;
-                                                    setIsMousePassthrough(newState);
-                                                    window.electronAPI?.setOverlayMousePassthrough(newState);
-                                                }}
-                                                className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${isMousePassthrough ? 'bg-sky-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                            >
-                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${isMousePassthrough ? 'translate-x-5' : 'translate-x-0'}`} />
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <h3 className="text-lg font-bold text-text-primary mb-1">General settings</h3>
-                                            <p className="text-xs text-text-secondary mb-2">Customize how TeamSync works for you</p>
-
-                                            <div className={`rounded-xl border ${isLight ? 'bg-bg-card border-border-subtle divide-y divide-border-subtle' : 'bg-transparent border-transparent divide-y divide-border-subtle/20'}`}>
-                                            <div className="space-y-0">
-                                                {/* Open at Login */}
-                                                <div className="flex items-center justify-between px-4 py-3">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                            <Power size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <h3 className="text-sm font-bold text-text-primary">Open TeamSync when you log in</h3>
-                                                            <p className="text-xs text-text-secondary mt-0.5">TeamSync will open automatically when you log in to your computer</p>
-                                                        </div>
+                            {/* Content */}
+                            <div className="flex-1 bg-bg-main overflow-y-auto p-8">
+                                {activeTab === 'general' && (
+                                    <div className="space-y-6 animated fadeIn">
+                                        <div className="space-y-3.5">
+                                            {/* UndetectableToggle */}
+                                            <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between transition-all ${isUndetectable ? 'shadow-lg shadow-blue-500/10' : ''}`}>
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-2">
+                                                        {isUndetectable ? (
+                                                            <svg
+                                                                width="18"
+                                                                height="18"
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                strokeWidth="2"
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                className="text-text-primary"
+                                                            >
+                                                                <path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" fill="currentColor" stroke="currentColor" />
+                                                                <path d="M9 10h.01" stroke="var(--bg-item-surface)" strokeWidth="2.5" />
+                                                                <path d="M15 10h.01" stroke="var(--bg-item-surface)" strokeWidth="2.5" />
+                                                            </svg>
+                                                        ) : (
+                                                            <Ghost size={18} className="text-text-primary" />
+                                                        )}
+                                                        <h3 className="text-lg font-bold text-text-primary">{isUndetectable ? 'Undetectable' : 'Detectable'}</h3>
                                                     </div>
-                                                    <div
-                                                        onClick={() => {
-                                                            const newState = !openOnLogin;
-                                                            setOpenOnLogin(newState);
-                                                            window.electronAPI?.setOpenAtLogin(newState);
-                                                        }}
-                                                        className={`w-11 h-6 rounded-full relative transition-colors ${openOnLogin ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                    >
-                                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${openOnLogin ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                    </div>
+                                                    <p className="text-xs text-text-secondary">
+                                                        TeamSync is currently {isUndetectable ? 'undetectable' : 'detectable'} by screen-sharing. <button className="text-blue-400 hover:underline">Supported apps here</button>
+                                                    </p>
                                                 </div>
-
-                                                {/* Debug Logging */}
-                                                <div className="flex items-center justify-between px-4 py-3">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className={`w-10 h-10 bg-bg-item-surface rounded-lg border flex items-center justify-center transition-colors ${verboseLogging ? 'border-amber-500/40 text-amber-400' : 'border-border-subtle text-text-tertiary'}`}>
-                                                            <Terminal size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <h3 className="text-sm font-bold text-text-primary">Verbose debug logging</h3>
-                                                            <p className="text-xs text-text-secondary mt-0.5">Print detailed audio, STT, and pipeline diagnostics</p>
-                                                        </div>
-                                                    </div>
-                                                    <div
-                                                        onClick={() => {
-                                                            const newState = !verboseLogging;
-                                                            setVerboseLogging(newState);
-                                                            window.electronAPI?.setVerboseLogging?.(newState);
-                                                            if (newState) {
-                                                                setShowVerboseToast(true);
-                                                            }
-                                                        }}
-                                                        className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${verboseLogging ? 'bg-amber-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                    >
-                                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${verboseLogging ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                    </div>
+                                                <div
+                                                    onClick={() => {
+                                                        const newState = !isUndetectable;
+                                                        setIsUndetectable(newState);
+                                                        window.electronAPI?.setUndetectable(newState);
+                                                        // Analytics: Undetectable Mode Toggle
+                                                        analytics.trackModeSelected(newState ? 'undetectable' : 'overlay');
+                                                    }}
+                                                    className={`w-11 h-6 rounded-full relative transition-colors ${isUndetectable ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                                                >
+                                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${isUndetectable ? 'translate-x-5' : 'translate-x-0'}`} />
                                                 </div>
+                                            </div>
 
-                                                {/* Verbose logging toast */}
-                                                <AnimatePresence>
-                                                    {showVerboseToast && (
-                                                        <motion.div
-                                                            key="verbose-toast"
-                                                            initial={{ opacity: 0, y: -6, height: 0 }}
-                                                            animate={{ opacity: 1, y: 0, height: 'auto' }}
-                                                            exit={{ opacity: 0, y: -4, height: 0 }}
-                                                            transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-                                                            className="mx-4 mb-1 overflow-hidden"
-                                                        >
-                                                            <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                    <Terminal size={14} className="text-amber-400 shrink-0" />
-                                                                    <p className="text-xs text-amber-200/80 leading-snug truncate">
-                                                                        Logs → <span className="font-mono text-amber-300">~/Documents/teamsync_debug.log</span>
+                                            {/* Mouse Passthrough Toggle — Adapted from public PR #113 */}
+                                            <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between transition-all ${isMousePassthrough ? 'shadow-lg shadow-sky-500/10' : ''}`}>
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <PointerOff size={18} className={isMousePassthrough ? 'text-sky-400' : 'text-text-primary'} />
+                                                        <h3 className="text-lg font-bold text-text-primary">Mouse Passthrough</h3>
+                                                    </div>
+                                                    <p className="text-xs text-text-secondary">
+                                                        Overlay stays visible but lets all mouse clicks pass through to the app beneath.
+                                                    </p>
+                                                </div>
+                                                <div
+                                                    onClick={() => {
+                                                        const newState = !isMousePassthrough;
+                                                        setIsMousePassthrough(newState);
+                                                        window.electronAPI?.setOverlayMousePassthrough(newState);
+                                                    }}
+                                                    className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${isMousePassthrough ? 'bg-sky-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                                                >
+                                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${isMousePassthrough ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <h3 className="text-lg font-bold text-text-primary mb-1">General settings</h3>
+                                                <p className="text-xs text-text-secondary mb-2">Customize how TeamSync works for you</p>
+
+                                                <div className={`rounded-xl border ${isLight ? 'bg-bg-card border-border-subtle divide-y divide-border-subtle' : 'bg-transparent border-transparent divide-y divide-border-subtle/20'}`}>
+                                                    <div className="space-y-0">
+                                                        {/* Open at Login */}
+                                                        <div className="flex items-center justify-between px-4 py-3">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
+                                                                    <Power size={20} />
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="text-sm font-bold text-text-primary">Open TeamSync when you log in</h3>
+                                                                    <p className="text-xs text-text-secondary mt-0.5">TeamSync will open automatically when you log in to your computer</p>
+                                                                </div>
+                                                            </div>
+                                                            <div
+                                                                onClick={() => {
+                                                                    const newState = !openOnLogin;
+                                                                    setOpenOnLogin(newState);
+                                                                    window.electronAPI?.setOpenAtLogin(newState);
+                                                                }}
+                                                                className={`w-11 h-6 rounded-full relative transition-colors ${openOnLogin ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                                                            >
+                                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${openOnLogin ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Debug Logging */}
+                                                        <div className="flex items-center justify-between px-4 py-3">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`w-10 h-10 bg-bg-item-surface rounded-lg border flex items-center justify-center transition-colors ${verboseLogging ? 'border-amber-500/40 text-amber-400' : 'border-border-subtle text-text-tertiary'}`}>
+                                                                    <Terminal size={20} />
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="text-sm font-bold text-text-primary">Verbose debug logging</h3>
+                                                                    <p className="text-xs text-text-secondary mt-0.5">Print detailed audio, STT, and pipeline diagnostics</p>
+                                                                </div>
+                                                            </div>
+                                                            <div
+                                                                onClick={() => {
+                                                                    const newState = !verboseLogging;
+                                                                    setVerboseLogging(newState);
+                                                                    window.electronAPI?.setVerboseLogging?.(newState);
+                                                                    if (newState) {
+                                                                        setShowVerboseToast(true);
+                                                                    }
+                                                                }}
+                                                                className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${verboseLogging ? 'bg-amber-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                                                            >
+                                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${verboseLogging ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Verbose logging toast */}
+                                                        <AnimatePresence>
+                                                            {showVerboseToast && (
+                                                                <motion.div
+                                                                    key="verbose-toast"
+                                                                    initial={{ opacity: 0, y: -6, height: 0 }}
+                                                                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                                                                    exit={{ opacity: 0, y: -4, height: 0 }}
+                                                                    transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+                                                                    className="mx-4 mb-1 overflow-hidden"
+                                                                >
+                                                                    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                                            <Terminal size={14} className="text-amber-400 shrink-0" />
+                                                                            <p className="text-xs text-amber-200/80 leading-snug truncate">
+                                                                                Logs → <span className="font-mono text-amber-300">~/Documents/teamsync_debug.log</span>
+                                                                            </p>
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => window.electronAPI?.openLogFile?.()}
+                                                                            className="shrink-0 text-[11px] font-medium text-amber-400 hover:text-amber-300 transition-colors px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25"
+                                                                        >
+                                                                            Open
+                                                                        </button>
+                                                                    </div>
+                                                                    {/* 5-second drain bar */}
+                                                                    <motion.div
+                                                                        className="h-[2px] bg-amber-500/40 rounded-b-xl"
+                                                                        initial={{ scaleX: 1, originX: 0 }}
+                                                                        animate={{ scaleX: 0 }}
+                                                                        transition={{ duration: 5, ease: 'linear', delay: 0.2 }}
+                                                                    />
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
+
+                                                        {/* Interviewer Transcript */}
+                                                        <div className="flex items-center justify-between px-4 py-3">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
+                                                                    <MessageSquare size={20} />
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="text-sm font-bold text-text-primary">Interviewer Transcript</h3>
+                                                                    <p className="text-xs text-text-secondary mt-0.5">Show real-time transcription of the interviewer</p>
+                                                                </div>
+                                                            </div>
+                                                            <div
+                                                                onClick={() => {
+                                                                    const newState = !showTranscript;
+                                                                    setShowTranscript(newState);
+                                                                    localStorage.setItem('teamsync_interviewer_transcript', String(newState));
+                                                                    window.dispatchEvent(new Event('storage'));
+                                                                }}
+                                                                className={`w-11 h-6 rounded-full relative transition-colors ${showTranscript ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                                                            >
+                                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${showTranscript ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                            </div>
+                                                        </div>
+
+
+                                                        {/* Theme */}
+                                                        <div className="flex items-center justify-between px-4 py-3">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
+                                                                    <Palette size={20} />
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="text-sm font-bold text-text-primary">Theme</h3>
+                                                                    <p className="text-xs text-text-secondary mt-0.5">Customize how TeamSync looks on your device</p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="relative" ref={themeDropdownRef}>
+                                                                <button
+                                                                    onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
+                                                                    className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 min-w-[110px] justify-between"
+                                                                >
+                                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                                        <span className="text-text-secondary shrink-0">
+                                                                            {themeMode === 'system' && <Monitor size={14} />}
+                                                                            {themeMode === 'light' && <Sun size={14} />}
+                                                                            {themeMode === 'dark' && <Moon size={14} />}
+                                                                        </span>
+                                                                        <span className="capitalize text-ellipsis overflow-hidden whitespace-nowrap">{themeMode}</span>
+                                                                    </div>
+                                                                    <ChevronDown size={12} className={`shrink-0 transition-transform ${isThemeDropdownOpen ? 'rotate-180' : ''}`} />
+                                                                </button>
+
+                                                                {/* Dropdown Menu */}
+                                                                {isThemeDropdownOpen && (
+                                                                    <div className="absolute right-0 top-full mt-1 min-w-full w-max bg-bg-elevated border border-border-subtle rounded-lg shadow-xl overflow-hidden z-20 p-1 animated fadeIn select-none">
+                                                                        {[
+                                                                            { mode: 'system', label: 'System', icon: <Monitor size={14} /> },
+                                                                            { mode: 'light', label: 'Light', icon: <Sun size={14} /> },
+                                                                            { mode: 'dark', label: 'Dark', icon: <Moon size={14} /> }
+                                                                        ].map((option) => (
+                                                                            <button
+                                                                                key={option.mode}
+                                                                                onClick={() => {
+                                                                                    handleSetTheme(option.mode as any);
+                                                                                    setIsThemeDropdownOpen(false);
+                                                                                }}
+                                                                                className={`w-full text-left px-2 py-1.5 rounded-md text-xs flex items-center gap-2 transition-colors ${themeMode === option.mode ? 'text-text-primary bg-bg-item-active/50' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
+                                                                            >
+                                                                                <span className={themeMode === option.mode ? 'text-text-primary' : 'text-text-secondary group-hover:text-text-primary'}>{option.icon}</span>
+                                                                                <span className="font-medium">{option.label}</span>
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* AI Response Language */}
+                                                        <div className="flex items-center justify-between px-4 py-3">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
+                                                                    <Globe size={20} />
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="text-sm font-bold text-text-primary">AI Response Language</h3>
+                                                                    <p className="text-xs text-text-secondary mt-0.5">
+                                                                        {aiResponseLanguage === 'auto'
+                                                                            ? 'Mirrors user\'s language automatically'
+                                                                            : 'Language for AI suggestions and notes'
+                                                                        }
                                                                     </p>
                                                                 </div>
+                                                            </div>
+
+                                                            <div className="relative" ref={aiLangDropdownRef}>
                                                                 <button
-                                                                    onClick={() => window.electronAPI?.openLogFile?.()}
-                                                                    className="shrink-0 text-[11px] font-medium text-amber-400 hover:text-amber-300 transition-colors px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25"
+                                                                    onClick={() => setIsAiLangDropdownOpen(!isAiLangDropdownOpen)}
+                                                                    className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 min-w-[110px] justify-between"
                                                                 >
-                                                                    Open
+                                                                    <span className="capitalize text-ellipsis overflow-hidden whitespace-nowrap flex items-center gap-1">
+                                                                        {aiResponseLanguage === 'auto' ? 'Auto' : aiResponseLanguage}
+                                                                    </span>
+                                                                    <ChevronDown size={12} className={`shrink-0 transition-transform ${isAiLangDropdownOpen ? 'rotate-180' : ''}`} />
                                                                 </button>
-                                                            </div>
-                                                            {/* 5-second drain bar */}
-                                                            <motion.div
-                                                                className="h-[2px] bg-amber-500/40 rounded-b-xl"
-                                                                initial={{ scaleX: 1, originX: 0 }}
-                                                                animate={{ scaleX: 0 }}
-                                                                transition={{ duration: 5, ease: 'linear', delay: 0.2 }}
-                                                            />
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
 
-                                                {/* Interviewer Transcript */}
-                                                <div className="flex items-center justify-between px-4 py-3">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                            <MessageSquare size={20} />
+                                                                {/* Dropdown Menu */}
+                                                                {isAiLangDropdownOpen && (
+                                                                    <div className="absolute right-0 top-full mt-1 min-w-full w-max bg-bg-elevated border border-border-subtle rounded-lg shadow-xl overflow-hidden z-20 p-1 animated fadeIn select-none max-h-60 overflow-y-auto custom-scrollbar">
+                                                                        {availableAiLanguages.map((option) => (
+                                                                            <button
+                                                                                key={option.code}
+                                                                                onClick={() => {
+                                                                                    handleAiLanguageChange(option.code);
+                                                                                    setIsAiLangDropdownOpen(false);
+                                                                                }}
+                                                                                className={`w-full text-left px-2 py-1.5 rounded-md text-xs flex items-center gap-2 transition-colors ${aiResponseLanguage === option.code ? 'text-text-primary bg-bg-item-active/50' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
+                                                                            >
+                                                                                {option.code === 'auto' ? (
+                                                                                    <span className="font-medium">Auto</span>
+                                                                                ) : (
+                                                                                    <span className="font-medium">{option.label}</span>
+                                                                                )}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <h3 className="text-sm font-bold text-text-primary">Interviewer Transcript</h3>
-                                                            <p className="text-xs text-text-secondary mt-0.5">Show real-time transcription of the interviewer</p>
+
+                                                        {/* Version */}
+                                                        <div className="flex items-start justify-between gap-4 px-4 py-3">
+                                                            <div className="flex items-start gap-4">
+                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
+                                                                    <BadgeCheck size={20} />
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="text-sm font-bold text-text-primary">Version</h3>
+                                                                    <p className="text-xs text-text-secondary mt-0.5">
+                                                                        You are currently using TeamSync version {packageJson.version}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    if (updateStatus === 'available') {
+                                                                        try {
+                                                                            // @ts-ignore
+                                                                            await window.electronAPI.downloadUpdate();
+                                                                            onClose(); // Close settings to show the banner
+                                                                        } catch (err) {
+                                                                            console.error("Failed to start download:", err);
+                                                                        }
+                                                                    } else {
+                                                                        handleCheckForUpdates();
+                                                                    }
+                                                                }}
+                                                                disabled={updateStatus === 'checking'}
+                                                                className={`px-5 py-2 rounded-lg text-[13px] font-bold transition-all flex items-center gap-2 shrink-0 ${updateStatus === 'checking' ? 'bg-bg-input text-text-tertiary cursor-wait' :
+                                                                    updateStatus === 'available' ? 'bg-accent-primary text-white hover:bg-accent-secondary shadow-lg shadow-blue-500/20' :
+                                                                        updateStatus === 'uptodate' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                                                            updateStatus === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                                                'bg-bg-component hover:bg-bg-input text-text-primary'
+                                                                    }`}
+                                                            >
+                                                                {updateStatus === 'checking' ? (
+                                                                    <>
+                                                                        <RefreshCw size={14} className="animate-spin" />
+                                                                        Checking...
+                                                                    </>
+                                                                ) : updateStatus === 'available' ? (
+                                                                    <>
+                                                                        <ArrowDown size={14} />
+                                                                        Update Available
+                                                                    </>
+                                                                ) : updateStatus === 'uptodate' ? (
+                                                                    <>
+                                                                        <Check size={14} />
+                                                                        Up to date
+                                                                    </>
+                                                                ) : updateStatus === 'error' ? (
+                                                                    <>
+                                                                        <X size={14} />
+                                                                        Error
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <RefreshCw size={14} />
+                                                                        Check for updates
+                                                                    </>
+                                                                )}
+                                                            </button>
                                                         </div>
-                                                    </div>
-                                                    <div
-                                                        onClick={() => {
-                                                            const newState = !showTranscript;
-                                                            setShowTranscript(newState);
-                                                            localStorage.setItem('teamsync_interviewer_transcript', String(newState));
-                                                            window.dispatchEvent(new Event('storage'));
-                                                        }}
-                                                        className={`w-11 h-6 rounded-full relative transition-colors ${showTranscript ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                    >
-                                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${showTranscript ? 'translate-x-5' : 'translate-x-0'}`} />
                                                     </div>
                                                 </div>
-
-
-                                                {/* Theme */}
-                                                <div className="flex items-center justify-between px-4 py-3">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                            <Palette size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <h3 className="text-sm font-bold text-text-primary">Theme</h3>
-                                                            <p className="text-xs text-text-secondary mt-0.5">Customize how TeamSync looks on your device</p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="relative" ref={themeDropdownRef}>
-                                                        <button
-                                                            onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
-                                                            className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 min-w-[110px] justify-between"
-                                                        >
-                                                            <div className="flex items-center gap-2 overflow-hidden">
-                                                                <span className="text-text-secondary shrink-0">
-                                                                    {themeMode === 'system' && <Monitor size={14} />}
-                                                                    {themeMode === 'light' && <Sun size={14} />}
-                                                                    {themeMode === 'dark' && <Moon size={14} />}
-                                                                </span>
-                                                                <span className="capitalize text-ellipsis overflow-hidden whitespace-nowrap">{themeMode}</span>
-                                                            </div>
-                                                            <ChevronDown size={12} className={`shrink-0 transition-transform ${isThemeDropdownOpen ? 'rotate-180' : ''}`} />
-                                                        </button>
-
-                                                        {/* Dropdown Menu */}
-                                                        {isThemeDropdownOpen && (
-                                                            <div className="absolute right-0 top-full mt-1 min-w-full w-max bg-bg-elevated border border-border-subtle rounded-lg shadow-xl overflow-hidden z-20 p-1 animated fadeIn select-none">
-                                                                {[
-                                                                    { mode: 'system', label: 'System', icon: <Monitor size={14} /> },
-                                                                    { mode: 'light', label: 'Light', icon: <Sun size={14} /> },
-                                                                    { mode: 'dark', label: 'Dark', icon: <Moon size={14} /> }
-                                                                ].map((option) => (
-                                                                    <button
-                                                                        key={option.mode}
-                                                                        onClick={() => {
-                                                                            handleSetTheme(option.mode as any);
-                                                                            setIsThemeDropdownOpen(false);
-                                                                        }}
-                                                                        className={`w-full text-left px-2 py-1.5 rounded-md text-xs flex items-center gap-2 transition-colors ${themeMode === option.mode ? 'text-text-primary bg-bg-item-active/50' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
-                                                                    >
-                                                                        <span className={themeMode === option.mode ? 'text-text-primary' : 'text-text-secondary group-hover:text-text-primary'}>{option.icon}</span>
-                                                                        <span className="font-medium">{option.label}</span>
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                    {/* AI Response Language */}
-                                                <div className="flex items-center justify-between px-4 py-3">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                            <Globe size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <h3 className="text-sm font-bold text-text-primary">AI Response Language</h3>
-                                                            <p className="text-xs text-text-secondary mt-0.5">
-                                                                {aiResponseLanguage === 'auto'
-                                                                    ? 'Mirrors user\'s language automatically'
-                                                                    : 'Language for AI suggestions and notes'
-                                                                }
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="relative" ref={aiLangDropdownRef}>
-                                                        <button
-                                                            onClick={() => setIsAiLangDropdownOpen(!isAiLangDropdownOpen)}
-                                                            className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 min-w-[110px] justify-between"
-                                                        >
-                                                            <span className="capitalize text-ellipsis overflow-hidden whitespace-nowrap flex items-center gap-1">
-                                                                {aiResponseLanguage === 'auto' ? 'Auto' : aiResponseLanguage}
-                                                            </span>
-                                                            <ChevronDown size={12} className={`shrink-0 transition-transform ${isAiLangDropdownOpen ? 'rotate-180' : ''}`} />
-                                                        </button>
-
-                                                        {/* Dropdown Menu */}
-                                                        {isAiLangDropdownOpen && (
-                                                            <div className="absolute right-0 top-full mt-1 min-w-full w-max bg-bg-elevated border border-border-subtle rounded-lg shadow-xl overflow-hidden z-20 p-1 animated fadeIn select-none max-h-60 overflow-y-auto custom-scrollbar">
-                                                                {availableAiLanguages.map((option) => (
-                                                                    <button
-                                                                        key={option.code}
-                                                                        onClick={() => {
-                                                                            handleAiLanguageChange(option.code);
-                                                                            setIsAiLangDropdownOpen(false);
-                                                                        }}
-                                                                        className={`w-full text-left px-2 py-1.5 rounded-md text-xs flex items-center gap-2 transition-colors ${aiResponseLanguage === option.code ? 'text-text-primary bg-bg-item-active/50' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
-                                                                    >
-                                                                        {option.code === 'auto' ? (
-                                                                            <span className="font-medium">Auto</span>
-                                                                        ) : (
-                                                                            <span className="font-medium">{option.label}</span>
-                                                                        )}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Version */}
-                                                <div className="flex items-start justify-between gap-4 px-4 py-3">
-                                                    <div className="flex items-start gap-4">
-                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
-                                                            <BadgeCheck size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <h3 className="text-sm font-bold text-text-primary">Version</h3>
-                                                            <p className="text-xs text-text-secondary mt-0.5">
-                                                                You are currently using TeamSync version {packageJson.version}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        onClick={async () => {
-                                                            if (updateStatus === 'available') {
-                                                                try {
-                                                                    // @ts-ignore
-                                                                    await window.electronAPI.downloadUpdate();
-                                                                    onClose(); // Close settings to show the banner
-                                                                } catch (err) {
-                                                                    console.error("Failed to start download:", err);
-                                                                }
-                                                            } else {
-                                                                handleCheckForUpdates();
-                                                            }
-                                                        }}
-                                                        disabled={updateStatus === 'checking'}
-                                                        className={`px-5 py-2 rounded-lg text-[13px] font-bold transition-all flex items-center gap-2 shrink-0 ${updateStatus === 'checking' ? 'bg-bg-input text-text-tertiary cursor-wait' :
-                                                            updateStatus === 'available' ? 'bg-accent-primary text-white hover:bg-accent-secondary shadow-lg shadow-blue-500/20' :
-                                                                updateStatus === 'uptodate' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
-                                                                    updateStatus === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                                        'bg-bg-component hover:bg-bg-input text-text-primary'
-                                                            }`}
-                                                    >
-                                                        {updateStatus === 'checking' ? (
-                                                            <>
-                                                                <RefreshCw size={14} className="animate-spin" />
-                                                                Checking...
-                                                            </>
-                                                        ) : updateStatus === 'available' ? (
-                                                            <>
-                                                                <ArrowDown size={14} />
-                                                                Update Available
-                                                            </>
-                                                        ) : updateStatus === 'uptodate' ? (
-                                                            <>
-                                                                <Check size={14} />
-                                                                Up to date
-                                                            </>
-                                                        ) : updateStatus === 'error' ? (
-                                                            <>
-                                                                <X size={14} />
-                                                                Error
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <RefreshCw size={14} />
-                                                                Check for updates
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            </div>
 
                                                 {/* ------------------------------------------------------------------ */}
                                                 {/* Interface Opacity (Stealth Mode)                                   */}
@@ -2108,364 +2086,257 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                     </p>
                                                 </div>
 
+                                            </div>
+
+                                        </div>
+
+                                        {/* Process Disguise */}
+                                        {/* Process Disguise */}
+                                        <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle`}>
+                                            <div className="flex flex-col gap-1 mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-lg font-bold text-text-primary">Process Disguise</h3>
+                                                </div>
+                                                <p className="text-xs text-text-secondary">
+                                                    Disguise TeamSync as another application to prevent detection during screen sharing.
+                                                    <span className="block mt-1 text-text-tertiary">
+                                                        Select a disguise to be automatically applied when Undetectable mode is on.
+                                                    </span>
+                                                </p>
+                                            </div>
+
+                                            <div className={`grid grid-cols-2 gap-3 ${isUndetectable ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                {isUndetectable && (
+                                                    <p className="col-span-2 text-xs text-yellow-500/80 -mt-1 mb-1">
+                                                        ⚠️ Disable Undetectable mode first to change disguise.
+                                                    </p>
+                                                )}
+                                                {[
+                                                    { id: 'none', label: 'None (Default)', icon: <Layout size={14} /> },
+                                                    { id: 'terminal', label: 'Terminal', icon: <Terminal size={14} /> },
+                                                    { id: 'settings', label: 'System Settings', icon: <Settings size={14} /> },
+                                                    { id: 'activity', label: 'Activity Monitor', icon: <Activity size={14} /> }
+                                                ].map((option) => (
+                                                    <button
+                                                        key={option.id}
+                                                        disabled={isUndetectable}
+                                                        onClick={() => {
+                                                            if (isUndetectable) return;
+                                                            // @ts-ignore
+                                                            setDisguiseMode(option.id);
+                                                            // @ts-ignore
+                                                            window.electronAPI?.setDisguise(option.id);
+                                                            // Analytics
+                                                            analytics.trackModeSelected(`disguise_${option.id}`);
+                                                        }}
+                                                        className={`p-3 rounded-lg border text-left flex items-center gap-3 transition-all ${disguiseMode === option.id
+                                                            ? 'bg-accent-primary border-accent-primary text-white shadow-lg shadow-blue-500/20'
+                                                            : 'bg-bg-input border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-subtle-hover'
+                                                            } ${isUndetectable ? 'cursor-not-allowed' : ''}`}
+                                                    >
+                                                        <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${disguiseMode === option.id ? 'bg-white/20 text-white' : 'bg-bg-item-surface text-text-secondary'
+                                                            }`}>
+                                                            {option.icon}
+                                                        </div>
+                                                        <span className="text-xs font-medium">{option.label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
 
                                     </div>
-
-                                    {/* Process Disguise */}
-                                    {/* Process Disguise */}
-                                    <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle`}>
-                                        <div className="flex flex-col gap-1 mb-3">
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="text-lg font-bold text-text-primary">Process Disguise</h3>
+                                )}
+                                {activeTab === 'profile' && (
+                                    <div className="space-y-6 animated fadeIn">
+                                        {/* Introduction */}
+                                        <div className="mb-5">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-sm font-bold text-text-primary">Professional Identity</h3>
+                                                    {isPremium && premiumPlan && (
+                                                        <span className="bg-[#FACC15]/10 text-[#FACC15] border border-[#FACC15]/20 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ml-1">
+                                                            {premiumPlan.toUpperCase()} PLAN
+                                                        </span>
+                                                    )}
+                                                    {isTrialActive && !isPremium && (
+                                                        <span className="bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ml-1">
+                                                            FREE TRIAL
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    onClick={() => setIsPremiumModalOpen(true)}
+                                                    className={`text-[11px] font-semibold flex items-center gap-1.5 transition-all duration-200 px-2.5 py-1 rounded-full border shadow-[0_0_10px_rgba(250,204,21,0.2)] hover:shadow-[0_0_15px_rgba(250,204,21,0.3)] ${isPremium
+                                                        ? (isLight ? 'bg-bg-component text-text-primary border-border-subtle hover:bg-bg-item-surface' : 'bg-zinc-800 text-white border-white/10 hover:bg-zinc-700')
+                                                        : isTrialActive
+                                                            ? 'bg-violet-500/15 text-violet-300 border-violet-500/30 hover:bg-violet-500/25 active:scale-[0.98]'
+                                                            : 'bg-[#FACC15] text-black border-transparent hover:bg-[#FDE047] active:scale-[0.98]'
+                                                        }`}
+                                                >
+                                                    {isPremium ? <CheckCircle size={12} className="text-green-400" /> : isTrialActive ? <Sparkles size={12} className="text-violet-400" /> : <Sparkles size={12} className="text-black/80" />}
+                                                    {isPremium ? 'Manage Pro' : isTrialActive ? 'Upgrade' : 'Unlock Pro'}
+                                                </button>
                                             </div>
-                                            <p className="text-xs text-text-secondary">
-                                                Disguise TeamSync as another application to prevent detection during screen sharing.
-                                                <span className="block mt-1 text-text-tertiary">
-                                                    Select a disguise to be automatically applied when Undetectable mode is on.
-                                                </span>
+                                            <p className="text-xs text-text-secondary mb-2">
+                                                This engine constructs an intelligent representation of your career history.
                                             </p>
                                         </div>
 
-                                        <div className={`grid grid-cols-2 gap-3 ${isUndetectable ? 'opacity-50 pointer-events-none' : ''}`}>
-                                            {isUndetectable && (
-                                                <p className="col-span-2 text-xs text-yellow-500/80 -mt-1 mb-1">
-                                                    ⚠️ Disable Undetectable mode first to change disguise.
-                                                </p>
-                                            )}
-                                            {[
-                                                { id: 'none', label: 'None (Default)', icon: <Layout size={14} /> },
-                                                { id: 'terminal', label: 'Terminal', icon: <Terminal size={14} /> },
-                                                { id: 'settings', label: 'System Settings', icon: <Settings size={14} /> },
-                                                { id: 'activity', label: 'Activity Monitor', icon: <Activity size={14} /> }
-                                            ].map((option) => (
-                                                <button
-                                                    key={option.id}
-                                                    disabled={isUndetectable}
-                                                    onClick={() => {
-                                                        if (isUndetectable) return;
-                                                        // @ts-ignore
-                                                        setDisguiseMode(option.id);
-                                                        // @ts-ignore
-                                                        window.electronAPI?.setDisguise(option.id);
-                                                        // Analytics
-                                                        analytics.trackModeSelected(`disguise_${option.id}`);
-                                                    }}
-                                                    className={`p-3 rounded-lg border text-left flex items-center gap-3 transition-all ${disguiseMode === option.id
-                                                        ? 'bg-accent-primary border-accent-primary text-white shadow-lg shadow-blue-500/20'
-                                                        : 'bg-bg-input border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-subtle-hover'
-                                                        } ${isUndetectable ? 'cursor-not-allowed' : ''}`}
-                                                >
-                                                    <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${disguiseMode === option.id ? 'bg-white/20 text-white' : 'bg-bg-item-surface text-text-secondary'
-                                                        }`}>
-                                                        {option.icon}
-                                                    </div>
-                                                    <span className="text-xs font-medium">{option.label}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                </div>
-                            )}
-                            {activeTab === 'profile' && (
-                                <div className="space-y-6 animated fadeIn">
-                                    {/* Introduction */}
-                                    <div className="mb-5">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="text-sm font-bold text-text-primary">Professional Identity</h3>
-                                                {isPremium && premiumPlan && (
-                                                    <span className="bg-[#FACC15]/10 text-[#FACC15] border border-[#FACC15]/20 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ml-1">
-                                                        {premiumPlan.toUpperCase()} PLAN
-                                                    </span>
-                                                )}
-                                                {isTrialActive && !isPremium && (
-                                                    <span className="bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ml-1">
-                                                        FREE TRIAL
-                                                    </span>
-                                                )}
+                                        {!profileStatus.isReady && (
+                                            <div className="mb-4 rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-xs text-text-secondary">
+                                                Restoring your saved profile intelligence and AOT outputs...
                                             </div>
-                                            <button
-                                                onClick={() => setIsPremiumModalOpen(true)}
-                                                className={`text-[11px] font-semibold flex items-center gap-1.5 transition-all duration-200 px-2.5 py-1 rounded-full border shadow-[0_0_10px_rgba(250,204,21,0.2)] hover:shadow-[0_0_15px_rgba(250,204,21,0.3)] ${isPremium
-                                                    ? (isLight ? 'bg-bg-component text-text-primary border-border-subtle hover:bg-bg-item-surface' : 'bg-zinc-800 text-white border-white/10 hover:bg-zinc-700')
-                                                    : isTrialActive
-                                                    ? 'bg-violet-500/15 text-violet-300 border-violet-500/30 hover:bg-violet-500/25 active:scale-[0.98]'
-                                                    : 'bg-[#FACC15] text-black border-transparent hover:bg-[#FDE047] active:scale-[0.98]'
-                                                    }`}
-                                            >
-                                                {isPremium ? <CheckCircle size={12} className="text-green-400" /> : isTrialActive ? <Sparkles size={12} className="text-violet-400" /> : <Sparkles size={12} className="text-black/80" />}
-                                                {isPremium ? 'Manage Pro' : isTrialActive ? 'Upgrade' : 'Unlock Pro'}
-                                            </button>
-                                        </div>
-                                        <p className="text-xs text-text-secondary mb-2">
-                                            This engine constructs an intelligent representation of your career history.
-                                        </p>
-                                    </div>
+                                        )}
 
-                                    {!profileStatus.isReady && (
-                                        <div className="mb-4 rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-xs text-text-secondary">
-                                            Restoring your saved profile intelligence and AOT outputs...
-                                        </div>
-                                    )}
+                                        {/* Intelligence Graph Hero Card */}
+                                        <div className="bg-bg-item-surface rounded-xl border border-border-subtle flex flex-col justify-between overflow-hidden">
+                                            <div className="flex flex-col justify-between min-h-[160px]">
 
-                                    {/* Intelligence Graph Hero Card */}
-                                    <div className="bg-bg-item-surface rounded-xl border border-border-subtle flex flex-col justify-between overflow-hidden">
-                                        <div className="flex flex-col justify-between min-h-[160px]">
-
-                                            {/* Header */}
-                                            <div className="p-5 pb-4">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-full bg-bg-input border border-border-subtle flex items-center justify-center text-text-primary shadow-sm hover:scale-105 transition-transform duration-300">
-                                                            <span className="font-bold text-sm tracking-tight">
-                                                                {profileData?.identity?.name ? profileData.identity.name.charAt(0).toUpperCase() : 'U'}
-                                                            </span>
+                                                {/* Header */}
+                                                <div className="p-5 pb-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-10 h-10 rounded-full bg-bg-input border border-border-subtle flex items-center justify-center text-text-primary shadow-sm hover:scale-105 transition-transform duration-300">
+                                                                <span className="font-bold text-sm tracking-tight">
+                                                                    {profileData?.identity?.name ? profileData.identity.name.charAt(0).toUpperCase() : 'U'}
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="text-sm font-bold text-text-primary tracking-tight">
+                                                                    {profileData?.identity?.name || 'Identity Node Inactive'}
+                                                                </h4>
+                                                                <p className="text-xs text-text-secondary mt-0.5 tracking-wide">
+                                                                    {profileData?.identity?.email || 'Upload a resume to begin mapping.'}
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <h4 className="text-sm font-bold text-text-primary tracking-tight">
-                                                                {profileData?.identity?.name || 'Identity Node Inactive'}
-                                                            </h4>
-                                                            <p className="text-xs text-text-secondary mt-0.5 tracking-wide">
-                                                                {profileData?.identity?.email || 'Upload a resume to begin mapping.'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
 
-                                                    <div className="flex items-center gap-3">
-                                                        {/* Profile Intelligence Toggle */}
-                                                        <div
-                                                            className={`flex items-center gap-2 bg-bg-input px-3 py-1.5 rounded-full border border-border-subtle ${!canEnableProfileIntelligence ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                                            title={!hasProfileAccess ? 'Requires Pro license' : !profileStatus.hasProfile ? 'Upload a resume to enable Profile Intelligence' : ''}
-                                                        >
-                                                            <span className="text-xs font-medium text-text-secondary">Profile Intelligence</span>
+                                                        <div className="flex items-center gap-3">
+                                                            {/* Profile Intelligence Toggle */}
                                                             <div
-                                                                onClick={async () => {
-                                                                    if (!canEnableProfileIntelligence) return;
-                                                                    const newState = !profileStatus.profileMode;
-                                                                    try {
-                                                                        await window.electronAPI?.profileSetMode?.(newState);
-                                                                    } catch (e) {
-                                                                        console.error('Failed to toggle profile intelligence:', e);
-                                                                    }
-                                                                }}
-                                                                className={`w-9 h-5 rounded-full relative transition-colors ${!canEnableProfileIntelligence ? 'opacity-40 cursor-not-allowed bg-bg-toggle-switch' : profileStatus.profileMode ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                                                                className={`flex items-center gap-2 bg-bg-input px-3 py-1.5 rounded-full border border-border-subtle ${!canEnableProfileIntelligence ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                                                title={!hasProfileAccess ? 'Requires Pro license' : !profileStatus.hasProfile ? 'Upload a resume to enable Profile Intelligence' : ''}
                                                             >
-                                                                <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${profileStatus.profileMode && canEnableProfileIntelligence ? 'translate-x-4' : 'translate-x-0'}`} />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Data Metrics & Extracted Skills */}
-                                            <div className="p-5 pt-0 mt-auto">
-                                                <div className="flex items-center justify-between bg-bg-input border border-border-subtle py-4 px-6 rounded-2xl shadow-sm">
-                                                    <div className="flex flex-col items-center justify-center flex-1">
-                                                        <span className="text-[20px] font-bold text-text-primary tracking-tight leading-none mb-1">{profileData?.experienceCount || 0}</span>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
-                                                            <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest">Experience</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="h-8 w-px bg-border-subtle/60" />
-
-                                                    <div className="flex flex-col items-center justify-center flex-1">
-                                                        <span className="text-[20px] font-bold text-text-primary tracking-tight leading-none mb-1">{profileData?.projectCount || 0}</span>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
-                                                            <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest">Projects</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="h-8 w-px bg-border-subtle/60" />
-
-                                                    <div className="flex flex-col items-center justify-center flex-1">
-                                                        <span className="text-[20px] font-bold text-text-primary tracking-tight leading-none mb-1">{profileData?.nodeCount || 0}</span>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.4)]" />
-                                                            <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest">Nodes</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {profileData?.skills && profileData.skills.length > 0 && (
-                                                    <div className="mt-5">
-                                                        <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide mb-2">
-                                                            Top Skills
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-1.5">
-                                                            {profileData.skills.slice(0, 15).map((skill: string, i: number) => (
-                                                                <span key={i} className="text-[10px] font-medium text-text-secondary px-2 py-1 rounded-md border border-border-subtle bg-bg-input">
-                                                                    {skill}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Upload Area */}
-                                    <div className="mt-5">
-                                        <div className={`bg-bg-item-surface rounded-xl border transition-all ${profileUploading ? 'border-accent-primary/50 ring-1 ring-accent-primary/20' : 'border-border-subtle'}`}>
-                                            <div className="p-5 flex items-center justify-between">
-                                                <div className="flex items-center gap-4 min-w-0">
-                                                    <div className="w-10 h-10 rounded-lg bg-bg-input border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
-                                                        {profileUploading ? <RefreshCw size={20} className="animate-spin text-accent-primary" /> : <Upload size={20} />}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <h4 className="text-sm font-bold text-text-primary mb-0.5 truncate pr-4">
-                                                            {profileStatus.hasProfile ? 'Overwrite Source Document' : 'Initialize Knowledge Base'}
-                                                        </h4>
-                                                        {profileUploading ? (
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="h-[4px] w-[100px] bg-bg-input rounded-full overflow-hidden">
-                                                                    <div className="h-full bg-accent-primary rounded-full animate-pulse" style={{ width: '50%' }} />
-                                                                </div>
-                                                                <span className="text-[10px] text-text-secondary tracking-wide">Processing structural semantics...</span>
-                                                            </div>
-                                                        ) : (
-                                                            <p className="text-xs text-text-secondary truncate pr-4">
-                                                                Provide a resume file to seed the intelligence engine.
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <button
-                                                    onClick={async () => {
-                                                        let uploadGenerationId = 0;
-                                                        setProfileError('');
-                                                        try {
-                                                            const fileResult = await window.electronAPI?.profileSelectFile?.();
-                                                            if (fileResult?.cancelled || !fileResult?.filePath) return;
-
-                                                            setLastResumePath(fileResult.filePath);
-                                                            setLastUploadKind('resume');
-                                                            uploadGenerationId = Date.now();
-                                                            uploadGenerationRef.current = uploadGenerationId;
-                                                            setProfileUploading(true);
-                                                            updateProfileViewStatus('processing');
-                                                            setProfileData(null);
-                                                            profileGenerationRef.current = 0;
-                                                            setNegotiationScript(null);
-                                                            setProfileStatus({
-                                                                hasProfile: false,
-                                                                profileMode: false,
-                                                                isReady: false
-                                                            });
-                                                            const result = await window.electronAPI?.profileUploadResume?.(fileResult.filePath);
-                                                            if (uploadGenerationRef.current !== uploadGenerationId) return;
-                                                            if (result?.success) {
-                                                                await refreshProfileStateRef.current?.(uploadGenerationId);
-                                                            } else if (result?.error === 'STALE_GENERATION') {
-                                                                return;
-                                                            } else {
-                                                                updateProfileViewStatus('error');
-                                                                setProfileError(result?.error || 'Upload failed');
-                                                            }
-                                                        } catch (e: any) {
-                                                            updateProfileViewStatus('error');
-                                                            setProfileError(e.message || 'Upload failed');
-                                                        } finally {
-                                                            if (uploadGenerationRef.current === uploadGenerationId) {
-                                                                setProfileUploading(false);
-                                                            }
-                                                        }
-                                                    }}
-                                                    disabled={profileViewStatus === 'processing'}
-                                                    className={`px-4 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${profileViewStatus === 'processing' ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-text-primary text-bg-main hover:opacity-90 shadow-sm'}`}
-                                                >
-                                                    {profileUploading ? 'Ingesting...' : 'Select File'}
-                                                </button>
-                                            </div>
-
-                                            {profileError && (
-                                                <div className="px-5 pb-4">
-                                                    <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-[11px] text-red-500 font-medium">
-                                                        <X size={12} /> {profileError}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* JD Upload Card */}
-                                    <div className="mt-5">
-                                        <div className={`rounded-xl transition-all border ${jdUploading ? 'border-blue-500/50 ring-1 ring-blue-500/20 bg-bg-item-surface' : profileData?.hasActiveJD ? 'border-blue-500/30 bg-blue-500/5' : 'border-border-subtle bg-bg-item-surface'}`}>
-                                            <div className="p-5 flex items-center justify-between">
-                                                <div className="flex items-center gap-4 min-w-0">
-                                                    <div className="w-10 h-10 rounded-lg bg-bg-input border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
-                                                        {jdUploading ? <RefreshCw size={20} className="animate-spin text-blue-500" /> : <Briefcase size={20} />}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <h4 className="text-sm font-bold text-text-primary mb-0.5 truncate pr-4">
-                                                            {profileData?.hasActiveJD ? `${profileData.activeJD?.title} @ ${profileData.activeJD?.company}` : 'Upload Job Description'}
-                                                        </h4>
-                                                        {jdUploading ? (
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="h-[4px] w-[100px] bg-bg-input rounded-full overflow-hidden">
-                                                                    <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '50%' }} />
-                                                                </div>
-                                                                <span className="text-[10px] text-text-secondary tracking-wide">Parsing JD structure...</span>
-                                                            </div>
-                                                        ) : profileData?.hasActiveJD ? (
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-[9px] font-bold text-blue-500 px-1.5 py-0.5 bg-blue-500/10 rounded uppercase tracking-wide border border-blue-500/20">
-                                                                    {profileData.activeJD?.level || 'mid'}-level
-                                                                </span>
-                                                                <div className="flex gap-1.5">
-                                                                    {profileData.activeJD?.technologies?.slice(0, 3).map((t: string, i: number) => (
-                                                                        <span key={i} className="text-[10px] text-text-secondary">{t}</span>
-                                                                    ))}
+                                                                <span className="text-xs font-medium text-text-secondary">Profile Intelligence</span>
+                                                                <div
+                                                                    onClick={async () => {
+                                                                        if (!canEnableProfileIntelligence) return;
+                                                                        const newState = !profileStatus.profileMode;
+                                                                        try {
+                                                                            await window.electronAPI?.profileSetMode?.(newState);
+                                                                        } catch (e) {
+                                                                            console.error('Failed to toggle profile intelligence:', e);
+                                                                        }
+                                                                    }}
+                                                                    className={`w-9 h-5 rounded-full relative transition-colors ${!canEnableProfileIntelligence ? 'opacity-40 cursor-not-allowed bg-bg-toggle-switch' : profileStatus.profileMode ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                                                                >
+                                                                    <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${profileStatus.profileMode && canEnableProfileIntelligence ? 'translate-x-4' : 'translate-x-0'}`} />
                                                                 </div>
                                                             </div>
-                                                        ) : (
-                                                            <p className="text-xs text-text-secondary">
-                                                                Upload a JD to enable persona tuning and company research.
-                                                            </p>
-                                                        )}
+                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    {profileData?.hasActiveJD && (
-                                                        <button
-                                                            onClick={async () => {
-                                                                await window.electronAPI?.profileDeleteJD?.();
-                                                                await refreshProfileStateRef.current?.();
-                                                            }}
-                                                            className="px-2.5 py-2 rounded-full text-xs text-text-tertiary hover:text-red-500 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
+                                                {/* Data Metrics & Extracted Skills */}
+                                                <div className="p-5 pt-0 mt-auto">
+                                                    <div className="flex items-center justify-between bg-bg-input border border-border-subtle py-4 px-6 rounded-2xl shadow-sm">
+                                                        <div className="flex flex-col items-center justify-center flex-1">
+                                                            <span className="text-[20px] font-bold text-text-primary tracking-tight leading-none mb-1">{profileData?.experienceCount || 0}</span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+                                                                <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest">Experience</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="h-8 w-px bg-border-subtle/60" />
+
+                                                        <div className="flex flex-col items-center justify-center flex-1">
+                                                            <span className="text-[20px] font-bold text-text-primary tracking-tight leading-none mb-1">{profileData?.projectCount || 0}</span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+                                                                <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest">Projects</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="h-8 w-px bg-border-subtle/60" />
+
+                                                        <div className="flex flex-col items-center justify-center flex-1">
+                                                            <span className="text-[20px] font-bold text-text-primary tracking-tight leading-none mb-1">{profileData?.nodeCount || 0}</span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.4)]" />
+                                                                <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-widest">Nodes</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {profileData?.skills && profileData.skills.length > 0 && (
+                                                        <div className="mt-5">
+                                                            <div className="text-[10px] font-bold text-text-primary uppercase tracking-wide mb-2">
+                                                                Top Skills
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {profileData.skills.slice(0, 15).map((skill: string, i: number) => (
+                                                                    <span key={i} className="text-[10px] font-medium text-text-secondary px-2 py-1 rounded-md border border-border-subtle bg-bg-input">
+                                                                        {skill}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
                                                     )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Upload Area */}
+                                        <div className="mt-5">
+                                            <div className={`bg-bg-item-surface rounded-xl border transition-all ${profileUploading ? 'border-accent-primary/50 ring-1 ring-accent-primary/20' : 'border-border-subtle'}`}>
+                                                <div className="p-5 flex items-center justify-between">
+                                                    <div className="flex items-center gap-4 min-w-0">
+                                                        <div className="w-10 h-10 rounded-lg bg-bg-input border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
+                                                            {profileUploading ? <RefreshCw size={20} className="animate-spin text-accent-primary" /> : <Upload size={20} />}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <h4 className="text-sm font-bold text-text-primary mb-0.5 truncate pr-4">
+                                                                {profileStatus.hasProfile ? 'Overwrite Source Document' : 'Initialize Knowledge Base'}
+                                                            </h4>
+                                                            {profileUploading ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="h-[4px] w-[100px] bg-bg-input rounded-full overflow-hidden">
+                                                                        <div className="h-full bg-accent-primary rounded-full animate-pulse" style={{ width: '50%' }} />
+                                                                    </div>
+                                                                    <span className="text-[10px] text-text-secondary tracking-wide">Processing structural semantics...</span>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-xs text-text-secondary truncate pr-4">
+                                                                    Provide a resume file to seed the intelligence engine.
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
                                                     <button
                                                         onClick={async () => {
                                                             let uploadGenerationId = 0;
-                                                            setJdError('');
+                                                            setProfileError('');
                                                             try {
                                                                 const fileResult = await window.electronAPI?.profileSelectFile?.();
                                                                 if (fileResult?.cancelled || !fileResult?.filePath) return;
 
-                                                                setLastJdPath(fileResult.filePath);
-                                                                setLastUploadKind('jd');
+                                                                setLastResumePath(fileResult.filePath);
+                                                                setLastUploadKind('resume');
                                                                 uploadGenerationId = Date.now();
                                                                 uploadGenerationRef.current = uploadGenerationId;
-                                                                setJdUploading(true);
+                                                                setProfileUploading(true);
                                                                 updateProfileViewStatus('processing');
                                                                 setProfileData(null);
                                                                 profileGenerationRef.current = 0;
                                                                 setNegotiationScript(null);
-                                                                setProfileStatus(prev => ({
-                                                                    ...prev,
+                                                                setProfileStatus({
+                                                                    hasProfile: false,
+                                                                    profileMode: false,
                                                                     isReady: false
-                                                                }));
-                                                                const result = await window.electronAPI?.profileUploadJD?.(fileResult.filePath);
+                                                                });
+                                                                const result = await window.electronAPI?.profileUploadResume?.(fileResult.filePath);
                                                                 if (uploadGenerationRef.current !== uploadGenerationId) return;
                                                                 if (result?.success) {
                                                                     await refreshProfileStateRef.current?.(uploadGenerationId);
@@ -2473,1243 +2344,1348 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                     return;
                                                                 } else {
                                                                     updateProfileViewStatus('error');
-                                                                    setJdError(result?.error || 'JD upload failed');
+                                                                    setProfileError(result?.error || 'Upload failed');
                                                                 }
                                                             } catch (e: any) {
                                                                 updateProfileViewStatus('error');
-                                                                setJdError(e.message || 'JD upload failed');
+                                                                setProfileError(e.message || 'Upload failed');
                                                             } finally {
                                                                 if (uploadGenerationRef.current === uploadGenerationId) {
-                                                                    setJdUploading(false);
+                                                                    setProfileUploading(false);
                                                                 }
                                                             }
                                                         }}
                                                         disabled={profileViewStatus === 'processing'}
-                                                        className={`px-4 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${profileViewStatus === 'processing' ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-sm'}`}
+                                                        className={`px-4 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${profileViewStatus === 'processing' ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-text-primary text-bg-main hover:opacity-90 shadow-sm'}`}
                                                     >
-                                                        {jdUploading ? 'Parsing...' : profileData?.hasActiveJD ? 'Replace JD' : 'Upload JD'}
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {jdError && (
-                                                <div className="px-5 pb-4">
-                                                    <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-[11px] text-red-500 font-medium">
-                                                        <X size={12} /> {jdError}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Custom Context Card — Pro only */}
-                                    {hasProfileAccess && (
-                                    <div className="mt-5">
-                                        <div className="bg-bg-item-surface rounded-xl border border-border-subtle">
-                                            <div className="p-5">
-                                                <div className="flex items-center gap-4 mb-4">
-                                                    <div className="w-10 h-10 rounded-lg bg-bg-input border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
-                                                        <Pencil size={20} />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <h4 className="text-sm font-bold text-text-primary">Custom Context</h4>
-                                                            {customNotesSaved && (
-                                                                <span className="text-[9px] font-bold text-emerald-500 px-1.5 py-0.5 bg-emerald-500/10 rounded-full border border-emerald-500/20 uppercase tracking-wide flex items-center gap-1">
-                                                                    <Check size={8} /> Saved
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-[11px] text-text-secondary mt-0.5">
-                                                            Add any context the AI should know about you — saved across all sessions.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-3">
-                                                    <textarea
-                                                        value={customNotes}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            if (val.length > 4000) return;
-                                                            setCustomNotes(val);
-                                                            setCustomNotesSaved(false);
-                                                            if (customNotesDebounceRef.current) clearTimeout(customNotesDebounceRef.current);
-                                                            customNotesDebounceRef.current = setTimeout(async () => {
-                                                                try {
-                                                                    await window.electronAPI?.profileSaveNotes?.(val);
-                                                                    setCustomNotesSaved(true);
-                                                                    setTimeout(() => setCustomNotesSaved(false), 2000);
-                                                                } catch (_) {}
-                                                            }, 800);
-                                                        }}
-                                                        placeholder={`Examples:\n• Q4 ARR was $2.1M, grew 40% YoY — use when pitching growth story\n• Solved LRU Cache (LeetCode 146) with O(1) get/put using HashMap + doubly linked list\n• I prefer concise, direct answers without filler phrases\n• My target salary is $180k base — don't go below $160k`}
-                                                        rows={6}
-                                                        className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-xs text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary/50 focus:ring-1 focus:ring-accent-primary/20 transition-all resize-none leading-relaxed"
-                                                    />
-                                                    <div className="flex items-center justify-between px-0.5">
-                                                        <p className="text-[10px] text-text-tertiary">
-                                                            Auto-saved · Works with all modes and providers
-                                                        </p>
-                                                        <span className={`text-[10px] tabular-nums ${customNotes.length > 3600 ? 'text-amber-500' : 'text-text-tertiary'}`}>
-                                                            {customNotes.length}/4000
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    )}
-
-                                    {/* Google Search API Card */}
-                                    <div className="mt-5">
-                                        <div className="bg-bg-item-surface rounded-xl border border-border-subtle">
-                                            <div className="p-5">
-                                                <div className="flex items-center gap-4 mb-4">
-                                                    <div className="w-10 h-10 rounded-lg bg-bg-input border border-border-subtle flex items-center justify-center text-emerald-500 shrink-0">
-                                                        <Globe size={20} />
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <h4 className="text-sm font-bold text-text-primary">Tavily Search API</h4>
-                                                            {hasStoredTavilyKey && (
-                                                                <span className="text-[9px] font-bold text-emerald-500 px-1.5 py-0.5 bg-emerald-500/10 rounded-full border border-emerald-500/20 uppercase tracking-wide">Connected</span>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-[11px] text-text-secondary mt-0.5">
-                                                            Powers live web search for company research.
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <div className="flex justify-between items-center mb-1.5">
-                                                            <label className="text-[10px] font-semibold text-text-secondary uppercase tracking-wide block">API Key</label>
-                                                            {hasStoredTavilyKey && (
-                                                                <button
-                                                                    onClick={handleRemoveTavilyKey}
-                                                                    className="text-[10px] flex items-center gap-1 text-red-400 hover:text-red-300 transition-colors bg-red-500/10 hover:bg-red-500/20 px-1.5 py-0.5 rounded"
-                                                                    title="Remove API Key"
-                                                                >
-                                                                    <Trash2 size={10} strokeWidth={2} /> Remove
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                        <input
-                                                            type="password"
-                                                            value={tavilyApiKey}
-                                                            onChange={(e) => { setTavilyApiKey(e.target.value); setTavilyError(''); }}
-                                                            placeholder={hasStoredTavilyKey ? '••••••••••••' : 'Enter Tavily API key (tvly-...)'}
-                                                            className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary/50 focus:ring-1 focus:ring-accent-primary/20 transition-all"
-                                                        />
-                                                    </div>
-                                                    {tavilyError && (
-                                                        <p className="text-[10px] text-red-400 px-1">{tavilyError}</p>
-                                                    )}
-                                                    <button
-                                                        onClick={async () => {
-                                                            if (!tavilyApiKey.trim()) return;
-                                                            setTavilyError('');
-                                                            setTavilySaving(true);
-                                                            try {
-                                                                const result = await window.electronAPI?.setTavilyApiKey?.(tavilyApiKey.trim());
-                                                                if (result && !result.success) {
-                                                                    setTavilyError(result.error ?? 'Failed to save API key.');
-                                                                } else {
-                                                                    setHasStoredTavilyKey(true);
-                                                                    setTavilyApiKey('');
-                                                                }
-                                                            } catch (e: any) {
-                                                                setTavilyError(e?.message ?? 'Unexpected error saving API key.');
-                                                            } finally {
-                                                                setTavilySaving(false);
-                                                            }
-                                                        }}
-                                                        disabled={tavilySaving || !tavilyApiKey.trim()}
-                                                        className={`w-full px-4 py-2 rounded-lg text-xs font-medium transition-all ${tavilySaving ? 'bg-bg-input text-text-tertiary cursor-wait' : !tavilyApiKey.trim() ? 'bg-bg-input text-text-tertiary cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm'}`}
-                                                    >
-                                                        {tavilySaving ? 'Saving...' : 'Save API Key'}
+                                                        {profileUploading ? 'Ingesting...' : 'Select File'}
                                                     </button>
                                                 </div>
 
-                                                <div className="mt-3 flex items-start gap-2 px-3 py-2.5 bg-bg-input/50 rounded-lg">
-                                                    <Info size={12} className="text-text-tertiary shrink-0 mt-0.5" />
-                                                    <p className="text-[10px] text-text-tertiary leading-relaxed">
-                                                        If not provided, LLM general knowledge is used for company research, which may be outdated. Get your free API key at <span className="text-emerald-500/80 hover:text-emerald-400 underline underline-offset-2 cursor-pointer" onClick={() => window.electronAPI?.openExternal?.('https://app.tavily.com/home')}>app.tavily.com</span>. Keys start with <code className="text-emerald-500/80">tvly-</code>.
-                                                    </p>
-                                                </div>
+                                                {profileError && (
+                                                    <div className="px-5 pb-4">
+                                                        <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-[11px] text-red-500 font-medium">
+                                                            <X size={12} /> {profileError}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* Company Research Section */}
-                                    {profileData?.hasActiveJD && profileData?.activeJD?.company && (
+                                        {/* JD Upload Card */}
                                         <div className="mt-5">
-                                            <div className="bg-bg-item-surface rounded-xl border border-border-subtle p-5">
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-lg bg-bg-input border border-border-subtle flex items-center justify-center text-purple-500">
-                                                            <Building2 size={20} />
+                                            <div className={`rounded-xl transition-all border ${jdUploading ? 'border-blue-500/50 ring-1 ring-blue-500/20 bg-bg-item-surface' : profileData?.hasActiveJD ? 'border-blue-500/30 bg-blue-500/5' : 'border-border-subtle bg-bg-item-surface'}`}>
+                                                <div className="p-5 flex items-center justify-between">
+                                                    <div className="flex items-center gap-4 min-w-0">
+                                                        <div className="w-10 h-10 rounded-lg bg-bg-input border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
+                                                            {jdUploading ? <RefreshCw size={20} className="animate-spin text-blue-500" /> : <Briefcase size={20} />}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <h4 className="text-sm font-bold text-text-primary mb-0.5 truncate pr-4">
+                                                                {profileData?.hasActiveJD ? `${profileData.activeJD?.title} @ ${profileData.activeJD?.company}` : 'Upload Job Description'}
+                                                            </h4>
+                                                            {jdUploading ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="h-[4px] w-[100px] bg-bg-input rounded-full overflow-hidden">
+                                                                        <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '50%' }} />
+                                                                    </div>
+                                                                    <span className="text-[10px] text-text-secondary tracking-wide">Parsing JD structure...</span>
+                                                                </div>
+                                                            ) : profileData?.hasActiveJD ? (
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="text-[9px] font-bold text-blue-500 px-1.5 py-0.5 bg-blue-500/10 rounded uppercase tracking-wide border border-blue-500/20">
+                                                                        {profileData.activeJD?.level || 'mid'}-level
+                                                                    </span>
+                                                                    <div className="flex gap-1.5">
+                                                                        {profileData.activeJD?.technologies?.slice(0, 3).map((t: string, i: number) => (
+                                                                            <span key={i} className="text-[10px] text-text-secondary">{t}</span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-xs text-text-secondary">
+                                                                    Upload a JD to enable persona tuning and company research.
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {profileData?.hasActiveJD && (
+                                                            <button
+                                                                onClick={async () => {
+                                                                    await window.electronAPI?.profileDeleteJD?.();
+                                                                    await refreshProfileStateRef.current?.();
+                                                                }}
+                                                                className="px-2.5 py-2 rounded-full text-xs text-text-tertiary hover:text-red-500 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={async () => {
+                                                                let uploadGenerationId = 0;
+                                                                setJdError('');
+                                                                try {
+                                                                    const fileResult = await window.electronAPI?.profileSelectFile?.();
+                                                                    if (fileResult?.cancelled || !fileResult?.filePath) return;
+
+                                                                    setLastJdPath(fileResult.filePath);
+                                                                    setLastUploadKind('jd');
+                                                                    uploadGenerationId = Date.now();
+                                                                    uploadGenerationRef.current = uploadGenerationId;
+                                                                    setJdUploading(true);
+                                                                    updateProfileViewStatus('processing');
+                                                                    setProfileData(null);
+                                                                    profileGenerationRef.current = 0;
+                                                                    setNegotiationScript(null);
+                                                                    setProfileStatus(prev => ({
+                                                                        ...prev,
+                                                                        isReady: false
+                                                                    }));
+                                                                    const result = await window.electronAPI?.profileUploadJD?.(fileResult.filePath);
+                                                                    if (uploadGenerationRef.current !== uploadGenerationId) return;
+                                                                    if (result?.success) {
+                                                                        await refreshProfileStateRef.current?.(uploadGenerationId);
+                                                                    } else if (result?.error === 'STALE_GENERATION') {
+                                                                        return;
+                                                                    } else {
+                                                                        updateProfileViewStatus('error');
+                                                                        setJdError(result?.error || 'JD upload failed');
+                                                                    }
+                                                                } catch (e: any) {
+                                                                    updateProfileViewStatus('error');
+                                                                    setJdError(e.message || 'JD upload failed');
+                                                                } finally {
+                                                                    if (uploadGenerationRef.current === uploadGenerationId) {
+                                                                        setJdUploading(false);
+                                                                    }
+                                                                }
+                                                            }}
+                                                            disabled={profileViewStatus === 'processing'}
+                                                            className={`px-4 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${profileViewStatus === 'processing' ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-sm'}`}
+                                                        >
+                                                            {jdUploading ? 'Parsing...' : profileData?.hasActiveJD ? 'Replace JD' : 'Upload JD'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {jdError && (
+                                                    <div className="px-5 pb-4">
+                                                        <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-[11px] text-red-500 font-medium">
+                                                            <X size={12} /> {jdError}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Custom Context Card — Pro only */}
+                                        {hasProfileAccess && (
+                                            <div className="mt-5">
+                                                <div className="bg-bg-item-surface rounded-xl border border-border-subtle">
+                                                    <div className="p-5">
+                                                        <div className="flex items-center gap-4 mb-4">
+                                                            <div className="w-10 h-10 rounded-lg bg-bg-input border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
+                                                                <Pencil size={20} />
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2">
+                                                                    <h4 className="text-sm font-bold text-text-primary">Custom Context</h4>
+                                                                    {customNotesSaved && (
+                                                                        <span className="text-[9px] font-bold text-emerald-500 px-1.5 py-0.5 bg-emerald-500/10 rounded-full border border-emerald-500/20 uppercase tracking-wide flex items-center gap-1">
+                                                                            <Check size={8} /> Saved
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-[11px] text-text-secondary mt-0.5">
+                                                                    Add any context the AI should know about you — saved across all sessions.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-3">
+                                                            <textarea
+                                                                value={customNotes}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    if (val.length > 4000) return;
+                                                                    setCustomNotes(val);
+                                                                    setCustomNotesSaved(false);
+                                                                    if (customNotesDebounceRef.current) clearTimeout(customNotesDebounceRef.current);
+                                                                    customNotesDebounceRef.current = setTimeout(async () => {
+                                                                        try {
+                                                                            await window.electronAPI?.profileSaveNotes?.(val);
+                                                                            setCustomNotesSaved(true);
+                                                                            setTimeout(() => setCustomNotesSaved(false), 2000);
+                                                                        } catch (_) { }
+                                                                    }, 800);
+                                                                }}
+                                                                placeholder={`Examples:\n• Q4 ARR was $2.1M, grew 40% YoY — use when pitching growth story\n• Solved LRU Cache (LeetCode 146) with O(1) get/put using HashMap + doubly linked list\n• I prefer concise, direct answers without filler phrases\n• My target salary is $180k base — don't go below $160k`}
+                                                                rows={6}
+                                                                className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-xs text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary/50 focus:ring-1 focus:ring-accent-primary/20 transition-all resize-none leading-relaxed"
+                                                            />
+                                                            <div className="flex items-center justify-between px-0.5">
+                                                                <p className="text-[10px] text-text-tertiary">
+                                                                    Auto-saved · Works with all modes and providers
+                                                                </p>
+                                                                <span className={`text-[10px] tabular-nums ${customNotes.length > 3600 ? 'text-amber-500' : 'text-text-tertiary'}`}>
+                                                                    {customNotes.length}/4000
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Google Search API Card */}
+                                        <div className="mt-5">
+                                            <div className="bg-bg-item-surface rounded-xl border border-border-subtle">
+                                                <div className="p-5">
+                                                    <div className="flex items-center gap-4 mb-4">
+                                                        <div className="w-10 h-10 rounded-lg bg-bg-input border border-border-subtle flex items-center justify-center text-emerald-500 shrink-0">
+                                                            <Globe size={20} />
                                                         </div>
                                                         <div>
                                                             <div className="flex items-center gap-2">
-                                                                <h4 className="text-sm font-bold text-text-primary">
-                                                                    Company Intel: <span className="text-purple-400">{profileData.activeJD.company}</span>
-                                                                </h4>
+                                                                <h4 className="text-sm font-bold text-text-primary">Tavily Search API</h4>
+                                                                {hasStoredTavilyKey && (
+                                                                    <span className="text-[9px] font-bold text-emerald-500 px-1.5 py-0.5 bg-emerald-500/10 rounded-full border border-emerald-500/20 uppercase tracking-wide">Connected</span>
+                                                                )}
                                                             </div>
                                                             <p className="text-[11px] text-text-secondary mt-0.5">
-                                                                {profileData?.research ? 'Research complete — company intelligence is synced in this panel.' : 'Click Research to generate hiring strategy, salary, culture, and interview intelligence.'}
+                                                                Powers live web search for company research.
                                                             </p>
                                                         </div>
                                                     </div>
 
-                                                    <button
-                                                        onClick={handleRunCompanyResearch}
-                                                        disabled={companyResearching}
-                                                        className={`px-4 py-2 rounded-full text-xs font-medium transition-all flex items-center gap-2 ${companyResearching ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-purple-600/10 text-purple-500 hover:bg-purple-600/20 border border-purple-500/20'}`}
-                                                    >
-                                                        {companyResearching ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
-                                                        {companyResearching ? 'Researching...' : profileData?.research ? 'Refresh Research' : 'Research'}
-                                                    </button>
-                                                </div>
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <div className="flex justify-between items-center mb-1.5">
+                                                                <label className="text-[10px] font-semibold text-text-secondary uppercase tracking-wide block">API Key</label>
+                                                                {hasStoredTavilyKey && (
+                                                                    <button
+                                                                        onClick={handleRemoveTavilyKey}
+                                                                        className="text-[10px] flex items-center gap-1 text-red-400 hover:text-red-300 transition-colors bg-red-500/10 hover:bg-red-500/20 px-1.5 py-0.5 rounded"
+                                                                        title="Remove API Key"
+                                                                    >
+                                                                        <Trash2 size={10} strokeWidth={2} /> Remove
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            <input
+                                                                type="password"
+                                                                value={tavilyApiKey}
+                                                                onChange={(e) => { setTavilyApiKey(e.target.value); setTavilyError(''); }}
+                                                                placeholder={hasStoredTavilyKey ? '••••••••••••' : 'Enter Tavily API key (tvly-...)'}
+                                                                className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary/50 focus:ring-1 focus:ring-accent-primary/20 transition-all"
+                                                            />
+                                                        </div>
+                                                        {tavilyError && (
+                                                            <p className="text-[10px] text-red-400 px-1">{tavilyError}</p>
+                                                        )}
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!tavilyApiKey.trim()) return;
+                                                                setTavilyError('');
+                                                                setTavilySaving(true);
+                                                                try {
+                                                                    const result = await window.electronAPI?.setTavilyApiKey?.(tavilyApiKey.trim());
+                                                                    if (result && !result.success) {
+                                                                        setTavilyError(result.error ?? 'Failed to save API key.');
+                                                                    } else {
+                                                                        setHasStoredTavilyKey(true);
+                                                                        setTavilyApiKey('');
+                                                                    }
+                                                                } catch (e: any) {
+                                                                    setTavilyError(e?.message ?? 'Unexpected error saving API key.');
+                                                                } finally {
+                                                                    setTavilySaving(false);
+                                                                }
+                                                            }}
+                                                            disabled={tavilySaving || !tavilyApiKey.trim()}
+                                                            className={`w-full px-4 py-2 rounded-lg text-xs font-medium transition-all ${tavilySaving ? 'bg-bg-input text-text-tertiary cursor-wait' : !tavilyApiKey.trim() ? 'bg-bg-input text-text-tertiary cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm'}`}
+                                                        >
+                                                            {tavilySaving ? 'Saving...' : 'Save API Key'}
+                                                        </button>
+                                                    </div>
 
-                                                {companyResearchToast && (
-                                                    <div className={`mb-4 flex items-start gap-2.5 px-3 py-2.5 rounded-xl border text-[11px] leading-relaxed ${
-                                                        companyResearchToast.variant === 'success'
+                                                    <div className="mt-3 flex items-start gap-2 px-3 py-2.5 bg-bg-input/50 rounded-lg">
+                                                        <Info size={12} className="text-text-tertiary shrink-0 mt-0.5" />
+                                                        <p className="text-[10px] text-text-tertiary leading-relaxed">
+                                                            If not provided, LLM general knowledge is used for company research, which may be outdated. Get your free API key at <span className="text-emerald-500/80 hover:text-emerald-400 underline underline-offset-2 cursor-pointer" onClick={() => window.electronAPI?.openExternal?.('https://app.tavily.com/home')}>app.tavily.com</span>. Keys start with <code className="text-emerald-500/80">tvly-</code>.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Company Research Section */}
+                                        {profileData?.hasActiveJD && profileData?.activeJD?.company && (
+                                            <div className="mt-5">
+                                                <div className="bg-bg-item-surface rounded-xl border border-border-subtle p-5">
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-10 h-10 rounded-lg bg-bg-input border border-border-subtle flex items-center justify-center text-purple-500">
+                                                                <Building2 size={20} />
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <h4 className="text-sm font-bold text-text-primary">
+                                                                        Company Intel: <span className="text-purple-400">{profileData.activeJD.company}</span>
+                                                                    </h4>
+                                                                </div>
+                                                                <p className="text-[11px] text-text-secondary mt-0.5">
+                                                                    {profileData?.research ? 'Research complete — company intelligence is synced in this panel.' : 'Click Research to generate hiring strategy, salary, culture, and interview intelligence.'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <button
+                                                            onClick={handleRunCompanyResearch}
+                                                            disabled={companyResearching}
+                                                            className={`px-4 py-2 rounded-full text-xs font-medium transition-all flex items-center gap-2 ${companyResearching ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-purple-600/10 text-purple-500 hover:bg-purple-600/20 border border-purple-500/20'}`}
+                                                        >
+                                                            {companyResearching ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
+                                                            {companyResearching ? 'Researching...' : profileData?.research ? 'Refresh Research' : 'Research'}
+                                                        </button>
+                                                    </div>
+
+                                                    {companyResearchToast && (
+                                                        <div className={`mb-4 flex items-start gap-2.5 px-3 py-2.5 rounded-xl border text-[11px] leading-relaxed ${companyResearchToast.variant === 'success'
                                                             ? 'bg-emerald-500/8 border-emerald-500/20 text-emerald-400'
                                                             : companyResearchToast.variant === 'error'
                                                                 ? 'bg-red-500/8 border-red-500/20 text-red-400'
                                                                 : 'bg-purple-500/8 border-purple-500/20 text-purple-300'
-                                                    }`}>
-                                                        <span className="shrink-0 mt-[1px]">
-                                                            {companyResearchToast.variant === 'success' ? '✓' : companyResearchToast.variant === 'error' ? '!' : '•'}
-                                                        </span>
-                                                        <div>
-                                                            <div className="font-semibold">{companyResearchToast.title}</div>
-                                                            <div className="mt-0.5 opacity-90">{companyResearchToast.description}</div>
+                                                            }`}>
+                                                            <span className="shrink-0 mt-[1px]">
+                                                                {companyResearchToast.variant === 'success' ? '✓' : companyResearchToast.variant === 'error' ? '!' : '•'}
+                                                            </span>
+                                                            <div>
+                                                                <div className="font-semibold">{companyResearchToast.title}</div>
+                                                                <div className="mt-0.5 opacity-90">{companyResearchToast.description}</div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    <ResearchPanel
+                                                        research={profileData?.research ?? null}
+                                                        loading={companyResearching}
+                                                        currentGenerationId={profileData?.generationId}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                        {profileViewStatus === 'processing' ? (
+                                            <div className="mt-6 rounded-2xl border border-border-subtle bg-bg-item-surface p-5 text-sm text-text-secondary shadow-sm">
+                                                {profileUploading ? 'Processing new profile...' : 'Refreshing role intelligence...'}
+                                            </div>
+                                        ) : profileViewStatus === 'error' ? (
+                                            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-600 shadow-sm">
+                                                <div className="font-medium">Profile generation failed.</div>
+                                                <div className="mt-1 text-red-500/90">
+                                                    {profileError || jdError || 'Please try the upload again.'}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { void retryLastUpload(); }}
+                                                    className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-xs font-medium text-white transition-all hover:bg-red-500"
+                                                >
+                                                    Retry
+                                                </button>
+                                            </div>
+                                        ) : profileData ? (
+                                            <ProfileVisualizer
+                                                profileData={profileData}
+                                                currentGenerationId={profileData?.generationId}
+                                            />
+                                        ) : (
+                                            <div className="mt-6 rounded-2xl border border-dashed border-border-subtle bg-bg-item-surface p-6 text-sm text-text-secondary shadow-sm">
+                                                Upload a resume to build your candidate profile. Uploading a new resume or JD will automatically replace the previous intelligence state.
+                                            </div>
+                                        )}
+
+                                        {/* Salary Negotiation Script */}
+                                        {profileData?.hasActiveJD && (
+                                            <div className="mt-6 animated fadeIn">
+                                                <div className="relative rounded-xl border border-border-subtle overflow-hidden bg-bg-item-surface">
+
+                                                    <div className="p-5">
+                                                        {/* Header row */}
+                                                        <div className="flex items-center justify-between mb-5">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="relative">
+                                                                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(6,182,212,0.1) 100%)', border: '1px solid rgba(16,185,129,0.25)' }}>
+                                                                        <Briefcase size={15} className="text-emerald-400" />
+                                                                    </div>
+                                                                    {negotiationScript && (
+                                                                        <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-bg-item-surface" />
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="text-[13px] font-bold text-text-primary tracking-tight">Negotiation Script</h3>
+                                                                    <p className="text-[10px] text-text-tertiary mt-0.5 tracking-wide uppercase">
+                                                                        {negotiationScript ? `Tailored for ${profileData?.activeJD?.company || 'this role'}` : 'AI-powered salary coaching'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                {negotiationScript && (
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            setNegotiationGenerating(true);
+                                                                            setNegotiationError('');
+                                                                            try {
+                                                                                const result = await window.electronAPI?.profileGenerateNegotiation?.(true);
+                                                                                if (result?.success) {
+                                                                                    await refreshProfileStateRef.current?.();
+                                                                                } else {
+                                                                                    setNegotiationError(result?.error || 'Failed to regenerate');
+                                                                                }
+                                                                            } catch { setNegotiationError('Generation failed'); }
+                                                                            finally { setNegotiationGenerating(false); }
+                                                                        }}
+                                                                        disabled={negotiationGenerating}
+                                                                        title="Regenerate script"
+                                                                        className="w-7 h-7 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-bg-input transition-all border border-border-subtle"
+                                                                    >
+                                                                        <RefreshCw size={12} className={negotiationGenerating ? 'animate-spin' : ''} />
+                                                                    </button>
+                                                                )}
+                                                                {!negotiationScript && (
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            setNegotiationGenerating(true);
+                                                                            setNegotiationError('');
+                                                                            try {
+                                                                                const result = await window.electronAPI?.profileGenerateNegotiation?.(false);
+                                                                                if (result?.success) {
+                                                                                    await refreshProfileStateRef.current?.();
+                                                                                } else {
+                                                                                    setNegotiationError(result?.error || 'Failed to generate');
+                                                                                }
+                                                                            } catch { setNegotiationError('Generation failed'); }
+                                                                            finally { setNegotiationGenerating(false); }
+                                                                        }}
+                                                                        disabled={negotiationGenerating}
+                                                                        className="px-4 py-1.5 rounded-full text-[11px] font-semibold transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-wait"
+                                                                        style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.2) 0%, rgba(6,182,212,0.15) 100%)', border: '1px solid rgba(16,185,129,0.3)', color: '#34d399' }}
+                                                                    >
+                                                                        {negotiationGenerating ? <RefreshCw size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                                                                        {negotiationGenerating ? 'Generating…' : 'Generate Script'}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {negotiationError && (
+                                                            <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                                                                <AlertCircle size={12} className="text-red-400 shrink-0" />
+                                                                <p className="text-[11px] text-red-400">{negotiationError}</p>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Empty state */}
+                                                        {!negotiationScript && !negotiationGenerating && !negotiationError && (
+                                                            <div className="flex flex-col items-center justify-center py-8 gap-3">
+                                                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(6,182,212,0.06) 100%)', border: '1px solid rgba(16,185,129,0.15)' }}>
+                                                                    <Briefcase size={20} className="text-emerald-500/50" />
+                                                                </div>
+                                                                <div className="text-center">
+                                                                    <p className="text-[12px] font-medium text-text-secondary">No script yet</p>
+                                                                    <p className="text-[10px] text-text-tertiary mt-0.5">Generate a personalized opening, justification &amp; counter-offer</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Generating skeleton */}
+                                                        {negotiationGenerating && (
+                                                            <div className="space-y-3 py-2">
+                                                                {[40, 70, 55].map((w, i) => (
+                                                                    <div key={i} className="h-3 rounded-full bg-bg-input animate-pulse" style={{ width: `${w}%`, animationDelay: `${i * 150}ms` }} />
+                                                                ))}
+                                                                <div className="h-12 rounded-lg bg-bg-input animate-pulse mt-2" style={{ animationDelay: '450ms' }} />
+                                                            </div>
+                                                        )}
+
+                                                        {negotiationScript && !negotiationGenerating && (
+                                                            <div className="space-y-3">
+                                                                {/* Salary Range Hero */}
+                                                                {negotiationScript.salary_range && (
+                                                                    <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(6,182,212,0.06) 100%)', border: '1px solid rgba(16,185,129,0.18)' }}>
+                                                                        <div>
+                                                                            <div className="text-[9px] font-bold uppercase tracking-widest text-emerald-500/70 mb-1">Target Compensation</div>
+                                                                            <div className="text-xl font-bold tracking-tight" style={{ color: '#34d399' }}>
+                                                                                {negotiationScript.salary_range.currency} {negotiationScript.salary_range.min.toLocaleString()}
+                                                                                <span className="text-text-tertiary font-normal mx-2">–</span>
+                                                                                {negotiationScript.salary_range.max.toLocaleString()}
+                                                                            </div>
+                                                                            {negotiationScript.sources?.length > 0 && (
+                                                                                <div className="text-[9px] text-text-tertiary mt-1">{negotiationScript.sources.length} market source{negotiationScript.sources.length > 1 ? 's' : ''}</div>
+                                                                            )}
+                                                                        </div>
+                                                                        <span className={`text-[9px] font-bold px-2 py-1 rounded-full tracking-wide ${negotiationScript.salary_range.confidence === 'high' ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/25' :
+                                                                            negotiationScript.salary_range.confidence === 'medium' ? 'text-yellow-400 bg-yellow-500/15 border border-yellow-500/25' :
+                                                                                'text-text-tertiary bg-bg-input border border-border-subtle'
+                                                                            }`}>
+                                                                            {(negotiationScript.salary_range.confidence || 'low').toUpperCase()}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Step cards */}
+                                                                {[
+                                                                    {
+                                                                        step: '01',
+                                                                        label: 'Opening',
+                                                                        sublabel: 'When asked about salary expectations',
+                                                                        content: negotiationScript.opening_line,
+                                                                        accent: '#10b981',
+                                                                        accentBg: 'rgba(16,185,129,0.07)',
+                                                                        accentBorder: 'rgba(16,185,129,0.2)',
+                                                                        quote: true,
+                                                                    },
+                                                                    {
+                                                                        step: '02',
+                                                                        label: 'Justify Your Ask',
+                                                                        sublabel: 'Link your track record to the number',
+                                                                        content: negotiationScript.justification,
+                                                                        accent: '#60a5fa',
+                                                                        accentBg: 'rgba(96,165,250,0.07)',
+                                                                        accentBorder: 'rgba(96,165,250,0.2)',
+                                                                        quote: false,
+                                                                    },
+                                                                    {
+                                                                        step: '03',
+                                                                        label: 'Counter & Hold',
+                                                                        sublabel: 'If they come back lower',
+                                                                        content: negotiationScript.counter_offer_fallback,
+                                                                        accent: '#fb923c',
+                                                                        accentBg: 'rgba(251,146,60,0.07)',
+                                                                        accentBorder: 'rgba(251,146,60,0.2)',
+                                                                        quote: true,
+                                                                    },
+                                                                ].filter(s => s.content).map((s) => ({ ...s, content: s.content.replace(/^["'"']+|["'"']+$/g, '').trim() })).map((s) => (
+                                                                    <div key={s.step} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${s.accentBorder}`, background: s.accentBg }}>
+                                                                        <div className="flex items-center justify-between px-3.5 pt-3 pb-2">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="text-[10px] font-black tracking-widest" style={{ color: s.accent, opacity: 0.6 }}>STEP {s.step}</span>
+                                                                                <span className="text-[11px] font-bold text-text-primary">{s.label}</span>
+                                                                            </div>
+                                                                            <button
+                                                                                onClick={() => navigator.clipboard?.writeText(s.content)}
+                                                                                title="Copy to clipboard"
+                                                                                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-medium transition-all hover:bg-bg-input text-text-tertiary hover:text-text-secondary"
+                                                                            >
+                                                                                <Check size={9} />
+                                                                                Copy
+                                                                            </button>
+                                                                        </div>
+                                                                        <p className="text-[10px] text-text-tertiary px-3.5 pb-2 -mt-1 tracking-wide">{s.sublabel}</p>
+                                                                        <div className="mx-3.5 mb-3.5">
+                                                                            <p className={`text-[12px] leading-relaxed text-text-primary ${s.quote ? 'pl-3 italic' : ''}`}>
+                                                                                {s.content}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                    </div>
+                                )}
+                                {activeTab === 'ai-providers' && (
+                                    <AIProvidersSettings />
+                                )}
+                                {activeTab === 'account' && (
+                                    <div className="space-y-6 animated fadeIn select-text pb-4">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-text-primary mb-1">Account</h3>
+                                            <p className="text-xs text-text-secondary">Manage your signed-in Google account.</p>
+                                        </div>
+
+                                        {(() => {
+                                            const storedUser = localStorage.getItem('teamsync_auth_user');
+                                            const user = storedUser ? JSON.parse(storedUser) : null;
+                                            return user ? (
+                                                <div className="bg-bg-card rounded-xl border border-border-subtle p-5 space-y-4">
+                                                    <div className="flex items-center gap-4">
+                                                        {user.picture ? (
+                                                            <img src={user.picture} alt="" className="w-12 h-12 rounded-full ring-2 ring-border-subtle" referrerPolicy="no-referrer" />
+                                                        ) : (
+                                                            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-lg font-bold">
+                                                                {(user.name || user.email || '?')[0].toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-semibold text-text-primary truncate">{user.name || 'User'}</p>
+                                                            <p className="text-xs text-text-secondary truncate">{user.email}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="pt-3 border-t border-border-subtle">
+                                                        <button
+                                                            onClick={async () => {
+                                                                const token = localStorage.getItem('teamsync_auth_token');
+                                                                if (token) {
+                                                                    try {
+                                                                        await fetch('http://localhost:3456/auth/logout', {
+                                                                            method: 'POST',
+                                                                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                                                        });
+                                                                    } catch { }
+                                                                }
+                                                                localStorage.removeItem('teamsync_auth_token');
+                                                                localStorage.removeItem('teamsync_auth_user');
+                                                                window.location.reload();
+                                                            }}
+                                                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 transition-all"
+                                                        >
+                                                            <LogOut size={14} /> Sign Out
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-bg-card rounded-xl border border-border-subtle p-5 text-center">
+                                                    <p className="text-sm text-text-secondary mb-3">Not signed in</p>
+                                                    <button
+                                                        onClick={() => window.location.reload()}
+                                                        className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                                                    >
+                                                        Sign In with Google
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
+                                {activeTab === 'keybinds' && (
+                                    <div className="space-y-5 animated fadeIn select-text pb-4">
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-text-primary mb-1">Keyboard shortcuts</h3>
+                                                <p className="text-xs text-text-secondary">TeamSync works with these easy to remember commands.</p>
+                                            </div>
+                                            <button
+                                                onClick={resetShortcuts}
+                                                className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-border-subtle bg-bg-subtle/30 hover:bg-bg-subtle hover:border-green-500/30 transition-all duration-200 text-xs font-medium text-text-secondary hover:text-green-500 active:scale-95 mt-1"
+                                            >
+                                                <RotateCcw size={13} strokeWidth={2.5} />
+                                                Restore Default
+                                            </button>
+                                        </div>
+
+                                        <div className="grid gap-6">
+                                            {/* General Category */}
+                                            <div>
+                                                <h4 className="text-sm font-bold text-text-primary mb-3">General</h4>
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center justify-between py-1.5 group">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Eye size={14} /></span>
+                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Toggle Visibility</span>
+                                                        </div>
+                                                        <KeyRecorder
+                                                            currentKeys={shortcuts.toggleVisibility}
+                                                            onSave={(keys) => updateShortcut('toggleVisibility', keys)}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between py-1.5 group">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><PointerOff size={14} /></span>
+                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Toggle Mouse Passthrough</span>
+                                                        </div>
+                                                        <KeyRecorder
+                                                            currentKeys={shortcuts.toggleMousePassthrough}
+                                                            onSave={(keys) => updateShortcut('toggleMousePassthrough', keys)}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between py-1.5 group">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><MessageSquare size={14} /></span>
+                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Process Screenshots</span>
+                                                        </div>
+                                                        <KeyRecorder
+                                                            currentKeys={shortcuts.processScreenshots}
+                                                            onSave={(keys) => updateShortcut('processScreenshots', keys)}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between py-1.5 group">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Sparkles size={14} /></span>
+                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Capture Screen & Ask AI</span>
+                                                        </div>
+                                                        <KeyRecorder
+                                                            currentKeys={shortcuts.captureAndProcess}
+                                                            onSave={(keys) => updateShortcut('captureAndProcess', keys)}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between py-1.5 group">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><RotateCcw size={14} /></span>
+                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Reset / Cancel</span>
+                                                        </div>
+                                                        <KeyRecorder
+                                                            currentKeys={shortcuts.resetCancel}
+                                                            onSave={(keys) => updateShortcut('resetCancel', keys)}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between py-1.5 group">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Camera size={14} /></span>
+                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Take Screenshot</span>
+                                                        </div>
+                                                        <KeyRecorder
+                                                            currentKeys={shortcuts.takeScreenshot}
+                                                            onSave={(keys) => updateShortcut('takeScreenshot', keys)}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between py-1.5 group">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Crop size={14} /></span>
+                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Selective Screenshot</span>
+                                                        </div>
+                                                        <KeyRecorder
+                                                            currentKeys={shortcuts.selectiveScreenshot}
+                                                            onSave={(keys) => updateShortcut('selectiveScreenshot', keys)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Chat Category */}
+                                            <div>
+                                                <div className="mb-3">
+                                                    <h4 className="text-sm font-bold text-text-primary">Chat</h4>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    {[
+                                                        { id: 'whatToAnswer', label: 'What to Answer', icon: <Sparkles size={14} /> },
+                                                        { id: 'clarify', label: 'Clarify', icon: <MessageSquare size={14} /> },
+                                                        { id: 'followUp', label: 'Follow Up', icon: <MessageSquare size={14} /> },
+                                                        { id: 'dynamicAction4', label: 'Recap / Brainstorm', icon: <RefreshCw size={14} /> },
+                                                        { id: 'answer', label: 'Answer / Record', icon: <Mic size={14} /> },
+                                                        { id: 'codeHint', label: 'Get Code Hint', icon: <Zap size={14} /> },
+                                                        { id: 'brainstorm', label: 'Brainstorm Approaches', icon: <Zap size={14} /> },
+                                                        { id: 'scrollUp', label: 'Scroll Up', icon: <ArrowUp size={14} /> },
+                                                        { id: 'scrollDown', label: 'Scroll Down', icon: <ArrowDown size={14} /> },
+                                                    ].map((item, i) => (
+                                                        <div key={i} className="flex items-center justify-between py-1.5 group">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center">{item.icon}</span>
+                                                                <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">{item.label}</span>
+                                                            </div>
+                                                            <KeyRecorder
+                                                                currentKeys={shortcuts[item.id as keyof typeof shortcuts]}
+                                                                onSave={(keys) => updateShortcut(item.id as any, keys)}
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Window Category */}
+                                            <div>
+                                                <h4 className="text-sm font-bold text-text-primary mb-3">Window</h4>
+                                                <div className="space-y-1">
+                                                    {[
+                                                        { id: 'moveWindowUp', label: 'Move Window Up', icon: <ArrowUp size={14} /> },
+                                                        { id: 'moveWindowDown', label: 'Move Window Down', icon: <ArrowDown size={14} /> },
+                                                        { id: 'moveWindowLeft', label: 'Move Window Left', icon: <ArrowLeft size={14} /> },
+                                                        { id: 'moveWindowRight', label: 'Move Window Right', icon: <ArrowRight size={14} /> }
+                                                    ].map((item, i) => (
+                                                        <div key={i} className="flex items-center justify-between py-1.5 group">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center">{item.icon}</span>
+                                                                <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">{item.label}</span>
+                                                            </div>
+                                                            <KeyRecorder
+                                                                currentKeys={shortcuts[item.id as keyof typeof shortcuts]}
+                                                                onSave={(keys) => updateShortcut(item.id as any, keys)}
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'audio' && (
+                                    <div className="space-y-6 animated fadeIn">
+                                        {/* ── Speech Provider Section ── */}
+                                        <div>
+                                            <h3 className="text-lg font-bold text-text-primary mb-1">Speech Provider</h3>
+                                            <p className="text-xs text-text-secondary mb-5">Choose the engine that transcribes audio to text.</p>
+
+                                            <div className="space-y-4">
+                                                <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-3">
+                                                    <label className="text-xs font-medium text-text-secondary block">Speech Provider</label>
+                                                    <div className="relative">
+                                                        <ProviderSelect
+                                                            value={sttProvider}
+                                                            onChange={(val) => handleSttProviderChange(val as any)}
+                                                            options={[
+                                                                ...(hasTeamSyncKey ? [{ id: 'teamsync', label: 'TeamSync API', badge: 'Saved' as const, recommended: true, desc: 'Managed transcription via TeamSync backend', color: 'blue', icon: <Mic size={14} /> }] : []),
+                                                                { id: 'google', label: 'Google Cloud', badge: googleServiceAccountPath ? 'Saved' : null, recommended: true, desc: 'gRPC streaming via Service Account', color: 'blue', icon: <Mic size={14} /> },
+                                                                { id: 'groq', label: 'Groq Whisper', badge: hasStoredSttGroqKey ? 'Saved' : null, recommended: true, desc: 'Ultra-fast REST transcription', color: 'orange', icon: <Mic size={14} /> },
+                                                                { id: 'openai', label: 'OpenAI Whisper', badge: hasStoredSttOpenaiKey ? 'Saved' : null, desc: 'OpenAI-compatible Whisper API', color: 'green', icon: <Mic size={14} /> },
+                                                                { id: 'deepgram', label: 'Deepgram Nova-3', badge: hasStoredDeepgramKey ? 'Saved' : null, recommended: true, desc: 'High-accuracy REST transcription', color: 'purple', icon: <Mic size={14} /> },
+                                                                { id: 'elevenlabs', label: 'ElevenLabs Scribe', badge: hasStoredElevenLabsKey ? 'Saved' : null, desc: 'Scribe v2 Realtime API', color: 'teal', icon: <Mic size={14} /> },
+                                                                { id: 'azure', label: 'Azure Speech', badge: hasStoredAzureKey ? 'Saved' : null, desc: 'Microsoft Cognitive Services STT', color: 'cyan', icon: <Mic size={14} /> },
+                                                                { id: 'ibmwatson', label: 'IBM Watson', badge: hasStoredIbmWatsonKey ? 'Saved' : null, desc: 'IBM Watson cloud STT service', color: 'indigo', icon: <Mic size={14} /> },
+                                                                { id: 'soniox', label: 'Soniox', badge: hasStoredSonioxKey ? 'Saved' : null, recommended: true, desc: '60+ languages, multilingual, domain context', color: 'cyan', icon: <Mic size={14} /> },
+                                                            ]}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Groq Model Selector */}
+                                                {sttProvider === 'groq' && (
+                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-4">
+                                                        <label className="text-xs font-medium text-text-secondary mb-2.5 block">Whisper Model</label>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            {[
+                                                                { id: 'whisper-large-v3-turbo', label: 'V3 Turbo', desc: 'Fastest' },
+                                                                { id: 'whisper-large-v3', label: 'V3', desc: 'Most Accurate' },
+                                                            ].map((m) => (
+                                                                <button
+                                                                    key={m.id}
+                                                                    onClick={async () => {
+                                                                        setGroqSttModel(m.id);
+                                                                        try {
+                                                                            // @ts-ignore
+                                                                            await window.electronAPI?.setGroqSttModel?.(m.id);
+                                                                        } catch (e) {
+                                                                            console.error('Failed to set Groq model:', e);
+                                                                        }
+                                                                    }}
+                                                                    className={`rounded-lg px-3 py-2.5 text-left transition-all duration-200 ease-in-out active:scale-[0.98] ${groqSttModel === m.id
+                                                                        ? 'bg-blue-600 text-white shadow-md'
+                                                                        : 'bg-bg-input hover:bg-bg-elevated text-text-primary'
+                                                                        }`}
+                                                                >
+                                                                    <span className="text-sm font-medium block">{m.label}</span>
+                                                                    <span className={`text-[11px] transition-colors ${groqSttModel === m.id ? 'text-white/70' : 'text-text-tertiary'
+                                                                        }`}>{m.desc}</span>
+                                                                </button>
+                                                            ))}
                                                         </div>
                                                     </div>
                                                 )}
 
-                                                <ResearchPanel
-                                                    research={profileData?.research ?? null}
-                                                    loading={companyResearching}
-                                                    currentGenerationId={profileData?.generationId}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-                                    {profileViewStatus === 'processing' ? (
-                                        <div className="mt-6 rounded-2xl border border-border-subtle bg-bg-item-surface p-5 text-sm text-text-secondary shadow-sm">
-                                            {profileUploading ? 'Processing new profile...' : 'Refreshing role intelligence...'}
-                                        </div>
-                                    ) : profileViewStatus === 'error' ? (
-                                        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-600 shadow-sm">
-                                            <div className="font-medium">Profile generation failed.</div>
-                                            <div className="mt-1 text-red-500/90">
-                                                {profileError || jdError || 'Please try the upload again.'}
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => { void retryLastUpload(); }}
-                                                className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-xs font-medium text-white transition-all hover:bg-red-500"
-                                            >
-                                                Retry
-                                            </button>
-                                        </div>
-                                    ) : profileData ? (
-                                        <ProfileVisualizer
-                                            profileData={profileData}
-                                            currentGenerationId={profileData?.generationId}
-                                        />
-                                    ) : (
-                                        <div className="mt-6 rounded-2xl border border-dashed border-border-subtle bg-bg-item-surface p-6 text-sm text-text-secondary shadow-sm">
-                                            Upload a resume to build your candidate profile. Uploading a new resume or JD will automatically replace the previous intelligence state.
-                                        </div>
-                                    )}
+                                                {/* Google Cloud Service Account */}
+                                                {sttProvider === 'google' && (
+                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-4">
+                                                        <label className="text-xs font-medium text-text-secondary mb-2 block">Service Account JSON</label>
+                                                        <div className="flex gap-2">
+                                                            <div className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-secondary font-mono truncate">
+                                                                {googleServiceAccountPath
+                                                                    ? <span className="text-text-primary">{googleServiceAccountPath.split('/').pop()}</span>
+                                                                    : <span className="text-text-tertiary italic">No file selected</span>}
+                                                            </div>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    // @ts-ignore
+                                                                    const result = await window.electronAPI?.selectServiceAccount?.();
+                                                                    if (result?.success && result.path) {
+                                                                        setGoogleServiceAccountPath(result.path);
+                                                                    }
+                                                                }}
+                                                                className="px-3 py-2 bg-bg-input hover:bg-bg-elevated border border-border-subtle rounded-lg text-xs font-medium text-text-primary transition-colors flex items-center gap-2"
+                                                            >
+                                                                <Upload size={14} /> Select File
+                                                            </button>
+                                                        </div>
+                                                        <p className="text-[10px] text-text-tertiary mt-2">
+                                                            Required for Google Cloud Speech-to-Text.
+                                                        </p>
+                                                    </div>
+                                                )}
 
-                                    {/* Salary Negotiation Script */}
-                                    {profileData?.hasActiveJD && (
-                                        <div className="mt-6 animated fadeIn">
-                                            <div className="relative rounded-xl border border-border-subtle overflow-hidden bg-bg-item-surface">
+                                                {/* API Key Input (non-Google providers) */}
+                                                {sttProvider !== 'google' && (
+                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-3">
+                                                        <label className="text-xs font-medium text-text-secondary block">
+                                                            {sttProvider === 'groq' ? 'Groq' : sttProvider === 'openai' ? 'OpenAI STT' : sttProvider === 'elevenlabs' ? 'ElevenLabs' : sttProvider === 'azure' ? 'Azure' : sttProvider === 'ibmwatson' ? 'IBM Watson' : sttProvider === 'soniox' ? 'Soniox' : 'Deepgram'} API Key
+                                                        </label>
+                                                        {sttProvider === 'openai' && (
+                                                            <p className="text-[10px] text-text-tertiary mb-1.5">
+                                                                This key is separate from your main AI Provider key.
+                                                            </p>
+                                                        )}
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="password"
+                                                                value={
+                                                                    sttProvider === 'groq' ? sttGroqKey
+                                                                        : sttProvider === 'openai' ? sttOpenaiKey
+                                                                            : sttProvider === 'elevenlabs' ? sttElevenLabsKey
+                                                                                : sttProvider === 'azure' ? sttAzureKey
+                                                                                    : sttProvider === 'ibmwatson' ? sttIbmKey
+                                                                                        : sttProvider === 'soniox' ? sttSonioxKey
+                                                                                            : sttDeepgramKey
+                                                                }
+                                                                onChange={(e) => {
+                                                                    if (sttProvider === 'groq') setSttGroqKey(e.target.value);
+                                                                    else if (sttProvider === 'openai') setSttOpenaiKey(e.target.value);
+                                                                    else if (sttProvider === 'elevenlabs') setSttElevenLabsKey(e.target.value);
+                                                                    else if (sttProvider === 'azure') setSttAzureKey(e.target.value);
+                                                                    else if (sttProvider === 'ibmwatson') setSttIbmKey(e.target.value);
+                                                                    else if (sttProvider === 'soniox') setSttSonioxKey(e.target.value);
+                                                                    else setSttDeepgramKey(e.target.value);
+                                                                }}
+                                                                placeholder={
+                                                                    sttProvider === 'groq'
+                                                                        ? (hasStoredSttGroqKey ? '••••••••••••' : 'Enter Groq API key')
+                                                                        : sttProvider === 'openai'
+                                                                            ? (hasStoredSttOpenaiKey ? '••••••••••••' : 'Enter OpenAI STT API key')
+                                                                            : sttProvider === 'elevenlabs'
+                                                                                ? (hasStoredElevenLabsKey ? '••••••••••••' : 'Enter ElevenLabs API key')
+                                                                                : sttProvider === 'azure'
+                                                                                    ? (hasStoredAzureKey ? '••••••••••••' : 'Enter Azure API key')
+                                                                                    : sttProvider === 'ibmwatson'
+                                                                                        ? (hasStoredIbmWatsonKey ? '••••••••••••' : 'Enter IBM Watson API key')
+                                                                                        : sttProvider === 'soniox'
+                                                                                            ? (hasStoredSonioxKey ? '••••••••••••' : 'Enter Soniox API key')
+                                                                                            : (hasStoredDeepgramKey ? '••••••••••••' : 'Enter Deepgram API key')
+                                                                }
+                                                                className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
+                                                            />
+                                                            <button
+                                                                onClick={() => {
+                                                                    const keyMap: Record<string, string> = {
+                                                                        groq: sttGroqKey, openai: sttOpenaiKey, deepgram: sttDeepgramKey,
+                                                                        elevenlabs: sttElevenLabsKey, azure: sttAzureKey, ibmwatson: sttIbmKey,
+                                                                    };
+                                                                    handleSttKeySubmit(sttProvider as any, keyMap[sttProvider] || '');
+                                                                }}
+                                                                disabled={sttSaving || !(() => {
+                                                                    const keyMap: Record<string, string> = {
+                                                                        groq: sttGroqKey, openai: sttOpenaiKey, deepgram: sttDeepgramKey,
+                                                                        elevenlabs: sttElevenLabsKey, azure: sttAzureKey, ibmwatson: sttIbmKey,
+                                                                        soniox: sttSonioxKey,
+                                                                    };
+                                                                    return (keyMap[sttProvider] || '').trim();
+                                                                })()}
+                                                                className={`px-5 py-2.5 rounded-lg text-xs font-medium transition-colors ${sttSaved
+                                                                    ? 'bg-green-500/20 text-green-400'
+                                                                    : 'bg-bg-input hover:bg-bg-input/80 border border-border-subtle text-text-primary disabled:opacity-50'
+                                                                    }`}
+                                                            >
+                                                                {sttSaving ? 'Saving...' : sttSaved ? 'Saved!' : 'Save'}
+                                                            </button>
+                                                            {(() => {
+                                                                const hasKeyMap: Record<string, boolean> = {
+                                                                    groq: hasStoredSttGroqKey,
+                                                                    openai: hasStoredSttOpenaiKey,
+                                                                    deepgram: hasStoredDeepgramKey,
+                                                                    elevenlabs: hasStoredElevenLabsKey,
+                                                                    azure: hasStoredAzureKey,
+                                                                    ibmwatson: hasStoredIbmWatsonKey,
+                                                                    soniox: hasStoredSonioxKey,
+                                                                };
+                                                                return hasKeyMap[sttProvider] ? (
+                                                                    <button
+                                                                        onClick={() => handleRemoveSttKey(sttProvider as any)}
+                                                                        className="px-2.5 py-2.5 rounded-lg text-xs font-medium text-text-tertiary hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                                                        title="Remove API Key"
+                                                                    >
+                                                                        <Trash2 size={16} strokeWidth={1.5} />
+                                                                    </button>
+                                                                ) : null;
+                                                            })()}
+                                                        </div>
 
-                                                <div className="p-5">
-                                                    {/* Header row */}
-                                                    <div className="flex items-center justify-between mb-5">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="relative">
-                                                                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(6,182,212,0.1) 100%)', border: '1px solid rgba(16,185,129,0.25)' }}>
-                                                                    <Briefcase size={15} className="text-emerald-400" />
+                                                        {/* Azure Region Input */}
+                                                        {sttProvider === 'azure' && (
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-xs font-medium text-text-secondary block">Region</label>
+                                                                <div className="flex gap-2">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={sttAzureRegion}
+                                                                        onChange={(e) => setSttAzureRegion(e.target.value)}
+                                                                        placeholder="e.g. eastus"
+                                                                        className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
+                                                                    />
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            if (!sttAzureRegion.trim()) return;
+                                                                            // @ts-ignore
+                                                                            await window.electronAPI?.setAzureRegion?.(sttAzureRegion.trim());
+                                                                            setSttSaved(true);
+                                                                            setTimeout(() => setSttSaved(false), 2000);
+                                                                        }}
+                                                                        disabled={!sttAzureRegion.trim()}
+                                                                        className="px-5 py-2.5 rounded-lg text-xs font-medium bg-bg-input hover:bg-bg-input/80 border border-border-subtle text-text-primary disabled:opacity-50 transition-colors"
+                                                                    >
+                                                                        Save
+                                                                    </button>
                                                                 </div>
-                                                                {negotiationScript && (
-                                                                    <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-bg-item-surface" />
+                                                                <p className="text-[10px] text-text-tertiary">e.g. eastus, westeurope, westus2</p>
+                                                            </div>
+                                                        )}
+
+                                                        <div className="flex items-center gap-3">
+                                                            <button
+                                                                onClick={handleTestSttConnection}
+                                                                disabled={sttTestStatus === 'testing'}
+                                                                className="text-xs bg-bg-input hover:bg-bg-elevated text-text-primary px-3 py-1.5 rounded-md transition-colors flex items-center gap-2 disabled:opacity-50"
+                                                            >
+                                                                {sttTestStatus === 'testing' ? (
+                                                                    <><RefreshCw size={12} className="animate-spin" /> Testing...</>
+                                                                ) : sttTestStatus === 'success' ? (
+                                                                    <><Check size={12} className="text-green-500" /> Connected</>
+                                                                ) : (
+                                                                    <>Test Connection</>
                                                                 )}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const urls: Record<string, string> = {
+                                                                        groq: 'https://console.groq.com/keys',
+                                                                        openai: 'https://platform.openai.com/api-keys',
+                                                                        deepgram: 'https://console.deepgram.com',
+                                                                        elevenlabs: 'https://elevenlabs.io/app/settings/api-keys',
+                                                                        azure: 'https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeech',
+                                                                        ibmwatson: 'https://cloud.ibm.com/catalog/services/speech-to-text'
+                                                                    };
+                                                                    if (urls[sttProvider]) {
+                                                                        // @ts-ignore
+                                                                        window.electronAPI?.openExternal(urls[sttProvider]);
+                                                                    }
+                                                                }}
+                                                                className="text-xs text-text-tertiary hover:text-text-primary flex items-center gap-1 transition-colors ml-1"
+                                                                title="Get API Key"
+                                                            >
+                                                                <ExternalLink size={12} />
+                                                            </button>
+                                                            {sttTestStatus === 'error' && (
+                                                                <span className="text-xs text-red-400">{sttTestError}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Recognition Language Family */}
+                                                <CustomSelect
+                                                    label="Language"
+                                                    icon={<Globe size={14} />}
+                                                    value={selectedSttGroup}
+                                                    options={languageGroups.map(g => ({
+                                                        deviceId: g,
+                                                        label: g,
+                                                        kind: 'audioinput' as MediaDeviceKind,
+                                                        groupId: '',
+                                                        toJSON: () => ({})
+                                                    }))}
+                                                    onChange={handleGroupChange}
+                                                    placeholder="Select Language"
+                                                />
+
+                                                {/* Variant/Accent Selector (Conditional) */}
+                                                {currentGroupVariants.length > 1 && (
+                                                    <div className="mt-3 animated fadeIn">
+                                                        <CustomSelect
+                                                            label="Accent / Region"
+                                                            icon={<MapPin size={14} />}
+                                                            value={recognitionLanguage}
+                                                            options={currentGroupVariants}
+                                                            onChange={handleLanguageChange}
+                                                            placeholder="Select Region"
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                <div className="flex gap-2 items-center mt-2 px-1">
+                                                    <Info size={14} className="text-text-secondary shrink-0" />
+                                                    <p className="text-xs text-text-secondary">
+                                                        {recognitionLanguage === 'auto'
+                                                            ? autoDetectedLanguage
+                                                                ? (() => {
+                                                                    const label = Object.values(availableLanguages).find((l: any) =>
+                                                                        l.bcp47 === autoDetectedLanguage || l.iso639 === autoDetectedLanguage
+                                                                    )?.label as string | undefined;
+                                                                    return `Auto mode — detected: ${label ?? autoDetectedLanguage}`;
+                                                                })()
+                                                                : 'Auto mode — language will be detected from the first few seconds of audio.'
+                                                            : 'Select the primary language being spoken in the meeting.'
+                                                        }
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="h-px bg-border-subtle" />
+
+                                        {/* ── Audio Configuration Section ── */}
+                                        <div>
+                                            <h3 className="text-lg font-bold text-text-primary mb-1">Audio Configuration</h3>
+                                            <p className="text-xs text-text-secondary mb-5">Manage input and output devices.</p>
+
+                                            <div className="space-y-4">
+                                                <CustomSelect
+                                                    label="Input Device"
+                                                    icon={<Mic size={16} />}
+                                                    value={selectedInput}
+                                                    options={inputDevices}
+                                                    onChange={(id) => {
+                                                        setSelectedInput(id);
+                                                        localStorage.setItem('preferredInputDeviceId', id);
+                                                    }}
+                                                    placeholder="Default Microphone"
+                                                />
+
+                                                <div>
+                                                    <div className="flex justify-between text-xs text-text-secondary mb-2 px-1">
+                                                        <span>Input Level</span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-bg-input rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-green-500 transition-all duration-100 ease-out"
+                                                            style={{ width: `${micLevel}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="h-px bg-border-subtle my-2" />
+
+                                                <CustomSelect
+                                                    label="Output Device"
+                                                    icon={<Speaker size={16} />}
+                                                    value={selectedOutput}
+                                                    options={outputDevices}
+                                                    onChange={(id) => {
+                                                        setSelectedOutput(id);
+                                                        localStorage.setItem('preferredOutputDeviceId', id);
+                                                    }}
+                                                    placeholder="Default Speakers"
+                                                />
+
+                                                <div className="flex justify-end">
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+                                                                if (!AudioContext) {
+                                                                    console.error("Web Audio API not supported");
+                                                                    return;
+                                                                }
+
+                                                                const ctx = new AudioContext();
+
+                                                                if (ctx.state === 'suspended') {
+                                                                    await ctx.resume();
+                                                                }
+
+                                                                const oscillator = ctx.createOscillator();
+                                                                const gainNode = ctx.createGain();
+
+                                                                oscillator.connect(gainNode);
+                                                                gainNode.connect(ctx.destination);
+
+                                                                oscillator.type = 'sine';
+                                                                oscillator.frequency.setValueAtTime(523.25, ctx.currentTime);
+                                                                gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+                                                                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.0);
+
+                                                                if (selectedOutput && (ctx as any).setSinkId) {
+                                                                    try {
+                                                                        await (ctx as any).setSinkId(selectedOutput);
+                                                                    } catch (e) {
+                                                                        console.warn("Error setting sink for AudioContext", e);
+                                                                    }
+                                                                }
+
+                                                                oscillator.start();
+                                                                oscillator.stop(ctx.currentTime + 1.0);
+                                                            } catch (e) {
+                                                                console.error("Error playing test sound", e);
+                                                            }
+                                                        }}
+                                                        className="text-xs bg-bg-input hover:bg-bg-elevated text-text-primary px-3 py-1.5 rounded-md transition-colors flex items-center gap-2"
+                                                    >
+                                                        <Speaker size={12} /> Test Sound
+                                                    </button>
+                                                </div>
+
+                                                <div className="h-px bg-border-subtle my-2" />
+
+                                                {/* SCK Backend Toggle */}
+                                                <div className="bg-amber-500/5 rounded-xl border border-amber-500/20 p-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-start gap-3">
+                                                            <div className="mt-0.5 p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                                                                <FlaskConical size={18} />
                                                             </div>
                                                             <div>
-                                                                <h3 className="text-[13px] font-bold text-text-primary tracking-tight">Negotiation Script</h3>
-                                                                <p className="text-[10px] text-text-tertiary mt-0.5 tracking-wide uppercase">
-                                                                    {negotiationScript ? `Tailored for ${profileData?.activeJD?.company || 'this role'}` : 'AI-powered salary coaching'}
+                                                                <div className="flex items-center gap-2 mb-0.5">
+                                                                    <h3 className="text-sm font-bold text-text-primary">SCK Backend</h3>
+                                                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-400 uppercase tracking-wide">Alternative</span>
+                                                                </div>
+                                                                <p className="text-xs text-text-secondary leading-relaxed max-w-[300px]">
+                                                                    Use the ScreenCaptureKit backend. An optimized alternative to CoreAudio if you experience any capture issues.
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            {negotiationScript && (
-                                                                <button
-                                                                    onClick={async () => {
-                                                                        setNegotiationGenerating(true);
-                                                                        setNegotiationError('');
-                                                                        try {
-                                                                            const result = await window.electronAPI?.profileGenerateNegotiation?.(true);
-                                                                            if (result?.success) {
-                                                                                await refreshProfileStateRef.current?.();
-                                                                            } else {
-                                                                                setNegotiationError(result?.error || 'Failed to regenerate');
-                                                                            }
-                                                                        } catch { setNegotiationError('Generation failed'); }
-                                                                        finally { setNegotiationGenerating(false); }
-                                                                    }}
-                                                                    disabled={negotiationGenerating}
-                                                                    title="Regenerate script"
-                                                                    className="w-7 h-7 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-bg-input transition-all border border-border-subtle"
-                                                                >
-                                                                    <RefreshCw size={12} className={negotiationGenerating ? 'animate-spin' : ''} />
-                                                                </button>
-                                                            )}
-                                                            {!negotiationScript && (
-                                                                <button
-                                                                    onClick={async () => {
-                                                                        setNegotiationGenerating(true);
-                                                                        setNegotiationError('');
-                                                                        try {
-                                                                            const result = await window.electronAPI?.profileGenerateNegotiation?.(false);
-                                                                            if (result?.success) {
-                                                                                await refreshProfileStateRef.current?.();
-                                                                            } else {
-                                                                                setNegotiationError(result?.error || 'Failed to generate');
-                                                                            }
-                                                                        } catch { setNegotiationError('Generation failed'); }
-                                                                        finally { setNegotiationGenerating(false); }
-                                                                    }}
-                                                                    disabled={negotiationGenerating}
-                                                                    className="px-4 py-1.5 rounded-full text-[11px] font-semibold transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-wait"
-                                                                    style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.2) 0%, rgba(6,182,212,0.15) 100%)', border: '1px solid rgba(16,185,129,0.3)', color: '#34d399' }}
-                                                                >
-                                                                    {negotiationGenerating ? <RefreshCw size={11} className="animate-spin" /> : <Sparkles size={11} />}
-                                                                    {negotiationGenerating ? 'Generating…' : 'Generate Script'}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {negotiationError && (
-                                                        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                                                            <AlertCircle size={12} className="text-red-400 shrink-0" />
-                                                            <p className="text-[11px] text-red-400">{negotiationError}</p>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Empty state */}
-                                                    {!negotiationScript && !negotiationGenerating && !negotiationError && (
-                                                        <div className="flex flex-col items-center justify-center py-8 gap-3">
-                                                            <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(6,182,212,0.06) 100%)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                                                                <Briefcase size={20} className="text-emerald-500/50" />
-                                                            </div>
-                                                            <div className="text-center">
-                                                                <p className="text-[12px] font-medium text-text-secondary">No script yet</p>
-                                                                <p className="text-[10px] text-text-tertiary mt-0.5">Generate a personalized opening, justification &amp; counter-offer</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Generating skeleton */}
-                                                    {negotiationGenerating && (
-                                                        <div className="space-y-3 py-2">
-                                                            {[40, 70, 55].map((w, i) => (
-                                                                <div key={i} className="h-3 rounded-full bg-bg-input animate-pulse" style={{ width: `${w}%`, animationDelay: `${i * 150}ms` }} />
-                                                            ))}
-                                                            <div className="h-12 rounded-lg bg-bg-input animate-pulse mt-2" style={{ animationDelay: '450ms' }} />
-                                                        </div>
-                                                    )}
-
-                                                    {negotiationScript && !negotiationGenerating && (
-                                                        <div className="space-y-3">
-                                                            {/* Salary Range Hero */}
-                                                            {negotiationScript.salary_range && (
-                                                                <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(6,182,212,0.06) 100%)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                                                                    <div>
-                                                                        <div className="text-[9px] font-bold uppercase tracking-widest text-emerald-500/70 mb-1">Target Compensation</div>
-                                                                        <div className="text-xl font-bold tracking-tight" style={{ color: '#34d399' }}>
-                                                                            {negotiationScript.salary_range.currency} {negotiationScript.salary_range.min.toLocaleString()}
-                                                                            <span className="text-text-tertiary font-normal mx-2">–</span>
-                                                                            {negotiationScript.salary_range.max.toLocaleString()}
-                                                                        </div>
-                                                                        {negotiationScript.sources?.length > 0 && (
-                                                                            <div className="text-[9px] text-text-tertiary mt-1">{negotiationScript.sources.length} market source{negotiationScript.sources.length > 1 ? 's' : ''}</div>
-                                                                        )}
-                                                                    </div>
-                                                                    <span className={`text-[9px] font-bold px-2 py-1 rounded-full tracking-wide ${
-                                                                        negotiationScript.salary_range.confidence === 'high' ? 'text-emerald-400 bg-emerald-500/15 border border-emerald-500/25' :
-                                                                        negotiationScript.salary_range.confidence === 'medium' ? 'text-yellow-400 bg-yellow-500/15 border border-yellow-500/25' :
-                                                                        'text-text-tertiary bg-bg-input border border-border-subtle'
-                                                                    }`}>
-                                                                        {(negotiationScript.salary_range.confidence || 'low').toUpperCase()}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Step cards */}
-                                                            {[
-                                                                {
-                                                                    step: '01',
-                                                                    label: 'Opening',
-                                                                    sublabel: 'When asked about salary expectations',
-                                                                    content: negotiationScript.opening_line,
-                                                                    accent: '#10b981',
-                                                                    accentBg: 'rgba(16,185,129,0.07)',
-                                                                    accentBorder: 'rgba(16,185,129,0.2)',
-                                                                    quote: true,
-                                                                },
-                                                                {
-                                                                    step: '02',
-                                                                    label: 'Justify Your Ask',
-                                                                    sublabel: 'Link your track record to the number',
-                                                                    content: negotiationScript.justification,
-                                                                    accent: '#60a5fa',
-                                                                    accentBg: 'rgba(96,165,250,0.07)',
-                                                                    accentBorder: 'rgba(96,165,250,0.2)',
-                                                                    quote: false,
-                                                                },
-                                                                {
-                                                                    step: '03',
-                                                                    label: 'Counter & Hold',
-                                                                    sublabel: 'If they come back lower',
-                                                                    content: negotiationScript.counter_offer_fallback,
-                                                                    accent: '#fb923c',
-                                                                    accentBg: 'rgba(251,146,60,0.07)',
-                                                                    accentBorder: 'rgba(251,146,60,0.2)',
-                                                                    quote: true,
-                                                                },
-                                                            ].filter(s => s.content).map((s) => ({ ...s, content: s.content.replace(/^["'"']+|["'"']+$/g, '').trim() })).map((s) => (
-                                                                <div key={s.step} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${s.accentBorder}`, background: s.accentBg }}>
-                                                                    <div className="flex items-center justify-between px-3.5 pt-3 pb-2">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="text-[10px] font-black tracking-widest" style={{ color: s.accent, opacity: 0.6 }}>STEP {s.step}</span>
-                                                                            <span className="text-[11px] font-bold text-text-primary">{s.label}</span>
-                                                                        </div>
-                                                                        <button
-                                                                            onClick={() => navigator.clipboard?.writeText(s.content)}
-                                                                            title="Copy to clipboard"
-                                                                            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-medium transition-all hover:bg-bg-input text-text-tertiary hover:text-text-secondary"
-                                                                        >
-                                                                            <Check size={9} />
-                                                                            Copy
-                                                                        </button>
-                                                                    </div>
-                                                                    <p className="text-[10px] text-text-tertiary px-3.5 pb-2 -mt-1 tracking-wide">{s.sublabel}</p>
-                                                                    <div className="mx-3.5 mb-3.5">
-                                                                        <p className={`text-[12px] leading-relaxed text-text-primary ${s.quote ? 'pl-3 italic' : ''}`}>
-                                                                            {s.content}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                </div>
-                            )}
-                            {activeTab === 'ai-providers' && (
-                                <AIProvidersSettings />
-                            )}
-                            {activeTab === 'account' && (
-                                <div className="space-y-6 animated fadeIn select-text pb-4">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-text-primary mb-1">Account</h3>
-                                        <p className="text-xs text-text-secondary">Manage your signed-in Google account.</p>
-                                    </div>
-
-                                    {(() => {
-                                        const storedUser = localStorage.getItem('teamsync_auth_user');
-                                        const user = storedUser ? JSON.parse(storedUser) : null;
-                                        return user ? (
-                                            <div className="bg-bg-card rounded-xl border border-border-subtle p-5 space-y-4">
-                                                <div className="flex items-center gap-4">
-                                                    {user.picture ? (
-                                                        <img src={user.picture} alt="" className="w-12 h-12 rounded-full ring-2 ring-border-subtle" referrerPolicy="no-referrer" />
-                                                    ) : (
-                                                        <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-lg font-bold">
-                                                            {(user.name || user.email || '?')[0].toUpperCase()}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-semibold text-text-primary truncate">{user.name || 'User'}</p>
-                                                        <p className="text-xs text-text-secondary truncate">{user.email}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="pt-3 border-t border-border-subtle">
-                                                    <button
-                                                        onClick={async () => {
-                                                            const token = localStorage.getItem('teamsync_auth_token');
-                                                            if (token) {
-                                                                try {
-                                                                    await fetch('http://localhost:3456/auth/logout', {
-                                                                        method: 'POST',
-                                                                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                                                    });
-                                                                } catch {}
-                                                            }
-                                                            localStorage.removeItem('teamsync_auth_token');
-                                                            localStorage.removeItem('teamsync_auth_user');
-                                                            window.location.reload();
-                                                        }}
-                                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 transition-all"
-                                                    >
-                                                        <LogOut size={14} /> Sign Out
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="bg-bg-card rounded-xl border border-border-subtle p-5 text-center">
-                                                <p className="text-sm text-text-secondary mb-3">Not signed in</p>
-                                                <button
-                                                    onClick={() => window.location.reload()}
-                                                    className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
-                                                >
-                                                    Sign In with Google
-                                                </button>
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            )}
-                            {activeTab === 'keybinds' && (
-                                <div className="space-y-5 animated fadeIn select-text pb-4">
-                                    <div className="flex items-start justify-between">
-                                        <div>
-                                            <h3 className="text-lg font-bold text-text-primary mb-1">Keyboard shortcuts</h3>
-                                            <p className="text-xs text-text-secondary">TeamSync works with these easy to remember commands.</p>
-                                        </div>
-                                        <button
-                                            onClick={resetShortcuts}
-                                            className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-border-subtle bg-bg-subtle/30 hover:bg-bg-subtle hover:border-green-500/30 transition-all duration-200 text-xs font-medium text-text-secondary hover:text-green-500 active:scale-95 mt-1"
-                                        >
-                                            <RotateCcw size={13} strokeWidth={2.5} />
-                                            Restore Default
-                                        </button>
-                                    </div>
-
-                                    <div className="grid gap-6">
-                                        {/* General Category */}
-                                        <div>
-                                            <h4 className="text-sm font-bold text-text-primary mb-3">General</h4>
-                                            <div className="space-y-1">
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Eye size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Toggle Visibility</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.toggleVisibility}
-                                                        onSave={(keys) => updateShortcut('toggleVisibility', keys)}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><PointerOff size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Toggle Mouse Passthrough</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.toggleMousePassthrough}
-                                                        onSave={(keys) => updateShortcut('toggleMousePassthrough', keys)}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><MessageSquare size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Process Screenshots</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.processScreenshots}
-                                                        onSave={(keys) => updateShortcut('processScreenshots', keys)}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Sparkles size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Capture Screen & Ask AI</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.captureAndProcess}
-                                                        onSave={(keys) => updateShortcut('captureAndProcess', keys)}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><RotateCcw size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Reset / Cancel</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.resetCancel}
-                                                        onSave={(keys) => updateShortcut('resetCancel', keys)}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Camera size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Take Screenshot</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.takeScreenshot}
-                                                        onSave={(keys) => updateShortcut('takeScreenshot', keys)}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between py-1.5 group">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Crop size={14} /></span>
-                                                        <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Selective Screenshot</span>
-                                                    </div>
-                                                    <KeyRecorder
-                                                        currentKeys={shortcuts.selectiveScreenshot}
-                                                        onSave={(keys) => updateShortcut('selectiveScreenshot', keys)}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Chat Category */}
-                                        <div>
-                                            <div className="mb-3">
-                                                <h4 className="text-sm font-bold text-text-primary">Chat</h4>
-                                            </div>
-                                            <div className="space-y-1">
-                                                {[
-                                                    { id: 'whatToAnswer', label: 'What to Answer', icon: <Sparkles size={14} /> },
-                                                    { id: 'clarify', label: 'Clarify', icon: <MessageSquare size={14} /> },
-                                                    { id: 'followUp', label: 'Follow Up', icon: <MessageSquare size={14} /> },
-                                                    { id: 'dynamicAction4', label: 'Recap / Brainstorm', icon: <RefreshCw size={14} /> },
-                                                    { id: 'answer', label: 'Answer / Record', icon: <Mic size={14} /> },
-                                                    { id: 'codeHint', label: 'Get Code Hint', icon: <Zap size={14} /> },
-                                                    { id: 'brainstorm', label: 'Brainstorm Approaches', icon: <Zap size={14} /> },
-                                                    { id: 'scrollUp', label: 'Scroll Up', icon: <ArrowUp size={14} /> },
-                                                    { id: 'scrollDown', label: 'Scroll Down', icon: <ArrowDown size={14} /> },
-                                                ].map((item, i) => (
-                                                    <div key={i} className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center">{item.icon}</span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">{item.label}</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts[item.id as keyof typeof shortcuts]}
-                                                            onSave={(keys) => updateShortcut(item.id as any, keys)}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Window Category */}
-                                        <div>
-                                            <h4 className="text-sm font-bold text-text-primary mb-3">Window</h4>
-                                            <div className="space-y-1">
-                                                {[
-                                                    { id: 'moveWindowUp', label: 'Move Window Up', icon: <ArrowUp size={14} /> },
-                                                    { id: 'moveWindowDown', label: 'Move Window Down', icon: <ArrowDown size={14} /> },
-                                                    { id: 'moveWindowLeft', label: 'Move Window Left', icon: <ArrowLeft size={14} /> },
-                                                    { id: 'moveWindowRight', label: 'Move Window Right', icon: <ArrowRight size={14} /> }
-                                                ].map((item, i) => (
-                                                    <div key={i} className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center">{item.icon}</span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">{item.label}</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts[item.id as keyof typeof shortcuts]}
-                                                            onSave={(keys) => updateShortcut(item.id as any, keys)}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeTab === 'audio' && (
-                                <div className="space-y-6 animated fadeIn">
-                                    {/* ── Speech Provider Section ── */}
-                                    <div>
-                                        <h3 className="text-lg font-bold text-text-primary mb-1">Speech Provider</h3>
-                                        <p className="text-xs text-text-secondary mb-5">Choose the engine that transcribes audio to text.</p>
-
-                                        <div className="space-y-4">
-                                            <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-3">
-                                                <label className="text-xs font-medium text-text-secondary block">Speech Provider</label>
-                                                <div className="relative">
-                                                    <ProviderSelect
-                                                        value={sttProvider}
-                                                        onChange={(val) => handleSttProviderChange(val as any)}
-                                                        options={[
-                                                            ...(hasTeamSyncKey ? [{ id: 'teamsync', label: 'TeamSync API', badge: 'Saved' as const, recommended: true, desc: 'Managed transcription via TeamSync backend', color: 'blue', icon: <Mic size={14} /> }] : []),
-                                                            { id: 'google', label: 'Google Cloud', badge: googleServiceAccountPath ? 'Saved' : null, recommended: true, desc: 'gRPC streaming via Service Account', color: 'blue', icon: <Mic size={14} /> },
-                                                            { id: 'groq', label: 'Groq Whisper', badge: hasStoredSttGroqKey ? 'Saved' : null, recommended: true, desc: 'Ultra-fast REST transcription', color: 'orange', icon: <Mic size={14} /> },
-                                                            { id: 'openai', label: 'OpenAI Whisper', badge: hasStoredSttOpenaiKey ? 'Saved' : null, desc: 'OpenAI-compatible Whisper API', color: 'green', icon: <Mic size={14} /> },
-                                                            { id: 'deepgram', label: 'Deepgram Nova-3', badge: hasStoredDeepgramKey ? 'Saved' : null, recommended: true, desc: 'High-accuracy REST transcription', color: 'purple', icon: <Mic size={14} /> },
-                                                            { id: 'elevenlabs', label: 'ElevenLabs Scribe', badge: hasStoredElevenLabsKey ? 'Saved' : null, desc: 'Scribe v2 Realtime API', color: 'teal', icon: <Mic size={14} /> },
-                                                            { id: 'azure', label: 'Azure Speech', badge: hasStoredAzureKey ? 'Saved' : null, desc: 'Microsoft Cognitive Services STT', color: 'cyan', icon: <Mic size={14} /> },
-                                                            { id: 'ibmwatson', label: 'IBM Watson', badge: hasStoredIbmWatsonKey ? 'Saved' : null, desc: 'IBM Watson cloud STT service', color: 'indigo', icon: <Mic size={14} /> },
-                                                            { id: 'soniox', label: 'Soniox', badge: hasStoredSonioxKey ? 'Saved' : null, recommended: true, desc: '60+ languages, multilingual, domain context', color: 'cyan', icon: <Mic size={14} /> },
-                                                        ]}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Groq Model Selector */}
-                                            {sttProvider === 'groq' && (
-                                                <div className="bg-bg-card rounded-xl border border-border-subtle p-4">
-                                                    <label className="text-xs font-medium text-text-secondary mb-2.5 block">Whisper Model</label>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {[
-                                                            { id: 'whisper-large-v3-turbo', label: 'V3 Turbo', desc: 'Fastest' },
-                                                            { id: 'whisper-large-v3', label: 'V3', desc: 'Most Accurate' },
-                                                        ].map((m) => (
-                                                            <button
-                                                                key={m.id}
-                                                                onClick={async () => {
-                                                                    setGroqSttModel(m.id);
-                                                                    try {
-                                                                        // @ts-ignore
-                                                                        await window.electronAPI?.setGroqSttModel?.(m.id);
-                                                                    } catch (e) {
-                                                                        console.error('Failed to set Groq model:', e);
-                                                                    }
-                                                                }}
-                                                                className={`rounded-lg px-3 py-2.5 text-left transition-all duration-200 ease-in-out active:scale-[0.98] ${groqSttModel === m.id
-                                                                    ? 'bg-blue-600 text-white shadow-md'
-                                                                    : 'bg-bg-input hover:bg-bg-elevated text-text-primary'
-                                                                    }`}
-                                                            >
-                                                                <span className="text-sm font-medium block">{m.label}</span>
-                                                                <span className={`text-[11px] transition-colors ${groqSttModel === m.id ? 'text-white/70' : 'text-text-tertiary'
-                                                                    }`}>{m.desc}</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Google Cloud Service Account */}
-                                            {sttProvider === 'google' && (
-                                                <div className="bg-bg-card rounded-xl border border-border-subtle p-4">
-                                                    <label className="text-xs font-medium text-text-secondary mb-2 block">Service Account JSON</label>
-                                                    <div className="flex gap-2">
-                                                        <div className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-secondary font-mono truncate">
-                                                            {googleServiceAccountPath
-                                                                ? <span className="text-text-primary">{googleServiceAccountPath.split('/').pop()}</span>
-                                                                : <span className="text-text-tertiary italic">No file selected</span>}
-                                                        </div>
-                                                        <button
-                                                            onClick={async () => {
-                                                                // @ts-ignore
-                                                                const result = await window.electronAPI?.selectServiceAccount?.();
-                                                                if (result?.success && result.path) {
-                                                                    setGoogleServiceAccountPath(result.path);
-                                                                }
-                                                            }}
-                                                            className="px-3 py-2 bg-bg-input hover:bg-bg-elevated border border-border-subtle rounded-lg text-xs font-medium text-text-primary transition-colors flex items-center gap-2"
-                                                        >
-                                                            <Upload size={14} /> Select File
-                                                        </button>
-                                                    </div>
-                                                    <p className="text-[10px] text-text-tertiary mt-2">
-                                                        Required for Google Cloud Speech-to-Text.
-                                                    </p>
-                                                </div>
-                                            )}
-
-                                            {/* API Key Input (non-Google providers) */}
-                                            {sttProvider !== 'google' && (
-                                                <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-3">
-                                                    <label className="text-xs font-medium text-text-secondary block">
-                                                        {sttProvider === 'groq' ? 'Groq' : sttProvider === 'openai' ? 'OpenAI STT' : sttProvider === 'elevenlabs' ? 'ElevenLabs' : sttProvider === 'azure' ? 'Azure' : sttProvider === 'ibmwatson' ? 'IBM Watson' : sttProvider === 'soniox' ? 'Soniox' : 'Deepgram'} API Key
-                                                    </label>
-                                                    {sttProvider === 'openai' && (
-                                                        <p className="text-[10px] text-text-tertiary mb-1.5">
-                                                            This key is separate from your main AI Provider key.
-                                                        </p>
-                                                    )}
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="password"
-                                                            value={
-                                                                sttProvider === 'groq' ? sttGroqKey
-                                                                    : sttProvider === 'openai' ? sttOpenaiKey
-                                                                        : sttProvider === 'elevenlabs' ? sttElevenLabsKey
-                                                                            : sttProvider === 'azure' ? sttAzureKey
-                                                                                : sttProvider === 'ibmwatson' ? sttIbmKey
-                                                                                    : sttProvider === 'soniox' ? sttSonioxKey
-                                                                                        : sttDeepgramKey
-                                                            }
-                                                            onChange={(e) => {
-                                                                if (sttProvider === 'groq') setSttGroqKey(e.target.value);
-                                                                else if (sttProvider === 'openai') setSttOpenaiKey(e.target.value);
-                                                                else if (sttProvider === 'elevenlabs') setSttElevenLabsKey(e.target.value);
-                                                                else if (sttProvider === 'azure') setSttAzureKey(e.target.value);
-                                                                else if (sttProvider === 'ibmwatson') setSttIbmKey(e.target.value);
-                                                                else if (sttProvider === 'soniox') setSttSonioxKey(e.target.value);
-                                                                else setSttDeepgramKey(e.target.value);
-                                                            }}
-                                                            placeholder={
-                                                                sttProvider === 'groq'
-                                                                    ? (hasStoredSttGroqKey ? '••••••••••••' : 'Enter Groq API key')
-                                                                    : sttProvider === 'openai'
-                                                                        ? (hasStoredSttOpenaiKey ? '••••••••••••' : 'Enter OpenAI STT API key')
-                                                                        : sttProvider === 'elevenlabs'
-                                                                            ? (hasStoredElevenLabsKey ? '••••••••••••' : 'Enter ElevenLabs API key')
-                                                                            : sttProvider === 'azure'
-                                                                                ? (hasStoredAzureKey ? '••••••••••••' : 'Enter Azure API key')
-                                                                                : sttProvider === 'ibmwatson'
-                                                                                    ? (hasStoredIbmWatsonKey ? '••••••••••••' : 'Enter IBM Watson API key')
-                                                                                    : sttProvider === 'soniox'
-                                                                                        ? (hasStoredSonioxKey ? '••••••••••••' : 'Enter Soniox API key')
-                                                                                        : (hasStoredDeepgramKey ? '••••••••••••' : 'Enter Deepgram API key')
-                                                            }
-                                                            className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
-                                                        />
-                                                        <button
+                                                        <div
                                                             onClick={() => {
-                                                                const keyMap: Record<string, string> = {
-                                                                    groq: sttGroqKey, openai: sttOpenaiKey, deepgram: sttDeepgramKey,
-                                                                    elevenlabs: sttElevenLabsKey, azure: sttAzureKey, ibmwatson: sttIbmKey,
-                                                                };
-                                                                handleSttKeySubmit(sttProvider as any, keyMap[sttProvider] || '');
+                                                                const newState = !useExperimentalSck;
+                                                                setUseExperimentalSck(newState);
+                                                                window.localStorage.setItem('useExperimentalSckBackend', newState ? 'true' : 'false');
                                                             }}
-                                                            disabled={sttSaving || !(() => {
-                                                                const keyMap: Record<string, string> = {
-                                                                    groq: sttGroqKey, openai: sttOpenaiKey, deepgram: sttDeepgramKey,
-                                                                    elevenlabs: sttElevenLabsKey, azure: sttAzureKey, ibmwatson: sttIbmKey,
-                                                                    soniox: sttSonioxKey,
-                                                                };
-                                                                return (keyMap[sttProvider] || '').trim();
-                                                            })()}
-                                                            className={`px-5 py-2.5 rounded-lg text-xs font-medium transition-colors ${sttSaved
-                                                                ? 'bg-green-500/20 text-green-400'
-                                                                : 'bg-bg-input hover:bg-bg-input/80 border border-border-subtle text-text-primary disabled:opacity-50'
-                                                                }`}
+                                                            className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${useExperimentalSck ? 'bg-amber-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
                                                         >
-                                                            {sttSaving ? 'Saving...' : sttSaved ? 'Saved!' : 'Save'}
-                                                        </button>
-                                                        {(() => {
-                                                            const hasKeyMap: Record<string, boolean> = {
-                                                                groq: hasStoredSttGroqKey,
-                                                                openai: hasStoredSttOpenaiKey,
-                                                                deepgram: hasStoredDeepgramKey,
-                                                                elevenlabs: hasStoredElevenLabsKey,
-                                                                azure: hasStoredAzureKey,
-                                                                ibmwatson: hasStoredIbmWatsonKey,
-                                                                soniox: hasStoredSonioxKey,
-                                                            };
-                                                            return hasKeyMap[sttProvider] ? (
-                                                                <button
-                                                                    onClick={() => handleRemoveSttKey(sttProvider as any)}
-                                                                    className="px-2.5 py-2.5 rounded-lg text-xs font-medium text-text-tertiary hover:text-red-500 hover:bg-red-500/10 transition-all"
-                                                                    title="Remove API Key"
-                                                                >
-                                                                    <Trash2 size={16} strokeWidth={1.5} />
-                                                                </button>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-
-                                                    {/* Azure Region Input */}
-                                                    {sttProvider === 'azure' && (
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-xs font-medium text-text-secondary block">Region</label>
-                                                            <div className="flex gap-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={sttAzureRegion}
-                                                                    onChange={(e) => setSttAzureRegion(e.target.value)}
-                                                                    placeholder="e.g. eastus"
-                                                                    className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
-                                                                />
-                                                                <button
-                                                                    onClick={async () => {
-                                                                        if (!sttAzureRegion.trim()) return;
-                                                                        // @ts-ignore
-                                                                        await window.electronAPI?.setAzureRegion?.(sttAzureRegion.trim());
-                                                                        setSttSaved(true);
-                                                                        setTimeout(() => setSttSaved(false), 2000);
-                                                                    }}
-                                                                    disabled={!sttAzureRegion.trim()}
-                                                                    className="px-5 py-2.5 rounded-lg text-xs font-medium bg-bg-input hover:bg-bg-input/80 border border-border-subtle text-text-primary disabled:opacity-50 transition-colors"
-                                                                >
-                                                                    Save
-                                                                </button>
-                                                            </div>
-                                                            <p className="text-[10px] text-text-tertiary">e.g. eastus, westeurope, westus2</p>
+                                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${useExperimentalSck ? 'translate-x-5' : 'translate-x-0'}`} />
                                                         </div>
-                                                    )}
-
-                                                    <div className="flex items-center gap-3">
-                                                        <button
-                                                            onClick={handleTestSttConnection}
-                                                            disabled={sttTestStatus === 'testing'}
-                                                            className="text-xs bg-bg-input hover:bg-bg-elevated text-text-primary px-3 py-1.5 rounded-md transition-colors flex items-center gap-2 disabled:opacity-50"
-                                                        >
-                                                            {sttTestStatus === 'testing' ? (
-                                                                <><RefreshCw size={12} className="animate-spin" /> Testing...</>
-                                                            ) : sttTestStatus === 'success' ? (
-                                                                <><Check size={12} className="text-green-500" /> Connected</>
-                                                            ) : (
-                                                                <>Test Connection</>
-                                                            )}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                const urls: Record<string, string> = {
-                                                                    groq: 'https://console.groq.com/keys',
-                                                                    openai: 'https://platform.openai.com/api-keys',
-                                                                    deepgram: 'https://console.deepgram.com',
-                                                                    elevenlabs: 'https://elevenlabs.io/app/settings/api-keys',
-                                                                    azure: 'https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeech',
-                                                                    ibmwatson: 'https://cloud.ibm.com/catalog/services/speech-to-text'
-                                                                };
-                                                                if (urls[sttProvider]) {
-                                                                    // @ts-ignore
-                                                                    window.electronAPI?.openExternal(urls[sttProvider]);
-                                                                }
-                                                            }}
-                                                            className="text-xs text-text-tertiary hover:text-text-primary flex items-center gap-1 transition-colors ml-1"
-                                                            title="Get API Key"
-                                                        >
-                                                            <ExternalLink size={12} />
-                                                        </button>
-                                                        {sttTestStatus === 'error' && (
-                                                            <span className="text-xs text-red-400">{sttTestError}</span>
-                                                        )}
                                                     </div>
                                                 </div>
-                                            )}
-
-                                            {/* Recognition Language Family */}
-                                            <CustomSelect
-                                                label="Language"
-                                                icon={<Globe size={14} />}
-                                                value={selectedSttGroup}
-                                                options={languageGroups.map(g => ({
-                                                    deviceId: g,
-                                                    label: g,
-                                                    kind: 'audioinput' as MediaDeviceKind,
-                                                    groupId: '',
-                                                    toJSON: () => ({})
-                                                }))}
-                                                onChange={handleGroupChange}
-                                                placeholder="Select Language"
-                                            />
-
-                                            {/* Variant/Accent Selector (Conditional) */}
-                                            {currentGroupVariants.length > 1 && (
-                                                <div className="mt-3 animated fadeIn">
-                                                    <CustomSelect
-                                                        label="Accent / Region"
-                                                        icon={<MapPin size={14} />}
-                                                        value={recognitionLanguage}
-                                                        options={currentGroupVariants}
-                                                        onChange={handleLanguageChange}
-                                                        placeholder="Select Region"
-                                                    />
-                                                </div>
-                                            )}
-
-                                            <div className="flex gap-2 items-center mt-2 px-1">
-                                                <Info size={14} className="text-text-secondary shrink-0" />
-                                                <p className="text-xs text-text-secondary">
-                                                    {recognitionLanguage === 'auto'
-                                                        ? autoDetectedLanguage
-                                                            ? (() => {
-                                                                const label = Object.values(availableLanguages).find((l: any) =>
-                                                                    l.bcp47 === autoDetectedLanguage || l.iso639 === autoDetectedLanguage
-                                                                )?.label as string | undefined;
-                                                                return `Auto mode — detected: ${label ?? autoDetectedLanguage}`;
-                                                              })()
-                                                            : 'Auto mode — language will be detected from the first few seconds of audio.'
-                                                        : 'Select the primary language being spoken in the meeting.'
-                                                    }
-                                                </p>
                                             </div>
                                         </div>
                                     </div>
+                                )}
 
-                                    <div className="h-px bg-border-subtle" />
 
-                                    {/* ── Audio Configuration Section ── */}
-                                    <div>
-                                        <h3 className="text-lg font-bold text-text-primary mb-1">Audio Configuration</h3>
-                                        <p className="text-xs text-text-secondary mb-5">Manage input and output devices.</p>
+                                {activeTab === 'calendar' && (
+                                    <div className="space-y-6 animated fadeIn h-full">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-text-primary mb-2">Visible Calendars</h3>
+                                            <p className="text-xs text-text-secondary mb-4">Upcoming meetings are synchronized from these calendars</p>
+                                        </div>
 
-                                        <div className="space-y-4">
-                                            <CustomSelect
-                                                label="Input Device"
-                                                icon={<Mic size={16} />}
-                                                value={selectedInput}
-                                                options={inputDevices}
-                                                onChange={(id) => {
-                                                    setSelectedInput(id);
-                                                    localStorage.setItem('preferredInputDeviceId', id);
-                                                }}
-                                                placeholder="Default Microphone"
-                                            />
-
-                                            <div>
-                                                <div className="flex justify-between text-xs text-text-secondary mb-2 px-1">
-                                                    <span>Input Level</span>
-                                                </div>
-                                                <div className="h-1.5 bg-bg-input rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-green-500 transition-all duration-100 ease-out"
-                                                        style={{ width: `${micLevel}%` }}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="h-px bg-border-subtle my-2" />
-
-                                            <CustomSelect
-                                                label="Output Device"
-                                                icon={<Speaker size={16} />}
-                                                value={selectedOutput}
-                                                options={outputDevices}
-                                                onChange={(id) => {
-                                                    setSelectedOutput(id);
-                                                    localStorage.setItem('preferredOutputDeviceId', id);
-                                                }}
-                                                placeholder="Default Speakers"
-                                            />
-
-                                            <div className="flex justify-end">
-                                                <button
-                                                    onClick={async () => {
-                                                        try {
-                                                            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-                                                            if (!AudioContext) {
-                                                                console.error("Web Audio API not supported");
-                                                                return;
-                                                            }
-
-                                                            const ctx = new AudioContext();
-
-                                                            if (ctx.state === 'suspended') {
-                                                                await ctx.resume();
-                                                            }
-
-                                                            const oscillator = ctx.createOscillator();
-                                                            const gainNode = ctx.createGain();
-
-                                                            oscillator.connect(gainNode);
-                                                            gainNode.connect(ctx.destination);
-
-                                                            oscillator.type = 'sine';
-                                                            oscillator.frequency.setValueAtTime(523.25, ctx.currentTime);
-                                                            gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
-                                                            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.0);
-
-                                                            if (selectedOutput && (ctx as any).setSinkId) {
-                                                                try {
-                                                                    await (ctx as any).setSinkId(selectedOutput);
-                                                                } catch (e) {
-                                                                    console.warn("Error setting sink for AudioContext", e);
-                                                                }
-                                                            }
-
-                                                            oscillator.start();
-                                                            oscillator.stop(ctx.currentTime + 1.0);
-                                                        } catch (e) {
-                                                            console.error("Error playing test sound", e);
-                                                        }
-                                                    }}
-                                                    className="text-xs bg-bg-input hover:bg-bg-elevated text-text-primary px-3 py-1.5 rounded-md transition-colors flex items-center gap-2"
-                                                >
-                                                    <Speaker size={12} /> Test Sound
-                                                </button>
-                                            </div>
-
-                                            <div className="h-px bg-border-subtle my-2" />
-
-                                            {/* SCK Backend Toggle */}
-                                            <div className="bg-amber-500/5 rounded-xl border border-amber-500/20 p-4">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-start gap-3">
-                                                        <div className="mt-0.5 p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
-                                                            <FlaskConical size={18} />
+                                        <div className="bg-bg-card rounded-xl p-6 border border-border-subtle flex flex-col items-start gap-4">
+                                            {calendarStatus.connected ? (
+                                                <div className="w-full flex items-center justify-between">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500">
+                                                            <Calendar size={20} />
                                                         </div>
                                                         <div>
-                                                            <div className="flex items-center gap-2 mb-0.5">
-                                                                <h3 className="text-sm font-bold text-text-primary">SCK Backend</h3>
-                                                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-400 uppercase tracking-wide">Alternative</span>
-                                                            </div>
-                                                            <p className="text-xs text-text-secondary leading-relaxed max-w-[300px]">
-                                                                Use the ScreenCaptureKit backend. An optimized alternative to CoreAudio if you experience any capture issues.
-                                                            </p>
+                                                            <h4 className="text-sm font-medium text-text-primary">Google Calendar</h4>
+                                                            <p className="text-xs text-text-secondary">Connected as {calendarStatus.email || 'User'}</p>
                                                         </div>
                                                     </div>
-                                                    <div
-                                                        onClick={() => {
-                                                            const newState = !useExperimentalSck;
-                                                            setUseExperimentalSck(newState);
-                                                            window.localStorage.setItem('useExperimentalSckBackend', newState ? 'true' : 'false');
+
+                                                    <button
+                                                        onClick={async () => {
+                                                            setIsCalendarsLoading(true);
+                                                            try {
+                                                                const token = localStorage.getItem('teamsync_auth_token') || undefined;
+                                                                await window.electronAPI.googleLogout?.(token);
+                                                                await window.electronAPI.calendarDisconnect();
+                                                                const storedUser = localStorage.getItem('teamsync_auth_user');
+                                                                if (storedUser) {
+                                                                    try {
+                                                                        const userData = JSON.parse(storedUser);
+                                                                        userData.calendarConnected = false;
+                                                                        localStorage.setItem('teamsync_auth_user', JSON.stringify(userData));
+                                                                    } catch {
+                                                                        // Ignore malformed local storage payload.
+                                                                    }
+                                                                }
+                                                                window.dispatchEvent(
+                                                                    new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: false } })
+                                                                );
+                                                                const status = await window.electronAPI.getCalendarStatus();
+                                                                setCalendarStatus(status);
+                                                            } catch (e) {
+                                                                console.error(e);
+                                                            } finally {
+                                                                setIsCalendarsLoading(false);
+                                                            }
                                                         }}
-                                                        className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${useExperimentalSck ? 'bg-amber-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                                                        disabled={isCalendarsLoading}
+                                                        className="px-3 py-1.5 bg-bg-input hover:bg-bg-elevated border border-border-subtle text-text-primary rounded-md text-xs font-medium transition-colors"
                                                     >
-                                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${useExperimentalSck ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                    </div>
+                                                        {isCalendarsLoading ? 'Disconnecting...' : 'Disconnect'}
+                                                    </button>
                                                 </div>
-                                            </div>
+                                            ) : (
+                                                <div className="w-full py-4">
+                                                    <div className="mb-4">
+                                                        <Calendar size={24} className="text-text-tertiary mb-3" />
+                                                        <h4 className="text-sm font-bold text-text-primary mb-1">No calendars</h4>
+                                                        <p className="text-xs text-text-secondary">Get started by connecting a Google account.</p>
+                                                    </div>
+
+                                                    <button
+                                                        onClick={async () => {
+                                                            setIsCalendarsLoading(true);
+                                                            try {
+                                                                // Use backend OAuth flow for calendar
+                                                                const storedUser = localStorage.getItem('teamsync_auth_user');
+                                                                const email = storedUser ? JSON.parse(storedUser)?.email : undefined;
+
+                                                                const urlRes = await fetch('http://localhost:3456/auth/google/calendar' +
+                                                                    (email ? `?login_hint=${encodeURIComponent(email)}` : ''));
+                                                                if (!urlRes.ok) throw new Error('Failed to get calendar auth URL');
+                                                                const { url } = await urlRes.json();
+
+                                                                if (window.electronAPI?.openExternal) {
+                                                                    await window.electronAPI.openExternal(url);
+                                                                }
+
+                                                                // Poll for completion
+                                                                const poll = setInterval(async () => {
+                                                                    try {
+                                                                        const pendingRes = await fetch('http://localhost:3456/auth/pending');
+                                                                        if (!pendingRes.ok) return;
+                                                                        const data = await pendingRes.json();
+                                                                        if (data.pending) return;
+
+                                                                        clearInterval(poll);
+                                                                        if (data.success && data.user?.calendarConnected) {
+                                                                            if (data.token) localStorage.setItem('teamsync_auth_token', data.token);
+                                                                            if (data.user) localStorage.setItem('teamsync_auth_user', JSON.stringify(data.user));
+                                                                            window.dispatchEvent(
+                                                                                new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: true } })
+                                                                            );
+                                                                            const status = await window.electronAPI.getCalendarStatus();
+                                                                            setCalendarStatus({ ...status, connected: true });
+                                                                        }
+                                                                        setIsCalendarsLoading(false);
+                                                                    } catch { }
+                                                                }, 1000);
+
+                                                                // Timeout after 2 minutes
+                                                                setTimeout(() => { clearInterval(poll); setIsCalendarsLoading(false); }, 120000);
+                                                            } catch (e) {
+                                                                console.error(e);
+                                                                setIsCalendarsLoading(false);
+                                                            }
+                                                        }}
+                                                        disabled={isCalendarsLoading}
+                                                        className={`px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2.5 ${isLight ? 'bg-bg-component hover:bg-bg-item-surface text-text-primary border border-border-subtle' : 'bg-[#303033] hover:bg-[#3A3A3D] text-white'}`}
+                                                    >
+                                                        <svg viewBox="0 0 24 24" width="14" height="14" xmlns="http://www.w3.org/2000/svg">
+                                                            <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
+                                                                <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" />
+                                                                <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" />
+                                                                <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.734 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z" />
+                                                                <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z" />
+                                                            </g>
+                                                        </svg>
+                                                        {isCalendarsLoading ? 'Connecting...' : 'Connect Google'}
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
+                                {activeTab === 'help' && (
+                                    <HelpSettings onNavigate={setActiveTab} />
+                                )}
 
-                            {activeTab === 'calendar' && (
-                                <div className="space-y-6 animated fadeIn h-full">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-text-primary mb-2">Visible Calendars</h3>
-                                        <p className="text-xs text-text-secondary mb-4">Upcoming meetings are synchronized from these calendars</p>
-                                    </div>
-
-                                    <div className="bg-bg-card rounded-xl p-6 border border-border-subtle flex flex-col items-start gap-4">
-                                        {calendarStatus.connected ? (
-                                            <div className="w-full flex items-center justify-between">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500">
-                                                        <Calendar size={20} />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-sm font-medium text-text-primary">Google Calendar</h4>
-                                                        <p className="text-xs text-text-secondary">Connected as {calendarStatus.email || 'User'}</p>
-                                                    </div>
-                                                </div>
-
-                                                <button
-                                                    onClick={async () => {
-                                                        setIsCalendarsLoading(true);
-                                                        try {
-                                                            const token = localStorage.getItem('teamsync_auth_token') || undefined;
-                                                            await window.electronAPI.googleLogout?.(token);
-                                                            await window.electronAPI.calendarDisconnect();
-                                                            const storedUser = localStorage.getItem('teamsync_auth_user');
-                                                            if (storedUser) {
-                                                                try {
-                                                                    const userData = JSON.parse(storedUser);
-                                                                    userData.calendarConnected = false;
-                                                                    localStorage.setItem('teamsync_auth_user', JSON.stringify(userData));
-                                                                } catch {
-                                                                    // Ignore malformed local storage payload.
-                                                                }
-                                                            }
-                                                            window.dispatchEvent(
-                                                                new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: false } })
-                                                            );
-                                                            const status = await window.electronAPI.getCalendarStatus();
-                                                            setCalendarStatus(status);
-                                                        } catch (e) {
-                                                            console.error(e);
-                                                        } finally {
-                                                            setIsCalendarsLoading(false);
-                                                        }
-                                                    }}
-                                                    disabled={isCalendarsLoading}
-                                                    className="px-3 py-1.5 bg-bg-input hover:bg-bg-elevated border border-border-subtle text-text-primary rounded-md text-xs font-medium transition-colors"
-                                                >
-                                                    {isCalendarsLoading ? 'Disconnecting...' : 'Disconnect'}
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="w-full py-4">
-                                                <div className="mb-4">
-                                                    <Calendar size={24} className="text-text-tertiary mb-3" />
-                                                    <h4 className="text-sm font-bold text-text-primary mb-1">No calendars</h4>
-                                                    <p className="text-xs text-text-secondary">Get started by connecting a Google account.</p>
-                                                </div>
-
-                                                <button
-                                                    onClick={async () => {
-                                                        setIsCalendarsLoading(true);
-                                                        try {
-                                                            // Use backend OAuth flow for calendar
-                                                            const storedUser = localStorage.getItem('teamsync_auth_user');
-                                                            const email = storedUser ? JSON.parse(storedUser)?.email : undefined;
-                                                            
-                                                            const urlRes = await fetch('http://localhost:3456/auth/google/calendar' + 
-                                                                (email ? `?login_hint=${encodeURIComponent(email)}` : ''));
-                                                            if (!urlRes.ok) throw new Error('Failed to get calendar auth URL');
-                                                            const { url } = await urlRes.json();
-                                                            
-                                                            if (window.electronAPI?.openExternal) {
-                                                                await window.electronAPI.openExternal(url);
-                                                            }
-                                                            
-                                                            // Poll for completion
-                                                            const poll = setInterval(async () => {
-                                                                try {
-                                                                    const pendingRes = await fetch('http://localhost:3456/auth/pending');
-                                                                    if (!pendingRes.ok) return;
-                                                                    const data = await pendingRes.json();
-                                                                    if (data.pending) return;
-                                                                    
-                                                                    clearInterval(poll);
-                                                                    if (data.success && data.user?.calendarConnected) {
-                                                                        if (data.token) localStorage.setItem('teamsync_auth_token', data.token);
-                                                                        if (data.user) localStorage.setItem('teamsync_auth_user', JSON.stringify(data.user));
-                                                                        window.dispatchEvent(
-                                                                            new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: true } })
-                                                                        );
-                                                                        const status = await window.electronAPI.getCalendarStatus();
-                                                                        setCalendarStatus({ ...status, connected: true });
-                                                                    }
-                                                                    setIsCalendarsLoading(false);
-                                                                } catch {}
-                                                            }, 1000);
-                                                            
-                                                            // Timeout after 2 minutes
-                                                            setTimeout(() => { clearInterval(poll); setIsCalendarsLoading(false); }, 120000);
-                                                        } catch (e) {
-                                                            console.error(e);
-                                                            setIsCalendarsLoading(false);
-                                                        }
-                                                    }}
-                                                    disabled={isCalendarsLoading}
-                                                    className={`px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2.5 ${isLight ? 'bg-bg-component hover:bg-bg-item-surface text-text-primary border border-border-subtle' : 'bg-[#303033] hover:bg-[#3A3A3D] text-white'}`}
-                                                >
-                                                    <svg viewBox="0 0 24 24" width="14" height="14" xmlns="http://www.w3.org/2000/svg">
-                                                        <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
-                                                            <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" />
-                                                            <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" />
-                                                            <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.734 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z" />
-                                                            <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z" />
-                                                        </g>
-                                                    </svg>
-                                                    {isCalendarsLoading ? 'Connecting...' : 'Connect Google'}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeTab === 'help' && (
-                                <HelpSettings onNavigate={setActiveTab} />
-                            )}
-
-                            {activeTab === 'about' && (
-                                <AboutSection />
-                            )}
+                                {activeTab === 'about' && (
+                                    <AboutSection />
+                                )}
+                            </div>
                         </div>
-                    </div>
                     </motion.div>
                 </motion.div>
             )

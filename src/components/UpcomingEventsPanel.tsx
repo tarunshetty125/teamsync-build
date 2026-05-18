@@ -147,7 +147,7 @@ const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, synci
       </div>
 
       {/* BODY */}
-      <div className="flex-1 px-3 pb-3 flex flex-col gap-2 min-h-0 overflow-hidden">
+      <div className="flex-1 px-3 pb-3 flex flex-col gap-2 min-h-0 overflow-visible">
         <AnimatePresence mode="wait">
           {nextUp ? (
             <motion.div key={nextUp.id}
