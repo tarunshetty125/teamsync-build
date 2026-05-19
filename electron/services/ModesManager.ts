@@ -2,6 +2,7 @@ import Store from 'electron-store';
 import { randomUUID } from 'crypto';
 import { cloneModeTemplateSections, MODE_TEMPLATE_MAP } from '../../src/lib/modes/templateCatalog';
 import type {
+    ModeIntelligenceType,
     ModeReferenceFile,
     ModesStateSnapshot,
     ModeTemplateId,
@@ -31,6 +32,20 @@ export interface ModeNoteSection {
     description: string;
     sortOrder: number;
     createdAt: string;
+}
+
+export interface ActiveModeSnapshot {
+    activeModeId: string;
+    templateType: ModeTemplateType;
+    renderedModeContext: string;
+    notesTemplate: Array<{ title: string; description: string }>;
+    modeMetadata: {
+        id: string;
+        name: string;
+        intelligenceType: ModeIntelligenceType;
+        createdAt: string;
+        updatedAt: string;
+    };
 }
 
 export const MODE_TEMPLATES: Array<{
@@ -65,12 +80,31 @@ const STORE_NAME = 'teamsync-modes';
 const MAX_FILE_CHARS = 12_000;
 const MAX_TOTAL_CHARS = 40_000;
 
+const LEGACY_TEMPLATE_SECTION_TITLES: Partial<Record<ModeTemplateType, string[]>> = {
+    sales: ['Action Items', 'Outcome', 'Discovery', 'Objections'],
+    recruiting: ['Action Items', 'Signal Summary', 'Experience and Skills', 'Role Fit'],
+    'team-meet': ['Summary', 'Action Items', 'Decisions Made', 'Challenges or Blockers'],
+    'looking-for-work': ['Overview', 'Questions and Responses', 'Follow-up Actions', 'Areas to Improve'],
+    lecture: ['Topic', 'Key Concepts', 'Detailed Notes', 'Follow-up Work'],
+    'technical-interview': ['Problems Covered', 'Concepts Tested', 'What Went Well', 'Areas to Study'],
+};
+
 function isoNow(): string {
     return new Date().toISOString();
 }
 
 function makeId(prefix: string): string {
     return `${prefix}_${randomUUID()}`;
+}
+
+function deepFreezeSnapshot<T>(value: T): T {
+    if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+        Object.freeze(value);
+        for (const nested of Object.values(value as Record<string, unknown>)) {
+            deepFreezeSnapshot(nested);
+        }
+    }
+    return value;
 }
 
 function cloneTemplateSections(templateId: ModeTemplateType): UserModeNoteSection[] {
@@ -82,6 +116,15 @@ function cloneTemplateSections(templateId: ModeTemplateType): UserModeNoteSectio
 
 function sanitizeName(name: string | undefined, fallback: string): string {
     return name?.trim() ? name.trim() : fallback;
+}
+
+function matchesLegacyTemplateSections(mode: UserMode): boolean {
+    const legacyTitles = LEGACY_TEMPLATE_SECTION_TITLES[mode.templateId];
+    if (!legacyTitles || mode.notesTemplate.length !== legacyTitles.length) {
+        return false;
+    }
+
+    return mode.notesTemplate.every((section, index) => section.title === legacyTitles[index]);
 }
 
 function toMode(mode: UserMode, activeModeId: string | null): Mode {
@@ -253,8 +296,14 @@ export class ModesManager {
         const patchedModes = sortedModes.map((mode) => {
             if (!mode.userPrompt && MODE_TEMPLATE_MAP[mode.templateId]?.defaultUserPrompt) {
                 modesPatched = true;
-                return { ...mode, userPrompt: MODE_TEMPLATE_MAP[mode.templateId].defaultUserPrompt };
+                mode = { ...mode, userPrompt: MODE_TEMPLATE_MAP[mode.templateId].defaultUserPrompt };
             }
+
+            if (matchesLegacyTemplateSections(mode)) {
+                modesPatched = true;
+                mode = { ...mode, notesTemplate: cloneTemplateSections(mode.templateId) };
+            }
+
             return mode;
         });
 
@@ -552,12 +601,6 @@ export class ModesManager {
         }));
     }
 
-    public getActiveModeSystemPromptSuffix(): string {
-        const activeMode = this.getActiveMode();
-        if (!activeMode) return '';
-        return getBuiltInModeTemplate(activeMode.templateType).builtInPrompt;
-    }
-
     public getActiveModeDeduped(): { suffix: string; templateType: ModeTemplateType | null } {
         const activeMode = this.getActiveMode();
         if (!activeMode) return { suffix: '', templateType: null };
@@ -597,6 +640,32 @@ export class ModesManager {
         }
 
         return parts.join('\n\n');
+    }
+
+    public getActiveModeSnapshot(options?: { includeCustomContext?: boolean }): ActiveModeSnapshot | null {
+        const state = this.ensureValidState();
+        const activeMode = state.userModes.find((mode) => mode.id === state.activeModeId);
+        if (!activeMode) return null;
+
+        const template = getBuiltInModeTemplate(activeMode.templateId);
+        const notesTemplate = activeMode.notesTemplate.map((section) => ({
+            title: section.title,
+            description: section.description,
+        }));
+
+        return deepFreezeSnapshot({
+            activeModeId: activeMode.id,
+            templateType: activeMode.templateId,
+            renderedModeContext: this.buildActiveModeContextBlock(options),
+            notesTemplate,
+            modeMetadata: {
+                id: activeMode.id,
+                name: activeMode.name,
+                intelligenceType: template.intelligenceType,
+                createdAt: activeMode.createdAt,
+                updatedAt: activeMode.updatedAt,
+            },
+        });
     }
 
 }

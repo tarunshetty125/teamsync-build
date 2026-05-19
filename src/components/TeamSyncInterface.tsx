@@ -50,6 +50,14 @@ import { analytics, detectProviderType } from '../lib/analytics/analytics.servic
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { getOverlayAppearance, OVERLAY_OPACITY_DEFAULT } from '../lib/overlayAppearance';
+import type { ModeTemplateId } from '../lib/modes/types';
+import {
+    getOverlayQuickActions,
+    getRecommendedOverlayAction,
+    resolveOverlayCopilotMode,
+    type OverlayQuickActionDef,
+    type OverlayRecommendationId,
+} from '../lib/modes/overlayCopilotConfig';
 
 interface Message {
     id: string;
@@ -237,13 +245,6 @@ function getSuggestedAnswerIntent(question: string): string {
 // ── Context-Aware Question Type Detection (mirrors IntentClassifier patterns) ──
 type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'follow_up' | 'general';
 type SessionMode = DetectedQuestionType;
-type QuickActionLabel =
-    | 'What to answer?'
-    | 'Recap'
-    | 'Clarify'
-    | 'Brainstorm'
-    | 'Answer'
-    | 'Follow Up';
 
 type ActionIntent =
     | 'what_to_answer'
@@ -257,106 +258,10 @@ type OverlaySessionState = {
     currentMode: SessionMode;
 };
 
-// Dynamic button sets per mode — only 4 shown at a time (+ Answer = 5 total)
-// Brainstorm and Recap share the same slot; toggled via overlay settings
-function getQuickActionLabels(mode: SessionMode, brainstormEnabled: boolean): QuickActionLabel[] {
-    const dynamicSlot: QuickActionLabel = brainstormEnabled ? 'Brainstorm' : 'Recap';
-    if (mode === 'system_design') {
-        return ['What to answer?', 'Clarify', dynamicSlot, 'Follow Up'];
-    }
-    // coding, behavioral, general, follow_up
-    return ['What to answer?', 'Clarify', dynamicSlot, 'Follow Up'];
-}
-
-// Keep the old constant as fallback
-const STATIC_QUICK_ACTION_LABELS: QuickActionLabel[] = [
-    'What to answer?',
-    'Clarify',
-    'Brainstorm',
-    'Follow Up',
-];
-
-const QUICK_ACTION_ICONS: Record<QuickActionLabel, string> = {
-    'What to answer?': '💡',
-    'Recap': '📝',
-    'Clarify': '❓',
-    'Brainstorm': '🧠',
-    'Answer': '⚡',
-    'Follow Up': '➡️',
-};
-
-function countKeywordMatches(text: string, patterns: RegExp[]): number {
-    return patterns.reduce((score, pattern) => {
-        const matches = text.match(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`));
-        return score + (matches?.length ?? 0);
-    }, 0);
-}
-
 function getScreenScanModeForSessionMode(mode: SessionMode): 'coding' | 'interview_question' | 'ui_general' {
     if (mode === 'coding') return 'coding';
     if (mode === 'general') return 'ui_general';
     return 'interview_question';
-}
-
-function getRecommendedButton(mode: SessionMode, transcript: string, screenText: string): QuickActionLabel {
-    const combined = normalizeTranscript(`${transcript} ${screenText}`.trim());
-
-    if (/tell me about yourself|introduce yourself/i.test(combined)) {
-        return 'Answer';
-    }
-
-    const scoringGroups: Record<SessionMode, Array<[QuickActionLabel, RegExp[]]>> = {
-        behavioral: [
-            ['Answer', [
-                /tell me about yourself/i,
-                /introduce yourself/i,
-                /\bexample\b/i,
-                /\bexperience\b/i,
-                /\bproject\b/i,
-                /\bprojects\b/i,
-                /\bchallenge\b/i,
-                /worked on/i,
-                /\bbuilt\b/i,
-                /\bdeveloped\b/i,
-            ]],
-            ['Follow Up', [/\bfollow.?up\b/i, /\bnext\b/i, /then what/i]],
-        ],
-        coding: [
-            ['Brainstorm', [/\berror\b/i, /\bbug\b/i, /\bissue\b/i, /\bexception\b/i]],
-            ['Clarify', [/\bwhy\b/i, /\bconfused\b/i, /\bclarif/i, /\bwhat is\b/i]],
-        ],
-        follow_up: [
-            ['Follow Up', [/\bfollow.?up\b/i, /\bnext\b/i, /then what/i]],
-            ['Clarify', [/\bclarify\b/i, /\brepeat\b/i, /\bagain\b/i]],
-        ],
-        general: [
-            ['Recap', [/\bsummari[sz]e\b/i, /\brecap\b/i, /\boverview\b/i, /\btl;dr\b/i]],
-            ['Clarify', [/\bexplain\b/i, /\bwhat is\b/i, /\bwhat.?s\b/i, /\bhow does\b/i]],
-        ],
-        system_design: [
-            ['Brainstorm', [/\btrade[\s-]?off/i, /\btradeoff/i, /\bscalab/i, /\bscale\b/i, /\blatency\b/i, /\bthroughput\b/i]],
-            ['Clarify', [/\bexplain\b/i, /\bwhat is\b/i, /\bhow would\b/i]],
-        ],
-    };
-
-    const scores = scoringGroups[mode].map(([label, patterns]) => [label, countKeywordMatches(combined, patterns)] as [QuickActionLabel, number]);
-    const [bestLabel, bestScore] = scores.reduce(
-        (best, curr) => (curr[1] > best[1] ? curr : best),
-        ['What to answer?', 0] as [QuickActionLabel, number]
-    );
-
-    if (bestScore > 0) {
-        return bestLabel;
-    }
-
-    switch (mode) {
-        case 'follow_up':
-            return 'Follow Up';
-        case 'general':
-            return 'Clarify';
-        default:
-            return 'What to answer?';
-    }
 }
 
 // M3 Fix: Removed /g flags — these are always wrapped in new RegExp(..., 'gi') via cap()
@@ -1052,15 +957,20 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
 
     // Active mode name (shown as a badge near the Modes button)
     const [activeModeLabel, setActiveModeLabel] = useState<string | null>(null);
+    const [activeModeTemplateId, setActiveModeTemplateId] = useState<ModeTemplateId | null>(null);
 
     useEffect(() => {
-        // Load initial active mode name
+        // Load initial active mode metadata
         window.electronAPI?.modesGetActive?.()
-            .then((mode: { name: string } | null) => setActiveModeLabel(mode?.name ?? null))
+            .then((mode) => {
+                setActiveModeLabel(mode?.name ?? null);
+                setActiveModeTemplateId((mode?.templateType as ModeTemplateId | null | undefined) ?? null);
+            })
             .catch(() => { });
         // Live-update whenever mode is activated/deactivated
-        const unsub = window.electronAPI?.onModeChanged?.((data: { id: string | null; name: string | null }) => {
+        const unsub = window.electronAPI?.onModeChanged?.((data: { id: string | null; name: string | null; templateId?: string | null }) => {
             setActiveModeLabel(data.name);
+            setActiveModeTemplateId((data.templateId as ModeTemplateId | null | undefined) ?? null);
         });
         return () => unsub?.();
     }, []);
@@ -1076,8 +986,8 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         lastStrongAt: performance.now(),
         seq: 0
     });
-    const [recommendedButton, setRecommendedButton] = useState<QuickActionLabel>('What to answer?');
-    const recommendedButtonRef = useRef<QuickActionLabel>('What to answer?');
+    const [recommendedButton, setRecommendedButton] = useState<OverlayRecommendationId>('what_to_answer');
+    const recommendedButtonRef = useRef<OverlayRecommendationId>('what_to_answer');
 
     // Brainstorm/Recap toggle — persisted in localStorage
     const [brainstormEnabled, setBrainstormEnabled] = useState<boolean>(() => {
@@ -1107,11 +1017,15 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const currentSessionMode = session.currentMode;
     const recommendationMode: SessionMode =
         currentSessionMode === 'system_design' ? 'system_design' : detectedQuestionType;
+    const overlayCopilotMode = useMemo(
+        () => resolveOverlayCopilotMode(activeModeTemplateId, recommendationMode),
+        [activeModeTemplateId, recommendationMode]
+    );
 
-    // Compute dynamic button labels based on mode and brainstorm toggle
-    const activeQuickActionLabels = useMemo(
-        () => getQuickActionLabels(currentSessionMode, brainstormEnabled),
-        [currentSessionMode, brainstormEnabled]
+    // Compute dynamic button labels based on active TeamSync mode and brainstorm toggle
+    const activeQuickActions = useMemo(
+        () => getOverlayQuickActions(overlayCopilotMode, brainstormEnabled),
+        [overlayCopilotMode, brainstormEnabled]
     );
 
     useEffect(() => {
@@ -1163,11 +1077,8 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         recommendationTimerRef.current = setTimeout(() => {
             if (recommendationLockTurnIdRef.current === currentQuestionTurnId) return;
 
-            const nextRecommendation = getRecommendedButton(
-                recommendationMode,
-                lastFinalSentenceRef.current || '',
-                screenContextTextRef.current || ''
-            );
+            const combined = normalizeTranscript(`${lastFinalSentenceRef.current || ''} ${screenContextTextRef.current || ''}`.trim());
+            const nextRecommendation = getRecommendedOverlayAction(overlayCopilotMode, combined);
 
             if (nextRecommendation !== recommendedButtonRef.current) {
                 recommendedButtonRef.current = nextRecommendation;
@@ -1181,7 +1092,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                 recommendationTimerRef.current = null;
             }
         };
-    }, [currentQuestionTurnId, recommendationMode, screenScanOverlay.answer]);
+    }, [currentQuestionTurnId, overlayCopilotMode, screenScanOverlay.answer]);
 
     const cancelInFlightOverlayRequests = useCallback(async (nextRequestId?: string) => {
         const streamingRequestIds = Object.values(requestRegistryRef.current)
@@ -1242,6 +1153,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             source: string;
             analyticsKey: string;
             message?: string;
+            additionalContext?: string;
             imagePaths?: string[];
             profilePreference?: 'default' | 'force_on' | 'force_off';
             userBubbleText?: string;
@@ -1295,6 +1207,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             await window.electronAPI.generateAction({
                 intent,
                 message: resolvedMessage || undefined,
+                additionalContext: options?.additionalContext,
                 imagePaths: options?.imagePaths,
                 requestId,
                 profilePreference: options?.profilePreference,
@@ -2420,22 +2333,33 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         void handleRecap();
     }, [handleRecap]);
 
-    const getQuickActionHandler = useCallback((label: QuickActionLabel): (() => void | Promise<void>) => {
-        switch (label) {
-            case 'What to answer?':
+    const executeQuickAction = useCallback(async (action: OverlayQuickActionDef) => {
+        await runAction(action.intent as ActionIntent, {
+            source: action.source,
+            analyticsKey: action.analyticsKey,
+            message: action.message,
+            additionalContext: action.additionalContext,
+            profilePreference: action.profilePreference,
+        });
+    }, [runAction]);
+
+    const getQuickActionHandler = useCallback((action: OverlayQuickActionDef): (() => void | Promise<void>) => {
+        switch (action.id) {
+            case 'what_to_answer':
                 return handleWhatToSay;
-            case 'Recap':
+            case 'recap':
                 return handleRecap;
-            case 'Clarify':
+            case 'clarify':
                 return handleClarify;
-            case 'Brainstorm':
+            case 'brainstorm':
                 return handleBrainstorm;
-            case 'Follow Up':
+            case 'follow_up_questions':
                 return handleFollowUpQuestions;
             default:
-                return handleWhatToSay;
+                return () => executeQuickAction(action);
         }
     }, [
+        executeQuickAction,
         handleWhatToSay,
         handleRecap,
         handleClarify,
@@ -2443,7 +2367,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         handleFollowUpQuestions,
     ]);
 
-    fourthActionHandlerRef.current = getQuickActionHandler(activeQuickActionLabels[2]);
+    fourthActionHandlerRef.current = activeQuickActions[2]
+        ? getQuickActionHandler(activeQuickActions[2])
+        : handleWhatToSay;
 
     // Setup Streaming Listeners
     useEffect(() => {
@@ -3644,13 +3570,12 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
 
                             {/* Quick Actions - Static Buttons with Recommendation Glow */}
                             {(() => {
-                                type ActionDef = { label: QuickActionLabel; icon: string; handler: () => void | Promise<void> };
-                                const actions: ActionDef[] = activeQuickActionLabels.map((label) => ({
-                                    label,
-                                    icon: QUICK_ACTION_ICONS[label],
-                                    handler: getQuickActionHandler(label),
+                                type ActionDef = OverlayQuickActionDef & { handler: () => void | Promise<void> };
+                                const actions: ActionDef[] = activeQuickActions.map((action) => ({
+                                    ...action,
+                                    handler: getQuickActionHandler(action),
                                 }));
-                                const isRecommendedAnswer = recommendedButton === 'Answer';
+                                const isRecommendedAnswer = recommendedButton === 'answer_now';
 
                                 return (
                                     <div className={`flex flex-nowrap justify-center items-center gap-2 px-3 pb-3 overflow-x-auto scrollbar-none transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity, width: '95%', margin: '0 auto' }}>
@@ -3658,20 +3583,20 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                             {(() => {
                                                 // macOS Control Center glassmorphism — Apple-style tinted glass per button
                                                 const glassColors: Record<string, { bg: string; border: string; tint: string }> = {
-                                                    'What to answer?': { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
-                                                    'Recap':           { bg: 'rgba(142,142,147,0.14)', border: 'rgba(142,142,147,0.25)', tint: 'rgba(142,142,147,0.06)' },
-                                                    'Clarify':         { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
-                                                    'Brainstorm':      { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
-                                                    'Follow Up':       { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
+                                                    what_to_answer: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
+                                                    recap: { bg: 'rgba(142,142,147,0.14)', border: 'rgba(142,142,147,0.25)', tint: 'rgba(142,142,147,0.06)' },
+                                                    clarify: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
+                                                    brainstorm: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
+                                                    follow_up_questions: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
                                                 };
                                                 const fallbackGlass = { bg: 'rgba(255,255,255,0.08)', border: 'rgba(255,255,255,0.15)', tint: 'rgba(255,255,255,0.04)' };
 
                                                 return actions.map((action: ActionDef, idx: number) => {
-                                                    const isRec = action.label === recommendedButton;
-                                                    const glass = glassColors[action.label] || fallbackGlass;
+                                                    const isRec = action.id === recommendedButton;
+                                                    const glass = glassColors[action.id] || fallbackGlass;
                                                     return (
                                                         <motion.button
-                                                            key={`${currentQuestionTurnId}-${currentSessionMode}-${action.label}`}
+                                                            key={`${currentQuestionTurnId}-${overlayCopilotMode}-${action.id}`}
                                                             layout
                                                             initial={{ opacity: 0, y: 6, scale: 0.92 }}
                                                             animate={{ opacity: 1, y: 0, scale: isRec ? 1.03 : 1 }}
@@ -3682,9 +3607,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                             onClick={() => {
                                                                 if (isProcessing) return;
                                                                 recommendationLockTurnIdRef.current = currentQuestionTurnIdRef.current;
-                                                                if (recommendedButtonRef.current !== action.label) {
-                                                                    recommendedButtonRef.current = action.label;
-                                                                    setRecommendedButton(action.label);
+                                                                if (recommendedButtonRef.current !== action.id) {
+                                                                    recommendedButtonRef.current = action.id;
+                                                                    setRecommendedButton(action.id);
                                                                 }
                                                                 action.handler();
                                                             }}
@@ -3702,11 +3627,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                         >
                                                             {/* Content */}
                                                             <span className="relative z-20 text-[11px] leading-none shrink-0">{action.icon}</span>
-                                                            <span className={`relative z-20 drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)] ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}>{
-                                                                currentSessionMode === 'system_design'
-                                                                    ? ({ 'What to answer?': 'Tradeoffs', 'Clarify': 'Clarify', 'Brainstorm': 'Approaches', 'Recap': 'Recap', 'Follow Up': 'Deep Dive' } as Record<string, string>)[action.label] ?? action.label
-                                                                    : ({ 'What to answer?': 'Suggest' } as Record<string, string>)[action.label] ?? action.label
-                                                            }</span>
+                                                            <span className={`relative z-20 drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)] ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}>{action.label}</span>
                                                         </motion.button>
                                                     );
                                                 });
@@ -3717,9 +3638,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                         <motion.button
                                             onClick={() => {
                                                 recommendationLockTurnIdRef.current = currentQuestionTurnIdRef.current;
-                                                if (recommendedButtonRef.current !== 'Answer') {
-                                                    recommendedButtonRef.current = 'Answer';
-                                                    setRecommendedButton('Answer');
+                                                if (recommendedButtonRef.current !== 'answer_now') {
+                                                    recommendedButtonRef.current = 'answer_now';
+                                                    setRecommendedButton('answer_now');
                                                 }
                                                 void handleAnswerNow();
                                             }}

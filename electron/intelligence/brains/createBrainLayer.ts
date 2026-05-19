@@ -17,6 +17,7 @@ import { BehavioralBrain } from './BehavioralBrain';
 import { SystemDesignBrain } from './SystemDesignBrain';
 import { ResumeBrain } from './ResumeBrain';
 import { ScreenAnalysisBrain } from './ScreenAnalysisBrain';
+import { LectureBrain, LookingForWorkBrain, RecruitingBrain, SalesBrain, TeamMeetingBrain } from './ModeBrains';
 
 export interface BrainLayer {
     registry: BrainRegistry;
@@ -38,6 +39,11 @@ export function createBrainLayer(): BrainLayer {
     registry.register(new BehavioralBrain());
     registry.register(new SystemDesignBrain());
     registry.register(new ResumeBrain());
+    registry.register(new SalesBrain());
+    registry.register(new LectureBrain());
+    registry.register(new RecruitingBrain());
+    registry.register(new TeamMeetingBrain());
+    registry.register(new LookingForWorkBrain());
     registry.register(new ScreenAnalysisBrain());
 
     const selector = new BrainSelector(registry);

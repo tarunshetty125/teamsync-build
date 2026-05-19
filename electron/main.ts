@@ -131,6 +131,7 @@ import { warmupIntentClassifier } from "./llm"
 type STTProvider = SttSupervisor;
 
 type ScreenshotWindowMode = 'launcher' | 'overlay';
+type MeetingLifecycleState = 'idle' | 'starting' | 'active' | 'failed';
 
 /** Payload for stt-status IPC events broadcast from main to renderer */
 interface SttStatusPayload {
@@ -252,6 +253,7 @@ export class AppState {
 
   private hasDebugged: boolean = false
   private isMeetingActive: boolean = false; // Guard for session state leaks
+  private meetingLifecycleState: MeetingLifecycleState = 'idle';
   private _isQuitting: boolean = false;
   private _verboseLogging: boolean = false;
   private _disguiseTimers: NodeJS.Timeout[] = []; // Track forceUpdate timeouts
@@ -548,7 +550,46 @@ export class AppState {
   }
 
   private broadcastMeetingState(): void {
-    this.broadcast('meeting-state-changed', { isActive: this.isMeetingActive });
+    this.broadcast('meeting-state-changed', {
+      isActive: this.isMeetingActive,
+      status: this.meetingLifecycleState,
+    });
+  }
+
+  private setMeetingLifecycleState(state: MeetingLifecycleState, shouldBroadcast: boolean = true): void {
+    this.meetingLifecycleState = state;
+    if (shouldBroadcast) {
+      this.broadcastMeetingState();
+    }
+  }
+
+  private async rollbackFailedMeetingStart(message: string): Promise<void> {
+    console.warn('[Main] Rolling back failed meeting start:', message);
+
+    this.isMeetingActive = false;
+    this.setMeetingLifecycleState('failed');
+
+    if (this.overlayMousePassthrough) {
+      this.setOverlayMousePassthrough(false);
+    }
+
+    this.systemAudioCapture?.stop();
+    this.googleSTT?.stop();
+    this.microphoneCapture?.stop();
+    this.googleSTT_User?.stop();
+
+    if (this.ragManager) {
+      await this.ragManager.stopLiveIndexing().catch(() => {});
+      this.ragManager.deleteMeetingData('live-meeting-current');
+    }
+
+    this.broadcast('meeting-start-recovered', { error: message });
+
+    try {
+      this.windowHelper.setWindowMode('launcher');
+    } catch (error) {
+      console.error('[Main] Failed to restore launcher after audio startup failure:', error);
+    }
   }
 
   private async bootstrapOllamaEmbeddings() {
@@ -1804,6 +1845,8 @@ export class AppState {
       return;
     }
     this._isStarting = true;
+    this.isMeetingActive = false;
+    this.setMeetingLifecycleState('starting');
     
     try {
       console.log('[Main] Starting Meeting...', metadata);
@@ -1833,6 +1876,7 @@ export class AppState {
       }
     } catch (err) {
       this._isStarting = false;
+      this.setMeetingLifecycleState('failed');
       throw err;
     }
 
@@ -1844,11 +1888,10 @@ export class AppState {
 
       console.warn('[Main] Meeting blocked by permissions:', permissionStatus);
       this._isStarting = false;
+      this.setMeetingLifecycleState('failed');
       throw new Error(message);
     }
 
-    this.isMeetingActive = true;
-    this.broadcastMeetingState()
     if (metadata) {
       this.intelligenceManager.setMeetingMetadata(metadata);
     }
@@ -1871,9 +1914,9 @@ export class AppState {
     // setTimeout(0) ensures setWindowMode IPC is processed first.
     setTimeout(async () => {
       // BUG-02 fix: a fast start→stop sequence can call endMeeting() before
-      // this callback fires, leaving isMeetingActive=false. If that happened,
+      // this callback fires. If that happened,
       // do NOT boot the audio pipeline — it would run forever with no stop signal.
-      if (!this.isMeetingActive) {
+      if (this.meetingLifecycleState !== 'starting') {
         console.warn('[Main] Meeting was cancelled before audio pipeline could start — aborting init.');
         return;
       }
@@ -1906,6 +1949,9 @@ export class AppState {
           this.ragManager.startLiveIndexing('live-meeting-current');
         }
 
+        this.isMeetingActive = true;
+        this.setMeetingLifecycleState('active');
+
         if (this._verboseLogging) {
           const requestedInput = metadata?.audio?.inputDeviceId || 'default';
           const requestedOutput = metadata?.audio?.outputDeviceId || 'default';
@@ -1917,8 +1963,9 @@ export class AppState {
         console.log('[Main] Audio pipeline started successfully.');
       } catch (err) {
         console.error('[Main] Error initializing audio pipeline:', err);
-        // Notify UI so user knows microphone/audio failed to start
-        this.broadcast('meeting-audio-error', (err as Error).message || 'Audio pipeline failed to start');
+        const message = (err as Error).message || 'Audio pipeline failed to start';
+        await this.rollbackFailedMeetingStart(message);
+        this.broadcast('meeting-audio-error', message);
       } finally {
         this._isStarting = false;
       }
@@ -1927,8 +1974,9 @@ export class AppState {
 
   public async endMeeting(): Promise<void> {
     console.log('[Main] Ending Meeting...');
+    this._isStarting = false;
     this.isMeetingActive = false; // Block new data immediately
-    this.broadcastMeetingState();
+    this.setMeetingLifecycleState('idle');
 
     // Reset Mouse Passthrough so the next meeting overlay starts fresh and focusable
     if (this.overlayMousePassthrough) {

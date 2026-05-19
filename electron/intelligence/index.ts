@@ -54,6 +54,7 @@ export { BehavioralBrain } from './brains/BehavioralBrain';
 export { SystemDesignBrain } from './brains/SystemDesignBrain';
 export { ResumeBrain } from './brains/ResumeBrain';
 export { ScreenAnalysisBrain } from './brains/ScreenAnalysisBrain';
+export { SalesBrain, LectureBrain, RecruitingBrain, TeamMeetingBrain, LookingForWorkBrain } from './brains/ModeBrains';
 
 // BrainSelector & factory (Phase 4)
 export { BrainSelector } from './brains/BrainSelector';
@@ -85,10 +86,6 @@ export {
 // KnowledgeOrchestratorV2 (Phase 3)
 export { KnowledgeOrchestratorV2 } from './KnowledgeOrchestratorV2';
 export type { KnowledgeOrchestratorLike, RetrieveContextParams } from './KnowledgeOrchestratorV2';
-
-// PromptAssembler (Phase 3)
-export { PromptAssembler } from './PromptAssembler';
-export type { AssembleParams } from './PromptAssembler';
 
 // Adapters (legacy → new type bridges)
 export {

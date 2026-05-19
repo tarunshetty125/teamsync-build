@@ -1077,7 +1077,11 @@ export class DatabaseManager {
                 meeting.isProcessed ? 1 : 0
             );
 
-            // 2. Insert Transcript
+            // 2. Replace child rows so repeated saves are idempotent.
+            this.db!.prepare('DELETE FROM transcripts WHERE meeting_id = ?').run(meeting.id);
+            this.db!.prepare('DELETE FROM ai_interactions WHERE meeting_id = ?').run(meeting.id);
+
+            // 3. Insert Transcript
             if (meeting.transcript) {
                 for (const segment of meeting.transcript) {
                     insertTranscript.run(
@@ -1089,7 +1093,7 @@ export class DatabaseManager {
                 }
             }
 
-            // 3. Insert Interactions
+            // 4. Insert Interactions
             if (meeting.usage) {
                 for (const usage of meeting.usage) {
                     let metadata = null;

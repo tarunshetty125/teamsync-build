@@ -78,6 +78,11 @@ export type BrainId =
     | 'system_design'
     | 'resume'
     | 'general'
+    | 'sales'
+    | 'lecture'
+    | 'recruiting'
+    | 'team_meeting'
+    | 'looking_for_work'
     | 'screen_analysis';
 
 /**

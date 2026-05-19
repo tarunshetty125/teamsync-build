@@ -6,6 +6,8 @@ import { SessionTracker, TranscriptSegment } from './SessionTracker';
 import { LLMHelper } from './LLMHelper';
 import { DatabaseManager, Meeting } from './db/DatabaseManager';
 import { GROQ_TITLE_PROMPT, GROQ_SUMMARY_JSON_PROMPT } from './llm';
+import { sanitizeSummaryOutput, type SummaryOutputData } from './SummaryOutputValidator';
+import type { ActiveModeSnapshot } from './services/ModesManager';
 const crypto = require('crypto');
 
 const deriveOverviewFromSummaryData = (
@@ -62,12 +64,15 @@ export class MeetingPersistence {
             return null;
         }
 
+        const { ModesManager } = require('./services/ModesManager');
+        const modeSnapshot: ActiveModeSnapshot | null = ModesManager.getInstance().getActiveModeSnapshot();
         const snapshot = {
             transcript: [...this.session.getFullTranscript()],
             usage: [...this.session.getFullUsage()],
             startTime: this.session.getSessionStartTime(),
             durationMs: durationMs,
-            context: this.session.getFullSessionContext()
+            context: this.session.getFullSessionContext(),
+            modeSnapshot,
         };
 
         // BUG-04 fix: snapshot metadata BEFORE reset() clears it so the
@@ -78,6 +83,7 @@ export class MeetingPersistence {
         this.session.reset();
 
         const meetingId = crypto.randomUUID();
+        DatabaseManager.getInstance().setAppState(`meeting_mode_snapshot:${meetingId}`, JSON.stringify(modeSnapshot ?? null));
         this.processAndSaveMeeting(snapshot, meetingId, metadataSnapshot).catch(err => {
             console.error('[MeetingPersistence] Background processing failed:', err);
         });
@@ -115,13 +121,13 @@ export class MeetingPersistence {
      * Heavy lifting: LLM Title, Summary, and DB Write
      */
     private async processAndSaveMeeting(
-        data: { transcript: TranscriptSegment[], usage: any[], startTime: number, durationMs: number, context: string },
+        data: { transcript: TranscriptSegment[], usage: any[], startTime: number, durationMs: number, context: string, modeSnapshot?: ActiveModeSnapshot | null },
         meetingId: string,
         // BUG-04 fix: accept metadata snapshot so calendar info is not lost after session.reset()
         metadata?: { title?: string; calendarEventId?: string; source?: 'manual' | 'calendar' } | null
     ): Promise<void> {
         let title = "Untitled Session";
-        let summaryData: { overview?: string; actionItems: string[], keyPoints: string[], sections?: Array<{ title: string; bullets: string[] }> } = { actionItems: [], keyPoints: [] };
+        let summaryData: SummaryOutputData = { actionItems: [], keyPoints: [] };
 
         // Use passed-in metadata snapshot (NOT this.session.getMeetingMetadata() which is already cleared)
         let calendarEventId: string | undefined;
@@ -143,24 +149,11 @@ export class MeetingPersistence {
                 if (generatedTitle) title = generatedTitle.replace(/["*]/g, '').trim();
             }
 
-            // Load template note sections for the active mode's templateType
-            let modeNoteSections: Array<{ title: string; description: string }> = [];
-            try {
-                const { ModesManager, TEMPLATE_NOTE_SECTIONS } = require('./services/ModesManager');
-                const modesMgr = ModesManager.getInstance();
-                const activeMode = modesMgr.getActiveMode();
-                if (activeMode) {
-                    // Prefer user's customized DB sections; fall back to canonical template
-                    const dbSections: Array<{ title: string; description: string }> = modesMgr.getNoteSections(activeMode.id);
-                    modeNoteSections = dbSections.length > 0
-                        ? dbSections
-                        : (TEMPLATE_NOTE_SECTIONS[activeMode.templateType] ?? []);
-                    console.log(`[MeetingPersistence] Active mode: "${activeMode.name}" (${activeMode.templateType}), sections: ${modeNoteSections.length} (${dbSections.length > 0 ? 'custom DB' : 'canonical template'})`);
-                } else {
-                    console.log('[MeetingPersistence] No active mode — using generic summary.');
-                }
-            } catch (modeErr: any) {
-                console.warn('[MeetingPersistence] Failed to load active mode sections:', modeErr?.message);
+            const modeNoteSections = data.modeSnapshot?.notesTemplate ?? [];
+            if (data.modeSnapshot) {
+                console.log(`[MeetingPersistence] Using stop-time mode snapshot: "${data.modeSnapshot.modeMetadata.name}" (${data.modeSnapshot.templateType}), sections=${modeNoteSections.length}`);
+            } else {
+                console.log('[MeetingPersistence] No mode snapshot found — using generic summary.');
             }
 
             // Generate Structured Summary
@@ -191,13 +184,9 @@ STYLE: Calm, neutral, professional, skim-friendly. Short bullets, no sub-bullets
                         .join(',\n');
 
                     // Include the full mode context block (reference files + custom context)
-                    const modeContext = (() => {
-                        try {
-                            const { ModesManager } = require('./services/ModesManager');
-                            const block = ModesManager.getInstance().buildActiveModeContextBlock();
-                            return block ? `\n${block}\n` : '';
-                        } catch { return ''; }
-                    })();
+                    const modeContext = data.modeSnapshot?.renderedModeContext?.trim()
+                        ? `\n${data.modeSnapshot.renderedModeContext.trim()}\n`
+                        : '';
 
                     summaryPrompt = `You are a silent meeting note-taker. Extract structured notes from the conversation transcript below.
 ${modeContext}
@@ -272,6 +261,8 @@ Return ONLY valid JSON (no markdown code blocks):
         }
 
         try {
+            summaryData = sanitizeSummaryOutput(summaryData);
+
             const minutes = Math.floor(data.durationMs / 60000);
             const seconds = ((data.durationMs % 60000) / 1000).toFixed(0);
             const durationStr = `${minutes}:${Number(seconds) < 10 ? '0' : ''}${seconds}`;
@@ -295,6 +286,7 @@ Return ONLY valid JSON (no markdown code blocks):
             };
 
             DatabaseManager.getInstance().saveMeeting(meetingData, data.startTime, data.durationMs);
+            DatabaseManager.getInstance().deleteAppState(`meeting_mode_snapshot:${meetingId}`);
 
             // Metadata was already snapshotted before session.reset() — nothing to clear here.
 
@@ -347,7 +339,15 @@ Return ONLY valid JSON (no markdown code blocks):
                     usage: details.usage,
                     startTime: startTime,
                     durationMs: durationMs,
-                    context: context
+                    context: context,
+                    modeSnapshot: (() => {
+                        try {
+                            const raw = db.getAppState(`meeting_mode_snapshot:${m.id}`);
+                            return raw ? JSON.parse(raw) as ActiveModeSnapshot : null;
+                        } catch {
+                            return null;
+                        }
+                    })(),
                 };
 
                 await this.processAndSaveMeeting(snapshot, m.id);

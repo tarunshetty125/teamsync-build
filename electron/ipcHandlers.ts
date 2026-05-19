@@ -2632,6 +2632,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("generate-action", async (_, payload: {
     intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now';
     message?: string;
+    additionalContext?: string;
     imagePaths?: string[];
     requestId?: string;
     profilePreference?: 'default' | 'force_on' | 'force_off';
@@ -2639,6 +2640,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     const intelligenceManager = appState.getIntelligenceManager();
     const result = await intelligenceManager.handleAction(payload.intent, {
       message: payload.message,
+      additionalContext: payload.additionalContext,
       imagePaths: payload.imagePaths,
       requestId: payload.requestId,
       profilePreference: payload.profilePreference,

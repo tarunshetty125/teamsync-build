@@ -53,6 +53,8 @@ import { planReasoning, isPlanConfident } from './intelligence/planning';
 import type { ReasoningPlan } from './intelligence/planning';
 import { evaluateResponseQuality, isQualityAcceptable, getMostCriticalIssue } from './intelligence/evaluation';
 import type { QualityEvaluationResult } from './intelligence/evaluation';
+import { ModesManager } from './services/ModesManager';
+import type { ModeTemplateId } from '../src/lib/modes/types';
 
 type UserControlledMode = Extract<ConversationIntent, 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design'>;
 
@@ -435,6 +437,43 @@ export class IntelligenceEngine extends EventEmitter {
         }
     }
 
+    private getActiveModeTemplateType(): ModeTemplateId | null {
+        try {
+            return ModesManager.getInstance().getActiveMode()?.templateType ?? null;
+        } catch {
+            return null;
+        }
+    }
+
+    private resolveForcedBrainId(
+        activeTemplateType: ModeTemplateId | null,
+        analysis: QuestionAnalysis,
+        intent: UnifiedActionIntent,
+    ): BrainId | undefined {
+        if (!activeTemplateType || activeTemplateType === 'general' || activeTemplateType === 'technical-interview' || intent === 'screen_scan') {
+            return undefined;
+        }
+
+        if (activeTemplateType === 'looking-for-work' && (analysis.category === 'coding' || analysis.category === 'system_design')) {
+            return undefined;
+        }
+
+        switch (activeTemplateType) {
+            case 'sales':
+                return 'sales';
+            case 'lecture':
+                return 'lecture';
+            case 'recruiting':
+                return 'recruiting';
+            case 'team-meet':
+                return 'team_meeting';
+            case 'looking-for-work':
+                return 'looking_for_work';
+            default:
+                return undefined;
+        }
+    }
+
     async runAction(params: {
         intent: UnifiedActionIntent;
         message?: string;
@@ -515,7 +554,10 @@ export class IntelligenceEngine extends EventEmitter {
                                 question: contextLayers.promptObject.question,
                                 analysis,
                             });
+                            const activeTemplateType = this.getActiveModeTemplateType();
+                            const forcedBrainId = this.resolveForcedBrainId(activeTemplateType, analysis, params.intent);
                             const brain = this.brainLayer.selector.select(analysis, {
+                                forceBrainId: forcedBrainId,
                                 isScreenScan: params.intent === 'screen_scan',
                                 hasImages: !!(params.imagePaths && params.imagePaths.length > 0),
                             });

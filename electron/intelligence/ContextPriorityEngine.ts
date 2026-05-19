@@ -103,6 +103,56 @@ const BASE_PRIORITIES: Record<BrainId, Record<ContextPrioritySource, ContextPrio
         previous_response: 'medium',
         supplemental: 'low',
     },
+    sales: {
+        transcript: 'critical',
+        screen: 'low',
+        resume: 'ignore',
+        jd: 'ignore',
+        rag: 'low',
+        session_history: 'high',
+        previous_response: 'high',
+        supplemental: 'medium',
+    },
+    lecture: {
+        transcript: 'critical',
+        screen: 'medium',
+        resume: 'ignore',
+        jd: 'ignore',
+        rag: 'medium',
+        session_history: 'medium',
+        previous_response: 'medium',
+        supplemental: 'medium',
+    },
+    recruiting: {
+        transcript: 'critical',
+        screen: 'low',
+        resume: 'critical',
+        jd: 'critical',
+        rag: 'low',
+        session_history: 'high',
+        previous_response: 'medium',
+        supplemental: 'medium',
+    },
+    team_meeting: {
+        transcript: 'critical',
+        screen: 'medium',
+        resume: 'ignore',
+        jd: 'ignore',
+        rag: 'low',
+        session_history: 'high',
+        previous_response: 'high',
+        supplemental: 'medium',
+    },
+    looking_for_work: {
+        transcript: 'critical',
+        screen: 'low',
+        resume: 'critical',
+        jd: 'high',
+        rag: 'low',
+        session_history: 'high',
+        previous_response: 'high',
+        supplemental: 'medium',
+    },
     screen_analysis: {
         transcript: 'critical',
         screen: 'critical',
@@ -184,6 +234,45 @@ export function deriveContextPriority(input: ContextPriorityInput): ContextPrior
         forcePriority(priorities, 'rag', 'ignore');
         reasoning.push('signal:behavioral_grounding');
         confidence += hasBehavioralSignals ? 0.14 : 0.08;
+    }
+
+    if (input.brainId === 'sales') {
+        setPriority(priorities, 'session_history', 'high');
+        setPriority(priorities, 'previous_response', 'high');
+        forcePriority(priorities, 'resume', 'ignore');
+        forcePriority(priorities, 'jd', 'ignore');
+        reasoning.push('brain:sales_runtime');
+        confidence += 0.1;
+    }
+
+    if (input.brainId === 'lecture') {
+        setPriority(priorities, 'transcript', 'critical');
+        setPriority(priorities, 'supplemental', 'medium');
+        reasoning.push('brain:lecture_runtime');
+        confidence += 0.08;
+    }
+
+    if (input.brainId === 'recruiting') {
+        setPriority(priorities, 'resume', 'critical');
+        setPriority(priorities, 'jd', 'critical');
+        setPriority(priorities, 'session_history', 'high');
+        reasoning.push('brain:recruiting_runtime');
+        confidence += 0.1;
+    }
+
+    if (input.brainId === 'team_meeting') {
+        setPriority(priorities, 'session_history', 'high');
+        setPriority(priorities, 'previous_response', 'high');
+        reasoning.push('brain:team_meeting_runtime');
+        confidence += 0.08;
+    }
+
+    if (input.brainId === 'looking_for_work') {
+        setPriority(priorities, 'resume', 'critical');
+        setPriority(priorities, 'jd', 'high');
+        setPriority(priorities, 'session_history', 'high');
+        reasoning.push('brain:looking_for_work_runtime');
+        confidence += 0.1;
     }
 
     if (input.questionCategory === 'system_design' || input.brainId === 'system_design' || hasSystemSignals) {
