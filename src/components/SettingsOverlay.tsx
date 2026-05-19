@@ -577,15 +577,17 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     }, []);
 
     useEffect(() => {
-        if (window.electronAPI?.onProfileModeChanged) {
-            return window.electronAPI.onProfileModeChanged((enabled) => {
-                setProfileStatus((prev) => ({
-                    ...prev,
-                    profileMode: prev.hasProfile && Boolean(profileData?.hasActiveJD) ? enabled : false
-                }));
-            });
-        }
-    }, [profileData?.hasActiveJD]);
+        if (!window.electronAPI?.onProfileModeChanged) return;
+        // Unidirectional: IPC is the source of truth — reflect whatever main process says.
+        // Only guard: can't be enabled without a resume. hasActiveJD is NOT required to enable.
+        return window.electronAPI.onProfileModeChanged((enabled) => {
+            setProfileStatus((prev) => ({
+                ...prev,
+                profileMode: prev.hasProfile ? enabled : false
+            }));
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         if (!profileStatus.profileMode || profileStatus.hasProfile) return;
@@ -2222,9 +2224,17 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                     onClick={async () => {
                                                                         if (!canEnableProfileIntelligence) return;
                                                                         const newState = !profileStatus.profileMode;
+                                                                        // Optimistic update — reflect change immediately
+                                                                        setProfileStatus((prev) => ({ ...prev, profileMode: newState }));
                                                                         try {
-                                                                            await window.electronAPI?.profileSetMode?.(newState);
+                                                                            const result = await window.electronAPI?.profileSetMode?.(newState);
+                                                                            if (!result?.success) {
+                                                                                // Revert on failure
+                                                                                setProfileStatus((prev) => ({ ...prev, profileMode: !newState }));
+                                                                                console.error('Failed to toggle profile intelligence:', result?.error);
+                                                                            }
                                                                         } catch (e) {
+                                                                            setProfileStatus((prev) => ({ ...prev, profileMode: !newState }));
                                                                             console.error('Failed to toggle profile intelligence:', e);
                                                                         }
                                                                     }}

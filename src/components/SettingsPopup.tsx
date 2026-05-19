@@ -113,8 +113,8 @@ const SettingsPopup = () => {
     const [profileModeOn, setProfileModeOn] = useState(false);
     const [profileAvailable, setProfileAvailable] = useState(false);
 
-    // Load profile status on mount
-    useEffect(() => {
+    // Shared refresh: re-fetch authoritative status from main process
+    const refreshProfileStatus = React.useCallback(() => {
         window.electronAPI?.profileGetStatus?.().then((status) => {
             if (status) {
                 setProfileModeOn(status.profileMode ?? false);
@@ -123,14 +123,37 @@ const SettingsPopup = () => {
         }).catch(() => {});
     }, []);
 
-    // Bi-directional sync: listen for profile mode changes from Settings panel
+    // Load profile status on mount
+    useEffect(() => { refreshProfileStatus(); }, [refreshProfileStatus]);
+
+    // Unidirectional: reflect profile mode changes broadcast by main process
     useEffect(() => {
         if (!window.electronAPI?.onProfileModeChanged) return;
         const unsubscribe = window.electronAPI.onProfileModeChanged((enabled: boolean) => {
             setProfileModeOn(enabled);
+            // Re-fetch full status so profileAvailable stays consistent
+            refreshProfileStatus();
         });
         return () => unsubscribe();
-    }, []);
+    }, [refreshProfileStatus]);
+
+    // Refresh when a resume is uploaded / deleted in the Settings panel
+    useEffect(() => {
+        if (!window.electronAPI?.onProfileUpdated) return;
+        const unsubscribe = window.electronAPI.onProfileUpdated(() => {
+            refreshProfileStatus();
+        });
+        return () => unsubscribe();
+    }, [refreshProfileStatus]);
+
+    // Refresh when the knowledge engine finishes restoring on startup
+    useEffect(() => {
+        if (!window.electronAPI?.onKnowledgeEngineReady) return;
+        const unsubscribe = window.electronAPI.onKnowledgeEngineReady(() => {
+            refreshProfileStatus();
+        });
+        return () => unsubscribe();
+    }, [refreshProfileStatus]);
 
     useEffect(() => {
         const handleStorage = () => {
@@ -295,10 +318,17 @@ const SettingsPopup = () => {
                             onClick={async () => {
                                 if (!profileAvailable) return;
                                 const newState = !profileModeOn;
-                                setProfileModeOn(newState);
+                                setProfileModeOn(newState); // optimistic
                                 try {
-                                    await window.electronAPI?.profileSetMode?.(newState);
-                                } catch (e) { console.error('Failed to toggle profile intelligence:', e); }
+                                    const result = await window.electronAPI?.profileSetMode?.(newState);
+                                    if (!result?.success) {
+                                        setProfileModeOn(!newState); // revert
+                                        console.error('Failed to toggle profile intelligence:', result?.error);
+                                    }
+                                } catch (e) {
+                                    setProfileModeOn(!newState); // revert
+                                    console.error('Failed to toggle profile intelligence:', e);
+                                }
                             }}
                             className={`w-[30px] h-[18px] rounded-full p-[1.5px] transition-all duration-300 ease-spring active:scale-[0.92] ${profileModeOn ? 'bg-blue-500 shadow-[0_2px_10px_rgba(59,130,246,0.3)]' : defaultToggleTrackClass}`}
                             disabled={!profileAvailable}
