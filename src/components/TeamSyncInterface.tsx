@@ -3305,17 +3305,27 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                 style={{ transformOrigin: 'center top' }}
                             >
                                 <div
-                                    className="absolute inset-x-0 top-[1px] h-[4px] rounded-full"
+                                    className="absolute inset-x-[-6%] top-[-6px] h-[18px] rounded-full"
                                     style={{
-                                        background: 'linear-gradient(90deg, rgba(255,140,41,0) 0%, rgba(255,140,41,0.20) 8%, rgba(255,140,41,0.76) 18%, rgba(255,198,108,1) 50%, rgba(255,140,41,0.76) 82%, rgba(255,140,41,0.20) 92%, rgba(255,140,41,0) 100%)',
-                                        boxShadow: '0 0 6px rgba(255,140,41,0.22)',
+                                        background: 'radial-gradient(ellipse at center, rgba(150,96,255,0.58) 0%, rgba(110,64,255,0.4) 30%, rgba(140,92,255,0.15) 58%, rgba(140,92,255,0) 84%)',
+                                        filter: 'blur(7px) saturate(145%)',
+                                        opacity: 0.92,
                                     }}
                                 />
                                 <div
-                                    className="absolute inset-x-[8%] top-[2px] h-[1px] rounded-full"
+                                    className="absolute inset-x-0 top-[1px] h-[5px] rounded-full"
                                     style={{
-                                        background: 'linear-gradient(90deg, rgba(255,220,166,0), rgba(255,234,196,0.92) 50%, rgba(255,220,166,0))',
-                                        opacity: 0.8,
+                                        background: 'linear-gradient(90deg, rgba(92,52,255,0) 0%, rgba(92,52,255,0.08) 7%, rgba(112,72,255,0.54) 16%, rgba(140,88,255,0.9) 29%, rgba(196,144,255,0.98) 50%, rgba(140,88,255,0.9) 71%, rgba(112,72,255,0.54) 84%, rgba(92,52,255,0.08) 93%, rgba(92,52,255,0) 100%)',
+                                        boxShadow: '0 0 18px rgba(140,88,255,0.34), 0 0 36px rgba(92,52,255,0.18)',
+                                        filter: 'saturate(150%)',
+                                    }}
+                                />
+                                <div
+                                    className="absolute inset-x-[11%] top-[2px] h-[2px] rounded-full"
+                                    style={{
+                                        background: 'linear-gradient(90deg, rgba(232,220,255,0) 0%, rgba(224,208,255,0.42) 16%, rgba(248,240,255,1) 50%, rgba(224,208,255,0.42) 84%, rgba(232,220,255,0) 100%)',
+                                        boxShadow: '0 0 10px rgba(224,208,255,0.24)',
+                                        opacity: 0.96,
                                     }}
                                 />
                             </motion.div>

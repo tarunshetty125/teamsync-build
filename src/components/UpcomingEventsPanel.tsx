@@ -28,7 +28,7 @@ function progressRatio(startTime: string): number {
   return Math.min(1, Math.max(0, 1 - remaining / windowMs));
 }
 
-function RingIcon({ platform, progress }: { platform: string; progress: number }) {
+function RingIcon({ progress }: { progress: number }) {
   const R = 36, circ = 2 * Math.PI * R;
   const filled = circ * Math.min(progress + 0.12, 0.88);
   const now = new Date();
@@ -59,7 +59,7 @@ const BORDER = "rgba(34,197,94,0.14)";
 const DIM = "rgba(255,255,255,0.45)";
 const SYS = `-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif`;
 
-const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, syncing=false, onRefresh }) => {
+const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, onRefresh }) => {
   const [, tick] = useState(0);
   const [showReminder, setShowReminder] = useState(false);
   const [reminderSet, setReminderSet] = useState<number|null>(null);
@@ -160,7 +160,7 @@ const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, synci
               <div className="flex items-stretch flex-1 min-h-0 px-3 py-3 gap-3">
                 {/* LEFT */}
                 <div className="flex flex-col items-center gap-2 shrink-0">
-                  <RingIcon platform={nextUp.platform} progress={progressRatio(nextUp.startTime)}/>
+                  <RingIcon progress={progressRatio(nextUp.startTime)}/>
                   {(() => {
                     const {isLive} = countdown(nextUp.startTime,nextUp.endTime);
                     return <span style={{fontSize:10,fontWeight:700,color:G,background:"rgba(34,197,94,0.14)",border:`1px solid rgba(34,197,94,0.28)`,borderRadius:999,padding:"3px 10px"}}>{isLive?"Live":"Upcoming"}</span>;

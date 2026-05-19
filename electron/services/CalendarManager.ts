@@ -21,6 +21,7 @@ if (GOOGLE_CLIENT_ID === "YOUR_CLIENT_ID_HERE" || GOOGLE_CLIENT_SECRET === "YOUR
 export interface CalendarEvent {
     id: string;
     title: string;
+    description?: string;
     startTime: string; // ISO
     endTime: string; // ISO
     link?: string;
@@ -171,6 +172,8 @@ export class CalendarManager extends EventEmitter {
             await this.getUpcomingEvents(true);
         } else {
             console.log('[CalendarManager] Calendar not connected, skipping fetch.');
+            const { CalendarIntelligence } = require('../calendar/CalendarIntelligence');
+            CalendarIntelligence.getInstance().clearRecommendation();
         }
 
         // 3. Emit update to UI
@@ -338,6 +341,8 @@ export class CalendarManager extends EventEmitter {
         }
 
         const events = await this.fetchEventsInternal();
+        const { CalendarIntelligence } = require('../calendar/CalendarIntelligence');
+        CalendarIntelligence.getInstance().observeUpcomingEvents(events);
         this.scheduleReminders(events);
         return events;
     }
@@ -377,6 +382,7 @@ export class CalendarManager extends EventEmitter {
                 .map((item: any) => ({
                     id: item.id,
                     title: item.summary || '(No Title)',
+                    description: item.description || undefined,
                     startTime: item.start.dateTime,
                     endTime: item.end.dateTime,
                     link: this.resolveMeetingLink(item),

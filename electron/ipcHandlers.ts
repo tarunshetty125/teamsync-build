@@ -117,6 +117,25 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   };
 
+  const { CalendarIntelligence } = require('./calendar/CalendarIntelligence');
+  const calendarIntelligence = CalendarIntelligence.getInstance();
+
+  const broadcastCalendarRecommendation = (recommendation = calendarIntelligence.getRecommendation()): void => {
+    try {
+      BrowserWindow.getAllWindows().forEach(win => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('calendar-intelligence-changed', recommendation);
+        }
+      });
+    } catch (error) {
+      console.warn('[IPC] Failed to broadcast calendar recommendation:', error);
+    }
+  };
+
+  calendarIntelligence.on('recommendation-changed', (recommendation: any) => {
+    broadcastCalendarRecommendation(recommendation);
+  });
+
   // --- NEW Test Helper ---
   safeHandle("test-release-fetch", async () => {
     try {
@@ -2958,6 +2977,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("calendar-disconnect", async () => {
     const { CalendarManager } = require('./services/CalendarManager');
     await CalendarManager.getInstance().disconnect();
+    calendarIntelligence.clearRecommendation();
 
     // Broadcast calendar disconnected to all windows (Launcher <-> Settings sync)
     BrowserWindow.getAllWindows().forEach(win => {
@@ -2977,6 +2997,19 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("get-upcoming-events", async () => {
     const { CalendarManager } = require('./services/CalendarManager');
     return CalendarManager.getInstance().getUpcomingEvents();
+  });
+
+  safeHandle("calendar-intelligence:evaluate-events", async (_, events: any[]) => {
+    return calendarIntelligence.observeUpcomingEvents(Array.isArray(events) ? events : []);
+  });
+
+  safeHandle("calendar-intelligence:get-recommendation", async () => {
+    return calendarIntelligence.getRecommendation();
+  });
+
+  safeHandle("calendar-intelligence:dismiss", async (_, eventId: string) => {
+    calendarIntelligence.dismissEvent(eventId);
+    return { success: true };
   });
 
   safeHandle("calendar-refresh", async () => {

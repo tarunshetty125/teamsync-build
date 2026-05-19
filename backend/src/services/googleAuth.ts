@@ -213,6 +213,7 @@ export async function fetchCalendarEvents(user: UserDocument): Promise<any[]> {
     .map((item: any) => ({
       id: item.id,
       title: item.summary || '(No Title)',
+      description: item.description || undefined,
       startTime: item.start!.dateTime,
       endTime: item.end!.dateTime,
       link: item.hangoutLink || extractMeetingLink(item.description || ''),

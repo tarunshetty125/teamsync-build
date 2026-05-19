@@ -16,6 +16,33 @@ interface PermissionsBridge {
   onStatusChanged: (callback: (status: PermissionStatusSnapshot) => void) => () => void
 }
 
+type CalendarEventPayload = {
+  id: string
+  title?: string
+  summary?: string
+  description?: string
+  startTime?: string
+  endTime?: string
+  start?: { dateTime?: string }
+  end?: { dateTime?: string }
+  link?: string
+  source?: 'google'
+}
+
+type CalendarModeRecommendation = {
+  eventId: string
+  title: string
+  description?: string
+  startTime: string
+  endTime: string
+  recommendedMode: 'technical-interview' | 'sales' | 'lecture' | 'team-meet' | 'recruiting' | 'looking-for-work'
+  recommendedModeLabel: string
+  confidence: number
+  matchedSignals: string[]
+  summary: string
+  suggestedReferences: string[]
+}
+
 // Types for the exposed Electron API
 interface ElectronAPI {
   updateContentDimensions: (dimensions: {
@@ -272,8 +299,12 @@ interface ElectronAPI {
   calendarConnect: () => Promise<{ success: boolean; error?: string }>
   calendarDisconnect: () => Promise<{ success: boolean; error?: string }>
   getCalendarStatus: () => Promise<{ connected: boolean; email?: string }>
-  getUpcomingEvents: () => Promise<Array<{ id: string; title: string; startTime: string; endTime: string; link?: string; source: 'google' }>>
+  getUpcomingEvents: () => Promise<Array<{ id: string; title: string; description?: string; startTime: string; endTime: string; link?: string; source: 'google' }>>
   calendarRefresh: () => Promise<{ success: boolean; error?: string }>
+  calendarIntelligenceEvaluateEvents: (events: CalendarEventPayload[]) => Promise<CalendarModeRecommendation | null>
+  calendarIntelligenceGetRecommendation: () => Promise<CalendarModeRecommendation | null>
+  calendarIntelligenceDismiss: (eventId: string) => Promise<{ success: boolean }>
+  onCalendarRecommendationChanged: (callback: (recommendation: CalendarModeRecommendation | null) => void) => () => void
 
   // Auto-Update
   onUpdateAvailable: (callback: (info: any) => void) => () => void
@@ -1230,6 +1261,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getCalendarStatus: () => ipcRenderer.invoke('get-calendar-status'),
   getUpcomingEvents: () => ipcRenderer.invoke('get-upcoming-events'),
   calendarRefresh: () => ipcRenderer.invoke('calendar-refresh'),
+  calendarIntelligenceEvaluateEvents: (events: CalendarEventPayload[]) => ipcRenderer.invoke('calendar-intelligence:evaluate-events', events),
+  calendarIntelligenceGetRecommendation: () => ipcRenderer.invoke('calendar-intelligence:get-recommendation'),
+  calendarIntelligenceDismiss: (eventId: string) => ipcRenderer.invoke('calendar-intelligence:dismiss', eventId),
 
   // Auto-Update
   onUpdateAvailable: (callback: (info: any) => void) => {
@@ -1563,6 +1597,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const subscription = (_: any, status: any) => callback(status);
     ipcRenderer.on('calendar-status-changed', subscription);
     return () => { ipcRenderer.removeListener('calendar-status-changed', subscription); };
+  },
+  onCalendarRecommendationChanged: (callback: (recommendation: CalendarModeRecommendation | null) => void) => {
+    const subscription = (_: any, recommendation: CalendarModeRecommendation | null) => callback(recommendation);
+    ipcRenderer.on('calendar-intelligence-changed', subscription);
+    return () => { ipcRenderer.removeListener('calendar-intelligence-changed', subscription); };
   },
 } as ElectronAPI)
 

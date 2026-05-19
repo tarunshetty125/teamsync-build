@@ -11,12 +11,37 @@ import GlobalChatOverlay from './GlobalChatOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FeatureSpotlight } from './FeatureSpotlight';
 import UpcomingEventsPanel from './UpcomingEventsPanel';
+import CalendarModeRecommendationCard from './CalendarModeRecommendationCard';
 import { analytics } from '../lib/analytics/analytics.service'; // Added analytics import
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { isMac } from '../utils/platformUtils';
 import WindowControls from './WindowControls';
 import { getEventsNext8Hours } from '../utils/filter';
+
+type RecommendationModeId =
+    | 'technical-interview'
+    | 'sales'
+    | 'lecture'
+    | 'team-meet'
+    | 'recruiting'
+    | 'looking-for-work';
+
+type ModeOverrideId = RecommendationModeId | 'general';
+
+interface CalendarModeRecommendation {
+    eventId: string;
+    title: string;
+    description?: string;
+    startTime: string;
+    endTime: string;
+    recommendedMode: RecommendationModeId;
+    recommendedModeLabel: string;
+    confidence: number;
+    matchedSignals: string[];
+    summary: string;
+    suggestedReferences: string[];
+}
 
 interface Meeting {
     id: string;
@@ -90,6 +115,9 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const [showEvents, setShowEvents] = useState(false);
     const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
     const [showNotification, setShowNotification] = useState(false);
+    const [calendarRecommendation, setCalendarRecommendation] = useState<CalendarModeRecommendation | null>(null);
+    const [isApplyingCalendarMode, setIsApplyingCalendarMode] = useState(false);
+    const [calendarRecommendationError, setCalendarRecommendationError] = useState<string | null>(null);
 
     // Global search state (for AI chat overlay)
     const [isGlobalChatOpen, setIsGlobalChatOpen] = useState(false);
@@ -108,6 +136,19 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         setUpcomingEvents(safeEvents);
         const hasUpcomingInNext8Hours = getEventsNext8Hours(safeEvents).length > 0;
         setShowEvents(hasUpcomingInNext8Hours);
+        setCalendarRecommendationError(null);
+        void refreshCalendarRecommendation(safeEvents);
+    };
+
+    const refreshCalendarRecommendation = async (events: any[]) => {
+        if (!window.electronAPI?.calendarIntelligenceEvaluateEvents) return;
+        try {
+            const recommendation = await window.electronAPI.calendarIntelligenceEvaluateEvents(events);
+            setCalendarRecommendation(recommendation);
+            setCalendarRecommendationError(null);
+        } catch (error) {
+            console.error('Failed to evaluate calendar recommendation:', error);
+        }
     };
 
     const syncCalendarConnection = async () => {
@@ -247,6 +288,16 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         fetchEvents();
 
         void syncCalendarConnection();
+        if (window.electronAPI?.calendarIntelligenceGetRecommendation) {
+            void window.electronAPI.calendarIntelligenceGetRecommendation()
+                .then((recommendation) => {
+                    if (mounted) {
+                        setCalendarRecommendation(recommendation);
+                        setCalendarRecommendationError(null);
+                    }
+                })
+                .catch(() => {});
+        }
 
         let removeCalendarStatusListener: (() => void) | undefined;
         if (window.electronAPI?.onCalendarStatusChanged) {
@@ -263,6 +314,15 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                 }
 
                 setIsCalendarConnected(Boolean(status.connected));
+            });
+        }
+
+        let removeCalendarRecommendationListener: (() => void) | undefined;
+        if (window.electronAPI?.onCalendarRecommendationChanged) {
+            removeCalendarRecommendationListener = window.electronAPI.onCalendarRecommendationChanged((recommendation) => {
+                if (!mounted) return;
+                setCalendarRecommendation(recommendation);
+                setCalendarRecommendationError(null);
             });
         }
 
@@ -310,6 +370,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             if (removeUndetectableListener) removeUndetectableListener();
             if (removeMeetingStateListener) removeMeetingStateListener();
             if (removeCalendarStatusListener) removeCalendarStatusListener();
+            if (removeCalendarRecommendationListener) removeCalendarRecommendationListener();
             window.removeEventListener('teamsync:calendar-status-changed', handleCalendarStatusSync as EventListener);
             clearInterval(interval);
         };
@@ -343,6 +404,60 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     }, [isShortcutPressed]);
 
     const upcomingCount = getEventsNext8Hours(upcomingEvents).length;
+
+    const handleDismissCalendarRecommendation = async () => {
+        if (!calendarRecommendation) return;
+        setCalendarRecommendation(null);
+        setCalendarRecommendationError(null);
+
+        try {
+            await window.electronAPI?.calendarIntelligenceDismiss?.(calendarRecommendation.eventId);
+        } catch (error) {
+            console.error('Failed to dismiss calendar recommendation:', error);
+        }
+    };
+
+    const handleApplyCalendarRecommendation = async (modeId: ModeOverrideId) => {
+        if (!calendarRecommendation || isApplyingCalendarMode) return;
+
+        setIsApplyingCalendarMode(true);
+        setCalendarRecommendationError(null);
+
+        try {
+            const allModes = await window.electronAPI.modesGetAll();
+            let targetMode = allModes.find((mode) => mode.templateType === modeId);
+
+            if (!targetMode) {
+                const created = await window.electronAPI.modesCreate({ templateId: modeId });
+                if (!created.success || !created.mode?.id) {
+                    throw new Error(created.error || 'Unable to create the recommended mode.');
+                }
+
+                targetMode = created.mode;
+            }
+
+            if (!targetMode?.id) {
+                throw new Error('Unable to resolve the recommended mode.');
+            }
+
+            const result = await window.electronAPI.modesSetActive(targetMode.id);
+            if (!result.success) {
+                if (result.error === 'pro_required') {
+                    throw new Error('Pro or trial access is required to apply this mode.');
+                }
+                throw new Error(result.error || 'Unable to apply the recommended mode.');
+            }
+
+            analytics.trackCommandExecuted(modeId === calendarRecommendation.recommendedMode ? 'calendar_apply_mode' : 'calendar_override_mode');
+            await window.electronAPI?.calendarIntelligenceDismiss?.(calendarRecommendation.eventId);
+            setCalendarRecommendation(null);
+        } catch (error) {
+            console.error('Failed to apply calendar recommendation:', error);
+            setCalendarRecommendationError(error instanceof Error ? error.message : 'Unable to apply the recommended mode.');
+        } finally {
+            setIsApplyingCalendarMode(false);
+        }
+    };
 
     if (!window.electronAPI) {
         return <div className="text-white p-10">Error: Electron API not initialized. Check preload script.</div>;
@@ -842,7 +957,25 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                         <div className="md:col-span-2 h-full">
                                             <div className="relative h-full overflow-hidden">
                                                 <AnimatePresence mode="wait">
-                                                    {showEvents ? (
+                                                    {calendarRecommendation ? (
+                                                        <motion.div
+                                                            key="calendar-recommendation"
+                                                            initial={{ opacity: 0, transform: "translateY(22px) scale(0.98)", filter: "blur(6px)" }}
+                                                            animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
+                                                            exit={{ opacity: 0, transform: "translateY(12px) scale(0.98)", filter: "blur(6px)" }}
+                                                            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                                                            className="h-full"
+                                                        >
+                                                            <CalendarModeRecommendationCard
+                                                                recommendation={calendarRecommendation}
+                                                                isLight={isLight}
+                                                                applying={isApplyingCalendarMode}
+                                                                error={calendarRecommendationError}
+                                                                onApply={handleApplyCalendarRecommendation}
+                                                                onDismiss={handleDismissCalendarRecommendation}
+                                                            />
+                                                        </motion.div>
+                                                    ) : showEvents ? (
                                                         <motion.div
                                                             key="upcoming-events"
                                                             initial={{ opacity: 0, transform: "translateY(22px) scale(0.98)", filter: "blur(6px)" }}
