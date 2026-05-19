@@ -4059,6 +4059,8 @@ export function initializeIpcHandlers(appState: AppState): void {
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
       mgr.setActiveMode(id);
+      const activeMode = id ? mgr.getModes().find((m: any) => m.id === id) : null;
+      console.log(`[IPC] modes:set-active → id: ${id}, name: "${activeMode?.name ?? '(none)'}", template: ${activeMode?.templateType ?? 'N/A'}`);
       broadcastModesState();
       return { success: true, state: mgr.getState() };
     } catch (e: any) {
