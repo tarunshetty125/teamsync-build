@@ -53,6 +53,8 @@ import { planReasoning, isPlanConfident } from './intelligence/planning';
 import type { ReasoningPlan } from './intelligence/planning';
 import { evaluateResponseQuality, isQualityAcceptable, getMostCriticalIssue } from './intelligence/evaluation';
 import type { QualityEvaluationResult } from './intelligence/evaluation';
+import { compileTinyPrompt } from './intelligence/TinyPromptCompiler';
+import { adaptPromptBudget } from './intelligence/AdaptivePromptBudgeter';
 import { ModesManager } from './services/ModesManager';
 import type { ModeTemplateId } from '../src/lib/modes/types';
 
@@ -511,6 +513,8 @@ export class IntelligenceEngine extends EventEmitter {
                 let analysis: QuestionAnalysis | null = null;
                 let strategy: ResponseStrategy | null = null;
                 let reasoningPlan: ReasoningPlan | undefined;
+                let maxPromptTokens = MAX_ACTION_PROMPT_TOKENS;
+                const activeTemplateType = this.getActiveModeTemplateType();
 
                 try {
                     const builtContext = await buildContext({
@@ -554,7 +558,6 @@ export class IntelligenceEngine extends EventEmitter {
                                 question: contextLayers.promptObject.question,
                                 analysis,
                             });
-                            const activeTemplateType = this.getActiveModeTemplateType();
                             const forcedBrainId = this.resolveForcedBrainId(activeTemplateType, analysis, params.intent);
                             const brain = this.brainLayer.selector.select(analysis, {
                                 forceBrainId: forcedBrainId,
@@ -649,11 +652,29 @@ export class IntelligenceEngine extends EventEmitter {
                     }
                     // ──── End Brain Layer Injection ────
 
+                    const preTinyPrompt = contextLayers.promptObject;
+                    const tinyPrompt = await compileTinyPrompt({
+                        prompt: preTinyPrompt,
+                        activeTemplateType,
+                        currentModel: this.llmHelper.getCurrentModel(),
+                        provider: this.llmHelper.getCurrentProvider(),
+                    });
+                    const adaptiveBudget = adaptPromptBudget({
+                        originalPrompt: preTinyPrompt,
+                        compiledPrompt: tinyPrompt.prompt,
+                        tinyPromptApplied: tinyPrompt.applied,
+                        tinyPromptMode: tinyPrompt.mode,
+                        currentModel: this.llmHelper.getCurrentModel(),
+                        provider: this.llmHelper.getCurrentProvider(),
+                    });
+                    contextLayers.promptObject = adaptiveBudget.prompt;
+                    maxPromptTokens = adaptiveBudget.maxTokens;
+
                     const budgeted = enforceTokenBudget({
                         prompt: contextLayers.promptObject,
-                        maxTokens: MAX_ACTION_PROMPT_TOKENS,
+                        maxTokens: maxPromptTokens,
                     });
-                    validatePromptObject(budgeted.prompt, { maxTokens: MAX_ACTION_PROMPT_TOKENS });
+                    validatePromptObject(budgeted.prompt, { maxTokens: maxPromptTokens });
                     const serializedPrompt = serializePromptObject(budgeted.prompt);
                     inputTokens = this.session.estimateTokenCount(serializedPrompt.finalPrompt);
 
@@ -737,6 +758,7 @@ export class IntelligenceEngine extends EventEmitter {
                     const finalContent = await this.ensureValidActionOutput({
                         prompt: budgeted.prompt,
                         content: executionResult.content,
+                        maxTokens: maxPromptTokens,
                         imagePaths: params.imagePaths,
                         skipCustomNotesInjection: contextLayers.profileApplied,
                         signal,
@@ -1132,6 +1154,7 @@ export class IntelligenceEngine extends EventEmitter {
     private async ensureValidActionOutput(args: {
         prompt: PromptObject;
         content: string;
+        maxTokens: number;
         imagePaths?: string[];
         skipCustomNotesInjection?: boolean;
         signal?: AbortSignal;
@@ -1139,7 +1162,7 @@ export class IntelligenceEngine extends EventEmitter {
         requestId: string | null;
         sessionIdSnapshot: string;
     }): Promise<string | null> {
-        const { prompt, content, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
+        const { prompt, content, maxTokens, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
         const validation = validateActionOutput(prompt.intent, prompt.mode, content);
         if (validation.valid) {
             return validation.correctedContent.trim();
@@ -1165,9 +1188,9 @@ export class IntelligenceEngine extends EventEmitter {
         };
         const repairBudgeted = enforceTokenBudget({
             prompt: repairPrompt,
-            maxTokens: MAX_ACTION_PROMPT_TOKENS,
+            maxTokens,
         });
-        validatePromptObject(repairBudgeted.prompt, { maxTokens: MAX_ACTION_PROMPT_TOKENS });
+        validatePromptObject(repairBudgeted.prompt, { maxTokens });
 
         const repaired = await this.collectStreamResponseForPrompt({
             prompt: repairBudgeted.prompt,
