@@ -56,7 +56,9 @@ interface PersistedCalendarIntelligenceState {
 
 const STORE_NAME = 'teamsync-calendar-intelligence';
 const EVENT_LOOKAHEAD_MS = 24 * 60 * 60 * 1000;
-const DISMISS_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+// Keep dismiss temporary to the current in-memory session only.
+// Refreshing upcoming events should allow the recommendation to appear again.
+const DISMISS_COOLDOWN_MS = 0;
 const MINIMUM_SCORE = 30;
 
 const MODE_RULES: ModeRule[] = [

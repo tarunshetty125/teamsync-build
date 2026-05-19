@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getEventsNext8Hours, GoogleCalendarEventLike } from "../utils/filter";
+import { getUpcomingEvents, GoogleCalendarEventLike } from "../utils/filter";
 import { formatTimeRange, getEventDuration } from "../utils/time";
 
 interface UpcomingEventsPanelProps {
@@ -78,7 +78,7 @@ const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, onRef
     return () => window.removeEventListener("click", handler);
   }, [showReminder]);
 
-  const filtered = useMemo(() => getEventsNext8Hours(events), [events]);
+  const filtered = useMemo(() => getUpcomingEvents(events), [events]);
   const nextUp = filtered[0] ?? null;
 
   const openLink = (link: string) =>
@@ -366,7 +366,7 @@ const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, onRef
                   <rect x="1" y="3.5" width="16" height="13" rx="2.5"/><path d="M1 7.5h16"/>
                 </svg>
               </div>
-              <p style={{fontSize:11,color:DIM,textAlign:"center"}}>No events in the next 8 hours</p>
+              <p style={{fontSize:11,color:DIM,textAlign:"center"}}>No upcoming events found</p>
             </motion.div>
           )}
         </AnimatePresence>

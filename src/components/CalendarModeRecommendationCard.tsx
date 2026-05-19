@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CalendarClock, Check, ChevronDown, Sparkles, WandSparkles } from 'lucide-react';
+import { CalendarClock, Check, ChevronDown, Sparkles, WandSparkles, X } from 'lucide-react';
 
 type CalendarModeRecommendation = {
     eventId: string;
@@ -30,6 +30,8 @@ interface CalendarModeRecommendationCardProps {
     isLight: boolean;
     applying?: boolean;
     error?: string | null;
+    showCloseButton?: boolean;
+    onClose?: () => void;
     onApply: (modeId: ModeOptionId) => void;
     onDismiss: () => void;
 }
@@ -113,6 +115,8 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
     isLight,
     applying = false,
     error = null,
+    showCloseButton = false,
+    onClose,
     onApply,
     onDismiss,
 }) => {
@@ -134,26 +138,33 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
 
     return (
         <div
-            className={`relative h-full overflow-hidden rounded-[22px] border ${
-                isLight ? 'border-black/8 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.08)]' : 'border-white/10 bg-[#0f1117]'
+            className={`relative overflow-hidden rounded-[28px] backdrop-blur-[40px] ${
+                isLight
+                    ? 'bg-white/54 shadow-[0_28px_90px_rgba(15,23,42,0.18),inset_0_1px_0_rgba(255,255,255,0.9)]'
+                    : 'bg-[rgba(30,34,42,0.72)] shadow-[0_28px_90px_rgba(2,6,23,0.52),inset_0_1px_0_rgba(255,255,255,0.12)]'
             }`}
         >
             <div className="absolute inset-0 pointer-events-none">
                 <div className={`absolute inset-0 ${
                     isLight
-                        ? 'bg-[radial-gradient(circle_at_14%_18%,rgba(168,85,247,0.16),transparent_34%),radial-gradient(circle_at_85%_12%,rgba(59,130,246,0.1),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.78),rgba(248,250,252,0.94))]'
-                        : 'bg-[radial-gradient(circle_at_12%_18%,rgba(168,85,247,0.3),transparent_34%),radial-gradient(circle_at_86%_14%,rgba(96,165,250,0.16),transparent_28%),linear-gradient(180deg,rgba(15,17,23,0.96),rgba(8,10,15,0.98))]'
+                        ? 'bg-[radial-gradient(circle_at_14%_18%,rgba(255,255,255,0.48),transparent_30%),radial-gradient(circle_at_82%_10%,rgba(191,219,254,0.18),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.56),rgba(241,245,249,0.28))]'
+                        : 'bg-[radial-gradient(circle_at_14%_16%,rgba(255,255,255,0.12),transparent_28%),radial-gradient(circle_at_82%_8%,rgba(191,219,254,0.1),transparent_22%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0))]'
                 }`} />
-                <div className={`absolute inset-0 opacity-[0.06] ${
-                    isLight ? 'bg-[linear-gradient(120deg,rgba(15,23,42,0.14),transparent_40%,rgba(168,85,247,0.16))]' : 'bg-[linear-gradient(120deg,rgba(255,255,255,0.12),transparent_40%,rgba(168,85,247,0.18))]'
+                <div className={`absolute inset-0 opacity-[0.08] ${
+                    isLight ? 'bg-[linear-gradient(120deg,rgba(15,23,42,0.08),transparent_40%,rgba(125,211,252,0.14))]' : 'bg-[linear-gradient(120deg,rgba(255,255,255,0.08),transparent_40%,rgba(125,211,252,0.12))]'
+                }`} />
+                <div className={`absolute inset-x-0 top-0 h-24 ${
+                    isLight
+                        ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.75),rgba(255,255,255,0))]'
+                        : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0))]'
                 }`} />
             </div>
 
-            <div className="relative z-10 flex h-full flex-col px-5 py-4">
+            <div className="relative z-10 flex flex-col px-6 py-5">
                 <div className="flex items-start justify-between gap-3">
                     <div>
-                        <div className={`mb-2 inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${
-                            isLight ? 'bg-violet-500/10 text-violet-700' : 'bg-violet-400/12 text-violet-200'
+                        <div className={`mb-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                            isLight ? 'bg-white/65 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]' : 'bg-white/[0.08] text-white/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
                         }`}>
                             <Sparkles className="h-3 w-3" />
                             Upcoming Event
@@ -172,11 +183,27 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                             </span>
                         </div>
                     </div>
+                    {showCloseButton && (
+                        <button
+                            type="button"
+                            onClick={onClose ?? onDismiss}
+                            aria-label="Close recommendation"
+                            className={`inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors ${
+                                isLight
+                                    ? 'bg-white/54 text-slate-500 shadow-[0_10px_24px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.88)] hover:bg-white/72 hover:text-slate-950'
+                                    : 'bg-white/[0.07] text-white/56 shadow-[0_10px_24px_rgba(2,6,23,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] hover:bg-white/[0.12] hover:text-white'
+                            }`}
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    )}
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-                    <div className={`rounded-[18px] border px-4 py-3 ${
-                        isLight ? 'border-black/6 bg-white/75' : 'border-white/8 bg-white/[0.03]'
+                    <div className={`rounded-[20px] px-5 py-4 ${
+                        isLight
+                            ? 'bg-white/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[22px]'
+                            : 'bg-white/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-[22px]'
                     }`}>
                         <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${
                             isLight ? 'text-slate-500' : 'text-white/42'
@@ -190,8 +217,10 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                         </p>
                     </div>
 
-                    <div className={`rounded-[18px] border px-4 py-3 ${
-                        isLight ? 'border-black/6 bg-white/72' : 'border-white/8 bg-white/[0.03]'
+                    <div className={`rounded-[20px] px-5 py-4 ${
+                        isLight
+                            ? 'bg-white/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[22px]'
+                            : 'bg-white/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-[22px]'
                     }`}>
                         <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${
                             isLight ? 'text-slate-500' : 'text-white/42'
@@ -201,7 +230,7 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                         <div className={`mt-1.5 flex items-center gap-2 text-[14px] font-semibold ${
                             isLight ? 'text-slate-950' : 'text-white'
                         }`}>
-                            <WandSparkles className={`h-4 w-4 ${isLight ? 'text-violet-700' : 'text-violet-200'}`} />
+                            <WandSparkles className={`h-4 w-4 ${isLight ? 'text-sky-700' : 'text-sky-200'}`} />
                             {recommendation.recommendedModeLabel}
                         </div>
                         <div className="mt-3">
@@ -213,8 +242,8 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                             <div className="mt-1.5 flex items-center gap-2">
                                 <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${
                                     isLight
-                                        ? 'border-violet-200 bg-violet-500/8 text-violet-700'
-                                        : 'border-violet-400/18 bg-violet-400/10 text-violet-200'
+                                        ? 'border-sky-200 bg-sky-500/8 text-sky-700'
+                                        : 'border-sky-300/18 bg-sky-300/10 text-sky-200'
                                 }`}>
                                     {confidenceLabel}
                                 </span>
@@ -228,8 +257,10 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                     </div>
                 </div>
 
-                <div className={`mt-3 rounded-[18px] border px-4 py-3 ${
-                    isLight ? 'border-black/6 bg-white/75' : 'border-white/8 bg-white/[0.03]'
+                <div className={`mt-3 rounded-[20px] px-5 py-4 ${
+                    isLight
+                        ? 'bg-white/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[22px]'
+                        : 'bg-white/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-[22px]'
                 }`}>
                     <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${
                         isLight ? 'text-slate-500' : 'text-white/42'
@@ -260,8 +291,10 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
 
                 <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
                     {recommendation.suggestedReferences.length > 0 ? (
-                        <div className={`rounded-[18px] border px-4 py-3 ${
-                            isLight ? 'border-black/6 bg-white/72' : 'border-white/8 bg-white/[0.03]'
+                        <div className={`rounded-[20px] px-5 py-4 ${
+                            isLight
+                                ? 'bg-white/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[22px]'
+                                : 'bg-white/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-[22px]'
                         }`}>
                             <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${
                                 isLight ? 'text-slate-500' : 'text-white/42'
@@ -274,8 +307,8 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                                         key={reference}
                                         className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium ${
                                             isLight
-                                                ? 'border-violet-200/80 bg-violet-500/8 text-violet-700'
-                                                : 'border-violet-400/18 bg-violet-400/10 text-violet-200'
+                                                ? 'border-slate-200 bg-slate-100/80 text-slate-700'
+                                                : 'border-white/12 bg-white/[0.08] text-white/72'
                                         }`}
                                     >
                                         <Check className="h-3 w-3" />
@@ -286,8 +319,10 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                         </div>
                     ) : <div />}
 
-                    <div className={`rounded-[18px] border px-4 py-3 ${
-                        isLight ? 'border-black/6 bg-white/72' : 'border-white/8 bg-white/[0.03]'
+                    <div className={`rounded-[20px] px-5 py-4 ${
+                        isLight
+                            ? 'bg-white/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] backdrop-blur-[22px]'
+                            : 'bg-white/[0.045] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-[22px]'
                     }`}>
                         <div className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${
                             isLight ? 'text-slate-500' : 'text-white/42'
@@ -298,10 +333,10 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                             <select
                                 value={selectedModeId}
                                 onChange={(event) => setSelectedModeId(event.target.value as ModeOptionId)}
-                                className={`w-full appearance-none rounded-xl border px-3 py-2 text-[12px] font-medium outline-none transition-colors ${
+                                className={`w-full appearance-none rounded-2xl px-3.5 py-3 text-[12px] font-medium outline-none transition-colors ${
                                     isLight
-                                        ? 'border-black/8 bg-white text-slate-900 focus:border-violet-300'
-                                        : 'border-white/10 bg-white/[0.04] text-white focus:border-violet-300/50'
+                                        ? 'bg-white/76 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] focus:bg-white'
+                                        : 'bg-white/[0.08] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] focus:bg-white/[0.11]'
                                 }`}
                             >
                                 {MODE_OPTIONS.map((option) => (
@@ -317,7 +352,7 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                     </div>
                 </div>
 
-                <div className="mt-auto pt-4">
+                <div className="pt-5">
                     {error && (
                         <div className={`mb-3 rounded-full px-3 py-2 text-[11px] font-medium ${
                             isLight ? 'bg-rose-500/10 text-rose-700' : 'bg-rose-500/12 text-rose-200'
@@ -326,27 +361,16 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                         </div>
                     )}
 
-                    <div className="flex items-center justify-end gap-2">
-                        <button
-                            type="button"
-                            onClick={onDismiss}
-                            className={`rounded-full px-4 py-2 text-[12px] font-medium transition-colors ${
-                                isLight
-                                    ? 'text-slate-600 hover:bg-slate-900/6 hover:text-slate-900'
-                                    : 'text-white/64 hover:bg-white/8 hover:text-white'
-                            }`}
-                        >
-                            Dismiss
-                        </button>
+                    <div className="flex items-center justify-end">
                         <motion.button
                             type="button"
                             whileTap={{ scale: 0.97 }}
                             onClick={() => onApply(selectedModeId)}
                             disabled={applying}
-                            className={`rounded-full px-4 py-2 text-[12px] font-semibold transition-all ${
+                            className={`rounded-full px-5 py-2.5 text-[12px] font-semibold transition-all ${
                                 isLight
                                     ? 'bg-slate-950 text-white shadow-[0_12px_30px_rgba(15,23,42,0.16)] hover:bg-slate-800'
-                                    : 'bg-white text-slate-950 shadow-[0_12px_30px_rgba(255,255,255,0.12)] hover:bg-violet-50'
+                                    : 'bg-white/92 text-slate-950 shadow-[0_16px_40px_rgba(255,255,255,0.12)] hover:bg-white'
                             } ${applying ? 'cursor-wait opacity-70' : ''}`}
                         >
                             {applying ? 'Applying...' : 'Apply Mode'}

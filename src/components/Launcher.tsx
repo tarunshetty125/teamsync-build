@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ToggleLeft, ToggleRight, Search, Zap, Calendar, ArrowRight, ArrowLeft, MoreHorizontal, Globe, Clock, ChevronRight, Settings, LayoutGrid, RefreshCw, Eye, EyeOff, Ghost, Plus, Mail, Link as LinkIcon, ChevronDown, Trash2, Bell, Check, Download, DownloadCloud, CheckCircle, AlertCircle } from 'lucide-react';
+import { ToggleLeft, ToggleRight, Search, Zap, Calendar, ArrowRight, ArrowLeft, MoreHorizontal, Globe, Clock, ChevronRight, Settings, LayoutGrid, RefreshCw, Eye, EyeOff, Ghost, Plus, Mail, Link as LinkIcon, ChevronDown, Trash2, Bell, Check, Download, DownloadCloud, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 import { generateMeetingPDF } from '../utils/pdfGenerator';
 import icon from "./icon.png";
 import mainui from "../UI_comp/mainui.png";
@@ -17,7 +17,6 @@ import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { isMac } from '../utils/platformUtils';
 import WindowControls from './WindowControls';
-import { getEventsNext8Hours } from '../utils/filter';
 
 type RecommendationModeId =
     | 'technical-interview'
@@ -116,6 +115,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
     const [showNotification, setShowNotification] = useState(false);
     const [calendarRecommendation, setCalendarRecommendation] = useState<CalendarModeRecommendation | null>(null);
+    const [isCalendarRecommendationOpen, setIsCalendarRecommendationOpen] = useState(false);
     const [isApplyingCalendarMode, setIsApplyingCalendarMode] = useState(false);
     const [calendarRecommendationError, setCalendarRecommendationError] = useState<string | null>(null);
 
@@ -134,8 +134,9 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const applyEvents = (events: any[]) => {
         const safeEvents = Array.isArray(events) ? events : [];
         setUpcomingEvents(safeEvents);
-        const hasUpcomingInNext8Hours = getEventsNext8Hours(safeEvents).length > 0;
-        setShowEvents(hasUpcomingInNext8Hours);
+        // Keep the calendar panel mounted whenever we have fetched events at all.
+        // The panel itself handles the "next 8 hours" empty state.
+        setShowEvents(safeEvents.length > 0);
         setCalendarRecommendationError(null);
         void refreshCalendarRecommendation(safeEvents);
     };
@@ -145,6 +146,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         try {
             const recommendation = await window.electronAPI.calendarIntelligenceEvaluateEvents(events);
             setCalendarRecommendation(recommendation);
+            setIsCalendarRecommendationOpen(false);
             setCalendarRecommendationError(null);
         } catch (error) {
             console.error('Failed to evaluate calendar recommendation:', error);
@@ -202,8 +204,8 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                     console.warn("Backend calendar fetch returned error:", result.error);
                     if (result.error === 'Calendar not connected') {
                         setIsCalendarConnected(false);
+                        applyEvents([]);
                     }
-                    applyEvents([]);
                     return;
                 }
             }
@@ -213,10 +215,12 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
         // Fallback path: legacy local CalendarManager
         if (window.electronAPI?.getUpcomingEvents) {
-            window.electronAPI
-                .getUpcomingEvents()
-                .then((events) => applyEvents(events))
-                .catch(err => console.error("Failed to fetch events:", err));
+            try {
+                const events = await window.electronAPI.getUpcomingEvents();
+                applyEvents(events);
+            } catch (err) {
+                console.error("Failed to fetch events:", err);
+            }
         }
     };
 
@@ -293,6 +297,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                 .then((recommendation) => {
                     if (mounted) {
                         setCalendarRecommendation(recommendation);
+                        setIsCalendarRecommendationOpen(false);
                         setCalendarRecommendationError(null);
                     }
                 })
@@ -322,6 +327,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             removeCalendarRecommendationListener = window.electronAPI.onCalendarRecommendationChanged((recommendation) => {
                 if (!mounted) return;
                 setCalendarRecommendation(recommendation);
+                setIsCalendarRecommendationOpen(false);
                 setCalendarRecommendationError(null);
             });
         }
@@ -403,11 +409,10 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         };
     }, [isShortcutPressed]);
 
-    const upcomingCount = getEventsNext8Hours(upcomingEvents).length;
-
     const handleDismissCalendarRecommendation = async () => {
         if (!calendarRecommendation) return;
         setCalendarRecommendation(null);
+        setIsCalendarRecommendationOpen(false);
         setCalendarRecommendationError(null);
 
         try {
@@ -451,6 +456,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             analytics.trackCommandExecuted(modeId === calendarRecommendation.recommendedMode ? 'calendar_apply_mode' : 'calendar_override_mode');
             await window.electronAPI?.calendarIntelligenceDismiss?.(calendarRecommendation.eventId);
             setCalendarRecommendation(null);
+            setIsCalendarRecommendationOpen(false);
         } catch (error) {
             console.error('Failed to apply calendar recommendation:', error);
             setCalendarRecommendationError(error instanceof Error ? error.message : 'Unable to apply the recommended mode.');
@@ -458,6 +464,19 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             setIsApplyingCalendarMode(false);
         }
     };
+
+    useEffect(() => {
+        if (!calendarRecommendation || !isCalendarRecommendationOpen) return;
+
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsCalendarRecommendationOpen(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleEscape);
+        return () => window.removeEventListener('keydown', handleEscape);
+    }, [calendarRecommendation, isCalendarRecommendationOpen]);
 
     if (!window.electronAPI) {
         return <div className="text-white p-10">Error: Electron API not initialized. Check preload script.</div>;
@@ -768,7 +787,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                     ) : (
                         <motion.div
                             key="launcher"
-                            className="flex-1 flex flex-col overflow-hidden"
+                            className="relative flex-1 flex flex-col overflow-hidden"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
@@ -785,6 +804,27 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-4">
                                             <h1 className="text-3xl font-celeb-light font-medium text-text-primary tracking-wide drop-shadow-sm">My TeamSync</h1>
+
+                                            {calendarRecommendation && (
+                                                <motion.button
+                                                    type="button"
+                                                    whileTap={{ scale: 0.97 }}
+                                                    onClick={() => setIsCalendarRecommendationOpen(true)}
+                                                    className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold tracking-[0.01em] backdrop-blur-[20px] transition-colors ${
+                                                        isLight
+                                                            ? 'bg-white/58 text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.10),inset_0_1px_0_rgba(255,255,255,0.92)] hover:bg-white/78'
+                                                            : 'bg-white/[0.07] text-white/76 shadow-[0_10px_24px_rgba(2,6,23,0.24),inset_0_1px_0_rgba(255,255,255,0.10)] hover:bg-white/[0.11]'
+                                                    }`}
+                                                    title="Open suggestion"
+                                                >
+                                                    <span className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                                                        isLight ? 'bg-white/72 text-sky-600' : 'bg-white/[0.08] text-sky-200'
+                                                    }`}>
+                                                        <Sparkles size={11} />
+                                                    </span>
+                                                    Suggestion
+                                                </motion.button>
+                                            )}
 
                                             {/* Refresh Button */}
                                             <button
@@ -957,25 +997,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                         <div className="md:col-span-2 h-full">
                                             <div className="relative h-full overflow-hidden">
                                                 <AnimatePresence mode="wait">
-                                                    {calendarRecommendation ? (
-                                                        <motion.div
-                                                            key="calendar-recommendation"
-                                                            initial={{ opacity: 0, transform: "translateY(22px) scale(0.98)", filter: "blur(6px)" }}
-                                                            animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
-                                                            exit={{ opacity: 0, transform: "translateY(12px) scale(0.98)", filter: "blur(6px)" }}
-                                                            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-                                                            className="h-full"
-                                                        >
-                                                            <CalendarModeRecommendationCard
-                                                                recommendation={calendarRecommendation}
-                                                                isLight={isLight}
-                                                                applying={isApplyingCalendarMode}
-                                                                error={calendarRecommendationError}
-                                                                onApply={handleApplyCalendarRecommendation}
-                                                                onDismiss={handleDismissCalendarRecommendation}
-                                                            />
-                                                        </motion.div>
-                                                    ) : showEvents ? (
+                                                    {showEvents ? (
                                                         <motion.div
                                                             key="upcoming-events"
                                                             initial={{ opacity: 0, transform: "translateY(22px) scale(0.98)", filter: "blur(6px)" }}
@@ -1175,6 +1197,42 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                     </div>
                                 </section>
                             </main>
+
+                            <AnimatePresence>
+                                {calendarRecommendation && isCalendarRecommendationOpen && (
+                                    <motion.div
+                                        key="calendar-recommendation-popup"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="pointer-events-none absolute inset-0 z-30"
+                                    >
+                                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.06),transparent_18%),linear-gradient(180deg,rgba(15,23,42,0.16),rgba(15,23,42,0.34))] backdrop-blur-[20px]" />
+                                        <div className="absolute inset-0 flex items-center justify-center px-8 py-16">
+                                            <div className="mx-auto flex w-full max-w-[980px] justify-center">
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: 18, scale: 0.985, filter: 'blur(10px)' }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+                                                    exit={{ opacity: 0, y: 16, scale: 0.985, filter: 'blur(10px)' }}
+                                                    transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
+                                                    className="pointer-events-auto w-full max-w-[960px] will-change-transform"
+                                                >
+                                                    <CalendarModeRecommendationCard
+                                                        recommendation={calendarRecommendation}
+                                                        isLight={isLight}
+                                                        applying={isApplyingCalendarMode}
+                                                        error={calendarRecommendationError}
+                                                        showCloseButton
+                                                        onClose={() => setIsCalendarRecommendationOpen(false)}
+                                                        onApply={handleApplyCalendarRecommendation}
+                                                        onDismiss={handleDismissCalendarRecommendation}
+                                                    />
+                                                </motion.div>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </motion.div>
                     )}
                 </AnimatePresence>

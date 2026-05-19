@@ -71,15 +71,21 @@ export function getEventsNext8Hours(events: GoogleCalendarEventLike[]): Normaliz
   const eightHoursMs = 8 * 60 * 60 * 1000;
   const max = now + eightHoursMs;
 
+  return getUpcomingEvents(events)
+    .filter((event) => new Date(event.startTime).getTime() <= max);
+}
+
+export function getUpcomingEvents(events: GoogleCalendarEventLike[]): NormalizedEvent[] {
+  const now = Date.now();
+
   return events
     .map(normalizeCalendarEvent)
     .filter((event): event is NormalizedEvent => Boolean(event))
     .filter((event) => {
-      const start = new Date(event.startTime).getTime();
       const end = new Date(event.endTime).getTime();
-      if (Number.isNaN(start) || Number.isNaN(end)) return false;
+      if (Number.isNaN(end)) return false;
       if (end < now) return false;
-      return start <= max;
+      return true;
     })
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 }
