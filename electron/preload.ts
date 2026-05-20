@@ -184,6 +184,8 @@ interface ElectronAPI {
   generateRecap: (requestId?: string) => Promise<{ summary: string | null }>
   submitManualQuestion: (question: string, requestId?: string) => Promise<{ answer: string | null; question: string }>
   getIntelligenceContext: () => Promise<{ context: string; lastAssistantMessage: string | null; activeMode: string }>
+  getBenchmarkSummary: () => Promise<any>
+  getRecentBenchmarks: (limit?: number) => Promise<any[]>
   resetIntelligence: () => Promise<{ success: boolean; error?: string }>
   cancelIntelligenceRequest: () => Promise<{ success: boolean; error?: string }>
   getSessionMode: () => Promise<{ mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
@@ -912,6 +914,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   generateRecap: (requestId?: string) => ipcRenderer.invoke("generate-recap", requestId),
   submitManualQuestion: (question: string, requestId?: string) => ipcRenderer.invoke("submit-manual-question", question, requestId),
   getIntelligenceContext: () => ipcRenderer.invoke("get-intelligence-context"),
+  getBenchmarkSummary: () => ipcRenderer.invoke("benchmark:get-summary"),
+  getRecentBenchmarks: (limit: number = 20) => ipcRenderer.invoke("benchmark:get-recent", limit),
   resetIntelligence: () => ipcRenderer.invoke("reset-intelligence"),
   getSessionMode: () => ipcRenderer.invoke("session:get-mode"),
   setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => ipcRenderer.invoke("session:set-mode", mode),

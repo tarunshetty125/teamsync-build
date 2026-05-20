@@ -11,6 +11,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { getTranscriptSpeakerLabel } from '../utils/transcriptSpeakers';
 
 // ============================================
 // Types 
@@ -267,7 +268,7 @@ const MeetingChatOverlay: React.FC<MeetingChatOverlayProps> = ({
         if (meetingContext.transcript?.length) {
             const recentTranscript = meetingContext.transcript.slice(-20);
             const transcriptText = recentTranscript
-                .map(t => `[${t.speaker === 'user' ? 'Me' : 'Them'}]: ${t.text}`)
+                .map(t => `[${getTranscriptSpeakerLabel(t.speaker)}]: ${t.text}`)
                 .join('\n');
             parts.push(`\nRECENT TRANSCRIPT:\n${transcriptText}`);
         }

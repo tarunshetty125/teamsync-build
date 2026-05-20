@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { getTranscriptSpeakerLabel, isHiddenTranscriptSpeaker } from '../utils/transcriptSpeakers';
 
 const formatTime = (ms: number) => {
     const date = new Date(ms);
@@ -153,7 +154,7 @@ KEY POINTS:
 ${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'None'}
             `.trim();
         } else if (activeTab === 'transcript' && meeting.transcript) {
-            textToCopy = meeting.transcript.map(t => `[${formatTime(t.timestamp)}] ${t.speaker === 'user' ? 'Me' : 'Them'}: ${t.text}`).join('\n');
+            textToCopy = meeting.transcript.map(t => `[${formatTime(t.timestamp)}] ${getTranscriptSpeakerLabel(t.speaker)}: ${t.text}`).join('\n');
         } else if (activeTab === 'usage' && meeting.usage) {
             textToCopy = meeting.usage.map(u => `Q: ${u.question || ''}\nA: ${u.answer || ''}`).join('\n\n');
         }
@@ -432,7 +433,7 @@ ${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'No
                                             {(() => {
                                                 console.log('Raw Transcript:', meeting.transcript);
                                                 const filteredTranscript = meeting.transcript?.filter(entry => {
-                                                    const isHidden = ['system', 'ai', 'assistant', 'model'].includes(entry.speaker?.toLowerCase());
+                                                    const isHidden = isHiddenTranscriptSpeaker(entry.speaker);
                                                     if (isHidden) console.log('Filtered out:', entry);
                                                     return !isHidden;
                                                 }) || [];
@@ -446,7 +447,7 @@ ${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'No
                                                     <div key={i} className="meeting-glass-transcript-row">
                                                         <div className="mb-2 flex items-center gap-2">
                                                             <span className="text-[12px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
-                                                                {entry.speaker === 'user' ? 'Me' : 'Them'}
+                                                                {getTranscriptSpeakerLabel(entry.speaker)}
                                                             </span>
                                                             <span className="text-[12px] font-medium text-text-tertiary">{entry.timestamp ? formatTime(entry.timestamp) : '0:00'}</span>
                                                         </div>

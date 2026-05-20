@@ -123,10 +123,12 @@ import { WhisperFallbackSttAdapter } from "./audio/stt/WhisperFallbackSttAdapter
 import type { SttMetricsSnapshot, StreamingSttAdapter, SttTelemetryEvent } from "./audio/stt/SttAdapter"
 import { assertValidSttRuntimeConfig, loadSttRuntimeConfig, validateSttRuntimeConfig } from "./audio/stt/SttRuntimeConfig"
 import { runSttLoadTest, type SttLoadTestResult } from "./audio/stt/SttLoadTester"
+import { SpeakerDiarizer } from "./audio/SpeakerDiarizer"
 import { ThemeManager } from "./ThemeManager"
 import { RAGManager } from "./rag/RAGManager"
 import { DatabaseManager } from "./db/DatabaseManager"
 import { warmupIntentClassifier } from "./llm"
+import { ModesManager } from "./services/ModesManager"
 
 type STTProvider = SttSupervisor;
 
@@ -1038,6 +1040,7 @@ export class AppState {
   private _audioTestStarting = false;               // P2-12: in-flight guard against concurrent calls
   private googleSTT: STTProvider | null = null; // Interviewer
   private googleSTT_User: STTProvider | null = null; // User
+  private speakerDiarizer: SpeakerDiarizer = new SpeakerDiarizer();
 
   private createSTTProvider(speaker: 'interviewer' | 'user'): STTProvider | null {
     const { CredentialsManager } = require('./services/CredentialsManager');
@@ -1149,11 +1152,20 @@ export class AppState {
       if ((segment as any)._sessionId && (segment as any)._sessionId !== expectedSessionId) {
         return;
       }
+      const transcriptTimestamp = Date.now();
+      const diarized = this.speakerDiarizer.processSegment({
+        channel: speaker,
+        text: segment.text,
+        timestamp: transcriptTimestamp,
+        final: segment.isFinal,
+      });
 
       this.intelligenceManager.handleTranscript({
         speaker: speaker,
+        speakerId: diarized.speakerId,
+        speakerLabel: diarized.speakerLabel,
         text: segment.text,
-        timestamp: Date.now(),
+        timestamp: transcriptTimestamp,
         final: segment.isFinal,
         confidence: segment.confidence,
         _sessionId: (segment as any)._sessionId
@@ -1162,9 +1174,9 @@ export class AppState {
       // Feed final transcript to JIT RAG indexer
       if (segment.isFinal && this.ragManager) {
         this.ragManager.feedLiveTranscript([{
-          speaker: speaker,
+          speaker: diarized.speakerLabel || speaker,
           text: segment.text,
-          timestamp: Date.now(),
+          timestamp: transcriptTimestamp,
           _sessionId: (segment as any)._sessionId
         }], expectedSessionId);
       }
@@ -1172,8 +1184,10 @@ export class AppState {
       const helper = this.getWindowHelper();
       const payload = {
         speaker: speaker,
+        speakerId: diarized.speakerId,
+        speakerLabel: diarized.speakerLabel,
         text: segment.text,
-        timestamp: Date.now(),
+        timestamp: transcriptTimestamp,
         final: segment.isFinal,
         confidence: segment.confidence,
         _sessionId: expectedSessionId,  // V1 Fix: allows renderer to drop cross-session transcripts
@@ -1895,6 +1909,11 @@ export class AppState {
     if (metadata) {
       this.intelligenceManager.setMeetingMetadata(metadata);
     }
+
+    this.speakerDiarizer.reset({
+      mode: ModesManager.getInstance().getActiveMode()?.templateType ?? 'general',
+      meetingTitle: metadata?.title,
+    });
 
     // Reset overlay position to default center so each new meeting starts
     // with the overlay in a predictable centered position, regardless of where

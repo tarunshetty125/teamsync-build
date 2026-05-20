@@ -37,6 +37,14 @@ const deriveOverviewFromSummaryData = (
     return undefined;
 };
 
+const persistedSpeakerLabel = (segment: TranscriptSegment): string => {
+    if (segment.speakerLabel?.trim()) return segment.speakerLabel.trim();
+    if (segment.speaker === 'user') return 'You';
+    if (segment.speaker === 'assistant') return 'Assistant';
+    if (segment.speaker === 'interviewer') return 'speaker_1';
+    return segment.speaker;
+};
+
 export class MeetingPersistence {
     private session: SessionTracker;
     private llmHelper: LLMHelper;
@@ -67,7 +75,10 @@ export class MeetingPersistence {
         const { ModesManager } = require('./services/ModesManager');
         const modeSnapshot: ActiveModeSnapshot | null = ModesManager.getInstance().getActiveModeSnapshot();
         const snapshot = {
-            transcript: [...this.session.getFullTranscript()],
+            transcript: this.session.getFullTranscript().map((segment) => ({
+                ...segment,
+                speaker: persistedSpeakerLabel(segment),
+            })),
             usage: [...this.session.getFullUsage()],
             startTime: this.session.getSessionStartTime(),
             durationMs: durationMs,

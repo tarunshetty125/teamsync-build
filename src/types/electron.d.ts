@@ -215,6 +215,8 @@ export interface ElectronAPI {
   generateRecap: (requestId?: string) => Promise<{ summary: string | null }>
   submitManualQuestion: (question: string, requestId?: string) => Promise<{ answer: string | null; question: string }>
   getIntelligenceContext: () => Promise<{ context: string; lastAssistantMessage: string | null; activeMode: string }>
+  getBenchmarkSummary: () => Promise<any>
+  getRecentBenchmarks: (limit?: number) => Promise<any[]>
   resetIntelligence: () => Promise<{ success: boolean; error?: string }>
   cancelIntelligenceRequest: () => Promise<{ success: boolean; error?: string }>
   cancelIntelligenceByRequest: (requestId: string) => Promise<{ success: boolean; error?: string }>

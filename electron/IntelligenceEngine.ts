@@ -55,6 +55,7 @@ import { evaluateResponseQuality, isQualityAcceptable, getMostCriticalIssue } fr
 import type { QualityEvaluationResult } from './intelligence/evaluation';
 import { compileTinyPrompt } from './intelligence/TinyPromptCompiler';
 import { adaptPromptBudget } from './intelligence/AdaptivePromptBudgeter';
+import { BenchmarkManager, countHallucinationIndicators, hasConfidenceSignal } from './intelligence/BenchmarkManager';
 import { ModesManager } from './services/ModesManager';
 import type { ModeTemplateId } from '../src/lib/modes/types';
 
@@ -514,6 +515,10 @@ export class IntelligenceEngine extends EventEmitter {
                 let strategy: ResponseStrategy | null = null;
                 let reasoningPlan: ReasoningPlan | undefined;
                 let maxPromptTokens = MAX_ACTION_PROMPT_TOKENS;
+                let promptBeforeTokens = 0;
+                let promptAfterTokens = 0;
+                let llmStartedAt: number | null = null;
+                let qualityScore: number | null = null;
                 const activeTemplateType = this.getActiveModeTemplateType();
 
                 try {
@@ -653,6 +658,8 @@ export class IntelligenceEngine extends EventEmitter {
                     // ──── End Brain Layer Injection ────
 
                     const preTinyPrompt = contextLayers.promptObject;
+                    const preTinySerialized = serializePromptObject(preTinyPrompt);
+                    promptBeforeTokens = this.session.estimateTokenCount(preTinySerialized.finalPrompt);
                     const tinyPrompt = await compileTinyPrompt({
                         prompt: preTinyPrompt,
                         activeTemplateType,
@@ -677,6 +684,7 @@ export class IntelligenceEngine extends EventEmitter {
                     validatePromptObject(budgeted.prompt, { maxTokens: maxPromptTokens });
                     const serializedPrompt = serializePromptObject(budgeted.prompt);
                     inputTokens = this.session.estimateTokenCount(serializedPrompt.finalPrompt);
+                    promptAfterTokens = inputTokens;
 
                     logPrompt({
                         intent: params.intent,
@@ -735,6 +743,7 @@ export class IntelligenceEngine extends EventEmitter {
                     }
 
                     const primaryDirect = contextLayers.directResponse?.trim();
+                    llmStartedAt = primaryDirect ? null : Date.now();
                     const executionResult = primaryDirect
                         ? {
                             content: primaryDirect,
@@ -788,6 +797,7 @@ export class IntelligenceEngine extends EventEmitter {
                             generatedResponse: finalContent,
                             reasoningPlan: reasoningPlan,
                         });
+                        qualityScore = qualityResult.score;
                         if (!isQualityAcceptable(qualityResult)) {
                             const worst = getMostCriticalIssue(qualityResult);
                             console.warn(`[QualityEvaluator] Below threshold: score=${qualityResult.score} issue=${worst?.ruleId ?? 'unknown'} (${worst?.description ?? ''})`);
@@ -823,6 +833,24 @@ export class IntelligenceEngine extends EventEmitter {
                         profilePolicy: contextLayers.profilePolicy,
                         transcriptStrategy: contextLayers.transcriptStrategy,
                         requestId: activeRequestId,
+                    });
+                    const finalValidation = validateActionOutput(budgeted.prompt.intent, budgeted.prompt.mode, finalContent);
+                    this.recordBenchmark({
+                        activeTemplateType,
+                        sessionMode,
+                        intent: params.intent,
+                        promptBeforeTokens,
+                        promptAfterTokens,
+                        inputTokens,
+                        content: finalContent,
+                        cacheHit: false,
+                        fallbackUsed: executionResult.fallbackUsed,
+                        retryCount: executionResult.retryCount,
+                        actionStartedAt,
+                        llmStartedAt,
+                        structuredOutputCompliant: finalValidation.valid,
+                        qualityScore,
+                        hasImages: Boolean(params.imagePaths?.length),
                     });
                     this.safeEmitAction(signal, activeRequestId, generationId, 'action_result', {
                         intent: params.intent,
@@ -866,6 +894,23 @@ export class IntelligenceEngine extends EventEmitter {
                         profilePolicy: contextLayers?.profilePolicy ?? 'never',
                         transcriptStrategy: contextLayers?.transcriptStrategy ?? 'rolling_window',
                         requestId: activeRequestId,
+                    });
+                    this.recordBenchmark({
+                        activeTemplateType,
+                        sessionMode,
+                        intent: params.intent,
+                        promptBeforeTokens,
+                        promptAfterTokens,
+                        inputTokens,
+                        content: safeFallback,
+                        cacheHit: false,
+                        fallbackUsed: true,
+                        retryCount: 0,
+                        actionStartedAt,
+                        llmStartedAt,
+                        structuredOutputCompliant: false,
+                        qualityScore,
+                        hasImages: Boolean(params.imagePaths?.length),
                     });
                     this.safeEmitAction(signal, activeRequestId, generationId, 'action_result', {
                         intent: params.intent,
@@ -1229,6 +1274,56 @@ export class IntelligenceEngine extends EventEmitter {
             timestamp: Date.now(),
             question,
             answer,
+        });
+    }
+
+    private recordBenchmark(args: {
+        activeTemplateType: ModeTemplateId | null;
+        sessionMode: UserControlledMode;
+        intent: UnifiedActionIntent;
+        promptBeforeTokens: number;
+        promptAfterTokens: number;
+        inputTokens: number;
+        content: string;
+        cacheHit: boolean;
+        fallbackUsed: boolean;
+        retryCount: number;
+        actionStartedAt: number;
+        llmStartedAt: number | null;
+        structuredOutputCompliant: boolean;
+        qualityScore: number | null;
+        hasImages: boolean;
+    }): void {
+        if (!args.llmStartedAt) return;
+
+        const promptBeforeTokens = Math.max(args.promptBeforeTokens, args.promptAfterTokens, args.inputTokens);
+        const promptAfterTokens = Math.max(0, args.inputTokens || args.promptAfterTokens);
+        const compressionRatio = promptBeforeTokens > 0
+            ? Math.max(0, (1 - (promptAfterTokens / promptBeforeTokens)) * 100)
+            : 0;
+
+        BenchmarkManager.getInstance().record({
+            id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            timestamp: Date.now(),
+            model: this.llmHelper.getCurrentModel(),
+            provider: this.llmHelper.getCurrentProvider(),
+            mode: args.activeTemplateType ?? args.sessionMode,
+            intent: args.intent,
+            latencyMs: Math.max(0, Date.now() - args.llmStartedAt),
+            totalLatencyMs: Math.max(0, Date.now() - args.actionStartedAt),
+            promptBeforeTokens,
+            promptAfterTokens,
+            compressionRatio,
+            inputTokens: promptAfterTokens,
+            outputTokens: this.session.estimateTokenCount(args.content),
+            responseLength: args.content.length,
+            cacheHit: args.cacheHit,
+            fallbackUsed: args.fallbackUsed,
+            retryCount: args.retryCount,
+            confidenceSignalPresent: hasConfidenceSignal(args.content),
+            structuredOutputCompliant: args.structuredOutputCompliant,
+            hallucinationIndicatorCount: countHallucinationIndicators(args.content, { hasImages: args.hasImages }),
+            qualityScore: args.qualityScore,
         });
     }
 

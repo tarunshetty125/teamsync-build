@@ -8,6 +8,8 @@ import { isVerboseLogging } from './verboseLog';
 export interface TranscriptSegment {
     marker?: string;
     speaker: string;
+    speakerId?: string;
+    speakerLabel?: string;
     text: string;
     timestamp: number;
     final: boolean;
@@ -24,6 +26,7 @@ export interface SuggestionTrigger {
 // Context item matching Swift ContextManager structure
 export interface ContextItem {
     role: 'interviewer' | 'user' | 'assistant';
+    speakerLabel?: string;
     text: string;
     timestamp: number;
 }
@@ -246,6 +249,7 @@ export class SessionTracker {
 
         this.contextItems.push({
             role,
+            speakerLabel: segment.speakerLabel,
             text,
             timestamp: segment.timestamp
         });
@@ -420,9 +424,9 @@ export class SessionTracker {
 
         for (let i = items.length - 1; i >= 0; i--) {
             const item = items[i];
-            const label = item.role === 'interviewer' ? 'INTERVIEWER' :
-                item.role === 'user' ? 'ME' :
-                    'ASSISTANT (PREVIOUS SUGGESTION)';
+            const label = item.role === 'assistant'
+                ? 'ASSISTANT (PREVIOUS SUGGESTION)'
+                : this.contextSpeakerLabel(item);
             const textStr = `[${label}]: ${item.text}`;
             const t = this.estimateTokens(textStr);
 
@@ -486,8 +490,20 @@ export class SessionTracker {
                 : 'ASSISTANT';
     }
 
-    private transcriptSpeakerLabel(speaker: TranscriptSegment['speaker']): string {
-        const role = this.mapSpeakerToRole(speaker);
+    private contextSpeakerLabel(item: ContextItem): string {
+        if (item.speakerLabel?.trim()) {
+            return item.speakerLabel.trim();
+        }
+
+        return this.contextRoleLabel(item.role);
+    }
+
+    private transcriptSpeakerLabel(segment: TranscriptSegment): string {
+        if (segment.speakerLabel?.trim()) {
+            return segment.speakerLabel.trim();
+        }
+
+        const role = this.mapSpeakerToRole(segment.speaker);
         return role === 'interviewer' ? 'INTERVIEWER'
             : role === 'user' ? 'ME'
                 : 'ASSISTANT';
@@ -519,7 +535,7 @@ export class SessionTracker {
 
     getCappedFullTranscript(maxTokens: number = SessionTracker.DEFAULT_FULL_TRANSCRIPT_TOKENS): string {
         const transcriptLines = this.fullTranscript.map((segment) => {
-            return `[${this.transcriptSpeakerLabel(segment.speaker)}]: ${segment.text}`;
+            return `[${this.transcriptSpeakerLabel(segment)}]: ${segment.text}`;
         });
         const recentTranscript = this.capFormattedLines(transcriptLines, maxTokens);
 
@@ -583,7 +599,7 @@ export class SessionTracker {
             }
         }
 
-        const formatted = selected.map((item) => `[${this.contextRoleLabel(item.role)}]: ${item.text}`);
+        const formatted = selected.map((item) => `[${this.contextSpeakerLabel(item)}]: ${item.text}`);
         return this.capFormattedLines(formatted, maxTokens);
     }
 
@@ -741,9 +757,7 @@ export class SessionTracker {
             const summarizeCount = 500;
             const oldEntries = this.fullTranscript.slice(0, summarizeCount);
             const summaryInput = oldEntries.map(seg => {
-                const role = this.mapSpeakerToRole(seg.speaker);
-                const label = role === 'interviewer' ? 'INTERVIEWER' :
-                    role === 'user' ? 'ME' : 'ASSISTANT';
+                const label = this.transcriptSpeakerLabel(seg);
                 return `[${label}]: ${seg.text}`;
             }).join('\n');
 

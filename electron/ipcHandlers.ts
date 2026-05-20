@@ -4,6 +4,7 @@ import { app, ipcMain, shell, dialog, desktopCapturer, systemPreferences, Browse
 import { AppState } from "./main"
 import { GEMINI_FLASH_MODEL } from "./IntelligenceManager"
 import { DatabaseManager } from "./db/DatabaseManager"; // Import Database Manager
+import { BenchmarkManager } from "./intelligence/BenchmarkManager";
 import * as os from "os";
 import * as path from "path";
 import * as fs from "fs";
@@ -2891,6 +2892,14 @@ export function initializeIpcHandlers(appState: AppState): void {
     } catch (error: any) {
       throw error;
     }
+  });
+
+  safeHandle("benchmark:get-summary", async () => {
+    return BenchmarkManager.getInstance().getSummary();
+  });
+
+  safeHandle("benchmark:get-recent", async (_, limit: number = 20) => {
+    return BenchmarkManager.getInstance().getRecent(limit);
   });
 
   // Reset intelligence state
