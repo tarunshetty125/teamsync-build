@@ -455,8 +455,15 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
             analytics.trackCommandExecuted(modeId === calendarRecommendation.recommendedMode ? 'calendar_apply_mode' : 'calendar_override_mode');
             await window.electronAPI?.calendarIntelligenceDismiss?.(calendarRecommendation.eventId);
+
+            // Sync the selected mode in ModesSettings so it highlights the newly active mode
+            await window.electronAPI?.modesSetSelected?.(targetMode.id).catch(() => {});
+
             setCalendarRecommendation(null);
             setIsCalendarRecommendationOpen(false);
+
+            // Open the Modes panel so the user can see the mode is now active
+            onOpenModes?.();
         } catch (error) {
             console.error('Failed to apply calendar recommendation:', error);
             setCalendarRecommendationError(error instanceof Error ? error.message : 'Unable to apply the recommended mode.');
