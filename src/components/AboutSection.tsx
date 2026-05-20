@@ -61,10 +61,83 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                 <h3 className="text-lg font-bold text-text-primary mb-1">About TeamSync</h3>
                 <p className="text-sm text-text-secondary">Designed to be invisible, intelligent, and trusted.</p>
             </div>
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.6 (Upcoming)</h4>
+                <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden mb-6">
+                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
+                                <LayoutGrid size={20} />
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Advanced Modes Manager</h5>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    Seven specialized AI personas — Technical Interview, Sales, Recruiting, Team Meet, Lecture, Looking for Work, and General — powered by a config-driven Modes Manager. Every mode injects tailored intelligence, structured notes, reference files, and hidden optimized prompts in real time. Built-in templates are reusable while remaining fully customizable.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-fuchsia-500/10 flex items-center justify-center text-fuchsia-400 shrink-0">
+                                <Sparkles size={20} />
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Domain Intelligence Brains</h5>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    Sales, Recruiting, and Team Meet now use specialized intelligence instead of generic prompting. Sales detects objections, pricing pressure, urgency, and buying signals. Recruiting evaluates ownership, STAR signals, measurable impact, and red flags. Team Meet extracts decisions, owners, blockers, deadlines, and action items with confidence scoring.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
+                                <Shield size={20} />
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Real-Time Pro License Sync</h5>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    Pro feature access updates instantly — Modes, Profile Intelligence, and premium capabilities react immediately to license activation or expiration with no restart required. Active protected modes are safely cleared when access changes.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                                <Zap size={20} />
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Benchmarking & Performance Telemetry</h5>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    A new local-only benchmarking layer measures latency, prompt compression, token estimates, and model performance in real time. TinyPrompt and Adaptive Budgeting improvements are now measurable through privacy-safe local telemetry.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-3 bg-bg-card/50">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400 shrink-0">
+                                <Database size={20} />
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Enhanced Notes & Memory</h5>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    Meeting notes are now more context-aware with improved handling of empty sections, cleaner templates, and reduced placeholder leakage. Mode-specific meeting intelligence improves summaries and note quality across interviews, sales, and meetings.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
 
             {/* What's New Section */}
             <div>
-                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.5 (Upcoming)</h4>
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.5</h4>
                 <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden">
                     <div className="p-3 border-b border-border-subtle bg-bg-card/50">
                         <div className="flex items-start gap-4">

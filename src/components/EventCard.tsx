@@ -103,7 +103,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, changeType = null, isNextU
 
           <h4 className={`text-sm font-semibold truncate ${isLight ? "text-slate-900" : "text-white"}`}>{event.summary}</h4>
           {event.description && (
-            <p className={`text-xs mt-1 line-clamp-2 ${isLight ? "text-slate-600" : "text-white/60"}`}>{event.description}</p>
+            <p className={`text-xs mt-1 line-clamp-2 whitespace-pre-line ${isLight ? "text-slate-600" : "text-white/60"}`}>{event.description}</p>
           )}
         </div>
 

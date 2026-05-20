@@ -256,9 +256,9 @@ const UpcomingEventsPanel: React.FC<UpcomingEventsPanelProps> = ({ events, onRef
 
                     {/* Description */}
                     {nextUp.description && (
-                      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:2,border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"8px 10px"}}>
                         <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.3)",textTransform:"uppercase"}}>Description</span>
-                        <p style={{fontSize:11,color:"rgba(255,255,255,0.6)",lineHeight:1.5,margin:0,display:"-webkit-box",WebkitLineClamp:4,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+                        <p style={{fontSize:11,color:"rgba(244,240,255,0.88)",lineHeight:1.5,margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
                           {nextUp.description}
                         </p>
                       </div>

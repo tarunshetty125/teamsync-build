@@ -46,6 +46,18 @@ function getMeetingLink(event: GoogleCalendarEventLike): string | undefined {
   return event.hangoutLink || event.conferenceData?.entryPoints?.[0]?.uri || event.link;
 }
 
+function normalizeDescription(description?: string): string | undefined {
+  if (!description) return undefined;
+
+  const text = description
+    .replace(/<br\s*\/?>(\r?\n)?/gi, "\n")
+    .replace(/<\/p>\s*<p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+
+  return text || undefined;
+}
+
 export function normalizeCalendarEvent(event: GoogleCalendarEventLike): NormalizedEvent | null {
   const startTime = (event.start && "dateTime" in event.start ? event.start.dateTime : undefined) || event.startTime;
   const endTime = (event.end && "dateTime" in event.end ? event.end.dateTime : undefined) || event.endTime;
@@ -57,7 +69,7 @@ export function normalizeCalendarEvent(event: GoogleCalendarEventLike): Normaliz
   return {
     id: event.id,
     summary,
-    description: event.description,
+    description: normalizeDescription(event.description),
     startTime,
     endTime,
     meetingLink,
