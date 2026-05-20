@@ -51,6 +51,7 @@ import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { getOverlayAppearance, OVERLAY_OPACITY_DEFAULT } from '../lib/overlayAppearance';
 import type { ModeTemplateId } from '../lib/modes/types';
+import { getTranscriptDisplayLabel } from '../utils/transcriptSpeakers';
 import {
     getOverlayQuickActions,
     getRecommendedOverlayAction,
@@ -911,6 +912,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     }, []);
 
     const [rollingTranscript, setRollingTranscript] = useState('');  // For interviewer rolling text bar
+    const [rollingTranscriptSpeakerLabel, setRollingTranscriptSpeakerLabel] = useState('');
     const finalizedTranscriptRef = useRef(''); // C6 Fix: Tracks finalized transcript separately from partials
     // Holds the merged interviewer turn (consecutive segments within a 15s gap).
     // Updated exclusively when transcript.final === true so interim partials never appear.
@@ -1529,6 +1531,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             setVoiceInput('');
             setIsProcessing(false);
             setRollingTranscript('');
+            setRollingTranscriptSpeakerLabel('');
             finalizedTranscriptRef.current = '';
             // Reset last-sentence pill so old question never leaks into new session
             setLastFinalSentence('');
@@ -1646,6 +1649,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                 transcript._sessionId !== activeSessionIdRef.current) {
                 return;
             }
+            const transcriptLabel = getTranscriptDisplayLabel(transcript);
             // When Answer button is active, capture USER transcripts for voice input
             // Use ref to avoid stale closure issue
             if (isRecordingRef.current && transcript.speaker === 'user') {
@@ -1676,6 +1680,8 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             if (transcript.speaker !== 'interviewer') {
                 return;  // Safety check for any other speaker types
             }
+
+            setRollingTranscriptSpeakerLabel(transcriptLabel);
 
             // Route to rolling transcript bar - accumulate text continuously
             setIsInterviewerSpeaking(!transcript.final);
@@ -3416,6 +3422,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                 <>
                                     <RollingTranscript
                                         text={showTranscript ? lastFinalSentence : ''}
+                                        speakerLabel={showTranscript ? rollingTranscriptSpeakerLabel : ''}
                                         isActive={isInterviewerSpeaking}
                                         aiHasResponded={lastResponseSentenceId === currentSentenceId && currentSentenceId > 0}
                                         surfaceStyle={showTranscript ? appearance.transcriptStyle : undefined}

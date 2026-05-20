@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { IoLogOutOutline } from "react-icons/io5"
 import { Dialog, DialogContent, DialogClose } from "../ui/dialog"
+import { getTranscriptDisplayLabel } from '../../utils/transcriptSpeakers'
 
 interface QueueCommandsProps {
   onTooltipVisibilityChange: (visible: boolean, height: number) => void
@@ -13,6 +14,8 @@ interface QueueCommandsProps {
 
 interface Transcript {
   speaker: string
+  speakerId?: string
+  speakerLabel?: string
   text: string
   final: boolean
 }
@@ -68,7 +71,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
     cleanupFns.push(window.electronAPI.onNativeAudioTranscript((transcript) => {
       console.log('[QueueCommands] Transcript:', transcript)
       setTranscripts(prev => [...prev.slice(-10), transcript]) // Keep last 10
-      setAudioResult(`[${transcript.speaker}] ${transcript.text}`)
+      setAudioResult(`[${getTranscriptDisplayLabel(transcript)}] ${transcript.text}`)
     }))
 
     // Suggestion events

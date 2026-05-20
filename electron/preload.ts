@@ -801,7 +801,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // Native Audio Service Events
-  onNativeAudioTranscript: (callback: (transcript: { speaker: string; text: string; final: boolean }) => void) => {
+  onNativeAudioTranscript: (callback: (transcript: { speaker: string; speakerId?: string; speakerLabel?: string; text: string; final: boolean; _sessionId?: string }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("native-audio-transcript", subscription)
     return () => {

@@ -12,6 +12,7 @@ interface ChannelStatus {
 interface RollingTranscriptProps {
     /** The LAST finalized sentence only (not the full cumulative text) */
     text: string;
+    speakerLabel?: string;
     isActive?: boolean;
     /**
      * True while the AI is still processing/streaming a response.
@@ -27,7 +28,7 @@ interface RollingTranscriptProps {
 }
 
 const RollingTranscript: React.FC<RollingTranscriptProps> = ({
-    text, isActive: _isActive = true, aiHasResponded = false, surfaceStyle: _surfaceStyle,
+    text, speakerLabel, isActive: _isActive = true, aiHasResponded = false, surfaceStyle: _surfaceStyle,
     interviewerChannel, microphoneChannel,
     onCopyDiagnostics
 }) => {
@@ -120,25 +121,32 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                 />
 
                                 {/* Sentence text */}
-                                {quoted ? (
-                                    <span
-                                        className="text-[13px] italic leading-snug overflow-hidden text-ellipsis whitespace-nowrap flex-1"
-                                        style={{
-                                            color: aiHasResponded
-                                                ? 'var(--overlay-text-muted)'
-                                                : 'var(--overlay-text-primary)',
-                                            transition: 'color 0.5s ease',
-                                            maxWidth: '100%',
-                                        }}
-                                        title={displayText}
-                                    >
-                                        {quoted}
-                                    </span>
-                                ) : (
-                                    <span className="text-[13px] italic leading-snug text-[var(--overlay-text-muted)] opacity-40">
-                                        Listening…
-                                    </span>
-                                )}
+                                <div className="flex min-w-0 flex-1 items-center gap-2">
+                                    {speakerLabel?.trim() ? (
+                                        <span className="inline-flex max-w-[40%] items-center rounded-full border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-text-primary)]/90">
+                                            {speakerLabel.trim()}
+                                        </span>
+                                    ) : null}
+                                    {quoted ? (
+                                        <span
+                                            className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] italic leading-snug"
+                                            style={{
+                                                color: aiHasResponded
+                                                    ? 'var(--overlay-text-muted)'
+                                                    : 'var(--overlay-text-primary)',
+                                                transition: 'color 0.5s ease',
+                                                maxWidth: '100%',
+                                            }}
+                                            title={displayText}
+                                        >
+                                            {quoted}
+                                        </span>
+                                    ) : (
+                                        <span className="text-[13px] italic leading-snug text-[var(--overlay-text-muted)] opacity-40">
+                                            Listening…
+                                        </span>
+                                    )}
+                                </div>
                             </motion.div>
                         </AnimatePresence>
                     )}

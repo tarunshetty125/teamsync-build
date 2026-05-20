@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { getTranscriptSpeakerLabel, isHiddenTranscriptSpeaker } from '../utils/transcriptSpeakers';
+import { getTranscriptDisplayLabel, isHiddenTranscriptSpeaker } from '../utils/transcriptSpeakers';
 
 const formatTime = (ms: number) => {
     const date = new Date(ms);
@@ -82,6 +82,8 @@ interface Meeting {
     };
     transcript?: Array<{
         speaker: string;
+        speakerId?: string;
+        speakerLabel?: string;
         text: string;
         timestamp: number;
     }>;
@@ -154,7 +156,7 @@ KEY POINTS:
 ${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'None'}
             `.trim();
         } else if (activeTab === 'transcript' && meeting.transcript) {
-            textToCopy = meeting.transcript.map(t => `[${formatTime(t.timestamp)}] ${getTranscriptSpeakerLabel(t.speaker)}: ${t.text}`).join('\n');
+            textToCopy = meeting.transcript.map(t => `[${formatTime(t.timestamp)}] ${getTranscriptDisplayLabel(t)}: ${t.text}`).join('\n');
         } else if (activeTab === 'usage' && meeting.usage) {
             textToCopy = meeting.usage.map(u => `Q: ${u.question || ''}\nA: ${u.answer || ''}`).join('\n\n');
         }
@@ -447,7 +449,7 @@ ${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'No
                                                     <div key={i} className="meeting-glass-transcript-row">
                                                         <div className="mb-2 flex items-center gap-2">
                                                             <span className="text-[12px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
-                                                                {getTranscriptSpeakerLabel(entry.speaker)}
+                                                                {getTranscriptDisplayLabel(entry)}
                                                             </span>
                                                             <span className="text-[12px] font-medium text-text-tertiary">{entry.timestamp ? formatTime(entry.timestamp) : '0:00'}</span>
                                                         </div>

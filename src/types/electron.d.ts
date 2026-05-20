@@ -167,7 +167,7 @@ export interface ElectronAPI {
   onCredentialsChanged: (callback: () => void) => () => void
 
   // Native Audio Service Events
-  onNativeAudioTranscript: (callback: (transcript: { speaker: string; text: string; final: boolean; _sessionId?: string }) => void) => () => void
+  onNativeAudioTranscript: (callback: (transcript: { speaker: string; speakerId?: string; speakerLabel?: string; text: string; final: boolean; _sessionId?: string }) => void) => () => void
   onNativeAudioSuggestion: (callback: (suggestion: { context: string; lastQuestion: string; confidence: number }) => void) => () => void
   onNativeAudioConnected: (callback: () => void) => () => void
   onNativeAudioDisconnected: (callback: () => void) => () => void

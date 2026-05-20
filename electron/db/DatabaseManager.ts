@@ -22,6 +22,8 @@ export interface Meeting {
     };
     transcript?: Array<{
         speaker: string;
+        speakerId?: string;
+        speakerLabel?: string;
         text: string;
         timestamp: number;
     }>;
@@ -218,6 +220,8 @@ export class DatabaseManager {
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     meeting_id TEXT,
                     speaker TEXT,
+                    speaker_id TEXT,
+                    speaker_label TEXT,
                     content TEXT,
                     timestamp_ms INTEGER,
                     FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
@@ -659,6 +663,19 @@ export class DatabaseManager {
             this.db.pragma('user_version = 14');
         }
 
+        // Version 14 → 15: Preserve diarization metadata on transcript rows.
+        if (version < 15) {
+            console.log('[DatabaseManager] Applying migration v14 → v15: Add transcript speaker metadata columns');
+            const columnsToAdd = [
+                'ALTER TABLE transcripts ADD COLUMN speaker_id TEXT',
+                'ALTER TABLE transcripts ADD COLUMN speaker_label TEXT',
+            ];
+            for (const sql of columnsToAdd) {
+                try { this.db.exec(sql); } catch (e) { /* Column already exists or table already upgraded */ }
+            }
+            this.db.pragma('user_version = 15');
+        }
+
         console.log('[DatabaseManager] Migrations completed.');
     }
 
@@ -1049,8 +1066,8 @@ export class DatabaseManager {
         `);
 
         const insertTranscript = this.db.prepare(`
-            INSERT INTO transcripts (meeting_id, speaker, content, timestamp_ms)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO transcripts (meeting_id, speaker, speaker_id, speaker_label, content, timestamp_ms)
+            VALUES (?, ?, ?, ?, ?, ?)
         `);
 
         const insertInteraction = this.db.prepare(`
@@ -1084,9 +1101,14 @@ export class DatabaseManager {
             // 3. Insert Transcript
             if (meeting.transcript) {
                 for (const segment of meeting.transcript) {
+                    const speakerLabel = segment.speakerLabel?.trim() || segment.speaker?.trim() || null;
+                    const speakerId = segment.speakerId?.trim() || null;
+                    const speakerValue = speakerLabel || segment.speaker;
                     insertTranscript.run(
                         meeting.id,
-                        segment.speaker,
+                        speakerValue,
+                        speakerId,
+                        speakerLabel,
                         segment.text,
                         segment.timestamp
                     );
@@ -1247,6 +1269,8 @@ export class DatabaseManager {
 
         const transcript = transcriptRows.map(row => ({
             speaker: row.speaker,
+            speakerId: row.speaker_id || undefined,
+            speakerLabel: row.speaker_label || row.speaker || undefined,
             text: row.content,
             timestamp: row.timestamp_ms
         }));

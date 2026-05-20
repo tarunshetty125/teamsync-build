@@ -11,7 +11,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { getTranscriptSpeakerLabel } from '../utils/transcriptSpeakers';
+import { getTranscriptDisplayLabel } from '../utils/transcriptSpeakers';
 
 // ============================================
 // Types 
@@ -30,7 +30,7 @@ interface MeetingContext {
     summary?: string;
     keyPoints?: string[];
     actionItems?: string[];
-    transcript?: Array<{ speaker: string; text: string; timestamp: number }>;
+    transcript?: Array<{ speaker: string; speakerId?: string; speakerLabel?: string; text: string; timestamp: number }>;
 }
 
 interface MeetingChatOverlayProps {
@@ -268,7 +268,7 @@ const MeetingChatOverlay: React.FC<MeetingChatOverlayProps> = ({
         if (meetingContext.transcript?.length) {
             const recentTranscript = meetingContext.transcript.slice(-20);
             const transcriptText = recentTranscript
-                .map(t => `[${getTranscriptSpeakerLabel(t.speaker)}]: ${t.text}`)
+                .map(t => `[${getTranscriptDisplayLabel(t)}]: ${t.text}`)
                 .join('\n');
             parts.push(`\nRECENT TRANSCRIPT:\n${transcriptText}`);
         }
@@ -525,6 +525,25 @@ ${contextString}`;
 
                         {/* Messages area - scrollable */}
                         <div className="flex-1 overflow-y-auto px-6 py-4 pb-32 custom-scrollbar">
+                            {meetingContext.transcript?.length ? (
+                                <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">
+                                        Recent transcript
+                                    </div>
+                                    <div className="space-y-2">
+                                        {meetingContext.transcript.slice(-4).map((entry, index) => (
+                                            <div key={`${entry.timestamp}-${index}`} className="text-[13px] leading-relaxed text-text-secondary">
+                                                <span className="font-semibold text-text-primary">
+                                                    {getTranscriptDisplayLabel(entry)}
+                                                </span>
+                                                <span className="mx-1 text-text-tertiary">:</span>
+                                                <span>{entry.text}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : null}
+
                             {messages.map((msg) => (
                                 msg.role === 'user'
                                     ? <UserMessage key={msg.id} content={msg.content} />
