@@ -12,6 +12,7 @@ import { RAGRetriever } from './RAGRetriever';
 import { LiveRAGIndexer } from './LiveRAGIndexer';
 import { buildRAGPrompt, NO_CONTEXT_FALLBACK, NO_GLOBAL_CONTEXT_FALLBACK } from './prompts';
 import type { QueryIntent } from './RAGRetriever';
+import { getTranscriptDisplayLabel } from '../../src/utils/transcriptSpeakers';
 
 export interface RAGManagerConfig {
     db: Database.Database;
@@ -413,7 +414,7 @@ export class RAGManager {
 
             // Convert to RawSegment format
             const segments = meeting.transcript.map((t: any) => ({
-                speaker: t.speaker,
+                speaker: getTranscriptDisplayLabel(t),
                 text: t.text,
                 timestamp: t.timestamp
             }));

@@ -453,12 +453,25 @@ export class IntelligenceEngine extends EventEmitter {
         analysis: QuestionAnalysis,
         intent: UnifiedActionIntent,
     ): BrainId | undefined {
-        if (!activeTemplateType || activeTemplateType === 'general' || activeTemplateType === 'technical-interview' || intent === 'screen_scan') {
+        if (!activeTemplateType || activeTemplateType === 'general' || intent === 'screen_scan') {
             return undefined;
         }
 
         if (activeTemplateType === 'looking-for-work' && (analysis.category === 'coding' || analysis.category === 'system_design')) {
             return undefined;
+        }
+
+        if (activeTemplateType === 'technical-interview') {
+            switch (analysis.category) {
+                case 'system_design':
+                    return 'system_design';
+                case 'behavioral':
+                    return 'behavioral';
+                case 'resume_jd':
+                    return 'resume';
+                default:
+                    return 'coding';
+            }
         }
 
         switch (activeTemplateType) {
@@ -1579,6 +1592,8 @@ export class IntelligenceEngine extends EventEmitter {
                     console.log(`[IntelligenceEngine] Injecting interim transcript: "${lastInterim.text.substring(0, 50)}..."`);
                     contextItems.push({
                         role: 'interviewer',
+                        speakerId: lastInterim.speakerId,
+                        speakerLabel: lastInterim.speakerLabel,
                         text: lastInterim.text,
                         timestamp: lastInterim.timestamp
                     });
@@ -1587,6 +1602,8 @@ export class IntelligenceEngine extends EventEmitter {
 
             const transcriptTurns = contextItems.map(item => ({
                 role: item.role,
+                speakerId: item.speakerId,
+                speakerLabel: item.speakerLabel,
                 text: item.text,
                 timestamp: item.timestamp
             }));

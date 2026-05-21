@@ -4,6 +4,8 @@
 
 export interface TranscriptTurn {
     role: 'interviewer' | 'user' | 'assistant';
+    speakerId?: string;
+    speakerLabel?: string;
     text: string;
     timestamp: number;
 }
@@ -120,6 +122,8 @@ export function cleanTranscript(turns: TranscriptTurn[]): TranscriptTurn[] {
         if (isMeaningfulTurn(turn, cleanedText)) {
             cleaned.push({
                 role: turn.role,
+                speakerId: turn.speakerId,
+                speakerLabel: turn.speakerLabel,
                 text: cleanedText,
                 timestamp: turn.timestamp
             });
@@ -168,8 +172,9 @@ export function sparsifyTranscript(
  */
 export function formatTranscriptForLLM(turns: TranscriptTurn[]): string {
     return turns.map(turn => {
-        const label = turn.role === 'interviewer' ? 'INTERVIEWER' :
-            turn.role === 'user' ? 'ME' : 'ASSISTANT';
+        const label = turn.speakerLabel?.trim()
+            || (turn.role === 'interviewer' ? 'INTERVIEWER'
+                : turn.role === 'user' ? 'ME' : 'ASSISTANT');
         return `[${label}]: ${turn.text}`;
     }).join('\n');
 }

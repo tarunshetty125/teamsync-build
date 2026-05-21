@@ -26,6 +26,7 @@ export interface SuggestionTrigger {
 // Context item matching Swift ContextManager structure
 export interface ContextItem {
     role: 'interviewer' | 'user' | 'assistant';
+    speakerId?: string;
     speakerLabel?: string;
     text: string;
     timestamp: number;
@@ -225,7 +226,10 @@ export class SessionTracker {
         // 2. Timestamp bucketing to 10ms (combats precision differences between STT APIs)
         const ts = Math.round(segment.timestamp / 10) * 10;
         
-        const hash = `${segment.speaker}|${norm}|${ts}`;
+        const speakerIdentity = segment.speakerId?.trim()
+            || segment.speakerLabel?.trim()
+            || segment.speaker;
+        const hash = `${segment.speaker}|${speakerIdentity}|${norm}|${ts}`;
         if (this.lastTranscriptHash === hash) {
             return null; // Duplicate dropped silently
         }
@@ -241,7 +245,7 @@ export class SessionTracker {
         // Deduplicate: check if this exact item already exists
         const lastItem = this.contextItems[this.contextItems.length - 1];
         if (lastItem &&
-            lastItem.role === role &&
+            this.isSameContextSpeaker(lastItem, segment, role) &&
             Math.abs(lastItem.timestamp - segment.timestamp) < 500 &&
             lastItem.text === text) {
             return null;
@@ -249,6 +253,7 @@ export class SessionTracker {
 
         this.contextItems.push({
             role,
+            speakerId: segment.speakerId,
             speakerLabel: segment.speakerLabel,
             text,
             timestamp: segment.timestamp
@@ -593,6 +598,8 @@ export class SessionTracker {
             if (!isDuplicate) {
                 selected.push({
                     role: 'interviewer',
+                    speakerId: this.lastInterimInterviewer.speakerId,
+                    speakerLabel: this.lastInterimInterviewer.speakerLabel,
                     text: this.lastInterimInterviewer.text.trim(),
                     timestamp: this.lastInterimInterviewer.timestamp,
                 });
@@ -732,6 +739,24 @@ export class SessionTracker {
         if (speaker === 'user') return 'user';
         if (speaker === 'assistant') return 'assistant';
         return 'interviewer'; // system audio = interviewer
+    }
+
+    private isSameContextSpeaker(
+        item: ContextItem,
+        segment: TranscriptSegment,
+        role: 'interviewer' | 'user' | 'assistant'
+    ): boolean {
+        if (item.role !== role) return false;
+
+        if (item.speakerId?.trim() && segment.speakerId?.trim()) {
+            return item.speakerId.trim() === segment.speakerId.trim();
+        }
+
+        if (item.speakerLabel?.trim() && segment.speakerLabel?.trim()) {
+            return item.speakerLabel.trim() === segment.speakerLabel.trim();
+        }
+
+        return true;
     }
 
     private evictOldEntries(): void {

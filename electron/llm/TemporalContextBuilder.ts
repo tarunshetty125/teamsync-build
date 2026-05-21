@@ -10,6 +10,8 @@ export interface AssistantResponse {
 
 export interface ContextItem {
     role: 'interviewer' | 'user' | 'assistant';
+    speakerId?: string;
+    speakerLabel?: string;
     text: string;
     timestamp: number;
 }
@@ -139,13 +141,14 @@ function formatPreviousResponses(responses: AssistantResponse[], maxResponses: n
  */
 function formatTranscript(items: ContextItem[]): string {
     return items.map(item => {
+        const explicitLabel = item.speakerLabel?.trim();
         if (item.role === 'interviewer') {
             // Weight interviewer turns more strongly - they define intent
-            return `[INTERVIEWER – IMPORTANT]: ${item.text}`;
+            return `[${explicitLabel || 'INTERVIEWER'} – IMPORTANT]: ${item.text}`;
         } else if (item.role === 'user') {
-            return `[ME]: ${item.text}`;
+            return `[${explicitLabel || 'ME'}]: ${item.text}`;
         } else {
-            return `[ASSISTANT (MY PREVIOUS RESPONSE)]: ${item.text}`;
+            return `[${explicitLabel || 'ASSISTANT (MY PREVIOUS RESPONSE)'}]: ${item.text}`;
         }
     }).join('\n');
 }

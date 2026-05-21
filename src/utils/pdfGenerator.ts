@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { getTranscriptDisplayLabel } from './transcriptSpeakers';
 
 interface Meeting {
     id: string;
@@ -93,7 +94,7 @@ export const generateMeetingPDF = (meeting: Meeting) => {
         meeting.transcript.forEach(entry => {
             const timeStr = new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             // Speaker line
-            addText(`${entry.speaker} [${timeStr}]`, 10, true, '#444444');
+            addText(`${getTranscriptDisplayLabel(entry)} [${timeStr}]`, 10, true, '#444444');
             // Text line
             addText(entry.text, 10, false, '#333333');
             addVerticalSpace(2);

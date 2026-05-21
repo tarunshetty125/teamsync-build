@@ -129,6 +129,7 @@ import { RAGManager } from "./rag/RAGManager"
 import { DatabaseManager } from "./db/DatabaseManager"
 import { warmupIntentClassifier } from "./llm"
 import { ModesManager } from "./services/ModesManager"
+import { getTranscriptDisplayLabel } from "../src/utils/transcriptSpeakers"
 
 type STTProvider = SttSupervisor;
 
@@ -2072,7 +2073,7 @@ export class AppState {
 
       // Convert transcript to RAG format
       const segments = meeting.transcript.map(t => ({
-        speaker: t.speaker,
+        speaker: getTranscriptDisplayLabel(t),
         text: t.text,
         timestamp: t.timestamp
       }));

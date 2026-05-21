@@ -6,10 +6,21 @@ export interface TranscriptSpeakerLike {
 
 const normalize = (value: string | null | undefined): string => (value || '').trim();
 
-const isRoleToken = (value: string): boolean => {
-    const lower = value.toLowerCase();
+export function isTranscriptRoleToken(value: string | null | undefined): boolean {
+    const normalized = normalize(value);
+    if (!normalized) return false;
+
+    const lower = normalized.toLowerCase();
     return lower === 'user' || lower === 'interviewer' || lower === 'assistant' || lower === 'ai' || lower === 'model' || lower === 'system';
-};
+}
+
+export function isCanonicalTranscriptSpeaker(value: string | null | undefined): boolean {
+    const normalized = normalize(value);
+    if (!normalized) return false;
+
+    const lower = normalized.toLowerCase();
+    return lower === 'user' || lower === 'interviewer' || lower === 'assistant';
+}
 
 export function getTranscriptSpeakerLabel(speaker: string | null | undefined): string {
     const normalized = normalize(speaker);
@@ -26,17 +37,18 @@ export function getTranscriptSpeakerLabel(speaker: string | null | undefined): s
 
 export function getTranscriptDisplayLabel(transcript: string | TranscriptSpeakerLike | null | undefined): string {
     if (typeof transcript === 'string' || transcript == null) {
-        return getTranscriptSpeakerLabel(transcript ?? undefined);
+        const speaker = typeof transcript === 'string' ? transcript : undefined;
+        return getTranscriptSpeakerLabel(speaker);
     }
 
     const speakerLabel = normalize(transcript.speakerLabel);
     if (speakerLabel) {
-        return isRoleToken(speakerLabel) ? getTranscriptSpeakerLabel(speakerLabel) : speakerLabel;
+        return isTranscriptRoleToken(speakerLabel) ? getTranscriptSpeakerLabel(speakerLabel) : speakerLabel;
     }
 
     const speaker = normalize(transcript.speaker);
     if (speaker) {
-        return isRoleToken(speaker) ? getTranscriptSpeakerLabel(speaker) : speaker;
+        return isTranscriptRoleToken(speaker) ? getTranscriptSpeakerLabel(speaker) : speaker;
     }
 
     const speakerId = normalize(transcript.speakerId);

@@ -8,6 +8,7 @@ import { DatabaseManager, Meeting } from './db/DatabaseManager';
 import { GROQ_TITLE_PROMPT, GROQ_SUMMARY_JSON_PROMPT } from './llm';
 import { sanitizeSummaryOutput, type SummaryOutputData } from './SummaryOutputValidator';
 import type { ActiveModeSnapshot } from './services/ModesManager';
+import { getTranscriptDisplayLabel } from '../src/utils/transcriptSpeakers';
 const crypto = require('crypto');
 
 const deriveOverviewFromSummaryData = (
@@ -37,13 +38,13 @@ const deriveOverviewFromSummaryData = (
     return undefined;
 };
 
-const persistedSpeakerLabel = (segment: TranscriptSegment): string => {
-    if (segment.speakerLabel?.trim()) return segment.speakerLabel.trim();
-    if (segment.speaker === 'user') return 'You';
-    if (segment.speaker === 'assistant') return 'Assistant';
-    if (segment.speaker === 'interviewer') return 'speaker_1';
-    return segment.speaker;
-};
+export const getPersistedTranscriptSpeakerLabel = (segment: Pick<TranscriptSegment, 'speaker' | 'speakerId' | 'speakerLabel'>): string =>
+    getTranscriptDisplayLabel(segment);
+
+export const normalizeTranscriptSegmentForPersistence = (segment: TranscriptSegment): TranscriptSegment => ({
+    ...segment,
+    speakerLabel: getPersistedTranscriptSpeakerLabel(segment),
+});
 
 export class MeetingPersistence {
     private session: SessionTracker;
@@ -75,10 +76,7 @@ export class MeetingPersistence {
         const { ModesManager } = require('./services/ModesManager');
         const modeSnapshot: ActiveModeSnapshot | null = ModesManager.getInstance().getActiveModeSnapshot();
         const snapshot = {
-            transcript: this.session.getFullTranscript().map((segment) => ({
-                ...segment,
-                speaker: persistedSpeakerLabel(segment),
-            })),
+            transcript: this.session.getFullTranscript().map((segment) => normalizeTranscriptSegmentForPersistence(segment)),
             usage: [...this.session.getFullUsage()],
             startTime: this.session.getSessionStartTime(),
             durationMs: durationMs,
@@ -333,8 +331,7 @@ Return ONLY valid JSON (no markdown code blocks):
                 console.log(`[MeetingPersistence] Recovering meeting ${m.id}...`);
 
                 const context = details.transcript?.map(t => {
-                    const label = t.speaker === 'interviewer' ? 'INTERVIEWER' :
-                        t.speaker === 'user' ? 'ME' : 'ASSISTANT';
+                    const label = getPersistedTranscriptSpeakerLabel(t);
                     return `[${label}]: ${t.text}`;
                 }).join('\n') || "";
 

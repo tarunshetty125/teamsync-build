@@ -4,6 +4,7 @@ import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
 import * as sqliteVec from 'sqlite-vec';
+import { getTranscriptDisplayLabel, isCanonicalTranscriptSpeaker, isTranscriptRoleToken } from '../../src/utils/transcriptSpeakers';
 
 // Interfaces for our data objects
 export interface Meeting {
@@ -112,6 +113,16 @@ const normalizeSummaryData = (summaryJson: string | null | undefined) => {
         summary,
         detailedSummary: normalizedDetailedSummary,
     };
+};
+
+const deriveStoredTranscriptSpeakerLabel = (
+    segment: { speaker?: string | null; speakerId?: string | null; speakerLabel?: string | null }
+): string | null => {
+    const normalizedLabel = segment.speakerLabel?.trim();
+    if (normalizedLabel) return normalizedLabel;
+
+    const derived = getTranscriptDisplayLabel(segment);
+    return derived.trim() || null;
 };
 
 export class DatabaseManager {
@@ -1101,9 +1112,9 @@ export class DatabaseManager {
             // 3. Insert Transcript
             if (meeting.transcript) {
                 for (const segment of meeting.transcript) {
-                    const speakerLabel = segment.speakerLabel?.trim() || segment.speaker?.trim() || null;
+                    const speakerLabel = deriveStoredTranscriptSpeakerLabel(segment);
                     const speakerId = segment.speakerId?.trim() || null;
-                    const speakerValue = speakerLabel || segment.speaker;
+                    const speakerValue = segment.speaker?.trim() || speakerLabel;
                     insertTranscript.run(
                         meeting.id,
                         speakerValue,
@@ -1270,7 +1281,9 @@ export class DatabaseManager {
         const transcript = transcriptRows.map(row => ({
             speaker: row.speaker,
             speakerId: row.speaker_id || undefined,
-            speakerLabel: row.speaker_label || row.speaker || undefined,
+            speakerLabel: row.speaker_label
+                || (!isCanonicalTranscriptSpeaker(row.speaker) && !isTranscriptRoleToken(row.speaker) ? row.speaker : undefined)
+                || undefined,
             text: row.content,
             timestamp: row.timestamp_ms
         }));
