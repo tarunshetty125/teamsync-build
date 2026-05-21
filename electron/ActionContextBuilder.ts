@@ -316,6 +316,10 @@ function buildModeAwareIntentRules(intent: UnifiedActionIntent, mode: SessionAct
                     'Ground the answer in a concrete real example.',
                     'Use first-person phrasing throughout.',
                     'Sound confident and specific, not generic.',
+                    'Talk like a real person in a conversation — NOT like a LinkedIn bio or cover letter.',
+                    'NEVER use corporate buzzwords like "highly motivated", "passionate about", "results-driven", "proactive", "synergy", "leveraging".',
+                    'Use natural speech patterns: "So basically...", "What got me into this was...", "The cool part was...".',
+                    'Show personality — it is a two-way conversation, not a monologue.',
                 ];
             case 'coding':
                 return [
@@ -792,12 +796,14 @@ export function buildIntentPrompt(
                     createInstruction('intent', 'INTENT', basePrompt),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        'Return a moderate answer the user can say immediately.',
-                        'Start with one direct opening sentence.',
-                        'Then provide 2 to 3 short bullets with only the most relevant resume or JD points.',
-                        'End with one concise closing sentence.',
-                        'Do not dump a full history or unrelated background.',
-                        'Use first person when answering for the user.',
+                        'Return a natural, conversational answer the user can say aloud — like a real person talking, not reading a script.',
+                        'Start with a warm, casual opening — the way a student would naturally begin: "So I\'m currently..." or "Yeah so basically..." or "Hey, so a bit about me...".',
+                        'Share 2-3 relevant highlights naturally woven into the flow — not as stiff bullet points but as part of a story.',
+                        'End with something that invites the other person to respond — a question back, or a natural handoff like "...so yeah, happy to dive into any of that."',
+                        'This is a TWO-WAY conversation, not a speech. Keep it under 30 seconds of speaking time.',
+                        'BANNED phrases: "highly motivated", "passionate about", "results-driven", "I am a", "I possess", "proven track record".',
+                        'Sound like a confident student chatting with someone, not a robot reading a resume summary.',
+                        'Use first person throughout.',
                         ...modeAwareRules,
                     ].join('\n')),
                 ];

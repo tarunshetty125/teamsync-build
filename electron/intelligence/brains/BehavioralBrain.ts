@@ -30,6 +30,10 @@ export class BehavioralBrain implements Brain {
                 'Do NOT say "I would" — say "I did" or "We did".',
                 'Sound confident, specific, and authentic — never generic.',
                 'Frame achievements with measurable impact when possible.',
+                'CRITICAL: Talk like a real human in a real conversation — NOT like a LinkedIn post or cover letter.',
+                'BANNED WORDS: "highly motivated", "passionate about", "results-driven", "proactive", "leveraging", "proven track record", "I possess".',
+                'Use natural speech: "So basically what happened was...", "The cool part was...", "What I ended up doing was...".',
+                'This is a two-way chat, not a monologue. End with a natural handoff or invite the interviewer to ask more.',
             ].join('\n'),
         });
 
@@ -42,10 +46,11 @@ export class BehavioralBrain implements Brain {
                 title: 'OUTPUT CONTRACT',
                 content: [
                     'Return a concise, first-person story the user can say aloud.',
-                    'Start with one strong opening sentence that names the project.',
-                    'Then provide the key action and result in 1-2 sentences.',
+                    'Start casually — like a student naturally would: "So basically..." or "Yeah so...".',
+                    'Then share the key action and result in 1-2 natural sentences.',
                     `Keep under ${strategy.maxWords} words.`,
                     'No bullet points — use natural speech flow.',
+                    'End with something that keeps the conversation going.',
                 ].join('\n'),
             });
         } else if (strategy.depth === 'deep') {
@@ -68,12 +73,12 @@ export class BehavioralBrain implements Brain {
                 key: 'output_contract',
                 title: 'OUTPUT CONTRACT',
                 content: [
-                    'Return a moderate first-person answer the user can say immediately.',
-                    'Start with one direct opening sentence naming the project.',
-                    `Then provide ${minBullets} to ${maxBullets} short bullets covering action and result.`,
-                    'End with one concise closing sentence.',
+                    'Return a natural first-person answer the user can say aloud — like talking to a real person.',
+                    'Start casually: "So I\'m currently..." or "Yeah, so what I\'ve been working on is...".',
+                    `Then share ${minBullets} to ${maxBullets} key points woven naturally into the conversation — not as stiff bullets.`,
+                    'End with something that invites the other person to respond: a question back or "...happy to go deeper on any of that."',
                     `Keep under ${strategy.maxWords} words.`,
-                    'Use first person throughout.',
+                    'Use first person throughout. Sound like a real student, not a resume.',
                 ].join('\n'),
             });
         }

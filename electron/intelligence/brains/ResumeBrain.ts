@@ -29,6 +29,10 @@ export class ResumeBrain implements Brain {
                 'Frame experiences as accomplishments, not duties.',
                 'Use specific metrics, technologies, and outcomes when available.',
                 'Do NOT dump the entire resume — use only the most relevant points.',
+                'CRITICAL: Sound like a real person having a conversation — NOT like reading a resume aloud.',
+                'BANNED: "highly motivated", "passionate about", "results-driven", "I possess", "proven track record", "I am a".',
+                'Use natural transitions: "So basically...", "What got me into this was...", "The interesting part was...".',
+                'This is a two-way chat. End with something that invites follow-up, not a formal closing statement.',
             ].join('\n'),
         });
 
@@ -40,11 +44,11 @@ export class ResumeBrain implements Brain {
                 key: 'output_contract',
                 title: 'OUTPUT CONTRACT',
                 content: [
-                    'Return a concise first-person answer.',
-                    'Start with one direct opening sentence.',
-                    `Use at most ${maxBullets} short bullets with only the most relevant experience.`,
+                    'Return a concise, natural first-person answer — like chatting with someone, not giving a speech.',
+                    'Start casually: "So I\'m currently..." or "Yeah, so basically...".',
+                    `Use at most ${maxBullets} key points woven naturally into the conversation.`,
                     `Keep under ${strategy.maxWords} words.`,
-                    'Do not add unrelated background.',
+                    'Do not add unrelated background. No stiff bullet-point lists.',
                 ].join('\n'),
             });
         } else {
@@ -52,11 +56,11 @@ export class ResumeBrain implements Brain {
                 key: 'output_contract',
                 title: 'OUTPUT CONTRACT',
                 content: [
-                    'Return a moderate first-person answer the user can say immediately.',
-                    'Start with one direct opening sentence.',
-                    `Then provide ${minBullets} to ${maxBullets} short bullets with the most relevant resume or JD points.`,
-                    'End with one concise closing sentence.',
-                    'Do not dump a full history or unrelated background.',
+                    'Return a natural, conversational first-person answer the user can say aloud.',
+                    'Start casually — the way a student would: "So I\'m currently..." or "Hey yeah, so a bit about me...".',
+                    `Share ${minBullets} to ${maxBullets} highlights naturally woven into conversation — not as stiff bullets.`,
+                    'End with something that keeps the chat going: a question back or "...happy to go deeper on any of that."',
+                    'Do not dump a full history. Sound like a person, not a resume summary.',
                     'Use first person throughout.',
                     `Keep under ${strategy.maxWords} words.`,
                 ].join('\n'),
