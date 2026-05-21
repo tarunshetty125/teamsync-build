@@ -6,6 +6,7 @@ import type { BrainId } from '../types';
 import type { Brain, BrainInput, BrainOutput } from './Brain';
 import type { PromptInstruction } from '../../ActionContextBuilder';
 import { planContains, isPlanConfident } from '../planning';
+import { runSubBrains } from '../multibrain/runSubBrains';
 
 export class CodingBrain implements Brain {
     readonly id: BrainId = 'coding';
@@ -140,11 +141,21 @@ export class CodingBrain implements Brain {
             ].join('\n'),
         });
 
-        return {
+        const baseOutput: BrainOutput = {
             instructions,
             outputContract: 'Response must contain a clear approach with complexity analysis. Code block required for implementation questions.',
             streamStrategy: isDeepCoding ? 'collect_validate' : 'direct',
             preferredModel: isDeepCoding ? undefined : undefined, // ModelRouter handles this
         };
+
+        return this.appendSubBrainInsights(input, baseOutput);
+    }
+
+    /**
+     * Run technical interview sub-brains and append high-confidence insights.
+     * Capability-gated, failure-safe, prompt-bloat-safe.
+     */
+    private appendSubBrainInsights(input: BrainInput, output: BrainOutput): BrainOutput {
+        return runSubBrains('technical_interview', input, output, 'multi_brain_technical_interview', 'MULTI-BRAIN TECHNICAL INTERVIEW INSIGHTS', 'CodingBrain');
     }
 }

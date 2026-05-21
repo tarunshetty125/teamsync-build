@@ -19,14 +19,30 @@ import { PricingPressureBrain } from './sub-brains/sales/PricingPressureBrain';
 import { UrgencyBrain } from './sub-brains/sales/UrgencyBrain';
 import { CompetitorBrain } from './sub-brains/sales/CompetitorBrain';
 
+// Team Meeting sub-brains (Phase 5A)
+import { DecisionBrain } from './sub-brains/team-meeting/DecisionBrain';
+import { OwnerBrain } from './sub-brains/team-meeting/OwnerBrain';
+import { BlockerBrain } from './sub-brains/team-meeting/BlockerBrain';
+import { DeadlineBrain } from './sub-brains/team-meeting/DeadlineBrain';
+import { ActionItemBrain } from './sub-brains/team-meeting/ActionItemBrain';
+
+// Technical Interview sub-brains (Phase 5B)
+import { CorrectnessBrain } from './sub-brains/technical-interview/CorrectnessBrain';
+import { TechnicalDepthBrain } from './sub-brains/technical-interview/TechnicalDepthBrain';
+import { InterviewConfidenceBrain } from './sub-brains/technical-interview/InterviewConfidenceBrain';
+import { SystemDesignSubBrain } from './sub-brains/technical-interview/SystemDesignSubBrain';
+import { InterviewCommunicationBrain } from './sub-brains/technical-interview/InterviewCommunicationBrain';
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
 /**
- * Create a fully populated SubBrainRegistry with all v1 sub-brains.
+ * Create a fully populated SubBrainRegistry with all sub-brains.
  *
- * Phase 2 scope: Recruiting + Sales only.
+ * Phase 2 scope: Recruiting + Sales
+ * Phase 5A scope: Team Meeting
+ * Phase 5B scope: Technical Interview
  */
 export function createSubBrainRegistry(): SubBrainRegistry {
     const registry = new SubBrainRegistry();
@@ -44,6 +60,21 @@ export function createSubBrainRegistry(): SubBrainRegistry {
     registry.register('sales', new PricingPressureBrain());
     registry.register('sales', new UrgencyBrain());
     registry.register('sales', new CompetitorBrain());
+
+    // Team Meeting sub-brains (Phase 5A)
+    registry.register('team_meeting', new DecisionBrain());
+    registry.register('team_meeting', new OwnerBrain());
+    registry.register('team_meeting', new BlockerBrain());
+    registry.register('team_meeting', new DeadlineBrain());
+    registry.register('team_meeting', new ActionItemBrain());
+
+    // Technical Interview sub-brains (Phase 5B)
+    // Shared across CodingBrain, BehavioralBrain, SystemDesignBrain
+    registry.register('technical_interview', new CorrectnessBrain());
+    registry.register('technical_interview', new TechnicalDepthBrain());
+    registry.register('technical_interview', new InterviewConfidenceBrain());
+    registry.register('technical_interview', new SystemDesignSubBrain());
+    registry.register('technical_interview', new InterviewCommunicationBrain());
 
     return registry;
 }

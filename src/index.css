@@ -534,6 +534,47 @@ body {
   to   { opacity: 1; transform: translateY(0)   scale(1); }
 }
 
+/* ─── Phase 7: Intelligence Surface Tokens ─────────────────────────────── */
+:root {
+  --intel-high-rgb: 34, 197, 94;
+  --intel-moderate-rgb: 245, 158, 11;
+  --intel-low-rgb: 156, 163, 175;
+  --intel-footer-bg: rgba(255, 255, 255, 0.02);
+  --intel-footer-border: rgba(255, 255, 255, 0.04);
+  --intel-chip-blur: 6px;
+}
+
+[data-theme='light'] {
+  --intel-footer-bg: rgba(0, 0, 0, 0.015);
+  --intel-footer-border: rgba(0, 0, 0, 0.04);
+}
+
+/* Skeleton shimmer — GPU-only via background-position */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Confidence chip staggered entry — 180ms ease-out */
+@keyframes chip-enter {
+  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+/* Subtle listening pulse — GPU-only opacity */
+@keyframes intel-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Reduced motion: collapse all intelligence animations */
+@media (prefers-reduced-motion: reduce) {
+  .intel-animate {
+    animation: none !important;
+    transition-duration: 0ms !important;
+  }
+}
+
 /* ─── Overlay Icon Active Glow (Flame/Orbit) ── */
 @keyframes flame-glow {
   0% {

@@ -24,8 +24,19 @@ import { CapabilityRegistry } from '../capability/CapabilityRegistry';
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Minimum confidence to surface a suggestion */
-const MIN_SUGGESTION_CONFIDENCE = 0.85;
+/** Minimum confidence to surface a suggestion (v1: 0.85, v2: 0.90) */
+const MIN_SUGGESTION_CONFIDENCE_V1 = 0.85;
+const MIN_SUGGESTION_CONFIDENCE_V2 = 0.90;
+
+function getMinSuggestionConfidence(): number {
+    try {
+        return CapabilityRegistry.getInstance().isEnabled('predictorV2')
+            ? MIN_SUGGESTION_CONFIDENCE_V2
+            : MIN_SUGGESTION_CONFIDENCE_V1;
+    } catch {
+        return MIN_SUGGESTION_CONFIDENCE_V1;
+    }
+}
 
 /** Minimum time between suggestions (ms) */
 const SUGGESTION_DEBOUNCE_MS = 10_000;
@@ -189,7 +200,7 @@ export class AdaptiveModeIPC {
         }
 
         // Confidence threshold
-        if (params.confidence < MIN_SUGGESTION_CONFIDENCE) {
+        if (params.confidence < getMinSuggestionConfidence()) {
             return false;
         }
 

@@ -5,10 +5,13 @@
 // Takes raw text and returns confidence scores for each mode.
 //
 // The keyword maps are intentionally simple (uniform weights) for v1.
-// A future version may use learned weights or semantic similarity.
+// v2 (classifyModeV2) adds density, speaker, and question type signals.
 
 import type { ModeTemplateId } from '../../../src/lib/modes/types';
 import type { ModeConfidenceScore, ModeClassifierConfig } from './types';
+import { computeTranscriptDensity } from './TranscriptDensitySignal';
+import { detectSpeakerPattern } from './SpeakerPatternSignal';
+import { classifyQuestionType } from './QuestionTypeSignal';
 
 // ---------------------------------------------------------------------------
 // Keyword Maps
@@ -67,7 +70,7 @@ const DEFAULT_CONFIG: Readonly<ModeClassifierConfig> = {
 };
 
 // ---------------------------------------------------------------------------
-// Classifier
+// Classifier v1
 // ---------------------------------------------------------------------------
 
 /**
@@ -143,6 +146,91 @@ export function classifyMode(
 }
 
 // ---------------------------------------------------------------------------
+// Classifier v2 (Phase 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Enhanced mode classification with multiple signal sources.
+ *
+ * Combines:
+ *   - Keyword score (weight 0.4)
+ *   - Transcript density (weight 0.25)
+ *   - Speaker pattern (weight 0.15)
+ *   - Question type (weight 0.20)
+ *
+ * Same output shape as classifyMode() — drop-in replacement.
+ * Only called when 'predictorV2' capability is enabled.
+ */
+export function classifyModeV2(
+    text: string,
+    config?: Partial<ModeClassifierConfig>,
+): ModeConfidenceScore[] {
+    const merged = { ...DEFAULT_CONFIG, ...config };
+    const normalizedText = text.toLowerCase();
+
+    if (normalizedText.length < merged.minTranscriptLength) {
+        return buildUniformScores();
+    }
+
+    // --- Signal 1: Keyword scores (v1) ---
+    const keywordScores = classifyMode(text, config);
+    const keywordMap = new Map<ModeTemplateId, ModeConfidenceScore>();
+    for (const s of keywordScores) {
+        keywordMap.set(s.modeId, s);
+    }
+
+    // --- Signal 2: Transcript density ---
+    const density = computeTranscriptDensity(text);
+
+    // --- Signal 3: Speaker pattern ---
+    const speaker = detectSpeakerPattern(text);
+
+    // --- Signal 4: Question type ---
+    const questions = classifyQuestionType(text);
+    const questionModeHints = new Map<string, number>();
+    for (const qt of questions.types) {
+        const current = questionModeHints.get(qt.modeHint) ?? 0;
+        questionModeHints.set(qt.modeHint, Math.max(current, qt.confidence));
+    }
+
+    // --- Combine with weights ---
+    const W_KEYWORD = 0.4;
+    const W_DENSITY = 0.25;
+    const W_SPEAKER = 0.15;
+    const W_QUESTION = 0.2;
+
+    const combinedScores: ModeConfidenceScore[] = ALL_MODE_IDS
+        .filter(id => id !== 'general')
+        .map(modeId => {
+            const kw = keywordMap.get(modeId)?.confidence ?? 0;
+            const d = density.scores[modeId] ?? 0;
+            const sp = speaker.modeHints[modeId] ?? 0;
+            const qt = questionModeHints.get(modeId) ?? 0;
+
+            const combined = kw * W_KEYWORD + d * W_DENSITY + sp * W_SPEAKER + qt * W_QUESTION;
+
+            return {
+                modeId,
+                confidence: Math.round(combined * 1000) / 1000,
+                signalCount: (keywordMap.get(modeId)?.signalCount ?? 0),
+                topKeywords: keywordMap.get(modeId)?.topKeywords ?? [],
+            };
+        })
+        .sort((a, b) => b.confidence - a.confidence);
+
+    // Add general with remaining confidence
+    const totalConfidence = combinedScores.reduce((sum, s) => sum + s.confidence, 0);
+    combinedScores.push({
+        modeId: 'general',
+        confidence: Math.max(0, Math.round((1 - totalConfidence) * 1000) / 1000),
+        signalCount: 0,
+        topKeywords: [],
+    });
+
+    return combinedScores.sort((a, b) => b.confidence - a.confidence);
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -160,3 +248,4 @@ function buildUniformScores(): ModeConfidenceScore[] {
         topKeywords: [],
     }));
 }
+

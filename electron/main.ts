@@ -2290,9 +2290,10 @@ export class AppState {
             if (registry.isEnabled('adaptiveModeUI') || registry.isEnabled('timelineUI') || registry.isEnabled('explainabilityUI')) {
                 const { buildPremiumUXMetadata } = require('./intelligence/ipc/PremiumUXMetadata');
                 _intelligence = buildPremiumUXMetadata({
-                    confidence: payload?.confidence ?? null,
-                    evidenceCount: payload?.evidenceCount ?? 0,
-                    mode: payload?.mode ?? 'general',
+                    confidence: typeof payload?.confidence === 'number' ? payload.confidence : 0,
+                    modeRecommendation: payload?.modeRecommendation ?? null,
+                    multiBrainActive: payload?.multiBrainActive ?? false,
+                    memoryHits: payload?.memoryHits ?? 0,
                 });
             }
         } catch {
@@ -2364,6 +2365,29 @@ export class AppState {
             return { available: true, explanation: lastExplanation };
         } catch {
             return { available: false, reason: 'error' };
+        }
+    });
+
+    // Enable all intelligence feature flags (dev-only, localStorage-gated in renderer)
+    // Premium gate still applies — this only flips featureFlags, does NOT bypass license.
+    ipcMain.handle('intelligence:enable-dev-mode', () => {
+        try {
+            const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
+            const registry = CapabilityRegistry.getInstance();
+            const keys: string[] = [
+                'adaptiveMode', 'adaptiveModeUI', 'multiBrain', 'timeline', 'timelineUI',
+                'confidenceEngine', 'evidenceLayer', 'modeMemory', 'explainability',
+                'explainabilityUI', 'multiBrainTelemetry', 'predictorV2',
+                'brainQualityScoring', 'promptOptimization', 'latencyOptimization',
+            ];
+            for (const key of keys) {
+                registry.setFeatureFlag(key as any, true);
+            }
+            console.log('[Intelligence] Dev mode enabled — all feature flags ON (premium gate still applies)');
+            return { success: true };
+        } catch (err: unknown) {
+            console.warn('[Intelligence] Failed to enable dev mode:', err);
+            return { success: false };
         }
     });
   }

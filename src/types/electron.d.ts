@@ -280,9 +280,20 @@ export interface ElectronAPI {
   onIntelligenceManualStarted: (callback: (data?: { _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceManualResult: (callback: (data: { answer: string; question: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceActionToken: (callback: (data: { intent: string; token: string; mode: string; profileApplied?: boolean; _sessionId?: string; requestId?: string }) => void) => () => void
-  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; mode: string; profileApplied?: boolean; _sessionId?: string; requestId?: string }) => void) => () => void
+  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; mode: string; profileApplied?: boolean; _sessionId?: string; requestId?: string; _intelligence?: any }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
   onIntelligenceError: (callback: (data: { error: string, mode: string; _sessionId?: string; requestId?: string }) => void) => () => void;
+
+  // Intelligence Surface Layer (Phase 4)
+  onAdaptiveModeSuggestion: (callback: (data: { predictedMode: string; predictedModeName: string; currentMode: string; confidence: number; timestamp: number }) => void) => () => void;
+  onTimelineBatch: (callback: (data: { signals: any[]; batchId: string; timestamp: number }) => void) => () => void;
+  onExplanation: (callback: (data: any) => void) => () => void;
+  dismissAdaptiveModeSuggestion: () => Promise<any>;
+  requestExplanation: (params?: { instructionKey?: string }) => Promise<any>;
+
+  // Intelligence Dev Mode
+  enableIntelligenceDevMode: () => Promise<{ success: boolean }>;
+
   // Session Management
   onSessionReset: (callback: (payload?: { sessionId: string }) => void) => () => void;
   onSessionModeChanged: (callback: (data: { mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }) => void) => () => void;

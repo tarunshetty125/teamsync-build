@@ -27,11 +27,12 @@ import type {
     ModePrediction,
     ShadowModeTelemetry,
 } from './types';
-import { classifyMode } from './ModeClassifier';
+import { classifyMode, classifyModeV2 } from './ModeClassifier';
 import { ModeConfidenceEngine } from './ModeConfidenceEngine';
 import { CapabilityRegistry } from '../capability/CapabilityRegistry';
 import { emitModePrediction } from '../timeline/SignalEmitter';
 import { AdaptiveModeIPC } from '../ipc/AdaptiveModeIPC';
+import { LatencyTracker } from '../LatencyTracker';
 
 // ---------------------------------------------------------------------------
 // Store Schema
@@ -121,8 +122,11 @@ export class ModePredictor {
         this.lastPredictionAt = now;
 
         // Classify → Smooth
-        const rawScores = classifyMode(params.text, this.config);
+        LatencyTracker.getInstance().start('prediction');
+        const useV2 = CapabilityRegistry.getInstance().isEnabled('predictorV2');
+        const rawScores = useV2 ? classifyModeV2(params.text, this.config) : classifyMode(params.text, this.config);
         const smoothedScores = this.confidenceEngine.update(rawScores);
+        LatencyTracker.getInstance().end('prediction');
 
         // Determine recommendation
         const topScore = smoothedScores[0];

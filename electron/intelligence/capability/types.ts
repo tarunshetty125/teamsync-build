@@ -20,7 +20,12 @@ export type IntelligenceCapabilityKey =
     | 'modeMemory'
     | 'explainability'
     | 'explainabilityUI'
-    | 'multiBrainTelemetry';
+    | 'multiBrainTelemetry'
+    // Phase 6 — Intelligence Quality & Optimization
+    | 'predictorV2'
+    | 'brainQualityScoring'
+    | 'promptOptimization'
+    | 'latencyOptimization';
 
 /** Full capability set snapshot */
 export type IntelligenceCapabilitySet = Readonly<Record<IntelligenceCapabilityKey, boolean>>;

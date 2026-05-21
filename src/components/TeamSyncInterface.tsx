@@ -40,6 +40,9 @@ import TopPill from './ui/TopPill';
 import RollingTranscript from './ui/RollingTranscript';
 import ProContextBar from './ui/ProContextBar';
 import CodeBlock from './ui/CodeBlock';
+import { PremiumResponseCard } from './ui/PremiumResponseCard';
+import { SkeletonLoader, EmptyListeningState, ErrorFallback } from './ui/PremiumStates';
+import { SignalDiscoveryNudge } from './ui/IntelligenceDiscovery';
 import ScreenScanOverlay, { type ScreenScanOverlayMode, type ScreenScanOverlayPhase } from './ScreenScanOverlay';
 import { NegotiationCoachingCard } from '../premium';
 import ReactMarkdown from 'react-markdown';
@@ -83,6 +86,13 @@ interface Message {
         theirOffer: number | null;
         yourTarget: number | null;
         currency: string;
+    };
+    intelligenceMetadata?: {
+        confidenceTier?: 'high' | 'moderate' | 'low';
+        confidencePercent?: number;
+        signalCount?: number;
+        signals?: readonly { readonly label: string }[];
+        memoryCount?: number;
     };
 }
 
@@ -706,6 +716,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const activeOverlayAbortRef = useRef<AbortController | null>(null);
     const requestRegistryRef = useRef<Record<string, RequestLifecycle>>({});
     const currentQuestionTurnIdRef = useRef<string | null>(null);
+    const intelligenceTimelineRef = useRef<{ signals: any[]; batchId: string; timestamp: number } | null>(null);
+    const intelligenceExplanationRef = useRef<any>(null);
+    const intelligenceModeSuggestionRef = useRef<{ predictedMode: string; predictedModeName: string; currentMode: string; confidence: number; timestamp: number } | null>(null);
     const [currentQuestionTurnId, setCurrentQuestionTurnId] = useState<string>('question-init');
 
     const rememberIntentRequest = useCallback((intent: string, requestId: string | null) => {
@@ -1907,8 +1920,36 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             } catch { }
 
             const chips = generateResponseChips(data.content, data.intent);
+
+            // Map _intelligence from IPC payload → intelligenceMetadata for PremiumResponseCard
+            let intelligenceMetadata: Message['intelligenceMetadata'] = undefined;
+            if (data._intelligence) {
+                const intel = data._intelligence;
+                const confidenceTier: 'high' | 'moderate' | 'low' =
+                    intel.signalStrength === 'strong' ? 'high' :
+                    intel.signalStrength === 'moderate' ? 'moderate' : 'low';
+                intelligenceMetadata = {
+                    confidenceTier,
+                    confidencePercent: typeof intel.confidence === 'number'
+                        ? Math.round(intel.confidence * 100) : undefined,
+                    signalCount: intel.timelineCount ?? 0,
+                    memoryCount: intel.memoryHits ?? 0,
+                };
+                // Enrich with live intelligence data from supplementary IPC channels
+                const timeline = intelligenceTimelineRef.current;
+                if (timeline?.signals?.length) {
+                    intelligenceMetadata.signalCount = Math.max(intelligenceMetadata.signalCount ?? 0, timeline.signals.length);
+                }
+                const explanation = intelligenceExplanationRef.current;
+                if (explanation?.signals && Array.isArray(explanation.signals)) {
+                    intelligenceMetadata.signals = explanation.signals;
+                    intelligenceExplanationRef.current = null; // consume once
+                }
+            }
+
             finalizeRequestMessage(data.requestId, data.content, {
                 chips: chips.length > 0 ? chips : undefined,
+                ...(intelligenceMetadata ? { intelligenceMetadata } : {}),
             });
             rememberIntentRequest(data.intent as ActionIntent, null);
             currentSourceRef.current = undefined;
@@ -2099,6 +2140,23 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                 text: `❌ Error (${data.mode}): ${data.error}`
             }]);
         }));
+        // Intelligence Surface Layer listeners (HIGH-001)
+        cleanups.push(window.electronAPI.onAdaptiveModeSuggestion((data) => {
+            intelligenceModeSuggestionRef.current = data;
+        }));
+        cleanups.push(window.electronAPI.onTimelineBatch((data) => {
+            intelligenceTimelineRef.current = data;
+        }));
+        cleanups.push(window.electronAPI.onExplanation((data) => {
+            intelligenceExplanationRef.current = data;
+        }));
+
+        // Intelligence Dev Mode activation (HIGH-002)
+        // Gate: localStorage.setItem('teamsync_intelligence_dev', 'true') in DevTools
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('teamsync_intelligence_dev') === 'true') {
+            window.electronAPI.enableIntelligenceDevMode?.().catch(() => {});
+        }
+
         return () => cleanups.forEach(fn => fn());
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [appendTokenToRequest, clearProcessingForRequest, finalizeRequestMessage, rememberIntentRequest, resolveSuggestedAnswerRequest]); // C2 Fix: mount-only — listeners must survive expand/collapse to prevent dropped tokens
@@ -3676,6 +3734,12 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                             ) : null}
 
                             {/* Chat History - Only show if there are messages OR active states */}
+                            {messages.length === 0 && !isManualRecording && !isProcessing && isConnected && (
+                                <div className="flex-1 flex items-center justify-center p-4">
+                                    <EmptyListeningState isLightTheme={isLightTheme} />
+                                </div>
+                            )}
+
                             {(messages.length > 0 || isManualRecording || isProcessing) && (
                                 <>
                                     <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[clamp(300px,35vh,450px)] no-drag" style={{ scrollbarWidth: 'none' }}>
@@ -3702,143 +3766,29 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                     {/* User & Interviewer Text Render */}
                                                     {msg.role !== 'system' && renderMessageText(msg)}
 
-                                                    {/* Premium System Response Card */}
-                                                    {msg.role === 'system' && (() => {
-                                                        const _accentKey = msg.source || '';
-                                                        const _accentMap: Record<string, [string, string]> = {
-                                                            'What to Answer': ['16,185,129', '#34D399'],
-                                                            'Clarify': ['245,158,11', '#FCD34D'],
-                                                            'Follow Up': ['6,182,212', '#67E8F9'],
-                                                            'Follow Up Questions': ['168,85,247', '#C4B5FD'],
-                                                            'Recap': ['99,102,241', '#A5B4FC'],
-                                                            'Code Hint': ['139,92,246', '#C4B5FD'],
-                                                            'Brainstorm': ['244,114,182', '#FBCFE8'],
-                                                            'Screen Scan': ['251,146,60', '#FDBA74'],
-                                                            'System Design Trade-offs': ['16,185,129', '#34D399'],
-                                                            'Answer Now': ['99,102,241', '#A5B4FC'],
-                                                            'Manual Input': ['148,163,184', '#CBD5E1'],
-                                                        };
-                                                        const [_rgb, _accentText] = _accentMap[_accentKey] || ['255,255,255', 'rgba(255,255,255,0.6)'];
-                                                        const _icon = sourceIconMap[_accentKey] || '⚡';
-                                                        return (
-                                                        <motion.div
-                                                            initial={{ opacity: 0, y: 8, scale: 0.985 }}
-                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                                                            className="w-full relative group rounded-2xl overflow-hidden"
-                                                            style={{
-                                                                background: isLightTheme
-                                                                    ? `linear-gradient(180deg, rgba(255,255,255,0.88), rgba(${_rgb},0.03))`
-                                                                    : `linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))`,
-                                                                border: isLightTheme
-                                                                    ? '1px solid rgba(0,0,0,0.06)'
-                                                                    : `1px solid rgba(255,255,255,0.08)`,
-                                                                boxShadow: isLightTheme
-                                                                    ? '0 2px 16px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.9)'
-                                                                    : `0 8px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)`,
-                                                                backdropFilter: 'blur(18px) saturate(140%)',
-                                                                WebkitBackdropFilter: 'blur(18px) saturate(140%)',
-                                                            }}
-                                                        >
-                                                            {/* Subtle radial accent glow */}
-                                                            <div
-                                                                className="absolute inset-0 pointer-events-none"
-                                                                style={{ background: `radial-gradient(ellipse at 15% -25%, rgba(${_rgb},${isLightTheme ? '0.04' : '0.07'}) 0%, transparent 55%)` }}
-                                                            />
-
-                                                            {/* Header — pill chip + copy button */}
-                                                            {msg.source && (
-                                                                <div className="flex items-center justify-between px-4 pt-3 pb-0 relative z-10">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div
-                                                                            className="inline-flex items-center gap-1.5 px-2.5 py-[5px] rounded-full"
-                                                                            style={{
-                                                                                background: isLightTheme ? `rgba(${_rgb},0.07)` : `rgba(${_rgb},0.10)`,
-                                                                                border: `1px solid rgba(${_rgb},${isLightTheme ? '0.10' : '0.16'})`,
-                                                                            }}
-                                                                        >
-                                                                            <span className="text-[10px] leading-none">{_icon}</span>
-                                                                            <span
-                                                                                className="text-[10px] font-bold tracking-[0.08em] uppercase leading-none"
-                                                                                style={{ color: isLightTheme ? `rgb(${_rgb})` : _accentText }}
-                                                                            >
-                                                                                {msg.source}
-                                                                            </span>
-                                                                        </div>
-                                                                        {msg.isStreaming && (
-                                                                            <div className="inline-flex items-center gap-1 px-1.5 py-[3px] rounded-full" style={{
-                                                                                background: isLightTheme ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.04)',
-                                                                                border: `1px solid ${isLightTheme ? 'rgba(59,130,246,0.10)' : 'rgba(255,255,255,0.06)'}`,
-                                                                            }}>
-                                                                                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isLightTheme ? 'bg-blue-500' : 'bg-white/60'}`} />
-                                                                                <span className={`text-[9px] font-bold tracking-wider uppercase ${isLightTheme ? 'text-blue-500' : 'text-white/40'}`}>Live</span>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                    {/* Copy button with success state */}
-                                                                    {!msg.isStreaming && (
-                                                                        <CopyButton text={msg.text} isLightTheme={isLightTheme} accentRgb={_rgb} />
-                                                                    )}
-                                                                </div>
-                                                            )}
-
-                                                            {/* Subtle gradient separator */}
-                                                            {msg.source && (
-                                                                <div className="mx-4 mt-2" style={{
-                                                                    height: '1px',
-                                                                    background: isLightTheme
-                                                                        ? 'linear-gradient(90deg, transparent, rgba(0,0,0,0.05), transparent)'
-                                                                        : `linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)`,
-                                                                }} />
-                                                            )}
-
-                                                            {/* Body — premium typography */}
-                                                            <div
-                                                                className={`px-4 ${msg.source ? 'pt-2.5' : 'pt-3.5'} pb-3 relative z-10`}
-                                                                style={{
-                                                                    fontSize: '13.5px',
-                                                                    lineHeight: '1.68',
-                                                                    fontWeight: 420,
-                                                                    color: isLightTheme ? '#1f2937' : '#E5E7EB',
-                                                                    WebkitFontSmoothing: 'antialiased',
-                                                                }}
-                                                            >
-                                                                {/* Copy button for no-source cards */}
-                                                                {!msg.source && !msg.isStreaming && (
-                                                                    <div className="absolute top-2 right-2 z-20">
-                                                                        <CopyButton text={msg.text} isLightTheme={isLightTheme} accentRgb="255,255,255" />
-                                                                    </div>
+                                                    {/* Premium System Response Card / ErrorFallback */}
+                                                    {msg.role === 'system' && (
+                                                        msg.text.startsWith('❌') ? (
+                                                            <ErrorFallback isLightTheme={isLightTheme} />
+                                                        ) : (
+                                                            <>
+                                                                <PremiumResponseCard
+                                                                    message={msg}
+                                                                    isLightTheme={isLightTheme}
+                                                                    sourceIconMap={sourceIconMap}
+                                                                    renderMessageText={renderMessageText}
+                                                                    onCopy={() => analytics.trackCopyAnswer()}
+                                                                />
+                                                                {msg.intelligenceMetadata?.confidenceTier && (
+                                                                    <SignalDiscoveryNudge
+                                                                        signalType={msg.intelligenceMetadata.confidenceTier}
+                                                                        signalLabel={`${msg.intelligenceMetadata.confidenceTier} confidence`}
+                                                                        isLightTheme={isLightTheme}
+                                                                    />
                                                                 )}
-                                                                {renderMessageText(msg)}
-                                                            </div>
-
-                                                            {/* Response Chips */}
-                                                            {!msg.isStreaming && msg.chips && msg.chips.length > 0 && (
-                                                                <div className="flex flex-wrap gap-1.5 px-4 pb-3.5">
-                                                                    {msg.chips.map((chip, i) => (
-                                                                        <span
-                                                                            key={i}
-                                                                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-tight cursor-default select-none"
-                                                                            style={{
-                                                                                animationDelay: `${i * 60}ms`,
-                                                                                animation: 'fadeInUp 0.22s cubic-bezier(0.23,1,0.32,1) both',
-                                                                                backdropFilter: 'blur(8px)',
-                                                                                ...(chip.variant === 'green' ? { background: 'rgba(34,197,94,0.10)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.20)' } :
-                                                                                    chip.variant === 'amber' ? { background: 'rgba(245,158,11,0.10)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.22)' } :
-                                                                                        chip.variant === 'red' ? { background: 'rgba(239,68,68,0.10)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.20)' } :
-                                                                                            chip.variant === 'blue' ? { background: 'rgba(59,130,246,0.10)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.20)' } :
-                                                                                                chip.variant === 'purple' ? { background: 'rgba(167,139,250,0.10)', color: '#C4B5FD', border: '1px solid rgba(167,139,250,0.20)' } :
-                                                                                                    { background: 'rgba(255,255,255,0.05)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.08)' })
-                                                                            }}
-                                                                        >
-                                                                            {chip.label}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </motion.div>
-                                                        );
-                                                    })()}
+                                                            </>
+                                                        )
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}
@@ -3864,12 +3814,8 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                         )}
 
                                         {isProcessing && (
-                                            <div className="flex justify-start">
-                                                <div className="px-3 py-2 flex gap-1.5">
-                                                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                                </div>
+                                            <div className="flex justify-start w-[85%]">
+                                                <SkeletonLoader isLightTheme={isLightTheme} />
                                             </div>
                                         )}
                                         <div ref={messagesEndRef} />

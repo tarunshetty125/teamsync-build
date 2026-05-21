@@ -32,6 +32,11 @@ const ALL_CAPABILITY_KEYS: readonly IntelligenceCapabilityKey[] = [
     'explainability',
     'explainabilityUI',
     'multiBrainTelemetry',
+    // Phase 6
+    'predictorV2',
+    'brainQualityScoring',
+    'promptOptimization',
+    'latencyOptimization',
 ] as const;
 
 const DEFAULT_CONFIG: CapabilityConfig = {
@@ -49,6 +54,11 @@ const DEFAULT_CONFIG: CapabilityConfig = {
         explainability: false,
         explainabilityUI: false,
         multiBrainTelemetry: false,
+        // Phase 6
+        predictorV2: false,
+        brainQualityScoring: false,
+        promptOptimization: false,
+        latencyOptimization: false,
     },
     requiresPremium: {
         adaptiveMode: true,
@@ -62,6 +72,11 @@ const DEFAULT_CONFIG: CapabilityConfig = {
         explainability: true,
         explainabilityUI: true,
         multiBrainTelemetry: true,
+        // Phase 6
+        predictorV2: true,
+        brainQualityScoring: true,
+        promptOptimization: true,
+        latencyOptimization: true,
     },
 };
 

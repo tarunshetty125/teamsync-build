@@ -6,6 +6,7 @@ import type { BrainId } from '../types';
 import type { Brain, BrainInput, BrainOutput } from './Brain';
 import type { PromptInstruction } from '../../ActionContextBuilder';
 import { planContains, isPlanConfident } from '../planning';
+import { runSubBrains } from '../multibrain/runSubBrains';
 
 export class SystemDesignBrain implements Brain {
     readonly id: BrainId = 'system_design';
@@ -147,10 +148,20 @@ export class SystemDesignBrain implements Brain {
             ].join('\n'),
         });
 
-        return {
+        const baseOutput: BrainOutput = {
             instructions,
             outputContract: 'Response must address architecture direction with explicit tradeoffs. Must include scale/reliability considerations.',
             streamStrategy: isDeep ? 'collect_validate' : 'direct',
         };
+
+        return this.appendSubBrainInsights(input, baseOutput);
+    }
+
+    /**
+     * Run technical interview sub-brains and append high-confidence insights.
+     * Capability-gated, failure-safe, prompt-bloat-safe.
+     */
+    private appendSubBrainInsights(input: BrainInput, output: BrainOutput): BrainOutput {
+        return runSubBrains('technical_interview', input, output, 'multi_brain_technical_interview', 'MULTI-BRAIN TECHNICAL INTERVIEW INSIGHTS', 'SystemDesignBrain');
     }
 }

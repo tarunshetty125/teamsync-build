@@ -1089,7 +1089,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("intelligence-action-token", subscription)
     }
   },
-  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; requestId?: string; mode: string; profileApplied?: boolean }) => void) => {
+  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; requestId?: string; mode: string; profileApplied?: boolean; _sessionId?: string; _intelligence?: any }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("intelligence-action-result", subscription)
     return () => {
@@ -1149,6 +1149,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   dismissAdaptiveModeSuggestion: () => ipcRenderer.invoke("intelligence:dismiss-suggestion"),
   requestExplanation: (params?: { instructionKey?: string }) => ipcRenderer.invoke("intelligence:request-explanation", params),
+  enableIntelligenceDevMode: () => ipcRenderer.invoke("intelligence:enable-dev-mode"),
 
 
   // Streaming Chat
