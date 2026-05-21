@@ -18,27 +18,50 @@ export interface SttRuntimeValidationResult {
   warnings: string[];
 }
 
-function normalizePriorityOrder(rawValue: string | undefined, selectedProvider: string): string[] {
+export const SUPPORTED_RUNTIME_STT_PROVIDERS = ["deepgram", "google", "whisper"] as const;
+export const DEFAULT_RUNTIME_STT_PROVIDER = "deepgram";
+export const DEFAULT_RUNTIME_STT_CHAIN = [...SUPPORTED_RUNTIME_STT_PROVIDERS];
+
+export type SupportedRuntimeSttProvider = typeof SUPPORTED_RUNTIME_STT_PROVIDERS[number];
+
+export function isSupportedRuntimeSttProvider(provider: string | null | undefined): provider is SupportedRuntimeSttProvider {
+  return SUPPORTED_RUNTIME_STT_PROVIDERS.includes((provider || "").trim().toLowerCase() as SupportedRuntimeSttProvider);
+}
+
+export function normalizeRuntimeSttProvider(provider: string | null | undefined): SupportedRuntimeSttProvider {
+  return isSupportedRuntimeSttProvider(provider) ? provider : DEFAULT_RUNTIME_STT_PROVIDER;
+}
+
+export function normalizePriorityOrder(rawValue: string | undefined): string[] {
+  const baseChain = [...DEFAULT_RUNTIME_STT_CHAIN];
   if (!rawValue?.trim()) {
-    return selectedProvider === "google"
-      ? ["google", "deepgram", "whisper"]
-      : ["deepgram", "google", "whisper"];
+    return baseChain;
   }
 
+  let parsedProviders: string[] = [];
   try {
     const parsed = JSON.parse(rawValue);
     if (Array.isArray(parsed)) {
-      return parsed.map((value) => String(value).trim().toLowerCase()).filter(Boolean);
+      parsedProviders = parsed.map((value) => String(value).trim().toLowerCase()).filter(Boolean);
     }
   } catch {
-    // Fall back to CSV parsing.
+    parsedProviders = rawValue.split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
   }
 
-  return rawValue.split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
+  const deduped = new Set<string>();
+  for (const provider of parsedProviders) {
+    if (isSupportedRuntimeSttProvider(provider)) {
+      deduped.add(provider);
+    }
+  }
+
+  // Enforce the production fallback chain order even if the environment variable
+  // contains noise or a partial subset from an older build.
+  return baseChain.filter((provider) => deduped.size === 0 || deduped.has(provider));
 }
 
 export function loadSttRuntimeConfig(credentialsManager?: any): SttRuntimeConfig {
-  const selectedProvider = credentialsManager?.getSttProvider?.() || "none";
+  const selectedProvider = normalizeRuntimeSttProvider(credentialsManager?.getSttProvider?.());
   const whisperModelPath = process.env.STT_WHISPER_MODEL_PATH
     || path.join(
       app.isPackaged ? process.resourcesPath : path.join(__dirname, "../../../../resources"),
@@ -50,7 +73,7 @@ export function loadSttRuntimeConfig(credentialsManager?: any): SttRuntimeConfig
 
   return {
     selectedProvider,
-    priorityOrder: normalizePriorityOrder(process.env.STT_PRIORITY_ORDER, selectedProvider),
+    priorityOrder: normalizePriorityOrder(process.env.STT_PRIORITY_ORDER),
     deepgramApiKey: credentialsManager?.getDeepgramApiKey?.()?.trim() || undefined,
     googleCredentialsPath,
     whisperEnabled: process.env.ENABLE_WHISPER_STT === "true",
@@ -63,10 +86,6 @@ export function loadSttRuntimeConfig(credentialsManager?: any): SttRuntimeConfig
 export function validateSttRuntimeConfig(config: SttRuntimeConfig): SttRuntimeValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-
-  if (config.selectedProvider === "none") {
-    return { errors, warnings };
-  }
 
   const availableProviders = new Set<string>();
   if (config.deepgramApiKey) {
@@ -99,7 +118,7 @@ export function validateSttRuntimeConfig(config: SttRuntimeConfig): SttRuntimeVa
     warnings.push(`Google credentials path does not exist: ${config.googleCredentialsPath}`);
   }
 
-  const supportedPriority = config.priorityOrder.filter((provider) => ["deepgram", "google", "whisper"].includes(provider));
+  const supportedPriority = config.priorityOrder.filter((provider) => isSupportedRuntimeSttProvider(provider));
   if (supportedPriority.length === 0) {
     errors.push("STT priority order resolved to an empty provider list.");
   }

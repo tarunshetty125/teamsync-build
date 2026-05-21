@@ -1,7 +1,7 @@
 import { EventEmitter } from "events";
 import * as crypto from "crypto";
 import { ReplayBuffer, ReplayBufferEntry } from "./ReplayBuffer";
-import { SttMetricsSnapshot, SttProviderMetrics, StreamingSttAdapter, SttFatalEvent, SttTelemetryEvent, SttTranscriptEvent } from "./SttAdapter";
+import { SttActivityEvent, SttMetricsSnapshot, SttProviderMetrics, StreamingSttAdapter, SttFatalEvent, SttTelemetryEvent, SttTranscriptEvent } from "./SttAdapter";
 
 interface QueuedWrite {
   chunk: Buffer;
@@ -25,6 +25,7 @@ interface ProviderHealthState {
   consecutiveFailures: number;
   disabledUntil: number | null;
   failureTimestamps: number[];
+  lastFailureAt: number | null;
 }
 
 interface ProviderMetricState {
@@ -84,7 +85,23 @@ export class SttSupervisor extends EventEmitter {
 
   private currentGenerationId: string = crypto.randomUUID();
   private cutoverTimestamp: number = 0;
+  private crossProviderDedupUntil = 0;
   private lastInterimText: string = "";
+  private providerConnectedAt = 0;
+  private lastProviderActivityAt = 0;
+  private lastAudioWriteAt = 0;
+  private lastTranscriptAt = 0;
+  private lastFinalTranscriptAt = 0;
+  private lastSpeechStartedAt = 0;
+  private lastUtteranceEndAt = 0;
+  private lastLocalSpeechEndedAt = 0;
+  private speechActive = false;
+  private watchdogTriggered = false;
+  private readonly recentFinalTranscripts = new Map<string, number>();
+  private readonly recentFinalTranscriptRetentionMs = Math.max(15_000, Number(process.env.STT_FINAL_TRANSCRIPT_DEDUP_MS || 20_000));
+  private readonly activeSpeechWatchdogMs = Math.max(4_000, Number(process.env.STT_ACTIVE_SPEECH_WATCHDOG_MS || 7_000));
+  private readonly utteranceFinalizationWatchdogMs = Math.max(2_000, Number(process.env.STT_UTTERANCE_FINALIZATION_WATCHDOG_MS || 4_000));
+  private readonly providerWarmupMs = Math.max(1_000, Number(process.env.STT_PROVIDER_WARMUP_MS || 2_500));
 
   constructor(options: SttSupervisorOptions) {
     super();
@@ -163,6 +180,9 @@ export class SttSupervisor extends EventEmitter {
     this.lastFinalTranscript = null;
     this.lastReplayStats = { entries: 0, durationMs: 0 };
     this.lastInterimText = "";
+    this.crossProviderDedupUntil = 0;
+    this.recentFinalTranscripts.clear();
+    this.resetProviderActivityState();
     this.stopMaintenanceTimer();
 
     const active = this.getActiveAdapter();
@@ -193,6 +213,7 @@ export class SttSupervisor extends EventEmitter {
     }
 
     const timestamp = Date.now();
+    this.lastAudioWriteAt = timestamp;
     this.replayBuffer.push(chunk, timestamp);
 
     const MAX_BUFFER_SIZE = 1000;
@@ -243,6 +264,8 @@ export class SttSupervisor extends EventEmitter {
   }
 
   public notifySpeechEnded(): void {
+    this.lastLocalSpeechEndedAt = Date.now();
+    this.speechActive = false;
     this.getActiveAdapter()?.notifySpeechEnded?.();
   }
 
@@ -379,10 +402,20 @@ export class SttSupervisor extends EventEmitter {
       adapter.onFatal((event) => {
         if (activeSessionId !== (this as any)._activeSessionId) return;
         this.handleFatal(index, event);
-      })
+      }),
     );
 
+    if (adapter.onActivity) {
+      this.unsubscribeFns.push(
+        adapter.onActivity((event) => {
+          if (activeSessionId !== (this as any)._activeSessionId) return;
+          this.handleActivity(index, event);
+        }),
+      );
+    }
+
     this.activeAdapterIndex = index;
+    this.resetProviderActivityState();
     this.getProviderMetric(adapter.name).starts += 1;
     this.logDebug(`active_provider=${adapter.name}`);
     this.emitTelemetry({
@@ -432,6 +465,8 @@ export class SttSupervisor extends EventEmitter {
     } else {
       this.lastInterimText = "";
     }
+    this.watchdogTriggered = false;
+    this.lastTranscriptAt = Date.now();
 
     const providerName = this.adapters[adapterIndex]?.name || event.provider || "unknown";
     const providerMetric = this.getProviderMetric(providerName);
@@ -454,11 +489,21 @@ export class SttSupervisor extends EventEmitter {
         return;
       }
       const now = Date.now();
+      this.pruneRecentFinalTranscripts(now);
       if (
         this.lastFinalTranscript
         && this.lastFinalTranscript.text === normalized
         && now - this.lastFinalTranscript.emittedAt < 2500
       ) {
+        return;
+      }
+      const crossProviderSeenAt = this.recentFinalTranscripts.get(normalized);
+      if (
+        this.crossProviderDedupUntil > now
+        && typeof crossProviderSeenAt === "number"
+        && now - crossProviderSeenAt <= this.recentFinalTranscriptRetentionMs
+      ) {
+        this.logDebug(`dedupe_drop provider=${providerName} text="${normalized.slice(0, 80)}"`);
         return;
       }
       this.resetProviderHealth(adapterIndex);
@@ -470,6 +515,8 @@ export class SttSupervisor extends EventEmitter {
         text: normalized,
         emittedAt: now,
       };
+      this.recentFinalTranscripts.set(normalized, now);
+      this.lastFinalTranscriptAt = now;
     }
 
     this.logDebug(
@@ -491,6 +538,37 @@ export class SttSupervisor extends EventEmitter {
     }
     
     this.emitMetrics();
+  }
+
+  private handleActivity(adapterIndex: number, event: SttActivityEvent): void {
+    if (!this.started || adapterIndex !== this.activeAdapterIndex) {
+      return;
+    }
+
+    const timestamp = Number.isFinite(event.timestamp) ? event.timestamp : Date.now();
+    this.lastProviderActivityAt = timestamp;
+    this.watchdogTriggered = false;
+
+    if (event.kind === "provider_open") {
+      this.providerConnectedAt = timestamp;
+      return;
+    }
+
+    if (event.kind === "speech_started") {
+      this.speechActive = true;
+      this.lastSpeechStartedAt = timestamp;
+      return;
+    }
+
+    if (event.kind === "utterance_end") {
+      this.speechActive = false;
+      this.lastUtteranceEndAt = timestamp;
+      return;
+    }
+
+    if (event.kind === "transcript" && event.isFinal) {
+      this.speechActive = false;
+    }
   }
 
   private handleFatal(adapterIndex: number, event: SttFatalEvent): void {
@@ -537,7 +615,16 @@ export class SttSupervisor extends EventEmitter {
     console.log(`[FAILOVER_TRIGGERED] from ${event.provider}`);
     const previousAdapter = this.getActiveAdapter();
     const previousProvider = this.getActiveProviderName();
+    const previousAdapterIndex = this.activeAdapterIndex;
     const replaySnapshot = this.replayBuffer.snapshot();
+    const health = previousAdapterIndex >= 0 ? this.providerHealth.get(previousAdapterIndex) : undefined;
+    const shouldSoftRestart = (
+      previousProvider === "deepgram"
+      && event.retryable
+      && !!health
+      && !health.disabledUntil
+      && health.consecutiveFailures < this.failureThreshold
+    );
     
     this.unsubscribeFns.forEach(fn => fn());
     this.unsubscribeFns = [];
@@ -556,8 +643,10 @@ export class SttSupervisor extends EventEmitter {
       this.lastInterimText = "";
     }
 
-    const nextIndex = this.findNextAvailableAdapterIndex(this.activeAdapterIndex);
-    const isSelfRestart = (nextIndex !== -1 && nextIndex === this.activeAdapterIndex);
+    const nextIndex = shouldSoftRestart
+      ? previousAdapterIndex
+      : this.findNextAvailableAdapterIndex(this.activeAdapterIndex);
+    const isSelfRestart = nextIndex !== -1 && nextIndex === previousAdapterIndex;
 
     if (!isSelfRestart && !this.canAttemptFailover()) {
       this.activeAdapterIndex = -1;
@@ -572,24 +661,35 @@ export class SttSupervisor extends EventEmitter {
 
       if (nextIndex === -1) {
         this.activeAdapterIndex = -1;
+        this.emitTelemetry({
+          type: "failover_triggered",
+          provider: previousProvider,
+          sourceLabel: this.sourceLabel,
+          timestamp: Date.now(),
+          reason: event.error.message,
+          nextProvider: "degraded",
+          replayBufferEntries: replaySnapshot.length,
+          replayBufferDurationMs: this.getReplayDurationMs(replaySnapshot),
+        });
         this.emit(
           "error",
           new Error(
-            `[SttSupervisor/${this.sourceLabel}] Exhausted STT failover chain after ${previousProvider}: ${event.error.message}`
+            `[SttSupervisor/${this.sourceLabel}] Speech recognition temporarily unavailable after ${previousProvider}: ${event.error.message}`
           )
         );
         return;
       }
 
       if (isSelfRestart) {
-          const health = this.providerHealth.get(nextIndex);
           const failures = health ? health.consecutiveFailures : 1;
-          const delayMs = Math.min(1000 * Math.pow(2, failures - 1), 15000); 
+          const delayMs = this.getRecoveryBackoffMs(failures);
+          this.crossProviderDedupUntil = Date.now() + Math.max(5_000, this.getReplayDurationMs(replaySnapshot) + 5_000);
           this.logDebug(`self_failover provider=${previousProvider} delay=${delayMs}ms`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
       } else {
           this.failoverCount += 1;
           this.getProviderMetric(previousProvider).failovers += 1;
+          this.crossProviderDedupUntil = Date.now() + Math.max(5_000, this.getReplayDurationMs(replaySnapshot) + 5_000);
       }
 
       const nextProvider = this.adapters[nextIndex].name;
@@ -600,7 +700,7 @@ export class SttSupervisor extends EventEmitter {
       this.emitTelemetry({
         type: "stt.transition",
         from: event.provider,
-        to: this.getActiveProviderName(),
+        to: nextProvider,
         sourceLabel: this.sourceLabel,
         timestamp: Date.now()
       } as any);
@@ -720,10 +820,12 @@ export class SttSupervisor extends EventEmitter {
       consecutiveFailures: 0,
       disabledUntil: null,
       failureTimestamps: [],
+      lastFailureAt: null,
     };
 
     const now = Date.now();
     current.consecutiveFailures += 1;
+    current.lastFailureAt = now;
     current.failureTimestamps.push(now);
     current.failureTimestamps = current.failureTimestamps.filter((timestamp) => now - timestamp <= this.rollingWindowMs);
     if (current.consecutiveFailures >= this.failureThreshold) {
@@ -743,6 +845,7 @@ export class SttSupervisor extends EventEmitter {
       consecutiveFailures: 0,
       disabledUntil: null,
       failureTimestamps: existing?.failureTimestamps || [],
+      lastFailureAt: existing?.lastFailureAt ?? null,
     });
   }
 
@@ -872,6 +975,7 @@ export class SttSupervisor extends EventEmitter {
   private runMaintenance(): void {
     this.replayBuffer.pruneNow();
     const now = Date.now();
+    this.pruneRecentFinalTranscripts(now);
 
     const activeCutoff = now - this.failoverWindowMs;
     while (this.failoverTimestamps.length > 0 && this.failoverTimestamps[0] < activeCutoff) {
@@ -900,6 +1004,93 @@ export class SttSupervisor extends EventEmitter {
     this.logDebug(
       `maintenance replayBytes=${this.replayBuffer.getTotalBytes()} pendingWrites=${this.pendingWrites.length} pendingBytes=${this.pendingWriteBytes} rss=${Math.round(memory.rss / (1024 * 1024))}MB`
     );
+    this.runSpeechWatchdog(now);
     this.emitMetrics();
+  }
+
+  private runSpeechWatchdog(now: number): void {
+    if (!this.started || this.isTransitioning || this.watchdogTriggered || this.activeAdapterIndex < 0) {
+      return;
+    }
+
+    if (!this.providerConnectedAt || now - this.providerConnectedAt < this.providerWarmupMs) {
+      return;
+    }
+
+    const activeProvider = this.getActiveProviderName();
+    let watchdogReason: string | null = null;
+
+    if (
+      this.speechActive
+      && this.lastSpeechStartedAt > 0
+      && now - Math.max(this.lastSpeechStartedAt, this.lastTranscriptAt || 0) >= this.activeSpeechWatchdogMs
+    ) {
+      watchdogReason = "speech_stalled_without_transcript";
+      if (
+        this.lastProviderActivityAt >= this.lastSpeechStartedAt
+        && now - this.lastProviderActivityAt >= this.activeSpeechWatchdogMs
+      ) {
+        watchdogReason = "provider_activity_stalled";
+      }
+      if (
+        this.lastAudioWriteAt > this.lastSpeechStartedAt
+        && now - this.lastAudioWriteAt <= this.activeSpeechWatchdogMs
+        && this.lastProviderActivityAt > 0
+        && now - this.lastProviderActivityAt >= this.activeSpeechWatchdogMs
+      ) {
+        watchdogReason = "dead_websocket";
+      }
+    } else {
+      const lastSpeechBoundaryAt = Math.max(this.lastUtteranceEndAt, this.lastLocalSpeechEndedAt);
+      if (
+        !this.speechActive
+        && lastSpeechBoundaryAt > 0
+        && lastSpeechBoundaryAt >= this.lastSpeechStartedAt
+        && this.lastFinalTranscriptAt < lastSpeechBoundaryAt
+        && now - lastSpeechBoundaryAt >= this.utteranceFinalizationWatchdogMs
+      ) {
+        watchdogReason = "speech_ended_without_final_transcript";
+      }
+    }
+
+    if (!watchdogReason) {
+      return;
+    }
+
+    this.watchdogTriggered = true;
+    this.logDebug(`watchdog_triggered provider=${activeProvider} reason=${watchdogReason}`);
+    this.handleFatal(this.activeAdapterIndex, {
+      error: new Error(`STT watchdog detected ${watchdogReason}`),
+      provider: activeProvider,
+      sourceLabel: this.sourceLabel,
+      retryable: true,
+    });
+  }
+
+  private resetProviderActivityState(): void {
+    this.providerConnectedAt = 0;
+    this.lastProviderActivityAt = 0;
+    this.lastAudioWriteAt = 0;
+    this.lastTranscriptAt = 0;
+    this.lastFinalTranscriptAt = 0;
+    this.lastSpeechStartedAt = 0;
+    this.lastUtteranceEndAt = 0;
+    this.lastLocalSpeechEndedAt = 0;
+    this.speechActive = false;
+    this.watchdogTriggered = false;
+  }
+
+  private getRecoveryBackoffMs(consecutiveFailures: number): number {
+    const schedule = [2_000, 5_000, 10_000, 20_000];
+    const index = Math.min(Math.max(consecutiveFailures, 1) - 1, schedule.length - 1);
+    return schedule[index];
+  }
+
+  private pruneRecentFinalTranscripts(now: number): void {
+    for (const [text, emittedAt] of this.recentFinalTranscripts.entries()) {
+      if (now - emittedAt > this.recentFinalTranscriptRetentionMs) {
+        this.recentFinalTranscripts.delete(text);
+      }
+    }
   }
 }

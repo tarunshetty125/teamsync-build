@@ -666,10 +666,7 @@ export async function buildProfileContext(
         }
 
         const negotiationResponse = profileResult?.liveNegotiationResponse;
-        const directNegotiationText =
-            negotiationResponse?.exactScript?.trim()
-            || negotiationResponse?.tacticalNote?.trim();
-        if (directNegotiationText) {
+        if (negotiationResponse?.exactScript?.trim() || negotiationResponse?.tacticalNote?.trim()) {
             return {
                 profile: {
                     title: 'PROFILE INTELLIGENCE',
@@ -678,7 +675,7 @@ export async function buildProfileContext(
                     policy,
                     approxTokens: 0,
                 },
-                directResponse: directNegotiationText,
+                directResponse: JSON.stringify({ __negotiationCoaching: negotiationResponse }),
             };
         }
 

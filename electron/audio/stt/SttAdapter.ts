@@ -14,6 +14,23 @@ export interface SttFatalEvent {
   retryable: boolean;
 }
 
+export type SttActivityEventKind =
+  | "provider_open"
+  | "provider_close"
+  | "provider_error"
+  | "speech_started"
+  | "utterance_end"
+  | "transcript";
+
+export interface SttActivityEvent {
+  kind: SttActivityEventKind;
+  provider: string;
+  sourceLabel: string;
+  timestamp: number;
+  isFinal?: boolean;
+  detail?: string;
+}
+
 export type SttTelemetryEventType =
   | "provider_started"
   | "provider_failed"
@@ -71,6 +88,7 @@ export interface StreamingSttAdapter {
 
   onTranscript(callback: (event: SttTranscriptEvent) => void): () => void;
   onFatal(callback: (event: SttFatalEvent) => void): () => void;
+  onActivity?(callback: (event: SttActivityEvent) => void): () => void;
 
   isAvailable(): boolean;
 

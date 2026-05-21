@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ToggleLeft, ToggleRight, Search, Zap, Calendar, ArrowRight, ArrowLeft, MoreHorizontal, Globe, Clock, ChevronRight, Settings, LayoutGrid, RefreshCw, Eye, EyeOff, Ghost, Plus, Mail, Link as LinkIcon, ChevronDown, Trash2, Bell, Check, Download, DownloadCloud, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 import { generateMeetingPDF } from '../utils/pdfGenerator';
 import icon from "./icon.png";
@@ -124,6 +124,8 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const [submittedGlobalQuery, setSubmittedGlobalQuery] = useState('');
 
     const [showModesOnboarding, setShowModesOnboarding] = useState(false);
+    const launcherScrollRef = useRef<HTMLElement | null>(null);
+    const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
 
     const fetchMeetings = () => {
         if (window.electronAPI && window.electronAPI.getRecentMeetings) {
@@ -386,6 +388,40 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     // Separate effect for keyboard listener — re-registers when isShortcutPressed changes
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            const isInput = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+
+            if (!selectedMeeting && !isGlobalChatOpen && !isInput) {
+                const currentIndex = flattenedMeetings.findIndex((meeting) => meeting.id === selectedMeetingId);
+                if (e.key === 'ArrowDown' && flattenedMeetings.length > 0) {
+                    e.preventDefault();
+                    const nextMeeting = flattenedMeetings[Math.min(flattenedMeetings.length - 1, Math.max(0, currentIndex) + 1)];
+                    if (nextMeeting) {
+                        setSelectedMeetingId(nextMeeting.id);
+                    }
+                    return;
+                } else if (e.key === 'ArrowUp' && flattenedMeetings.length > 0) {
+                    e.preventDefault();
+                    const nextMeeting = flattenedMeetings[Math.max(0, Math.max(0, currentIndex) - 1)];
+                    if (nextMeeting) {
+                        setSelectedMeetingId(nextMeeting.id);
+                    }
+                    return;
+                } else if (e.key === 'Enter' && currentIndex >= 0) {
+                    e.preventDefault();
+                    void handleOpenMeeting(flattenedMeetings[currentIndex]);
+                    return;
+                } else if (e.key === 'PageUp') {
+                    e.preventDefault();
+                    launcherScrollRef.current?.scrollBy({ top: -360, behavior: 'smooth' });
+                    return;
+                } else if (e.key === 'PageDown') {
+                    e.preventDefault();
+                    launcherScrollRef.current?.scrollBy({ top: 360, behavior: 'smooth' });
+                    return;
+                }
+            }
+
             if (isShortcutPressed(e, 'toggleVisibility')) {
                 e.preventDefault();
                 window.electronAPI.toggleWindow();
@@ -407,7 +443,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [isShortcutPressed]);
+    }, [isGlobalChatOpen, isShortcutPressed, meetings, selectedMeeting, selectedMeetingId]);
 
     const handleDismissCalendarRecommendation = async () => {
         if (!calendarRecommendation) return;
@@ -515,6 +551,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         // Approximation for others: parse date
         return new Date(b).getTime() - new Date(a).getTime();
     });
+    const flattenedMeetings = sortedGroups.flatMap((label) => groupedMeetings[label]);
 
 
     const [forwardMeeting, setForwardMeeting] = useState<Meeting | null>(null);
@@ -524,6 +561,26 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     useEffect(() => {
         setMenuEntered(false);
     }, [activeMenuId]);
+
+    useEffect(() => {
+        if (flattenedMeetings.length === 0) {
+            setSelectedMeetingId(null);
+            return;
+        }
+
+        if (!selectedMeetingId || !flattenedMeetings.some((meeting) => meeting.id === selectedMeetingId)) {
+            setSelectedMeetingId(flattenedMeetings[0]?.id ?? null);
+        }
+    }, [flattenedMeetings, selectedMeetingId]);
+
+    useEffect(() => {
+        if (!selectedMeetingId) {
+            return;
+        }
+
+        const node = document.querySelector<HTMLElement>(`[data-meeting-id="${selectedMeetingId}"]`);
+        node?.scrollIntoView({ block: 'nearest' });
+    }, [selectedMeetingId]);
 
     // Global click listener to close menu
     useEffect(() => {
@@ -541,6 +598,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
     const handleOpenMeeting = async (meeting: Meeting) => {
         setForwardMeeting(null); // Clear forward history on new navigation
+        setSelectedMeetingId(meeting.id);
         console.log("[Launcher] Opening meeting:", meeting.id);
         analytics.trackCommandExecuted('open_meeting_details');
 
@@ -1075,7 +1133,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                             </section>
 
                             {/* BOTTOM SECTION: Black Background (Scrollable content) */}
-                            <main className="flex-1 overflow-y-auto custom-scrollbar bg-bg-primary">
+                            <main ref={launcherScrollRef} className="flex-1 overflow-y-auto custom-scrollbar bg-bg-primary">
                                 <section className="px-8 py-8 min-h-full">
                                     <div className="max-w-4xl mx-auto space-y-8">
 
@@ -1087,8 +1145,9 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                     {groupedMeetings[label].map((m) => (
                                                         <motion.div
                                                             key={m.id}
+                                                            data-meeting-id={m.id}
                                                             layoutId={`meeting-${m.id}`}
-                                                            className="group relative flex items-center justify-between px-3 py-2 rounded-lg bg-transparent hover:bg-bg-elevated transition-colors"
+                                                            className={`group relative flex items-center justify-between rounded-lg px-3 py-2 transition-colors ${selectedMeetingId === m.id ? 'bg-bg-elevated' : 'bg-transparent hover:bg-bg-elevated'}`}
                                                             onClick={() => handleOpenMeeting(m)}
                                                         >
                                                             <div className={`font-medium text-[14px] max-w-[60%] truncate ${m.title === 'Processing...' ? 'text-blue-400 italic animate-pulse' : 'text-text-primary'}`}>

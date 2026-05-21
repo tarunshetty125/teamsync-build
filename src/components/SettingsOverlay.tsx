@@ -1037,10 +1037,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [selectedInput, setSelectedInput] = useState('');
     const [selectedOutput, setSelectedOutput] = useState('');
     const [micLevel, setMicLevel] = useState(0);
+    const [micTestActive, setMicTestActive] = useState(false);
     const [useExperimentalSck, setUseExperimentalSck] = useState(false);
 
     // STT Provider settings
-    const [sttProvider, setSttProvider] = useState<'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync'>('none');
+    const [sttProvider, setSttProvider] = useState<'none' | 'google' | 'deepgram' | 'whisper'>('deepgram');
     const [groqSttModel, setGroqSttModel] = useState('whisper-large-v3-turbo');
     const [sttGroqKey, setSttGroqKey] = useState('');
     const [sttOpenaiKey, setSttOpenaiKey] = useState('');
@@ -1065,6 +1066,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [hasStoredSonioxKey, setHasStoredSonioxKey] = useState(false);
     const [isSttDropdownOpen, setIsSttDropdownOpen] = useState(false);
     const sttDropdownRef = React.useRef<HTMLDivElement>(null);
+    const normalizeStoredSttProvider = (provider?: string): 'none' | 'google' | 'deepgram' | 'whisper' => {
+        if (provider === 'google' || provider === 'deepgram' || provider === 'whisper' || provider === 'none') {
+            return provider;
+        }
+        return 'deepgram';
+    };
 
     // Close STT dropdown when clicking outside
     useEffect(() => {
@@ -1086,7 +1093,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 // @ts-ignore
                 const creds = await window.electronAPI?.getStoredCredentials?.();
                 if (creds) {
-                    setSttProvider(creds.sttProvider || 'none');
+                    setSttProvider(normalizeStoredSttProvider(creds.sttProvider));
                     if (creds.groqSttModel) setGroqSttModel(creds.groqSttModel);
                     setGoogleServiceAccountPath(creds.googleServiceAccountPath);
                     setHasStoredSttGroqKey(creds.hasSttGroqKey);
@@ -1125,7 +1132,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 // Re-fetch credentials silently — purely additive, no state reset
                 window.electronAPI?.getStoredCredentials?.().then((creds: any) => {
                     if (!creds) return;
-                    setSttProvider(creds.sttProvider || 'none');
+                    setSttProvider(normalizeStoredSttProvider(creds.sttProvider));
                     if (creds.groqSttModel) setGroqSttModel(creds.groqSttModel);
                     setHasTeamSyncKey(creds.hasTeamSyncKey || false);
                     setHasStoredSttGroqKey(creds.hasSttGroqKey);
@@ -1142,7 +1149,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         return () => unsubscribe();
     }, []); // mount-once: isOpen is checked inside the callback
 
-    const handleSttProviderChange = async (provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync') => {
+    const handleSttProviderChange = async (provider: 'none' | 'google' | 'deepgram' | 'whisper') => {
         setSttProvider(provider);
         setIsSttDropdownOpen(false);
         setSttTestStatus('idle');
@@ -1359,13 +1366,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     };
 
     const handleTestSttConnection = async () => {
-        if (sttProvider === 'none' || sttProvider === 'google' || sttProvider === 'teamsync') return;
-        const keyMap: Record<string, string> = {
-            groq: sttGroqKey, openai: sttOpenaiKey, deepgram: sttDeepgramKey,
-            elevenlabs: sttElevenLabsKey, azure: sttAzureKey, ibmwatson: sttIbmKey,
-            soniox: sttSonioxKey,
-        };
-        const keyToTest = keyMap[sttProvider] || '';
+        if (sttProvider === 'none' || sttProvider === 'google' || sttProvider === 'whisper') return;
+        const keyToTest = sttDeepgramKey;
         if (!keyToTest.trim()) {
             setSttTestStatus('error');
             setSttTestError('Please enter an API key first');
@@ -1377,9 +1379,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
         try {
             // @ts-ignore
             const result = await window.electronAPI?.testSttConnection?.(
-                sttProvider,
+                'deepgram',
                 keyToTest.trim(),
-                sttProvider === 'azure' ? sttAzureRegion : undefined
+                undefined
             );
             if (result?.success) {
                 setSttTestStatus('success');
@@ -1546,8 +1548,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     }, [isOpen, selectedInput, selectedOutput]); // Re-run if isOpen changes, or if selected devices are cleared
 
     // Use the native mic test path so device IDs stay consistent with the meeting runtime.
+    // Gated behind micTestActive to prevent eager mic activation (macOS orange indicator).
     useEffect(() => {
-        if (isOpen && activeTab === 'audio') {
+        if (isOpen && activeTab === 'audio' && micTestActive) {
             const unsubscribe = window.electronAPI?.onAudioTestLevel?.((level) => {
                 setMicLevel(Math.max(0, Math.min(100, level * 100)));
             });
@@ -1570,7 +1573,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                 console.error("Error stopping native microphone test:", error);
             });
         }
-    }, [isOpen, activeTab, selectedInput]);
+    }, [isOpen, activeTab, selectedInput, micTestActive]);
+
+    // Stop mic test when leaving the audio tab or closing settings
+    useEffect(() => {
+        if (!isOpen || activeTab !== 'audio') {
+            setMicTestActive(false);
+        }
+    }, [isOpen, activeTab]);
 
     return (
         <AnimatePresence>
@@ -2847,8 +2857,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                 {[
                                                                     {
                                                                         step: '01',
-                                                                        label: 'Opening',
-                                                                        sublabel: 'When asked about salary expectations',
+                                                                        label: 'Your Opening Answer',
+                                                                        sublabel: 'Say this when HR asks about salary expectations',
                                                                         content: negotiationScript.opening_line,
                                                                         accent: '#10b981',
                                                                         accentBg: 'rgba(16,185,129,0.07)',
@@ -2857,8 +2867,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                     },
                                                                     {
                                                                         step: '02',
-                                                                        label: 'Justify Your Ask',
-                                                                        sublabel: 'Link your track record to the number',
+                                                                        label: 'Your Justification',
+                                                                        sublabel: 'Say this to explain and defend your range',
                                                                         content: negotiationScript.justification,
                                                                         accent: '#60a5fa',
                                                                         accentBg: 'rgba(96,165,250,0.07)',
@@ -2867,8 +2877,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                                     },
                                                                     {
                                                                         step: '03',
-                                                                        label: 'Counter & Hold',
-                                                                        sublabel: 'If they come back lower',
+                                                                        label: 'Your Counter & Hold',
+                                                                        sublabel: 'Say this if they come back lower than your range',
                                                                         content: negotiationScript.counter_offer_fallback,
                                                                         accent: '#fb923c',
                                                                         accentBg: 'rgba(251,146,60,0.07)',
@@ -3139,53 +3149,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                             value={sttProvider}
                                                             onChange={(val) => handleSttProviderChange(val as any)}
                                                             options={[
-                                                                ...(hasTeamSyncKey ? [{ id: 'teamsync', label: 'TeamSync API', badge: 'Saved' as const, recommended: true, desc: 'Managed transcription via TeamSync backend', color: 'blue', icon: <Mic size={14} /> }] : []),
-                                                                { id: 'google', label: 'Google Cloud', badge: googleServiceAccountPath ? 'Saved' : null, recommended: true, desc: 'gRPC streaming via Service Account', color: 'blue', icon: <Mic size={14} /> },
-                                                                { id: 'groq', label: 'Groq Whisper', badge: hasStoredSttGroqKey ? 'Saved' : null, recommended: true, desc: 'Ultra-fast REST transcription', color: 'orange', icon: <Mic size={14} /> },
-                                                                { id: 'openai', label: 'OpenAI Whisper', badge: hasStoredSttOpenaiKey ? 'Saved' : null, desc: 'OpenAI-compatible Whisper API', color: 'green', icon: <Mic size={14} /> },
-                                                                { id: 'deepgram', label: 'Deepgram Nova-3', badge: hasStoredDeepgramKey ? 'Saved' : null, recommended: true, desc: 'High-accuracy REST transcription', color: 'purple', icon: <Mic size={14} /> },
-                                                                { id: 'elevenlabs', label: 'ElevenLabs Scribe', badge: hasStoredElevenLabsKey ? 'Saved' : null, desc: 'Scribe v2 Realtime API', color: 'teal', icon: <Mic size={14} /> },
-                                                                { id: 'azure', label: 'Azure Speech', badge: hasStoredAzureKey ? 'Saved' : null, desc: 'Microsoft Cognitive Services STT', color: 'cyan', icon: <Mic size={14} /> },
-                                                                { id: 'ibmwatson', label: 'IBM Watson', badge: hasStoredIbmWatsonKey ? 'Saved' : null, desc: 'IBM Watson cloud STT service', color: 'indigo', icon: <Mic size={14} /> },
-                                                                { id: 'soniox', label: 'Soniox', badge: hasStoredSonioxKey ? 'Saved' : null, recommended: true, desc: '60+ languages, multilingual, domain context', color: 'cyan', icon: <Mic size={14} /> },
+                                                                { id: 'deepgram', label: 'Deepgram Nova-3', badge: hasStoredDeepgramKey ? 'Saved' : 'Default', recommended: true, desc: 'Primary realtime STT provider with automatic fallback to Google and Whisper.', color: 'purple', icon: <Mic size={14} /> },
+                                                                { id: 'google', label: 'Google Cloud', badge: googleServiceAccountPath ? 'Saved' : 'Fallback', desc: 'Secondary streaming provider when Deepgram needs recovery.', color: 'blue', icon: <Mic size={14} /> },
+                                                                { id: 'whisper', label: 'Local Whisper', badge: 'Fallback', desc: 'Last-resort local recovery path before degraded mode.', color: 'cyan', icon: <Mic size={14} /> },
                                                             ]}
                                                         />
                                                     </div>
+                                                    <p className="text-[10px] text-text-tertiary">
+                                                        Runtime failover chain: Deepgram → Google → Whisper.
+                                                    </p>
                                                 </div>
-
-                                                {/* Groq Model Selector */}
-                                                {sttProvider === 'groq' && (
-                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-4">
-                                                        <label className="text-xs font-medium text-text-secondary mb-2.5 block">Whisper Model</label>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            {[
-                                                                { id: 'whisper-large-v3-turbo', label: 'V3 Turbo', desc: 'Fastest' },
-                                                                { id: 'whisper-large-v3', label: 'V3', desc: 'Most Accurate' },
-                                                            ].map((m) => (
-                                                                <button
-                                                                    key={m.id}
-                                                                    onClick={async () => {
-                                                                        setGroqSttModel(m.id);
-                                                                        try {
-                                                                            // @ts-ignore
-                                                                            await window.electronAPI?.setGroqSttModel?.(m.id);
-                                                                        } catch (e) {
-                                                                            console.error('Failed to set Groq model:', e);
-                                                                        }
-                                                                    }}
-                                                                    className={`rounded-lg px-3 py-2.5 text-left transition-all duration-200 ease-in-out active:scale-[0.98] ${groqSttModel === m.id
-                                                                        ? 'bg-blue-600 text-white shadow-md'
-                                                                        : 'bg-bg-input hover:bg-bg-elevated text-text-primary'
-                                                                        }`}
-                                                                >
-                                                                    <span className="text-sm font-medium block">{m.label}</span>
-                                                                    <span className={`text-[11px] transition-colors ${groqSttModel === m.id ? 'text-white/70' : 'text-text-tertiary'
-                                                                        }`}>{m.desc}</span>
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
 
                                                 {/* Google Cloud Service Account */}
                                                 {sttProvider === 'google' && (
@@ -3211,76 +3184,38 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                             </button>
                                                         </div>
                                                         <p className="text-[10px] text-text-tertiary mt-2">
-                                                            Required for Google Cloud Speech-to-Text.
+                                                            Used as the live fallback when Deepgram needs to be quarantined.
                                                         </p>
                                                     </div>
                                                 )}
 
-                                                {/* API Key Input (non-Google providers) */}
-                                                {sttProvider !== 'google' && (
+                                                {sttProvider === 'whisper' && (
+                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-2">
+                                                        <label className="text-xs font-medium text-text-secondary block">Local Fallback</label>
+                                                        <p className="text-xs text-text-secondary">
+                                                            Whisper is only used after Deepgram and Google fail. It does not replace the primary realtime stream.
+                                                        </p>
+                                                        <p className="text-[10px] text-text-tertiary">
+                                                            No API key is required here. If local Whisper is unavailable, TeamSync enters degraded mode and warns that speech recognition is temporarily unavailable.
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* API Key Input (Deepgram primary) */}
+                                                {sttProvider === 'deepgram' && (
                                                     <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-3">
-                                                        <label className="text-xs font-medium text-text-secondary block">
-                                                            {sttProvider === 'groq' ? 'Groq' : sttProvider === 'openai' ? 'OpenAI STT' : sttProvider === 'elevenlabs' ? 'ElevenLabs' : sttProvider === 'azure' ? 'Azure' : sttProvider === 'ibmwatson' ? 'IBM Watson' : sttProvider === 'soniox' ? 'Soniox' : 'Deepgram'} API Key
-                                                        </label>
-                                                        {sttProvider === 'openai' && (
-                                                            <p className="text-[10px] text-text-tertiary mb-1.5">
-                                                                This key is separate from your main AI Provider key.
-                                                            </p>
-                                                        )}
+                                                        <label className="text-xs font-medium text-text-secondary block">Deepgram API Key</label>
                                                         <div className="flex gap-2">
                                                             <input
                                                                 type="password"
-                                                                value={
-                                                                    sttProvider === 'groq' ? sttGroqKey
-                                                                        : sttProvider === 'openai' ? sttOpenaiKey
-                                                                            : sttProvider === 'elevenlabs' ? sttElevenLabsKey
-                                                                                : sttProvider === 'azure' ? sttAzureKey
-                                                                                    : sttProvider === 'ibmwatson' ? sttIbmKey
-                                                                                        : sttProvider === 'soniox' ? sttSonioxKey
-                                                                                            : sttDeepgramKey
-                                                                }
-                                                                onChange={(e) => {
-                                                                    if (sttProvider === 'groq') setSttGroqKey(e.target.value);
-                                                                    else if (sttProvider === 'openai') setSttOpenaiKey(e.target.value);
-                                                                    else if (sttProvider === 'elevenlabs') setSttElevenLabsKey(e.target.value);
-                                                                    else if (sttProvider === 'azure') setSttAzureKey(e.target.value);
-                                                                    else if (sttProvider === 'ibmwatson') setSttIbmKey(e.target.value);
-                                                                    else if (sttProvider === 'soniox') setSttSonioxKey(e.target.value);
-                                                                    else setSttDeepgramKey(e.target.value);
-                                                                }}
-                                                                placeholder={
-                                                                    sttProvider === 'groq'
-                                                                        ? (hasStoredSttGroqKey ? '••••••••••••' : 'Enter Groq API key')
-                                                                        : sttProvider === 'openai'
-                                                                            ? (hasStoredSttOpenaiKey ? '••••••••••••' : 'Enter OpenAI STT API key')
-                                                                            : sttProvider === 'elevenlabs'
-                                                                                ? (hasStoredElevenLabsKey ? '••••••••••••' : 'Enter ElevenLabs API key')
-                                                                                : sttProvider === 'azure'
-                                                                                    ? (hasStoredAzureKey ? '••••••••••••' : 'Enter Azure API key')
-                                                                                    : sttProvider === 'ibmwatson'
-                                                                                        ? (hasStoredIbmWatsonKey ? '••••••••••••' : 'Enter IBM Watson API key')
-                                                                                        : sttProvider === 'soniox'
-                                                                                            ? (hasStoredSonioxKey ? '••••••••••••' : 'Enter Soniox API key')
-                                                                                            : (hasStoredDeepgramKey ? '••••••••••••' : 'Enter Deepgram API key')
-                                                                }
+                                                                value={sttDeepgramKey}
+                                                                onChange={(e) => setSttDeepgramKey(e.target.value)}
+                                                                placeholder={hasStoredDeepgramKey ? '••••••••••••' : 'Enter Deepgram API key'}
                                                                 className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
                                                             />
                                                             <button
-                                                                onClick={() => {
-                                                                    const keyMap: Record<string, string> = {
-                                                                        groq: sttGroqKey, openai: sttOpenaiKey, deepgram: sttDeepgramKey,
-                                                                        elevenlabs: sttElevenLabsKey, azure: sttAzureKey, ibmwatson: sttIbmKey,
-                                                                    };
-                                                                    handleSttKeySubmit(sttProvider as any, keyMap[sttProvider] || '');
-                                                                }}
-                                                                disabled={sttSaving || !(() => {
-                                                                    const keyMap: Record<string, string> = {
-                                                                        groq: sttGroqKey, openai: sttOpenaiKey, deepgram: sttDeepgramKey,
-                                                                        elevenlabs: sttElevenLabsKey, azure: sttAzureKey, ibmwatson: sttIbmKey,
-                                                                        soniox: sttSonioxKey,
-                                                                    };
-                                                                    return (keyMap[sttProvider] || '').trim();
-                                                                })()}
+                                                                onClick={() => handleSttKeySubmit('deepgram', sttDeepgramKey)}
+                                                                disabled={sttSaving || !sttDeepgramKey.trim()}
                                                                 className={`px-5 py-2.5 rounded-lg text-xs font-medium transition-colors ${sttSaved
                                                                     ? 'bg-green-500/20 text-green-400'
                                                                     : 'bg-bg-input hover:bg-bg-input/80 border border-border-subtle text-text-primary disabled:opacity-50'
@@ -3288,57 +3223,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                             >
                                                                 {sttSaving ? 'Saving...' : sttSaved ? 'Saved!' : 'Save'}
                                                             </button>
-                                                            {(() => {
-                                                                const hasKeyMap: Record<string, boolean> = {
-                                                                    groq: hasStoredSttGroqKey,
-                                                                    openai: hasStoredSttOpenaiKey,
-                                                                    deepgram: hasStoredDeepgramKey,
-                                                                    elevenlabs: hasStoredElevenLabsKey,
-                                                                    azure: hasStoredAzureKey,
-                                                                    ibmwatson: hasStoredIbmWatsonKey,
-                                                                    soniox: hasStoredSonioxKey,
-                                                                };
-                                                                return hasKeyMap[sttProvider] ? (
-                                                                    <button
-                                                                        onClick={() => handleRemoveSttKey(sttProvider as any)}
-                                                                        className="px-2.5 py-2.5 rounded-lg text-xs font-medium text-text-tertiary hover:text-red-500 hover:bg-red-500/10 transition-all"
-                                                                        title="Remove API Key"
-                                                                    >
-                                                                        <Trash2 size={16} strokeWidth={1.5} />
-                                                                    </button>
-                                                                ) : null;
-                                                            })()}
+                                                            {hasStoredDeepgramKey ? (
+                                                                <button
+                                                                    onClick={() => handleRemoveSttKey('deepgram')}
+                                                                    className="px-2.5 py-2.5 rounded-lg text-xs font-medium text-text-tertiary hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                                                    title="Remove API Key"
+                                                                >
+                                                                    <Trash2 size={16} strokeWidth={1.5} />
+                                                                </button>
+                                                            ) : null}
                                                         </div>
-
-                                                        {/* Azure Region Input */}
-                                                        {sttProvider === 'azure' && (
-                                                            <div className="space-y-1.5">
-                                                                <label className="text-xs font-medium text-text-secondary block">Region</label>
-                                                                <div className="flex gap-2">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={sttAzureRegion}
-                                                                        onChange={(e) => setSttAzureRegion(e.target.value)}
-                                                                        placeholder="e.g. eastus"
-                                                                        className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
-                                                                    />
-                                                                    <button
-                                                                        onClick={async () => {
-                                                                            if (!sttAzureRegion.trim()) return;
-                                                                            // @ts-ignore
-                                                                            await window.electronAPI?.setAzureRegion?.(sttAzureRegion.trim());
-                                                                            setSttSaved(true);
-                                                                            setTimeout(() => setSttSaved(false), 2000);
-                                                                        }}
-                                                                        disabled={!sttAzureRegion.trim()}
-                                                                        className="px-5 py-2.5 rounded-lg text-xs font-medium bg-bg-input hover:bg-bg-input/80 border border-border-subtle text-text-primary disabled:opacity-50 transition-colors"
-                                                                    >
-                                                                        Save
-                                                                    </button>
-                                                                </div>
-                                                                <p className="text-[10px] text-text-tertiary">e.g. eastus, westeurope, westus2</p>
-                                                            </div>
-                                                        )}
 
                                                         <div className="flex items-center gap-3">
                                                             <button
@@ -3356,18 +3250,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                             </button>
                                                             <button
                                                                 onClick={() => {
-                                                                    const urls: Record<string, string> = {
-                                                                        groq: 'https://console.groq.com/keys',
-                                                                        openai: 'https://platform.openai.com/api-keys',
-                                                                        deepgram: 'https://console.deepgram.com',
-                                                                        elevenlabs: 'https://elevenlabs.io/app/settings/api-keys',
-                                                                        azure: 'https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeech',
-                                                                        ibmwatson: 'https://cloud.ibm.com/catalog/services/speech-to-text'
-                                                                    };
-                                                                    if (urls[sttProvider]) {
-                                                                        // @ts-ignore
-                                                                        window.electronAPI?.openExternal(urls[sttProvider]);
-                                                                    }
+                                                                    // @ts-ignore
+                                                                    window.electronAPI?.openExternal('https://console.deepgram.com');
                                                                 }}
                                                                 className="text-xs text-text-tertiary hover:text-text-primary flex items-center gap-1 transition-colors ml-1"
                                                                 title="Get API Key"
@@ -3453,13 +3337,26 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                 <div>
                                                     <div className="flex justify-between text-xs text-text-secondary mb-2 px-1">
                                                         <span>Input Level</span>
+                                                        <button
+                                                            onClick={() => setMicTestActive(prev => !prev)}
+                                                            className={`text-[11px] font-medium px-2 py-0.5 rounded-md transition-colors ${
+                                                                micTestActive
+                                                                    ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
+                                                                    : 'bg-bg-item-surface text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 border border-border-subtle'
+                                                            }`}
+                                                        >
+                                                            {micTestActive ? 'Stop Test' : 'Test Mic'}
+                                                        </button>
                                                     </div>
                                                     <div className="h-1.5 bg-bg-input rounded-full overflow-hidden">
                                                         <div
-                                                            className="h-full bg-green-500 transition-all duration-100 ease-out"
+                                                            className={`h-full transition-all duration-100 ease-out ${micTestActive ? 'bg-green-500' : 'bg-gray-600'}`}
                                                             style={{ width: `${micLevel}%` }}
                                                         />
                                                     </div>
+                                                    {!micTestActive && (
+                                                        <p className="text-[10px] text-text-tertiary mt-1.5 px-1">Click "Test Mic" to check your microphone input level</p>
+                                                    )}
                                                 </div>
 
                                                 <div className="h-px bg-border-subtle my-2" />

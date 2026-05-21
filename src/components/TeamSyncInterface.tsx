@@ -88,6 +88,15 @@ interface Message {
 type ChipVariant = 'green' | 'amber' | 'red' | 'blue' | 'purple' | 'gray';
 interface ResponseChip { label: string; variant: ChipVariant; }
 
+type InsightToneKey =
+    | 'general'
+    | 'technical'
+    | 'sales'
+    | 'recruiting'
+    | 'team'
+    | 'lecture'
+    | 'job';
+
 type RequestLifecycleStatus = 'streaming' | 'completed' | 'failed' | 'cancelled';
 
 interface RequestLifecycle {
@@ -177,6 +186,13 @@ function generateResponseChips(text: string, _intent?: string): ResponseChip[] {
     }
 
     return chips;
+}
+
+function normalizeInsightSections(text: string): string {
+    return text.replace(
+        /^(Summary|Why this answer|Say this|Risk\s*\/\s*Tradeoff|Risk|Tradeoff|Next question|Next step|Action items?|Key takeaway|Why it matters)\s*:\s*/gim,
+        '\n### $1\n'
+    );
 }
 
 interface SttTelemetryData {
@@ -483,8 +499,20 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                 window.electronAPI?.getAOTState?.(),
                 window.electronAPI?.profileGetProfile?.(),
             ]);
-            setNegotiationContextEnabled(Boolean(negotiationState?.enabled ?? negotiationState?.isActive));
-            setHasNegotiationScript(hasNegotiationScriptAvailable(aotState, profileData));
+            const scriptAvailable = hasNegotiationScriptAvailable(aotState, profileData);
+            const currentlyEnabled = Boolean(negotiationState?.enabled ?? negotiationState?.isActive);
+
+            setHasNegotiationScript(scriptAvailable);
+
+            if (scriptAvailable && !currentlyEnabled && window.electronAPI?.profileSetNegotiationContextEnabled) {
+                const enableResult = await window.electronAPI.profileSetNegotiationContextEnabled(true);
+                if (enableResult?.success) {
+                    setNegotiationContextEnabled(Boolean(enableResult.enabled ?? enableResult.isActive ?? true));
+                    return;
+                }
+            }
+
+            setNegotiationContextEnabled(currentlyEnabled);
         } catch {
             setNegotiationContextEnabled(false);
             setHasNegotiationScript(false);
@@ -944,6 +972,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const userHasScrolledRef = useRef(false);
     const [showJumpButton, setShowJumpButton] = useState(false);
+    const [showScrollUpButton, setShowScrollUpButton] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
     // Captures data from onCaptureAndProcess before the React state flush so
     // handleWhatToSay() can access it even in React 18 concurrent mode (where
@@ -964,6 +993,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     // Active mode name (shown as a badge near the Modes button)
     const [activeModeLabel, setActiveModeLabel] = useState<string | null>(null);
     const [activeModeTemplateId, setActiveModeTemplateId] = useState<ModeTemplateId | null>(null);
+    const [isMeetingActive, setIsMeetingActive] = useState(false);
 
     useEffect(() => {
         // Load initial active mode metadata
@@ -1024,9 +1054,27 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const recommendationMode: SessionMode =
         currentSessionMode === 'system_design' ? 'system_design' : detectedQuestionType;
     const overlayCopilotMode = useMemo(
-        () => resolveOverlayCopilotMode(activeModeTemplateId, recommendationMode),
-        [activeModeTemplateId, recommendationMode]
+        () => resolveOverlayCopilotMode(isMeetingActive ? activeModeTemplateId : 'general', isMeetingActive ? recommendationMode : 'general'),
+        [activeModeTemplateId, isMeetingActive, recommendationMode]
     );
+
+    const resetOverlayRecommendationState = useCallback(() => {
+        if (recommendationTimerRef.current) {
+            clearTimeout(recommendationTimerRef.current);
+            recommendationTimerRef.current = null;
+        }
+        recommendationLockTurnIdRef.current = null;
+        currentQuestionTurnIdRef.current = null;
+        setCurrentQuestionTurnId('');
+        latestCombinedRef.current = '';
+        screenContextTextRef.current = '';
+        recommendedButtonRef.current = 'what_to_answer';
+        setRecommendedButton('what_to_answer');
+        setSession({ currentMode: 'general' });
+        dispatchIntent({ type: 'RESET' });
+        seqRef.current = 0;
+        hideScreenScanOverlay();
+    }, [hideScreenScanOverlay]);
 
     // Compute dynamic button labels based on active TeamSync mode and brainstorm toggle
     const activeQuickActions = useMemo(
@@ -1448,8 +1496,10 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         const handleScroll = () => {
             const { scrollTop, scrollHeight, clientHeight } = container;
             const isNearBottom = scrollHeight - scrollTop - clientHeight < 120;
+            const isNearTop = scrollTop < 80;
             userHasScrolledRef.current = !isNearBottom;
             setShowJumpButton(!isNearBottom);
+            setShowScrollUpButton(!isNearTop && scrollHeight > clientHeight + 80);
             if (isNearBottom) setUnreadCount(0);
         };
 
@@ -1465,6 +1515,13 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         userHasScrolledRef.current = false;
         setShowJumpButton(false);
         setUnreadCount(0);
+    }, []);
+
+    const scrollToTop = useCallback(() => {
+        const container = scrollContainerRef.current;
+        if (container) {
+            container.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     }, []);
 
     // Listen for settings window visibility changes
@@ -1567,14 +1624,8 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             activeChatRequestIdRef.current = null;
             activeRagRequestIdRef.current = null;
             activeUiRequestIdRef.current = null;
-            setSession({ currentMode: 'general' });
             requestRegistryRef.current = {};
-
-            // SESSION ISOLATION FIX: Reset intentReducer so no button mode from
-            // the previous session leaks into the new one. seqRef/scheduledSeqRef
-            // are also zeroed so any in-flight intent sequence is invalidated.
-            dispatchIntent({ type: 'RESET' });
-            seqRef.current = 0;
+            resetOverlayRecommendationState();
 
             // Track new conversation/session if applicable?
             // Actually 'app_opened' is global, 'assistant_started' is overlay.
@@ -1582,7 +1633,21 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             analytics.trackConversationStarted();
         });
         return () => unsubscribe();
-    }, []);
+    }, [resetOverlayRecommendationState]);
+
+    useEffect(() => {
+        if (!window.electronAPI?.onMeetingStateChanged) return;
+        window.electronAPI.getMeetingActive?.()
+            .then((active) => setIsMeetingActive(active))
+            .catch(() => { });
+        const unsubscribe = window.electronAPI.onMeetingStateChanged(({ isActive }) => {
+            setIsMeetingActive(isActive);
+            if (!isActive) {
+                resetOverlayRecommendationState();
+            }
+        });
+        return () => unsubscribe();
+    }, [resetOverlayRecommendationState]);
 
 
     const handleScreenshotAttach = (data: { path: string; preview: string }) => {
@@ -1788,6 +1853,19 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                 setUnreadCount(prev => prev + 1);
             }
             clearProcessingForRequest(data.requestId);
+            try {
+                const parsed = JSON.parse(data.content);
+                if (parsed?.__negotiationCoaching) {
+                    finalizeRequestMessage(data.requestId, '', {
+                        isNegotiationCoaching: true,
+                        negotiationCoachingData: parsed.__negotiationCoaching,
+                    });
+                    rememberIntentRequest(data.intent as ActionIntent, null);
+                    currentSourceRef.current = undefined;
+                    return;
+                }
+            } catch { }
+
             const chips = generateResponseChips(data.content, data.intent);
             finalizeRequestMessage(data.requestId, data.content, {
                 chips: chips.length > 0 ? chips : undefined,
@@ -2769,14 +2847,14 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                     const lang = match[1] || 'python';
                                     const code = match[2].trim();
                                     return (
-                                        <div key={i} className={`my-3 rounded-xl overflow-hidden border shadow-lg ${codeBlockClass}`} style={appearance.codeBlockStyle}>
+                                        <div key={i} className={`my-3 overflow-hidden rounded-xl border shadow-lg ${codeBlockClass}`} style={appearance.codeBlockStyle}>
                                             {/* Minimalist Apple Header */}
                                             <div className={`px-3 py-1.5 border-b ${codeHeaderClass}`} style={appearance.codeHeaderStyle}>
                                                 <span className={`text-[10px] uppercase tracking-widest font-semibold font-mono ${codeHeaderTextClass}`}>
                                                     {lang || 'CODE'}
                                                 </span>
                                             </div>
-                                            <div className="bg-transparent">
+                                            <div className="overflow-x-auto bg-transparent">
                                                 <SyntaxHighlighter
                                                     language={lang}
                                                     style={codeTheme}
@@ -2789,7 +2867,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                         padding: '16px',
                                                         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
                                                     }}
-                                                    wrapLongLines={true}
+                                                    wrapLongLines={false}
                                                     showLineNumbers={true}
                                                     lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: codeLineNumberColor, textAlign: 'right', fontSize: '11px' }}
                                                 >
@@ -2923,7 +3001,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                     }
 
                                     return (
-                                        <div key={i} className={`my-3 rounded-xl overflow-hidden border shadow-lg ${codeBlockClass}`} style={appearance.codeBlockStyle}>
+                                        <div key={i} className={`my-3 overflow-hidden rounded-xl border shadow-lg ${codeBlockClass}`} style={appearance.codeBlockStyle}>
                                             {/* Minimalist Apple Header */}
                                             <div className={`px-3 py-1.5 border-b ${codeHeaderClass}`} style={appearance.codeHeaderStyle}>
                                                 <span className={`text-[10px] uppercase tracking-widest font-semibold font-mono ${codeHeaderTextClass}`}>
@@ -2931,7 +3009,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                 </span>
                                             </div>
 
-                                            <div className="bg-transparent">
+                                            <div className="overflow-x-auto bg-transparent">
                                                 <SyntaxHighlighter
                                                     language={lang}
                                                     style={codeTheme}
@@ -2944,7 +3022,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                         padding: '16px',
                                                         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
                                                     }}
-                                                    wrapLongLines={true}
+                                                    wrapLongLines={false}
                                                     showLineNumbers={true}
                                                     lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: codeLineNumberColor, textAlign: 'right', fontSize: '11px' }}
                                                 >
@@ -2982,6 +3060,8 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
 
         // Standard Text Messages (e.g. from User or Interviewer)
         // We still want basic markdown support here too
+        // For system messages, apply normalizeInsightSections to create elegant section headers
+        const displayText = msg.role === 'system' ? normalizeInsightSections(msg.text) : msg.text;
         return (
             <div className="markdown-content">
                 <ReactMarkdown
@@ -2994,11 +3074,14 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                         ul: ({ node, ...props }: any) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
                         ol: ({ node, ...props }: any) => <ol className="list-decimal ml-4 mb-2 space-y-1" {...props} />,
                         li: ({ node, ...props }: any) => <li className="pl-1" {...props} />,
+                        h3: ({ node, ...props }: any) => (
+                            <h3 className={`text-[11px] font-bold uppercase tracking-[0.06em] mt-4 mb-1.5 pb-1 border-b ${isLightTheme ? 'text-gray-400 border-black/[0.05]' : 'text-white/30 border-white/[0.06]'}`} {...props} />
+                        ),
                         code: ({ node, ...props }: any) => <code className={`overlay-inline-code-surface rounded px-1 py-0.5 text-xs font-mono ${isLightTheme ? 'text-slate-800' : ''}`} {...props} />,
                         a: ({ node, ...props }: any) => <a className="underline hover:opacity-80" target="_blank" rel="noopener noreferrer" {...props} />,
                     }}
                 >
-                    {msg.text}
+                    {displayText}
                 </ReactMarkdown>
             </div>
         );
@@ -3034,6 +3117,8 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             const { handleWhatToSay, handleFollowUp, handleFollowUpQuestions, handleRecap, handleAnswerNow, handleClarify, handleCodeHint, handleBrainstorm } = handlersRef.current;
+            const target = e.target as HTMLElement | null;
+            const isInput = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
 
             // Chat Shortcuts (Scope: Local to Chat/Overlay usually, but we allow them here if focused)
             if (isShortcutPressed(e, 'whatToAnswer')) {
@@ -3063,6 +3148,21 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             } else if (isShortcutPressed(e, 'scrollDown')) {
                 e.preventDefault();
                 scrollContainerRef.current?.scrollBy({ top: 100, behavior: 'smooth' });
+            } else if (!isInput && e.key === 'PageUp') {
+                e.preventDefault();
+                scrollContainerRef.current?.scrollBy({ top: -320, behavior: 'smooth' });
+            } else if (!isInput && e.key === 'PageDown') {
+                e.preventDefault();
+                scrollContainerRef.current?.scrollBy({ top: 320, behavior: 'smooth' });
+            } else if (!isInput && e.key === 'Home') {
+                e.preventDefault();
+                scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+            } else if (!isInput && e.key === 'End') {
+                e.preventDefault();
+                const container = scrollContainerRef.current;
+                if (container) {
+                    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                }
             } else if (isShortcutPressed(e, 'moveWindowUp') || isShortcutPressed(e, 'moveWindowDown')) {
                 // Prevent default scrolling when moving window
                 e.preventDefault();
@@ -3486,31 +3586,109 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                     {msg.role !== 'system' && renderMessageText(msg)}
 
                                                     {/* Premium System Response Card */}
-                                                    {msg.role === 'system' && (
-                                                        <div className={`w-full relative group rounded-xl overflow-hidden backdrop-blur-xl ${isLightTheme ? 'bg-white/70 border border-black/[0.06] shadow-[0_2px_16px_rgba(0,0,0,0.06)]' : 'bg-white/[0.06] border border-white/[0.10] shadow-[0_4px_24px_rgba(0,0,0,0.3)]'}`}>
-                                                            {/* Header */}
+                                                    {msg.role === 'system' && (() => {
+                                                        const _accentKey = msg.source || '';
+                                                        const _accentMap: Record<string, [string, string]> = {
+                                                            'What to Answer': ['16,185,129', '#34D399'],
+                                                            'Clarify': ['245,158,11', '#FCD34D'],
+                                                            'Follow Up': ['6,182,212', '#67E8F9'],
+                                                            'Follow Up Questions': ['168,85,247', '#C4B5FD'],
+                                                            'Recap': ['99,102,241', '#A5B4FC'],
+                                                            'Code Hint': ['139,92,246', '#C4B5FD'],
+                                                            'Brainstorm': ['244,114,182', '#FBCFE8'],
+                                                            'Screen Scan': ['251,146,60', '#FDBA74'],
+                                                            'System Design Trade-offs': ['16,185,129', '#34D399'],
+                                                            'Answer Now': ['99,102,241', '#A5B4FC'],
+                                                            'Manual Input': ['148,163,184', '#CBD5E1'],
+                                                        };
+                                                        const [_rgb, _accentText] = _accentMap[_accentKey] || ['255,255,255', 'rgba(255,255,255,0.6)'];
+                                                        const _icon = sourceIconMap[_accentKey] || '⚡';
+                                                        return (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, y: 6, scale: 0.985 }}
+                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                            transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                                                            className="w-full relative group rounded-2xl overflow-hidden"
+                                                            style={{
+                                                                background: isLightTheme
+                                                                    ? `linear-gradient(145deg, rgba(255,255,255,0.82), rgba(${_rgb},0.04))`
+                                                                    : `linear-gradient(145deg, rgba(255,255,255,0.05), rgba(${_rgb},0.04) 60%, rgba(255,255,255,0.02))`,
+                                                                border: isLightTheme
+                                                                    ? '1px solid rgba(0,0,0,0.06)'
+                                                                    : `1px solid rgba(${_rgb},0.14)`,
+                                                                boxShadow: isLightTheme
+                                                                    ? '0 2px 20px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.8)'
+                                                                    : `0 4px 32px rgba(0,0,0,0.25), 0 0 0 1px rgba(${_rgb},0.05), inset 0 1px 0 rgba(255,255,255,0.04)`,
+                                                                backdropFilter: 'blur(24px) saturate(150%)',
+                                                                WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+                                                            }}
+                                                        >
+                                                            {/* Subtle radial accent glow */}
+                                                            <div
+                                                                className="absolute inset-0 pointer-events-none"
+                                                                style={{ background: `radial-gradient(ellipse at 20% -20%, rgba(${_rgb},${isLightTheme ? '0.05' : '0.09'}) 0%, transparent 60%)` }}
+                                                            />
+
+                                                            {/* Premium Header Pill Chip */}
                                                             {msg.source && (
-                                                                <div className={`flex items-center justify-between px-4 py-2 border-b relative z-10 ${isLightTheme ? 'border-black/[0.05] bg-black/[0.02]' : 'border-white/[0.06] bg-white/[0.03]'}`}>
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <span className={`text-[11px] font-semibold tracking-[0.06em] uppercase ${isLightTheme ? 'text-gray-500' : 'text-white/60'}`}>
-                                                                            {sourceIconMap[msg.source] || '⚡'} {msg.source}
+                                                                <div className="flex items-center justify-between px-4 pt-3.5 pb-0 relative z-10">
+                                                                    <div
+                                                                        className="inline-flex items-center gap-1.5 px-2.5 py-[5px] rounded-full"
+                                                                        style={{
+                                                                            background: isLightTheme ? `rgba(${_rgb},0.08)` : `rgba(${_rgb},0.12)`,
+                                                                            border: `1px solid rgba(${_rgb},${isLightTheme ? '0.12' : '0.2'})`,
+                                                                        }}
+                                                                    >
+                                                                        <span className="text-[10px] leading-none">{_icon}</span>
+                                                                        <span
+                                                                            className="text-[10px] font-bold tracking-[0.08em] uppercase leading-none"
+                                                                            style={{ color: isLightTheme ? `rgb(${_rgb})` : _accentText }}
+                                                                        >
+                                                                            {msg.source}
                                                                         </span>
                                                                     </div>
                                                                     {msg.isStreaming ? (
-                                                                        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md ${isLightTheme ? 'bg-blue-500/10 border border-blue-500/15' : 'bg-white/[0.06] border border-white/[0.08]'}`}>
-                                                                            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isLightTheme ? 'bg-blue-500' : 'bg-white/70'}`}></div>
-                                                                            <span className={`text-[9px] font-bold tracking-wider uppercase ${isLightTheme ? 'text-blue-500' : 'text-white/60'}`}>Live</span>
+                                                                        <div className="inline-flex items-center gap-1.5 px-2 py-[4px] rounded-full" style={{
+                                                                            background: isLightTheme ? 'rgba(59,130,246,0.08)' : 'rgba(255,255,255,0.06)',
+                                                                            border: `1px solid ${isLightTheme ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.08)'}`,
+                                                                        }}>
+                                                                            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isLightTheme ? 'bg-blue-500' : 'bg-white/70'}`} />
+                                                                            <span className={`text-[9px] font-bold tracking-wider uppercase ${isLightTheme ? 'text-blue-500' : 'text-white/50'}`}>Live</span>
                                                                         </div>
                                                                     ) : null}
                                                                 </div>
                                                             )}
 
-                                                            {/* Body */}
-                                                            <div className={`p-4 text-[14px] leading-relaxed relative z-10 ${isLightTheme ? 'text-gray-800' : 'text-[#F3F4F6]'}`}>
+                                                            {/* Subtle gradient separator */}
+                                                            {msg.source && (
+                                                                <div className="mx-4 mt-2.5" style={{
+                                                                    height: '1px',
+                                                                    background: isLightTheme
+                                                                        ? 'linear-gradient(90deg, transparent, rgba(0,0,0,0.06), transparent)'
+                                                                        : `linear-gradient(90deg, transparent, rgba(${_rgb},0.12), transparent)`,
+                                                                }} />
+                                                            )}
+
+                                                            {/* Body — premium typography */}
+                                                            <div
+                                                                className={`px-4 ${msg.source ? 'pt-3' : 'pt-4'} pb-3 relative z-10`}
+                                                                style={{
+                                                                    fontSize: '14.5px',
+                                                                    lineHeight: '1.72',
+                                                                    fontWeight: 420,
+                                                                    color: isLightTheme ? '#1f2937' : '#F3F4F6',
+                                                                    WebkitFontSmoothing: 'antialiased',
+                                                                }}
+                                                            >
                                                                 {!msg.isStreaming && (
                                                                     <button
                                                                         onClick={() => handleCopy(msg.text)}
-                                                                        className={`absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity border ${isLightTheme ? 'bg-black/[0.03] hover:bg-black/[0.06] text-gray-400 hover:text-gray-600 border-black/[0.05]' : 'bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/90 border-white/5'}`}
+                                                                        className="absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200"
+                                                                        style={{
+                                                                            background: isLightTheme ? 'rgba(0,0,0,0.03)' : `rgba(${_rgb},0.08)`,
+                                                                            border: `1px solid ${isLightTheme ? 'rgba(0,0,0,0.05)' : `rgba(${_rgb},0.15)`}`,
+                                                                            color: isLightTheme ? '#9CA3AF' : 'rgba(255,255,255,0.5)',
+                                                                        }}
                                                                         title="Copy to clipboard"
                                                                     >
                                                                         <Copy className="w-3.5 h-3.5" />
@@ -3521,20 +3699,21 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
 
                                                             {/* Response Chips */}
                                                             {!msg.isStreaming && msg.chips && msg.chips.length > 0 && (
-                                                                <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+                                                                <div className="flex flex-wrap gap-1.5 px-4 pb-3.5">
                                                                     {msg.chips.map((chip, i) => (
                                                                         <span
                                                                             key={i}
-                                                                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-tight border cursor-default select-none"
+                                                                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-tight cursor-default select-none"
                                                                             style={{
                                                                                 animationDelay: `${i * 60}ms`,
                                                                                 animation: 'fadeInUp 0.22s cubic-bezier(0.23,1,0.32,1) both',
-                                                                                ...(chip.variant === 'green' ? { background: 'rgba(34,197,94,0.12)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.28)' } :
-                                                                                    chip.variant === 'amber' ? { background: 'rgba(245,158,11,0.14)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.32)' } :
-                                                                                        chip.variant === 'red' ? { background: 'rgba(239,68,68,0.12)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.28)' } :
-                                                                                            chip.variant === 'blue' ? { background: 'rgba(59,130,246,0.12)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.28)' } :
-                                                                                                chip.variant === 'purple' ? { background: 'rgba(167,139,250,0.12)', color: '#C4B5FD', border: '1px solid rgba(167,139,250,0.28)' } :
-                                                                                                    { background: 'rgba(255,255,255,0.07)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.12)' })
+                                                                                backdropFilter: 'blur(8px)',
+                                                                                ...(chip.variant === 'green' ? { background: 'rgba(34,197,94,0.10)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.20)' } :
+                                                                                    chip.variant === 'amber' ? { background: 'rgba(245,158,11,0.10)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.22)' } :
+                                                                                        chip.variant === 'red' ? { background: 'rgba(239,68,68,0.10)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.20)' } :
+                                                                                            chip.variant === 'blue' ? { background: 'rgba(59,130,246,0.10)', color: '#93C5FD', border: '1px solid rgba(59,130,246,0.20)' } :
+                                                                                                chip.variant === 'purple' ? { background: 'rgba(167,139,250,0.10)', color: '#C4B5FD', border: '1px solid rgba(167,139,250,0.20)' } :
+                                                                                                    { background: 'rgba(255,255,255,0.05)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.08)' })
                                                                             }}
                                                                         >
                                                                             {chip.label}
@@ -3542,8 +3721,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                                     ))}
                                                                 </div>
                                                             )}
-                                                        </div>
-                                                    )}
+                                                        </motion.div>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                         ))}
@@ -3580,12 +3760,24 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                         <div ref={messagesEndRef} />
                                     </div>
 
-                                    {/* Jump to latest button */}
-                                    {showJumpButton && (
-                                        <div className="flex justify-center py-1 no-drag">
+                                    {/* Scroll Navigation — ChatGPT-style up/down buttons */}
+                                    {(showScrollUpButton || showJumpButton) && (
+                                        <div className="flex justify-center items-center gap-1 py-1.5 no-drag">
+                                            {/* Scroll to Top */}
+                                            <button
+                                                onClick={scrollToTop}
+                                                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium backdrop-blur-md transition-all duration-200 ${showScrollUpButton ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${isLightTheme ? 'bg-black/[0.04] hover:bg-black/[0.07] text-gray-500 hover:text-gray-700 border border-black/[0.06]' : 'bg-white/[0.06] hover:bg-white/[0.10] text-white/50 hover:text-white/80 border border-white/[0.08]'}`}
+                                                title="Scroll to top"
+                                            >
+                                                <ChevronUp className="w-3 h-3" />
+                                                <span>Top</span>
+                                            </button>
+
+                                            {/* Scroll to Bottom */}
                                             <button
                                                 onClick={scrollToBottom}
-                                                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium overlay-chip-surface border border-transparent hover:border-white/10 hover:bg-white/[0.08] transition-all duration-200 overlay-text-muted hover:overlay-text-secondary"
+                                                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium backdrop-blur-md transition-all duration-200 ${showJumpButton ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${isLightTheme ? 'bg-black/[0.04] hover:bg-black/[0.07] text-gray-500 hover:text-gray-700 border border-black/[0.06]' : 'bg-white/[0.06] hover:bg-white/[0.10] text-white/50 hover:text-white/80 border border-white/[0.08]'}`}
+                                                title="Scroll to bottom"
                                             >
                                                 <ChevronDown className="w-3 h-3" />
                                                 {unreadCount > 0 ? (
@@ -3594,7 +3786,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                         <span className="flex h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
                                                     </>
                                                 ) : (
-                                                    'Latest'
+                                                    <span>End</span>
                                                 )}
                                             </button>
                                         </div>

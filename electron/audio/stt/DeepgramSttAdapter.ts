@@ -1,8 +1,9 @@
 import { DeepgramStreamingSTT } from "../DeepgramStreamingSTT";
-import { StreamingSttAdapter, SttFatalEvent, SttTranscriptEvent } from "./SttAdapter";
+import { SttActivityEvent, StreamingSttAdapter, SttFatalEvent, SttTranscriptEvent } from "./SttAdapter";
 
 type TranscriptCallback = (event: SttTranscriptEvent) => void;
 type FatalCallback = (event: SttFatalEvent) => void;
+type ActivityCallback = (event: SttActivityEvent) => void;
 
 function classifyDeepgramError(error: Error, sourceLabel: string): SttFatalEvent {
   const message = error.message.toLowerCase();
@@ -33,6 +34,7 @@ export class DeepgramSttAdapter implements StreamingSttAdapter {
   private provider: DeepgramStreamingSTT | null = null;
   private transcriptListeners = new Set<TranscriptCallback>();
   private fatalListeners = new Set<FatalCallback>();
+  private activityListeners = new Set<ActivityCallback>();
   private recognitionLanguage = "english-us";
   private sampleRate = 16_000;
   private audioChannelCount = 1;
@@ -77,6 +79,13 @@ export class DeepgramSttAdapter implements StreamingSttAdapter {
     this.fatalListeners.add(callback);
     return () => {
       this.fatalListeners.delete(callback);
+    };
+  }
+
+  public onActivity(callback: ActivityCallback): () => void {
+    this.activityListeners.add(callback);
+    return () => {
+      this.activityListeners.delete(callback);
     };
   }
 
@@ -136,6 +145,16 @@ export class DeepgramSttAdapter implements StreamingSttAdapter {
       const classified = classifyDeepgramError(error, this.sourceLabel);
       for (const listener of this.fatalListeners) {
         listener(classified);
+      }
+    });
+
+    provider.on("activity", (event: Omit<SttActivityEvent, "provider" | "sourceLabel">) => {
+      for (const listener of this.activityListeners) {
+        listener({
+          ...event,
+          provider: this.name,
+          sourceLabel: this.sourceLabel,
+        });
       }
     });
 

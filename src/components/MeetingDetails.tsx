@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Search, Mail, Link, ChevronDown, Play, ArrowUp, Copy, Check, MoreHorizontal, Settings, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MeetingChatOverlay from './MeetingChatOverlay';
@@ -110,6 +110,7 @@ const MeetingDetails: React.FC<MeetingDetailsProps> = ({ meeting: initialMeeting
     const [isCopied, setIsCopied] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [submittedQuery, setSubmittedQuery] = useState('');
+    const scrollContainerRef = useRef<HTMLElement | null>(null);
     const overviewText = getMeetingOverview(meeting);
     const tabOptions: Array<'summary' | 'transcript' | 'usage'> = ['summary', 'transcript', 'usage'];
     const meetingDateLabel = new Date(meeting.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
@@ -230,13 +231,51 @@ ${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'No
         }
     };
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            const isInput = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+            if (isInput) {
+                return;
+            }
+
+            const container = scrollContainerRef.current;
+            if (!container) {
+                return;
+            }
+
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                container.scrollBy({ top: -72, behavior: 'smooth' });
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                container.scrollBy({ top: 72, behavior: 'smooth' });
+            } else if (e.key === 'PageUp') {
+                e.preventDefault();
+                container.scrollBy({ top: -360, behavior: 'smooth' });
+            } else if (e.key === 'PageDown') {
+                e.preventDefault();
+                container.scrollBy({ top: 360, behavior: 'smooth' });
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                container.scrollTo({ top: 0, behavior: 'smooth' });
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
 
     return (
         <div className="meeting-notes-screen relative h-full w-full overflow-hidden font-sans text-text-secondary">
             <div className="meeting-notes-screen__ambient meeting-notes-screen__ambient--top" />
             <div className="meeting-notes-screen__ambient meeting-notes-screen__ambient--bottom" />
 
-            <main className="relative z-10 flex-1 overflow-y-auto custom-scrollbar">
+            <main ref={scrollContainerRef} className="relative z-10 flex-1 overflow-y-auto custom-scrollbar">
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -506,7 +545,7 @@ ${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'No
                                                                                             {lang || 'CODE'}
                                                                                         </span>
                                                                                     </div>
-                                                                                    <div className="bg-transparent">
+                                                                                    <div className="overflow-x-auto bg-transparent">
                                                                                         <SyntaxHighlighter
                                                                                             language={lang || 'text'}
                                                                                             style={vscDarkPlus}
@@ -519,7 +558,7 @@ ${meeting.detailedSummary?.keyPoints?.map(item => `- ${item}`).join('\n') || 'No
                                                                                                 padding: '16px',
                                                                                                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
                                                                                             }}
-                                                                                            wrapLongLines={true}
+                                                                                            wrapLongLines={false}
                                                                                             showLineNumbers={true}
                                                                                             lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: 'rgba(255,255,255,0.2)', textAlign: 'right', fontSize: '11px' }}
                                                                                             {...props}

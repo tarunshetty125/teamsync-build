@@ -119,13 +119,13 @@ const AssistantMessage: React.FC<{ content: string; isStreaming?: boolean }> = (
                                 const lang = match ? match[1] : '';
 
                                 return !isInline ? (
-                                    <div className="my-3 rounded-xl overflow-hidden border border-white/[0.08] shadow-lg bg-zinc-800/60 backdrop-blur-md">
+                                    <div className="my-3 overflow-hidden rounded-xl border border-white/[0.08] bg-zinc-800/60 shadow-lg backdrop-blur-md">
                                         <div className="bg-white/[0.04] px-3 py-1.5 border-b border-white/[0.08]">
                                             <span className="text-[10px] uppercase tracking-widest font-semibold text-white/40 font-mono">
                                                 {lang || 'CODE'}
                                             </span>
                                         </div>
-                                        <div className="bg-transparent">
+                                        <div className="overflow-x-auto bg-transparent">
                                             <SyntaxHighlighter
                                                 language={lang || 'text'}
                                                 style={vscDarkPlus}
@@ -138,7 +138,7 @@ const AssistantMessage: React.FC<{ content: string; isStreaming?: boolean }> = (
                                                     padding: '16px',
                                                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
                                                 }}
-                                                wrapLongLines={true}
+                                                wrapLongLines={false}
                                                 showLineNumbers={true}
                                                 lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1.2em', color: 'rgba(255,255,255,0.2)', textAlign: 'right', fontSize: '11px' }}
                                                 {...props}
@@ -195,6 +195,7 @@ const MeetingChatOverlay: React.FC<MeetingChatOverlayProps> = ({
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
     const streamBuffer = useStreamBuffer();
 
@@ -228,8 +229,16 @@ const MeetingChatOverlay: React.FC<MeetingChatOverlayProps> = ({
     // ESC key handler
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            const isInput = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
             if (e.key === 'Escape' && isOpen) {
                 handleClose();
+            } else if (!isInput && e.key === 'PageUp') {
+                e.preventDefault();
+                messagesContainerRef.current?.scrollBy({ top: -320, behavior: 'smooth' });
+            } else if (!isInput && e.key === 'PageDown') {
+                e.preventDefault();
+                messagesContainerRef.current?.scrollBy({ top: 320, behavior: 'smooth' });
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -524,7 +533,7 @@ ${contextString}`;
                         </div>
 
                         {/* Messages area - scrollable */}
-                        <div className="flex-1 overflow-y-auto px-6 py-4 pb-32 custom-scrollbar">
+                        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-6 py-4 pb-32 custom-scrollbar">
                             {meetingContext.transcript?.length ? (
                                 <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
                                     <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">

@@ -9,11 +9,14 @@
 
 import { EventEmitter } from 'events';
 import { RECOGNITION_LANGUAGES } from '../config/languages';
+import type { SttActivityEvent } from './stt/SttAdapter';
 
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30000;
 const RECONNECT_MAX_ATTEMPTS = 10;
 const KEEPALIVE_INTERVAL_MS = 1000;
+const STABLE_CONNECTION_RESET_MS = 5000;
+const RECONNECT_JITTER_RATIO = 0.2;
 
 export class DeepgramStreamingSTT extends EventEmitter {
     private apiKey: string;
@@ -29,9 +32,13 @@ export class DeepgramStreamingSTT extends EventEmitter {
     private reconnectAttempts = 0;
     private reconnectTimer: NodeJS.Timeout | null = null;
     private keepAliveInterval: NodeJS.Timeout | null = null;
+    private stableConnectionTimer: NodeJS.Timeout | null = null;
     private buffer: Buffer[] = [];
     private isConnecting = false;
     private connectionGeneration = 0;
+    private closingGeneration = 0;
+    private lastFailureSignature: string | null = null;
+    private lastFailureAt = 0;
 
     constructor(apiKey: string) {
         super();
@@ -88,14 +95,7 @@ export class DeepgramStreamingSTT extends EventEmitter {
         this.shouldReconnect = false;
         this.clearTimers();
 
-        if (this.live) {
-            try {
-                this.live.requestClose();
-            } catch {
-                // ignore errors during shutdown
-            }
-            this.live = null;
-        }
+        this.closeLiveConnection('stop');
 
         this.isActive = false;
         this.isConnecting = false;
@@ -129,7 +129,9 @@ export class DeepgramStreamingSTT extends EventEmitter {
         try {
             this.live.send(chunk);
         } catch (err: any) {
-            console.error('[DeepgramStreaming] Send error:', err?.message);
+            const error = this.normalizeError(err, 'Deepgram send failed');
+            console.error('[DeepgramStreaming] Send error:', error.message);
+            this.handleConnectionFailure(error, 'send');
         }
     }
 
@@ -159,42 +161,86 @@ export class DeepgramStreamingSTT extends EventEmitter {
             });
             this.live = connection;
 
+            const emitActivity = (event: Omit<SttActivityEvent, 'provider' | 'sourceLabel'>) => {
+                this.emit('activity', event);
+            };
+
+            connection.on(LiveTranscriptionEvents.Transcript, (data: any) => {
+                if (this.live !== connection || this.connectionGeneration !== connectionGeneration) {
+                    return;
+                }
+
+                emitActivity({
+                    kind: 'transcript',
+                    timestamp: Date.now(),
+                    isFinal: data?.is_final ?? false,
+                });
+
+                try {
+                    const alt = data.channel?.alternatives?.[0];
+                    const transcript = alt?.transcript;
+                    const isFinal = data.is_final ?? false;
+                    console.log(`[DeepgramStreaming] Transcript event — isFinal=${isFinal}, text="${transcript ?? '(empty)'}"`);
+                    if (!transcript) return;
+                    this.emit('transcript', {
+                        text: transcript,
+                        isFinal,
+                        confidence: alt?.confidence ?? 1.0,
+                    });
+                } catch (err) {
+                    console.error('[DeepgramStreaming] Parse error:', err);
+                }
+            });
+
+            connection.on(LiveTranscriptionEvents.SpeechStarted, (event: any) => {
+                if (this.live !== connection || this.connectionGeneration !== connectionGeneration) {
+                    return;
+                }
+
+                emitActivity({
+                    kind: 'speech_started',
+                    timestamp: Date.now(),
+                    detail: JSON.stringify(event),
+                });
+            });
+
+            connection.on(LiveTranscriptionEvents.UtteranceEnd, (event: any) => {
+                if (this.live !== connection || this.connectionGeneration !== connectionGeneration) {
+                    return;
+                }
+
+                emitActivity({
+                    kind: 'utterance_end',
+                    timestamp: Date.now(),
+                    detail: JSON.stringify(event),
+                });
+            });
+
             connection.on(LiveTranscriptionEvents.Open, () => {
                 if (this.live !== connection || this.connectionGeneration !== connectionGeneration || !this.shouldReconnect) {
-                    try { connection.requestClose(); } catch { }
+                    this.safeRequestClose(connection);
                     return;
                 }
 
                 this.isConnecting = false;
                 this.isOpen = true;
                 console.log('[DeepgramStreaming] Connected');
-
-                // Register Transcript inside Open per SDK README pattern
-                connection.on(LiveTranscriptionEvents.Transcript, (data: any) => {
-                    if (this.live !== connection || this.connectionGeneration !== connectionGeneration) {
-                        return;
-                    }
-
-                    try {
-                        const alt = data.channel?.alternatives?.[0];
-                        const transcript = alt?.transcript;
-                        const isFinal = data.is_final ?? false;
-                        console.log(`[DeepgramStreaming] Transcript event — isFinal=${isFinal}, text="${transcript ?? '(empty)'}"`);
-                        if (!transcript) return;
-                        this.emit('transcript', {
-                            text: transcript,
-                            isFinal,
-                            confidence: alt?.confidence ?? 1.0,
-                        });
-                    } catch (err) {
-                        console.error('[DeepgramStreaming] Parse error:', err);
-                    }
+                emitActivity({
+                    kind: 'provider_open',
+                    timestamp: Date.now(),
                 });
 
                 // Flush buffered audio
                 const buffered = this.buffer.splice(0);
                 for (const chunk of buffered) {
-                    try { connection.send(chunk); } catch { }
+                    try {
+                        connection.send(chunk);
+                    } catch (err) {
+                        const error = this.normalizeError(err, 'Deepgram flush failed');
+                        console.error('[DeepgramStreaming] Flush error:', error.message);
+                        this.handleConnectionFailure(error, 'flush', connection, connectionGeneration);
+                        break;
+                    }
                 }
                 if (buffered.length > 0) {
                     console.log(`[DeepgramStreaming] Flushed ${buffered.length} buffered chunks`);
@@ -204,16 +250,24 @@ export class DeepgramStreamingSTT extends EventEmitter {
                 try { connection.keepAlive(); } catch { }
                 this.keepAliveInterval = setInterval(() => {
                     if (this.isOpen && this.live === connection && this.connectionGeneration === connectionGeneration) {
-                        try { connection.keepAlive(); } catch { }
+                        try {
+                            connection.keepAlive();
+                        } catch (err) {
+                            const error = this.normalizeError(err, 'Deepgram keepalive failed');
+                            console.error('[DeepgramStreaming] Keepalive error:', error.message);
+                            this.handleConnectionFailure(error, 'keepalive', connection, connectionGeneration);
+                        }
                     }
                 }, KEEPALIVE_INTERVAL_MS);
 
-                // Reset backoff only after 5s of stable connection
-                setTimeout(() => {
+                // Reset backoff only after a stable window so rapid 1006 loops keep escalating.
+                this.stableConnectionTimer = setTimeout(() => {
                     if (this.isOpen && this.live === connection && this.connectionGeneration === connectionGeneration) {
                         this.reconnectAttempts = 0;
+                        this.lastFailureSignature = null;
+                        this.lastFailureAt = 0;
                     }
-                }, 5000);
+                }, STABLE_CONNECTION_RESET_MS);
             });
 
             connection.on(LiveTranscriptionEvents.Error, (err: any) => {
@@ -221,8 +275,14 @@ export class DeepgramStreamingSTT extends EventEmitter {
                     return;
                 }
 
-                console.error('[DeepgramStreaming] Error:', err);
-                this.emit('error', err instanceof Error ? err : new Error(String(err)));
+                const error = this.normalizeError(err, 'Deepgram websocket error');
+                console.error('[DeepgramStreaming] Error:', error.message);
+                emitActivity({
+                    kind: 'provider_error',
+                    timestamp: Date.now(),
+                    detail: error.message,
+                });
+                this.handleConnectionFailure(error, 'ws_error', connection, connectionGeneration);
             });
 
             connection.on(LiveTranscriptionEvents.Unhandled, (event: any) => {
@@ -241,20 +301,34 @@ export class DeepgramStreamingSTT extends EventEmitter {
                 const reason = event?.reason || '(empty)';
                 console.log(`[DeepgramStreaming] Closed (code=${code}, reason=${reason})`);
 
-                this.live = null;
+                const isIntentional = connectionGeneration <= this.closingGeneration || !this.shouldReconnect;
+                emitActivity({
+                    kind: 'provider_close',
+                    timestamp: Date.now(),
+                    detail: `code=${code} reason=${reason}`,
+                });
+                if (this.live === connection) {
+                    this.live = null;
+                }
                 this.isOpen = false;
                 this.isConnecting = false;
                 this.clearTimers();
 
-                if (this.shouldReconnect && code !== 1000) {
-                    this.scheduleReconnect();
+                if (!isIntentional && code !== 1000) {
+                    this.handleConnectionFailure(
+                        new Error(`Deepgram websocket closed unexpectedly (${code}): ${reason}`),
+                        'ws_close',
+                        connection,
+                        connectionGeneration
+                    );
                 }
             });
 
         } catch (err: any) {
-            console.error('[DeepgramStreaming] Initialization error:', err?.message);
+            const error = this.normalizeError(err, 'Deepgram initialization failed');
+            console.error('[DeepgramStreaming] Initialization error:', error.message);
             this.isConnecting = false;
-            if (this.shouldReconnect) this.scheduleReconnect();
+            this.handleConnectionFailure(error, 'init');
         }
     }
 
@@ -275,14 +349,16 @@ export class DeepgramStreamingSTT extends EventEmitter {
             RECONNECT_BASE_DELAY_MS * Math.pow(2, this.reconnectAttempts),
             RECONNECT_MAX_DELAY_MS
         );
+        const jitter = Math.round(delay * RECONNECT_JITTER_RATIO * Math.random());
+        const staggeredDelay = delay + jitter;
         this.reconnectAttempts++;
 
-        console.log(`[DeepgramStreaming] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${RECONNECT_MAX_ATTEMPTS})...`);
+        console.log(`[DeepgramStreaming] Reconnecting in ${staggeredDelay}ms (attempt ${this.reconnectAttempts}/${RECONNECT_MAX_ATTEMPTS})...`);
 
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
             if (this.shouldReconnect) this.connect();
-        }, delay);
+        }, staggeredDelay);
     }
 
     private clearTimers(): void {
@@ -294,5 +370,112 @@ export class DeepgramStreamingSTT extends EventEmitter {
             clearInterval(this.keepAliveInterval);
             this.keepAliveInterval = null;
         }
+        if (this.stableConnectionTimer) {
+            clearTimeout(this.stableConnectionTimer);
+            this.stableConnectionTimer = null;
+        }
+    }
+
+    public finalize(): void {
+        if (!this.live || !this.isOpen) {
+            return;
+        }
+
+        try {
+            this.live.finalize();
+        } catch (err) {
+            const error = this.normalizeError(err, 'Deepgram finalize failed');
+            console.error('[DeepgramStreaming] Finalize error:', error.message);
+        }
+    }
+
+    private closeLiveConnection(reason: string): void {
+        if (!this.live) {
+            return;
+        }
+
+        this.closingGeneration = Math.max(this.closingGeneration, this.connectionGeneration);
+        const connection = this.live;
+        this.live = null;
+        this.isOpen = false;
+
+        try {
+            this.safeRequestClose(connection);
+        } catch (err) {
+            const error = this.normalizeError(err, `Deepgram close failed during ${reason}`);
+            if (!this.isBenignTransportError(error)) {
+                console.error('[DeepgramStreaming] Close error:', error.message);
+            }
+        }
+    }
+
+    private safeRequestClose(connection: any): void {
+        if (!connection) return;
+
+        try {
+            connection.requestClose();
+        } catch (err) {
+            const error = this.normalizeError(err, 'Deepgram requestClose failed');
+            if (!this.isBenignTransportError(error)) {
+                throw error;
+            }
+        }
+    }
+
+    private handleConnectionFailure(
+        err: unknown,
+        source: string,
+        connection: any = this.live,
+        generation: number = this.connectionGeneration
+    ): void {
+        const error = this.normalizeError(err, `Deepgram ${source} failure`);
+        const isIntentional = generation <= this.closingGeneration || !this.shouldReconnect;
+        if (isIntentional) {
+            if (!this.isBenignTransportError(error)) {
+                console.log(`[DeepgramStreaming] Ignoring ${source} after intentional close: ${error.message}`);
+            }
+            return;
+        }
+
+        const signature = `${generation}:${source}:${error.message}`;
+        const now = Date.now();
+        if (this.lastFailureSignature === signature && now - this.lastFailureAt < 750) {
+            return;
+        }
+        this.lastFailureSignature = signature;
+        this.lastFailureAt = now;
+
+        this.clearTimers();
+        this.isOpen = false;
+        this.isConnecting = false;
+
+        if (this.live === connection) {
+            this.closeLiveConnection(source);
+        }
+
+        this.emit('error', error);
+        this.scheduleReconnect();
+    }
+
+    private normalizeError(err: unknown, fallbackMessage: string): Error {
+        if (err instanceof Error) {
+            return err;
+        }
+        if (typeof err === 'string' && err.trim()) {
+            return new Error(err);
+        }
+        if (err && typeof err === 'object') {
+            const message = (err as any).message || (err as any).type || JSON.stringify(err);
+            return new Error(typeof message === 'string' && message.trim() ? message : fallbackMessage);
+        }
+        return new Error(fallbackMessage);
+    }
+
+    private isBenignTransportError(error: Error): boolean {
+        const message = error.message.toLowerCase();
+        return message.includes('epipe')
+            || message.includes('socket is not open')
+            || message.includes('ready state')
+            || message.includes('closed before the connection was established');
     }
 }

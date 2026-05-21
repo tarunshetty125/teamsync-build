@@ -6,6 +6,7 @@
 import { app, safeStorage } from 'electron';
 import fs from 'fs';
 import path from 'path';
+import { DEFAULT_RUNTIME_STT_PROVIDER, isSupportedRuntimeSttProvider, normalizeRuntimeSttProvider } from '../audio/stt/SttRuntimeConfig';
 
 const CREDENTIALS_PATH = path.join(app.getPath('userData'), 'credentials.enc');
 
@@ -33,7 +34,7 @@ export interface StoredCredentials {
     defaultModel?: string;
     teamsyncApiKey?: string;
     // STT Provider settings
-    sttProvider?: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync';
+    sttProvider?: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync' | 'whisper';
     groqSttApiKey?: string;
     groqSttModel?: string;
     openAiSttApiKey?: string;
@@ -63,6 +64,7 @@ export interface StoredCredentials {
 export class CredentialsManager {
     private static instance: CredentialsManager;
     private credentials: StoredCredentials = {};
+    private unsupportedProviderWarnings = new Set<string>();
 
     private constructor() {
         // Load on construction after app ready
@@ -112,18 +114,13 @@ export class CredentialsManager {
         return this.credentials.customProviders || [];
     }
 
-    public getSttProvider(): 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync' {
-        const provider = this.credentials.sttProvider || 'none';
-        // Self-heal: if provider is 'none' but a TeamSync key exists, the user is in a
-        // broken state (key cleared then re-entered via a path that skipped auto-promote,
-        // or credentials restored from backup). Silently restore to 'teamsync' so STT works.
-        if (provider === 'none' && this.credentials.teamsyncApiKey) {
-            this.credentials.sttProvider = 'teamsync';
-            this.saveCredentials();
-            console.log('[CredentialsManager] Self-healed sttProvider: none→teamsync (TeamSync key present)');
-            return 'teamsync';
+    public getSttProvider(): 'deepgram' | 'google' | 'whisper' {
+        const rawProvider = this.credentials.sttProvider;
+        const normalizedProvider = normalizeRuntimeSttProvider(rawProvider);
+        if (rawProvider !== normalizedProvider) {
+            this.warnAndNormalizeSttProvider(rawProvider);
         }
-        return provider;
+        return normalizedProvider;
     }
 
     public getDeepgramApiKey(): string | undefined {
@@ -223,10 +220,14 @@ export class CredentialsManager {
         console.log('[CredentialsManager] Google Service Account path updated');
     }
 
-    public setSttProvider(provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync'): void {
-        this.credentials.sttProvider = provider;
+    public setSttProvider(provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync' | 'whisper'): void {
+        const normalizedProvider = normalizeRuntimeSttProvider(provider);
+        if (provider !== normalizedProvider) {
+            this.logUnsupportedProviderSelection(provider, normalizedProvider);
+        }
+        this.credentials.sttProvider = normalizedProvider;
         this.saveCredentials();
-        console.log(`[CredentialsManager] STT Provider set to: ${provider}`);
+        console.log(`[CredentialsManager] STT Provider set to: ${normalizedProvider}`);
     }
 
     public setDeepgramApiKey(key: string): void {
@@ -257,6 +258,35 @@ export class CredentialsManager {
         this.credentials.elevenLabsApiKey = key;
         this.saveCredentials();
         console.log('[CredentialsManager] ElevenLabs API Key updated');
+    }
+
+    private warnAndNormalizeSttProvider(rawProvider: string | undefined): void {
+        const normalizedProvider = normalizeRuntimeSttProvider(rawProvider);
+        this.logUnsupportedProviderSelection(rawProvider, normalizedProvider);
+        this.credentials.sttProvider = normalizedProvider;
+        this.saveCredentials();
+    }
+
+    private logUnsupportedProviderSelection(rawProvider: string | undefined, normalizedProvider: string): void {
+        const unsupportedProvider = (rawProvider || '').trim().toLowerCase();
+        const warningKey = unsupportedProvider || 'unset';
+        if (this.unsupportedProviderWarnings.has(warningKey)) {
+            return;
+        }
+
+        this.unsupportedProviderWarnings.add(warningKey);
+        if (!unsupportedProvider || unsupportedProvider === normalizedProvider) {
+            console.warn(
+                `[CredentialsManager] No supported STT provider was configured. Defaulting runtime provider to ${DEFAULT_RUNTIME_STT_PROVIDER}.`
+            );
+            return;
+        }
+
+        if (!isSupportedRuntimeSttProvider(unsupportedProvider)) {
+            console.warn(
+                `[CredentialsManager] STT provider "${rawProvider}" is not supported at runtime. Falling back to ${normalizedProvider}.`
+            );
+        }
     }
 
     public setAzureApiKey(key: string): void {

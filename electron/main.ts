@@ -120,6 +120,7 @@ import { SttSupervisor } from "./audio/stt/SttSupervisor"
 import { DeepgramSttAdapter } from "./audio/stt/DeepgramSttAdapter"
 import { GoogleStreamingSttAdapter } from "./audio/stt/GoogleStreamingSttAdapter"
 import { WhisperFallbackSttAdapter } from "./audio/stt/WhisperFallbackSttAdapter"
+import { ElevenLabsShadowProbe } from "./audio/stt/ElevenLabsShadowProbe"
 import type { SttMetricsSnapshot, StreamingSttAdapter, SttTelemetryEvent } from "./audio/stt/SttAdapter"
 import { assertValidSttRuntimeConfig, loadSttRuntimeConfig, validateSttRuntimeConfig } from "./audio/stt/SttRuntimeConfig"
 import { runSttLoadTest, type SttLoadTestResult } from "./audio/stt/SttLoadTester"
@@ -1042,6 +1043,7 @@ export class AppState {
   private googleSTT: STTProvider | null = null; // Interviewer
   private googleSTT_User: STTProvider | null = null; // User
   private speakerDiarizer: SpeakerDiarizer = new SpeakerDiarizer();
+  private elevenLabsShadowProbe: ElevenLabsShadowProbe | null = null;
 
   private createSTTProvider(speaker: 'interviewer' | 'user'): STTProvider | null {
     const { CredentialsManager } = require('./services/CredentialsManager');
@@ -1055,12 +1057,6 @@ export class AppState {
     if (configuredProvider === 'none') {
       console.log(`[Main] STT provider is 'none' — audio capture will proceed but transcription is disabled.`);
       return null;
-    }
-
-    if (configuredProvider !== 'deepgram' && configuredProvider !== 'google') {
-      console.warn(
-        `[Main] Configured STT provider "${configuredProvider}" is not yet implemented in SttSupervisor. Using Deepgram -> Google fallback chain for ${speaker}.`
-      );
     }
 
     console.log(`[Main] STT priority order for ${speaker}: ${config.priorityOrder.join(" -> ")}`);
@@ -1120,7 +1116,7 @@ export class AppState {
 
     const getBroadcastProvider = () => {
       const active = stt.getActiveProviderName();
-      return active === 'inactive' ? configuredProvider : active;
+      return active === 'inactive' ? (config.priorityOrder[0] || configuredProvider || 'deepgram') : active;
     };
 
     stt.on("telemetry", (event: SttTelemetryEvent) => {
@@ -1232,6 +1228,8 @@ export class AppState {
 
       const isQuotaError = err.message.toLowerCase().includes('transcription_quota_exceeded')
         || err.message.toLowerCase().includes('quota');
+      const isDegradedError = err.message.toLowerCase().includes('speech recognition temporarily unavailable')
+        || err.message.toLowerCase().includes('exhausted stt failover chain');
 
       if (isAuthError) {
         _consecutiveErrors = 0;
@@ -1249,14 +1247,16 @@ export class AppState {
       _consecutiveErrors++;
       const maxErrors = 5;
 
-      if (_consecutiveErrors >= maxErrors || isQuotaError) {
+      if (_consecutiveErrors >= maxErrors || isQuotaError || isDegradedError) {
         _lastState = 'failed';
         this.broadcast('stt-status', {
           state: 'failed',
           provider: getBroadcastProvider(),
-          error: isQuotaError
-            ? errorMessage
-            : `STT provider failed (${_consecutiveErrors} consecutive errors): ${errorMessage}`,
+          error: isDegradedError
+            ? 'Speech recognition temporarily unavailable'
+            : isQuotaError
+              ? errorMessage
+              : `STT provider failed (${_consecutiveErrors} consecutive errors): ${errorMessage}`,
           channel: speaker,
           reconnectAttempts: _consecutiveErrors,
         } as SttStatusPayload);
@@ -1289,6 +1289,40 @@ export class AppState {
     });
 
     return stt;
+  }
+
+  private startElevenLabsShadowProbe(): void {
+    const apiKey = CredentialsManager.getInstance().getElevenLabsApiKey?.()?.trim();
+    if (!apiKey) {
+      this.stopElevenLabsShadowProbe();
+      return;
+    }
+
+    if (this.elevenLabsShadowProbe) {
+      return;
+    }
+
+    const probe = new ElevenLabsShadowProbe(apiKey);
+    probe.on("healthy", (snapshot) => {
+      console.log(`[ElevenLabsShadowProbe] healthy failures=${snapshot.consecutiveFailures}`);
+    });
+    probe.on("failed", (snapshot) => {
+      console.warn(
+        `[ElevenLabsShadowProbe] failed consecutive=${snapshot.consecutiveFailures} error="${snapshot.lastError || 'unknown'}"`,
+      );
+    });
+    probe.start();
+    this.elevenLabsShadowProbe = probe;
+  }
+
+  private stopElevenLabsShadowProbe(): void {
+    if (!this.elevenLabsShadowProbe) {
+      return;
+    }
+
+    this.elevenLabsShadowProbe.stop();
+    this.elevenLabsShadowProbe.removeAllListeners();
+    this.elevenLabsShadowProbe = null;
   }
 
   private getSttProviderForChannel(channel: 'user' | 'interviewer'): STTProvider | null {
@@ -1915,6 +1949,7 @@ export class AppState {
       mode: ModesManager.getInstance().getActiveMode()?.templateType ?? 'general',
       meetingTitle: metadata?.title,
     });
+    this.startElevenLabsShadowProbe();
 
     // Reset overlay position to default center so each new meeting starts
     // with the overlay in a predictable centered position, regardless of where
@@ -2008,6 +2043,7 @@ export class AppState {
     this.googleSTT?.stop();
     this.microphoneCapture?.stop();
     this.googleSTT_User?.stop();
+    this.stopElevenLabsShadowProbe();
 
     // Save session state and reset context — MeetingPersistence.stopMeeting() is
     // already fire-and-forget internally (processAndSaveMeeting runs in background).
