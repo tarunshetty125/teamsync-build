@@ -2578,11 +2578,8 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             const token = typeof payload === 'string' ? payload : payload.token;
             const requestId = typeof payload === 'string' ? activeChatRequestIdRef.current : (payload.requestId || activeChatRequestIdRef.current);
             if (!requestId) return;
-            // Guard: if this token is the negotiation coaching JSON sentinel, accumulate it
-            // silently. The JSON is always emitted as a single complete `yield JSON.stringify(...)`
-            // call, so one parse attempt is sufficient. The onGeminiStreamDone handler will
-            // detect the accumulated JSON and render the proper card UI — we just prevent the
-            // raw JSON characters from ever appearing in the chat bubble.
+            // Guard: skip structured JSON tokens (negotiation coaching).
+            // The JSON is emitted as a single complete token — one parse attempt is sufficient.
             try {
                 const parsed = JSON.parse(token);
                 if (parsed?.__negotiationCoaching) {
@@ -2911,7 +2908,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             const streamContext = [
                 conversationContext.trim(),
                 finalizedTranscriptRef.current.slice(-700),
-                'RESPONSE RULES:\n- 3-5 bullets max when listing items.\n- Keep the answer under 120 words unless code is required.\n- No preamble.'
+                'RESPONSE RULES:\n- 3-5 bullets max when listing items.\n- Keep the answer under 120 words for non-code responses.\n- If the question asks about code, algorithms, or implementation: ALWAYS include full, working code in a fenced ```code``` block. Code blocks do NOT count toward the word limit.\n- No preamble.'
             ].filter(Boolean).join('\n') || undefined;
             await window.electronAPI.streamGeminiChat(
                 userText || 'Analyze this screenshot',
@@ -3193,7 +3190,29 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         // Standard Text Messages (e.g. from User or Interviewer)
         // We still want basic markdown support here too
         // For system messages, apply normalizeInsightSections to create elegant section headers
-        const displayText = msg.role === 'system' ? normalizeInsightSections(msg.text) : msg.text;
+        let displayText = msg.role === 'system' ? normalizeInsightSections(msg.text) : msg.text;
+
+        // Guard: if the final text is a JSON object (e.g. LLM returned structured JSON
+        // instead of markdown), extract the readable content from it.
+        if (msg.role === 'system' && displayText.trimStart().startsWith('{')) {
+            try {
+                const parsed = JSON.parse(displayText);
+                // Extract content from common JSON response shapes
+                const extracted = parsed?.content || parsed?.answer || parsed?.text || parsed?.response || parsed?.message;
+                if (typeof extracted === 'string' && extracted.trim()) {
+                    displayText = extracted;
+                } else {
+                    // JSON has no recognizable text field — render a summary of all string values
+                    const values = Object.values(parsed)
+                        .filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+                    if (values.length > 0) {
+                        displayText = values.join('\n\n');
+                    }
+                }
+            } catch {
+                // Not valid JSON — render as-is
+            }
+        }
 
         // If the text contains code fences, split and render with CodeBlock
         if (displayText.includes('```')) {
@@ -3813,7 +3832,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                             </div>
                                         )}
 
-                                        {isProcessing && (
+                                        {isProcessing && !messages.some(m => m.isStreaming) && (
                                             <div className="flex justify-start w-[85%]">
                                                 <SkeletonLoader isLightTheme={isLightTheme} />
                                             </div>
