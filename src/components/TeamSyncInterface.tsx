@@ -237,6 +237,8 @@ function nextRequestId(prefix: string = 'req'): string {
     return `${prefix}-${Date.now()}-${++requestIdCounter}`;
 }
 
+const OVERLAY_HIDE_ANIMATION_MS = 240;
+
 function getSuggestedAnswerIntent(question: string): string {
     if (question === 'Code Hint') return 'code_hint';
     if (question === 'Brainstorming Approaches') return 'brainstorm';
@@ -935,6 +937,8 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const voiceInputRef = useRef<string>('');  // Ref for capturing in async handlers
     const textInputRef = useRef<HTMLInputElement>(null); // Ref for input focus
     const isStealthRef = useRef<boolean>(false); // Tracks if the next expansion should be stealthy
+    const overlayHideTimerRef = useRef<number | null>(null);
+    const suppressOverlayResizeRef = useRef(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1251,6 +1255,18 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const inputClass = `${isLightTheme ? 'focus:ring-black/10' : 'focus:ring-white/10'} overlay-input-surface overlay-input-text`;
     const controlSurfaceClass = 'overlay-control-surface overlay-text-interactive';
 
+    const pushOverlayDimensions = useCallback((target: Element | null, options?: { force?: boolean }) => {
+        if (!target) return;
+        if (suppressOverlayResizeRef.current && !options?.force) return;
+
+        const rect = target.getBoundingClientRect();
+        const width = Math.ceil(rect.width);
+        const height = Math.ceil(rect.height);
+        if (!width || !height) return;
+
+        window.electronAPI?.updateContentDimensions({ width, height });
+    }, []);
+
     useEffect(() => {
         // Load the persisted default model (not the runtime model)
         // Each new meeting starts with the default from settings
@@ -1354,50 +1370,30 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
 
         const observer = new ResizeObserver((entries) => {
             for (const entry of entries) {
-                // Use getBoundingClientRect to get the exact rendered size including padding
-                const rect = entry.target.getBoundingClientRect();
-
-                // Send exact dimensions to Electron
-                // Removed buffer to ensure tight fit
-                console.log('[TeamSyncInterface] ResizeObserver:', Math.ceil(rect.width), Math.ceil(rect.height));
-                window.electronAPI?.updateContentDimensions({
-                    width: Math.ceil(rect.width),
-                    height: Math.ceil(rect.height)
-                });
+                pushOverlayDimensions(entry.target);
             }
         });
 
         observer.observe(contentRef.current);
         return () => observer.disconnect();
-    }, []);
+    }, [pushOverlayDimensions]);
 
     // Force resize when attachedContext changes (screenshots added/removed)
     useEffect(() => {
         if (!contentRef.current) return;
         // Let the DOM settle, then measure and push new dimensions
         requestAnimationFrame(() => {
-            if (!contentRef.current) return;
-            const rect = contentRef.current.getBoundingClientRect();
-            window.electronAPI?.updateContentDimensions({
-                width: Math.ceil(rect.width),
-                height: Math.ceil(rect.height)
-            });
+            pushOverlayDimensions(contentRef.current, { force: true });
         });
-    }, [attachedContext]);
+    }, [attachedContext, pushOverlayDimensions]);
 
     // Force initial sizing safety check
     useEffect(() => {
         const timer = setTimeout(() => {
-            if (contentRef.current) {
-                const rect = contentRef.current.getBoundingClientRect();
-                window.electronAPI?.updateContentDimensions({
-                    width: Math.ceil(rect.width),
-                    height: Math.ceil(rect.height)
-                });
-            }
+            pushOverlayDimensions(contentRef.current, { force: true });
         }, 600);
         return () => clearTimeout(timer);
-    }, []);
+    }, [pushOverlayDimensions]);
 
     // H2 Fix: useMemo instead of useEffect+state — eliminates one-render-behind lag
     const conversationContext = useMemo(() => {
@@ -1482,16 +1478,36 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
 
     // Sync Window Visibility with Expanded State
     useEffect(() => {
+        if (overlayHideTimerRef.current) {
+            clearTimeout(overlayHideTimerRef.current);
+            overlayHideTimerRef.current = null;
+        }
+
         if (isExpanded) {
+            suppressOverlayResizeRef.current = false;
             window.electronAPI.showWindow(isStealthRef.current);
+            requestAnimationFrame(() => {
+                pushOverlayDimensions(contentRef.current, { force: true });
+            });
             isStealthRef.current = false; // Reset back to default
         } else {
-            // Slight delay to allow animation to clean up if needed, though immediate is safer for click-through
-            // Using setTimeout to ensure the render cycle completes first
-            // Increased to 400ms to allow "contract to bottom" exit animation to finish
-            setTimeout(() => window.electronAPI.hideWindow(), 400);
+            // Freeze the Electron window size during the exit animation so the
+            // overlay fades out cleanly instead of snapping down to its empty shell.
+            suppressOverlayResizeRef.current = true;
+            overlayHideTimerRef.current = window.setTimeout(() => {
+                window.electronAPI.hideWindow();
+                overlayHideTimerRef.current = null;
+            }, OVERLAY_HIDE_ANIMATION_MS + 40);
         }
-    }, [isExpanded]);
+    }, [isExpanded, pushOverlayDimensions]);
+
+    useEffect(() => {
+        return () => {
+            if (overlayHideTimerRef.current) {
+                clearTimeout(overlayHideTimerRef.current);
+            }
+        };
+    }, []);
 
     // Keyboard shortcut to toggle expanded state (via Main Process)
     useEffect(() => {
@@ -3281,11 +3297,12 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             <AnimatePresence>
                 {isExpanded && (
                     <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                        transition={{ duration: 0.3, ease: "easeInOut" }}
-                        className="flex flex-col items-center gap-2 w-full"
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        transition={{ duration: OVERLAY_HIDE_ANIMATION_MS / 1000, ease: [0.22, 1, 0.36, 1] }}
+                        className="flex flex-col items-center gap-2 w-full transform-gpu"
+                        style={{ willChange: 'transform, opacity' }}
                     >
                         <TopPill
                             expanded={isExpanded}
