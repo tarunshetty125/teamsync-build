@@ -122,3 +122,111 @@ export { analyzeResumeJDFit, isAnalysisUsable } from './resume';
 // Metrics & Observability (Phase 6)
 export type { BrainExecutionMetric, PipelineLatencyMetric } from './metrics';
 export { MetricCollector, getDefaultMetricCollector } from './metrics';
+
+// ---------------------------------------------------------------------------
+// Phase 1: Intelligence Architecture v2
+// ---------------------------------------------------------------------------
+
+// Capability Registry (§1)
+export type {
+    IntelligenceCapabilityKey,
+    IntelligenceCapabilitySet,
+    CapabilityChangeEvent,
+    CapabilityConfig,
+} from './capability/types';
+export { CapabilityRegistry } from './capability/CapabilityRegistry';
+export { assertCapability, withCapability, withCapabilityAsync, guardCapability } from './capability/CapabilityResolver';
+
+// Confidence Engine (§3)
+export type {
+    ConfidenceFactor,
+    ConfidenceResult,
+    ConfidenceConfig,
+    ConfidenceThresholdResult,
+} from './confidence/types';
+export { computeConfidence, applyHallucinationPenalty, DEFAULT_CONFIDENCE_CONFIG } from './confidence/ConfidenceEngine';
+export { normalizeModelConfidence, normalizeTemperatureAdjusted, clampConfidence } from './confidence/ConfidenceNormalizer';
+export { filterByThreshold, filterResults } from './confidence/ThresholdFilter';
+
+// Evidence Layer (§4)
+export type {
+    Evidence,
+    EvidenceSource,
+    EvidenceChain,
+    EvidenceExtractionConfig,
+} from './evidence/types';
+export { extractEvidence, extractEvidenceFromSegments, computeKeywordOverlap } from './evidence/EvidenceExtractor';
+export { linkEvidence, mergeEvidenceChains, computeSupportStrength } from './evidence/EvidenceLinker';
+
+// Timeline Event Bus (§5)
+export type {
+    SignalType,
+    SignalSeverity,
+    IntelligenceSignal,
+    TimelineEntry,
+    TimelineBatch,
+    TimelineConfig,
+} from './timeline/types';
+export { IntelligenceEventBus } from './timeline/IntelligenceEventBus';
+export { emitSignal, emitModePrediction } from './timeline/SignalEmitter';
+export { TimelineManager } from './timeline/TimelineManager';
+
+// Adaptive Mode — Shadow (§6)
+export type {
+    ModeConfidenceScore,
+    ModePrediction,
+    ShadowModeTelemetry,
+    ModeClassifierConfig,
+} from './adaptive/types';
+export { classifyMode } from './adaptive/ModeClassifier';
+export { ModeConfidenceEngine } from './adaptive/ModeConfidenceEngine';
+export { ModePredictor } from './adaptive/ModePredictor';
+
+// Multi-Brain (Phase 2 — §7)
+export type {
+    SubBrain,
+    SubBrainInput,
+    SubBrainInsight,
+    SubBrainOutput,
+    MergedInsightSet,
+    SubBrainExecutionResult,
+} from './multibrain/types';
+export { SubBrainRegistry } from './multibrain/SubBrainRegistry';
+export { ParallelExecutor } from './multibrain/ParallelExecutor';
+export { OutputMerger } from './multibrain/OutputMerger';
+export { createSubBrainRegistry } from './multibrain/createMultiBrainLayer';
+export { MultiBrainTelemetry } from './multibrain/MultiBrainTelemetry';
+export type { MultiBrainTelemetryRecord, MultiBrainStats } from './multibrain/MultiBrainTelemetry';
+
+// Mode Memory (Phase 3 — §8)
+export type {
+    MemoryEntry,
+    MemoryQuery,
+    ScoredMemory,
+    ModeMemory,
+    MemoryMetadata,
+} from './memory/types';
+export { ModeMemoryManager } from './memory/ModeMemoryManager';
+export { rankMemories, computeRecencyBoost, computeFinalScore } from './memory/MemoryRetriever';
+
+// Explainability (Phase 3 — §9)
+export type {
+    Explanation,
+    ExplanationFactor,
+} from './explainability/types';
+export { explain, explainAll } from './explainability/ExplainabilityEngine';
+export { formatCompact, formatExpanded, formatAll } from './explainability/ExplanationFormatter';
+
+// Intelligence IPC (Phase 4 — §10)
+export type {
+    AdaptiveModeSuggestionPayload,
+    TimelineBatchPayload,
+    TimelineSignalPayload,
+    ExplanationPayload,
+    ExplanationFactorPayload,
+    PremiumUXMetadata,
+} from './ipc/types';
+export { AdaptiveModeIPC } from './ipc/AdaptiveModeIPC';
+export { TimelineIPC } from './ipc/TimelineIPC';
+export { ExplainabilityIPC } from './ipc/ExplainabilityIPC';
+export { buildPremiumUXMetadata } from './ipc/PremiumUXMetadata';

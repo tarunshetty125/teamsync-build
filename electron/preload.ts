@@ -1125,6 +1125,31 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }
   },
 
+  // Phase 4: Intelligence Surface Layer
+  onAdaptiveModeSuggestion: (callback: (data: { predictedMode: string; predictedModeName: string; currentMode: string; confidence: number; timestamp: number }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("intelligence:adaptive-mode-suggestion", subscription)
+    return () => {
+      ipcRenderer.removeListener("intelligence:adaptive-mode-suggestion", subscription)
+    }
+  },
+  onTimelineBatch: (callback: (data: { signals: any[]; batchId: string; timestamp: number }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("intelligence:timeline-batch", subscription)
+    return () => {
+      ipcRenderer.removeListener("intelligence:timeline-batch", subscription)
+    }
+  },
+  onExplanation: (callback: (data: any) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on("intelligence:explanation", subscription)
+    return () => {
+      ipcRenderer.removeListener("intelligence:explanation", subscription)
+    }
+  },
+  dismissAdaptiveModeSuggestion: () => ipcRenderer.invoke("intelligence:dismiss-suggestion"),
+  requestExplanation: (params?: { instructionKey?: string }) => ipcRenderer.invoke("intelligence:request-explanation", params),
+
 
   // Streaming Chat
   streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }) => ipcRenderer.invoke("gemini-chat-stream", message, imagePaths, context, options),

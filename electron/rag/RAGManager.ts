@@ -70,6 +70,10 @@ export class RAGManager {
         return this.embeddingPipeline;
     }
 
+    getVectorStore(): VectorStore {
+        return this.vectorStore;
+    }
+
     initializeEmbeddings(keys: { openaiKey?: string, geminiKey?: string, ollamaUrl?: string }): void {
         const initPromise = this.embeddingPipeline.initialize(keys);
         // After init, backfill embedding_provider on meetings that have embedded chunks

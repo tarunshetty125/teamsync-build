@@ -58,6 +58,7 @@ import { adaptPromptBudget } from './intelligence/AdaptivePromptBudgeter';
 import { BenchmarkManager, countHallucinationIndicators, hasConfidenceSignal } from './intelligence/BenchmarkManager';
 import { ModesManager } from './services/ModesManager';
 import type { ModeTemplateId } from '../src/lib/modes/types';
+import { ModePredictor } from './intelligence/adaptive/ModePredictor';
 
 type UserControlledMode = Extract<ConversationIntent, 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design'>;
 
@@ -310,6 +311,9 @@ export class IntelligenceEngine extends EventEmitter {
     private brainLayer: BrainLayer;
     private useBrainLayer: boolean = true;
 
+    // Phase 1: Shadow mode predictor (silent telemetry, no side effects)
+    private modePredictor: ModePredictor;
+
     // Timestamps for tracking
     private lastTranscriptTime: number = 0;
     private lastTriggerTime: number = 0;
@@ -320,6 +324,8 @@ export class IntelligenceEngine extends EventEmitter {
         this.llmHelper = llmHelper;
         this.session = session;
         this.brainLayer = createBrainLayer();
+        // Phase 1: Shadow mode predictor (silent telemetry only)
+        this.modePredictor = new ModePredictor();
         this.initializeLLMs();
     }
 
@@ -669,6 +675,28 @@ export class IntelligenceEngine extends EventEmitter {
                         }
                     }
                     // ──── End Brain Layer Injection ────
+
+                    // ──── Shadow Mode Prediction (Phase 1 — telemetry only) ────
+                    // Scheduled off the hot path via queueMicrotask. Never blocks runAction.
+                    // No mode switching, no UI. Silent failure.
+                    {
+                        const shadowText = contextLayers?.promptObject?.question;
+                        if (shadowText) {
+                            const shadowMode = this.getActiveModeTemplateType();
+                            const predictor = this.modePredictor;
+                            queueMicrotask(() => {
+                                try {
+                                    predictor.predictShadow({
+                                        text: shadowText,
+                                        currentMode: shadowMode,
+                                    });
+                                } catch {
+                                    // Shadow prediction failure is completely silent
+                                }
+                            });
+                        }
+                    }
+                    // ──── End Shadow Mode Prediction ────
 
                     const preTinyPrompt = contextLayers.promptObject;
                     const preTinySerialized = serializePromptObject(preTinyPrompt);

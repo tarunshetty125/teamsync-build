@@ -649,6 +649,19 @@ export class AppState {
         });
         this.ragManager.setLLMHelper(this.processingHelper.getLLMHelper());
         console.log('[AppState] RAGManager initialized');
+
+        // Wire ModeMemoryManager with the SAME VectorStore + EmbeddingPipeline
+        // instances owned by RAGManager — no duplicate creation.
+        try {
+            const { ModeMemoryManager } = require('./intelligence/memory/ModeMemoryManager');
+            ModeMemoryManager.getInstance().initialize(
+                this.ragManager.getVectorStore(),
+                this.ragManager.getEmbeddingPipeline(),
+            );
+            console.log('[AppState] ModeMemoryManager initialized (shared VectorStore + EmbeddingPipeline)');
+        } catch (err) {
+            console.warn('[AppState] ModeMemoryManager initialization skipped:', err);
+        }
       }
     } catch (error) {
       console.error('[AppState] Failed to initialize RAGManager:', error);
@@ -2269,7 +2282,28 @@ export class AppState {
     this.intelligenceManager.on('action_result', (payload: any) => {
       const win = mainWindow()
       if (win) {
-        win.webContents.send('intelligence-action-result', { ...payload, _sessionId: sid(), requestId: payload?.requestId ?? rid() })
+        // Attach PremiumUXMetadata if capability is enabled (silent no-op otherwise)
+        let _intelligence: any = undefined;
+        try {
+            const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
+            const registry = CapabilityRegistry.getInstance();
+            if (registry.isEnabled('adaptiveModeUI') || registry.isEnabled('timelineUI') || registry.isEnabled('explainabilityUI')) {
+                const { buildPremiumUXMetadata } = require('./intelligence/ipc/PremiumUXMetadata');
+                _intelligence = buildPremiumUXMetadata({
+                    confidence: payload?.confidence ?? null,
+                    evidenceCount: payload?.evidenceCount ?? 0,
+                    mode: payload?.mode ?? 'general',
+                });
+            }
+        } catch {
+            // Silent — PremiumUXMetadata attachment is non-critical
+        }
+        win.webContents.send('intelligence-action-result', {
+            ...payload,
+            _sessionId: sid(),
+            requestId: payload?.requestId ?? rid(),
+            ...(_intelligence ? { _intelligence } : {}),
+        })
       }
     })
 
@@ -2288,6 +2322,50 @@ export class AppState {
         win.webContents.send('intelligence-error', { error: error.message, mode, _sessionId: sid(), requestId: requestId ?? rid() })
       }
     })
+
+    // Start batched timeline IPC bridge (capability-gated internally)
+    try {
+        const { TimelineIPC } = require('./intelligence/ipc/TimelineIPC');
+        TimelineIPC.getInstance().start();
+    } catch (err) {
+        console.warn('[AppState] TimelineIPC start skipped:', err);
+    }
+
+    // Phase 4: Renderer → Main IPC handlers for intelligence surface layer
+    const { ipcMain } = require('electron');
+
+    // Dismiss adaptive mode suggestion (applies 5-minute per-mode cooldown)
+    ipcMain.handle('intelligence:dismiss-suggestion', () => {
+        try {
+            const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
+            if (!CapabilityRegistry.getInstance().isEnabled('adaptiveModeUI')) {
+                return { dismissed: false, reason: 'capability_disabled' };
+            }
+            const { AdaptiveModeIPC } = require('./intelligence/ipc/AdaptiveModeIPC');
+            const dismissedMode = AdaptiveModeIPC.getInstance().dismiss();
+            return { dismissed: !!dismissedMode, mode: dismissedMode };
+        } catch {
+            return { dismissed: false, reason: 'error' };
+        }
+    });
+
+    // Request explanation for the last response (on-demand)
+    ipcMain.handle('intelligence:request-explanation', (_event: any, params?: { instructionKey?: string }) => {
+        try {
+            const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
+            if (!CapabilityRegistry.getInstance().isEnabled('explainabilityUI')) {
+                return { available: false, reason: 'capability_disabled' };
+            }
+            const { ExplainabilityIPC } = require('./intelligence/ipc/ExplainabilityIPC');
+            const lastExplanation = ExplainabilityIPC.getInstance().getLastExplanation();
+            if (!lastExplanation) {
+                return { available: false, reason: 'no_explanation' };
+            }
+            return { available: true, explanation: lastExplanation };
+        } catch {
+            return { available: false, reason: 'error' };
+        }
+    });
   }
 
 

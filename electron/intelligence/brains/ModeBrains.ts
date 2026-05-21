@@ -1,6 +1,13 @@
 import type { Brain, BrainInput, BrainOutput } from './Brain';
 import type { BrainId } from '../types';
 import type { PromptInstruction } from '../../ActionContextBuilder';
+import type { SubBrainInput, SubBrainExecutionResult, MergedInsightSet } from '../multibrain/types';
+import { CapabilityRegistry } from '../capability/CapabilityRegistry';
+import { OutputMerger } from '../multibrain/OutputMerger';
+import { createSubBrainRegistry } from '../multibrain/createMultiBrainLayer';
+import { MultiBrainTelemetry } from '../multibrain/MultiBrainTelemetry';
+import { ModeMemoryManager } from '../memory/ModeMemoryManager';
+import { ExplainabilityIPC } from '../ipc/ExplainabilityIPC';
 
 type ConfidenceLevel = 'high' | 'medium' | 'low';
 
@@ -57,6 +64,187 @@ function scoreToConfidence(strongSignals: number, weakSignals: number = 0): Conf
     if (strongSignals >= 3 && weakSignals <= 1) return 'high';
     if (strongSignals >= 1) return 'medium';
     return 'low';
+}
+
+// ---------------------------------------------------------------------------
+// Shared Multi-Brain Infrastructure
+// ---------------------------------------------------------------------------
+
+// Lazy-initialized shared instance (created once on first use)
+let _subBrainRegistry: ReturnType<typeof createSubBrainRegistry> | null = null;
+
+function getSubBrainRegistry(): ReturnType<typeof createSubBrainRegistry> {
+    if (!_subBrainRegistry) {
+        _subBrainRegistry = createSubBrainRegistry();
+    }
+    return _subBrainRegistry;
+}
+
+/**
+ * Build SubBrainInput from the parent Brain's heuristic text.
+ */
+function buildSubBrainInput(input: BrainInput, modeId: string): SubBrainInput {
+    const hText = getHeuristicText(input);
+    return {
+        rawText: hText.raw,
+        normalizedText: hText.normalized,
+        modeId,
+    };
+}
+
+/** Max insights injected into the prompt — high-signal only */
+const MAX_PROMPT_INSIGHTS = 2;
+/** Minimum confidence for an insight to be injected into the prompt */
+const PROMPT_CONFIDENCE_THRESHOLD = 0.75;
+/** OutputMerger threshold — only quality insights survive merge */
+const MERGE_CONFIDENCE_THRESHOLD = 0.3;
+
+/**
+ * Format the strongest merged insights as a PromptInstruction.
+ *
+ * Only injects the top MAX_PROMPT_INSIGHTS insights above
+ * PROMPT_CONFIDENCE_THRESHOLD into the prompt. All remaining insights
+ * stay as internal metadata (logged, not injected).
+ *
+ * Returns null if no insights meet the threshold.
+ */
+function mergedInsightsToInstruction(
+    merged: MergedInsightSet,
+    key: string,
+    title: string,
+): PromptInstruction | null {
+    // Filter to high-confidence only, already sorted by OutputMerger
+    const eligible = merged.insights.filter(i => i.confidence >= PROMPT_CONFIDENCE_THRESHOLD);
+    const topInsights = eligible.slice(0, MAX_PROMPT_INSIGHTS);
+
+    if (topInsights.length === 0) return null;
+
+    const lines = topInsights.map(insight => {
+        const conf = Math.round(insight.confidence * 100);
+        const reasonStr = insight.reasoning.length > 0 ? ` (${insight.reasoning[0]})` : '';
+        return `• ${insight.label} [${conf}% confidence]${reasonStr}`;
+    });
+
+    return {
+        key,
+        title,
+        content: lines.join('\n'),
+    };
+}
+
+/**
+ * Run sub-brains synchronously for a mode, merge, and append
+ * high-confidence insights as a PromptInstruction.
+ *
+ * Execution: sync for-loop with per-brain try/catch isolation.
+ * Sub-brains are deterministic heuristics (<2ms each) — no async needed.
+ *
+ * Capability-gated: returns output unchanged if multiBrain is disabled.
+ * Failure-safe: individual sub-brain errors never propagate.
+ */
+function runSubBrains(
+    modeId: string,
+    input: BrainInput,
+    output: BrainOutput,
+    instructionKey: string,
+    instructionTitle: string,
+    logPrefix: string,
+): BrainOutput {
+    if (!CapabilityRegistry.getInstance().isEnabled('multiBrain')) {
+        return output;
+    }
+
+    try {
+        const registry = getSubBrainRegistry();
+        if (!registry.hasBrains(modeId)) return output;
+
+        const subInput = buildSubBrainInput(input, modeId);
+        const brains = registry.getBrains(modeId);
+
+        // Sync execution with per-brain failure isolation
+        const results: SubBrainExecutionResult[] = [];
+        for (const brain of brains) {
+            const startMs = performance.now();
+            try {
+                const brainOutput = brain.execute(subInput);
+                results.push({
+                    brainId: brain.id,
+                    status: 'success',
+                    output: brainOutput,
+                    executionMs: Math.round((performance.now() - startMs) * 100) / 100,
+                });
+            } catch (err: unknown) {
+                results.push({
+                    brainId: brain.id,
+                    status: 'failure',
+                    error: err instanceof Error ? err.message : String(err),
+                    executionMs: Math.round((performance.now() - startMs) * 100) / 100,
+                });
+            }
+        }
+
+        const merged = OutputMerger.merge(results, { confidenceThreshold: MERGE_CONFIDENCE_THRESHOLD });
+        const instruction = mergedInsightsToInstruction(merged, instructionKey, instructionTitle);
+
+        // --- Telemetry (capability-gated, non-blocking, silent) ---
+        if (CapabilityRegistry.getInstance().isEnabled('multiBrainTelemetry')) {
+            queueMicrotask(() => {
+                try {
+                    MultiBrainTelemetry.getInstance().recordBatch(results);
+                } catch { /* telemetry failure is non-fatal */ }
+            });
+        }
+
+        // --- Memory persistence (non-blocking, silent) ---
+        // ModeMemoryManager.saveMemory() gates on 'modeMemory' capability
+        // and enforces MIN_PERSIST_CONFIDENCE internally.
+        if (merged.insights.length > 0) {
+            queueMicrotask(() => {
+                try {
+                    const memory = ModeMemoryManager.getInstance();
+                    for (const insight of merged.insights) {
+                        memory.saveMemory({
+                            modeId,
+                            sourceBrain: instructionKey,
+                            label: insight.label,
+                            content: insight.reasoning.join('; '),
+                            confidence: insight.confidence,
+                            tags: [modeId],
+                        });
+                    }
+                } catch { /* memory failure is non-fatal */ }
+            });
+        }
+
+        // --- Explainability surface (capability-gated, non-blocking, silent) ---
+        if (merged.insights.length > 0) {
+            queueMicrotask(() => {
+                try {
+                    ExplainabilityIPC.getInstance().explainInsights(merged.insights, instructionKey);
+                } catch { /* explainability failure is non-fatal */ }
+            });
+        }
+
+        // Log all insights (including those below prompt threshold) for diagnostics
+        if (merged.insights.length > 0) {
+            console.log(
+                `[${logPrefix}] Multi-brain: ${merged.brainCount} brains, ` +
+                `${merged.insights.length} total insights, ` +
+                `${instruction ? 'injecting top signals' : 'no signals above prompt threshold'}, ` +
+                `${merged.totalExecutionMs}ms`,
+            );
+        }
+
+        if (!instruction) return output;
+
+        return {
+            ...output,
+            instructions: [...output.instructions, instruction],
+        };
+    } catch {
+        // Multi-brain failure is completely silent — base output is unchanged
+        return output;
+    }
 }
 
 function buildSalesHeuristics(input: BrainInput): {
@@ -417,11 +605,21 @@ export class SalesBrain implements Brain {
             buildCompactContract(input, heuristics.contractLines),
         ].filter((instruction): instruction is PromptInstruction => instruction !== null);
 
-        return {
+        const baseOutput: BrainOutput = {
             instructions,
             outputContract: 'Sales response must identify the best tactical move, provide exact words or the best discovery ask, and include Confidence: high|medium|low.',
             streamStrategy: 'direct',
         };
+
+        return this.appendSubBrainInsights(input, baseOutput);
+    }
+
+    /**
+     * Run sales sub-brains synchronously and append high-confidence insights.
+     * Capability-gated, failure-safe, prompt-bloat-safe.
+     */
+    private appendSubBrainInsights(input: BrainInput, output: BrainOutput): BrainOutput {
+        return runSubBrains('sales', input, output, 'multi_brain_sales', 'MULTI-BRAIN SALES INSIGHTS', 'SalesBrain');
     }
 }
 
@@ -482,11 +680,21 @@ export class RecruitingBrain implements Brain {
             buildCompactContract(input, heuristics.contractLines),
         ].filter((instruction): instruction is PromptInstruction => instruction !== null);
 
-        return {
+        const baseOutput: BrainOutput = {
             instructions,
             outputContract: 'Recruiting response must surface the strongest hiring signal or concern, propose the next best probe when needed, and include Confidence: high|medium|low.',
             streamStrategy: 'direct',
         };
+
+        return this.appendSubBrainInsights(input, baseOutput);
+    }
+
+    /**
+     * Run recruiting sub-brains synchronously and append high-confidence insights.
+     * Capability-gated, failure-safe, prompt-bloat-safe.
+     */
+    private appendSubBrainInsights(input: BrainInput, output: BrainOutput): BrainOutput {
+        return runSubBrains('recruiting', input, output, 'multi_brain_recruiting', 'MULTI-BRAIN RECRUITING INSIGHTS', 'RecruitingBrain');
     }
 }
 
