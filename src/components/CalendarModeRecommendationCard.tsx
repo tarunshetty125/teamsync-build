@@ -71,10 +71,11 @@ function getTimeLabel(startTime: string): string {
     });
 }
 
-function getConfidenceLabel(confidence: number): 'High Confidence' | 'Medium Confidence' | 'Low Confidence' {
-    if (confidence >= 80) return 'High Confidence';
-    if (confidence >= 60) return 'Medium Confidence';
-    return 'Low Confidence';
+function getConfidenceLabel(confidence: number): string {
+    if (confidence >= 90) return 'Very High Match';
+    if (confidence >= 80) return 'High Match';
+    if (confidence >= 60) return 'Medium Match';
+    return 'Low Match';
 }
 
 function buildWhyLine(recommendation: CalendarModeRecommendation): string {
@@ -110,15 +111,17 @@ function buildWhyLine(recommendation: CalendarModeRecommendation): string {
     }
 }
 
-/* ── Shared pane style (embedded glass compartment) ────────────── */
+/* ── Premium glass pane (layered glass compartment) ──────────────
+   ring-1 refraction border + inset top/bottom lighting + ambient shadow */
 const pane = (isLight: boolean) =>
     isLight
-        ? 'rounded-[16px] bg-white/28 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.7),0_1px_3px_rgba(15,23,42,0.04)] backdrop-blur-[18px]'
-        : 'rounded-[16px] bg-white/[0.04] shadow-[inset_0_0.5px_0_rgba(255,255,255,0.08),0_1px_3px_rgba(0,0,0,0.12)] backdrop-blur-[18px]';
+        ? 'rounded-[14px] bg-white/30 ring-1 ring-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),inset_0_-0.5px_0_rgba(0,0,0,0.03),0_0.5px_2px_rgba(15,23,42,0.05)] backdrop-blur-[20px] transition-[background-color,box-shadow] duration-200 hover:bg-white/38'
+        : 'rounded-[14px] bg-white/[0.045] ring-1 ring-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.09),inset_0_-0.5px_0_rgba(0,0,0,0.15),0_0.5px_2px_rgba(0,0,0,0.14)] backdrop-blur-[20px] transition-[background-color,box-shadow] duration-200 hover:bg-white/[0.07]';
 
-/* ── Section label style ───────────────────────────────────────── */
+/* ── Section label style ─────────────────────────────────────────
+   Refined uppercase with wider tracking + calibrated opacity     */
 const sectionLabel = (isLight: boolean) =>
-    `text-[9px] font-semibold uppercase tracking-[0.14em] ${isLight ? 'text-slate-400' : 'text-white/36'}`;
+    `text-[9px] font-semibold uppercase tracking-[0.16em] ${isLight ? 'text-slate-400/80' : 'text-white/28'}`;
 
 const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardProps> = ({
     recommendation,
@@ -146,62 +149,99 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
         [recommendation]
     );
 
+    /* ── Confidence colour tokens (pill + bar) ─────────────────── */
+    const confidenceColor = useMemo(() => {
+        if (recommendation.confidence >= 80)
+            return {
+                pill: isLight
+                    ? 'bg-emerald-500/[0.08] text-emerald-700 shadow-[inset_0_0.5px_0_rgba(16,185,129,0.15)]'
+                    : 'bg-emerald-400/[0.10] text-emerald-300 shadow-[inset_0_0.5px_0_rgba(16,185,129,0.12)]',
+                bar: 'bg-emerald-400/70',
+            };
+        if (recommendation.confidence >= 60)
+            return {
+                pill: isLight
+                    ? 'bg-amber-500/[0.08] text-amber-700 shadow-[inset_0_0.5px_0_rgba(245,158,11,0.15)]'
+                    : 'bg-amber-400/[0.10] text-amber-300 shadow-[inset_0_0.5px_0_rgba(245,158,11,0.12)]',
+                bar: 'bg-amber-400/70',
+            };
+        return {
+            pill: isLight
+                ? 'bg-rose-500/[0.08] text-rose-700 shadow-[inset_0_0.5px_0_rgba(244,63,94,0.15)]'
+                : 'bg-rose-400/[0.10] text-rose-300 shadow-[inset_0_0.5px_0_rgba(244,63,94,0.12)]',
+            bar: 'bg-rose-400/70',
+        };
+    }, [recommendation.confidence, isLight]);
+
     return (
-        <div
-            className={`relative overflow-hidden rounded-[24px] ${
+        <motion.div
+            initial={{ opacity: 0, scale: 0.97, filter: 'blur(6px)' }}
+            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, scale: 0.98, filter: 'blur(4px)' }}
+            transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
+            className={`relative overflow-hidden rounded-[22px] ${
                 isLight
-                    ? 'bg-white/48 shadow-[0_24px_80px_rgba(15,23,42,0.16),0_0_0_0.5px_rgba(255,255,255,0.6),inset_0_1px_0_rgba(255,255,255,0.85)]'
-                    : 'bg-[rgba(28,30,38,0.62)] shadow-[0_24px_80px_rgba(2,6,23,0.48),0_0_0_0.5px_rgba(255,255,255,0.08),inset_0_1px_0_rgba(255,255,255,0.10)]'
+                    ? 'bg-white/50 shadow-[0_20px_60px_rgba(15,23,42,0.14),0_0_0_0.5px_rgba(255,255,255,0.65),inset_0_1.5px_0_rgba(255,255,255,0.9)]'
+                    : 'bg-[rgba(24,26,32,0.65)] shadow-[0_20px_60px_rgba(2,6,23,0.50),0_0_0_0.5px_rgba(255,255,255,0.07),inset_0_1.5px_0_rgba(255,255,255,0.09)]'
             }`}
-            style={{ backdropFilter: 'blur(24px) saturate(180%)' }}
+            style={{ backdropFilter: 'blur(28px) saturate(190%)' }}
         >
-            {/* ── Ambient layers ─────────────────────────────────── */}
+            {/* ── Ambient glass layers ────────────────────────────── */}
             <div className="absolute inset-0 pointer-events-none">
-                {/* Radial colour wash */}
+                {/* Radial colour wash — organic ellipse shapes */}
                 <div className={`absolute inset-0 ${
                     isLight
-                        ? 'bg-[radial-gradient(circle_at_12%_14%,rgba(255,255,255,0.42),transparent_32%),radial-gradient(circle_at_85%_8%,rgba(186,216,255,0.14),transparent_26%)]'
-                        : 'bg-[radial-gradient(circle_at_12%_14%,rgba(255,255,255,0.09),transparent_30%),radial-gradient(circle_at_85%_8%,rgba(140,180,255,0.07),transparent_24%)]'
+                        ? 'bg-[radial-gradient(ellipse_at_10%_8%,rgba(255,255,255,0.50),transparent_36%),radial-gradient(ellipse_at_88%_6%,rgba(186,216,255,0.16),transparent_28%)]'
+                        : 'bg-[radial-gradient(ellipse_at_10%_8%,rgba(255,255,255,0.08),transparent_34%),radial-gradient(ellipse_at_88%_6%,rgba(140,180,255,0.06),transparent_26%)]'
                 }`} />
-                {/* Diagonal refraction */}
-                <div className={`absolute inset-0 opacity-[0.06] ${
+                {/* Diagonal refraction — subtle prismatic sweep */}
+                <div className={`absolute inset-0 ${
                     isLight
-                        ? 'bg-[linear-gradient(118deg,rgba(15,23,42,0.06),transparent_38%,rgba(125,211,252,0.10))]'
-                        : 'bg-[linear-gradient(118deg,rgba(255,255,255,0.06),transparent_38%,rgba(125,211,252,0.08))]'
+                        ? 'bg-[linear-gradient(118deg,rgba(15,23,42,0.03),transparent_42%,rgba(125,211,252,0.06))]'
+                        : 'bg-[linear-gradient(118deg,rgba(255,255,255,0.04),transparent_42%,rgba(125,211,252,0.05))]'
                 }`} />
-                {/* Apple highlight band — faint top edge light */}
-                <div className={`absolute inset-x-0 top-0 h-16 ${
+                {/* Top highlight band — faint inner edge glow */}
+                <div className={`absolute inset-x-0 top-0 h-12 ${
                     isLight
-                        ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.65),rgba(255,255,255,0))]'
-                        : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0))]'
+                        ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.70),rgba(255,255,255,0))]'
+                        : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0))]'
+                }`} />
+                {/* Bottom ambient edge fade */}
+                <div className={`absolute inset-x-0 bottom-0 h-16 ${
+                    isLight
+                        ? 'bg-[linear-gradient(0deg,rgba(241,245,249,0.14),transparent)]'
+                        : 'bg-[linear-gradient(0deg,rgba(0,0,0,0.12),transparent)]'
                 }`} />
             </div>
 
-            {/* ── Content ────────────────────────────────────────── */}
-            <div className="relative z-10 flex flex-col px-5 py-4">
+            {/* ── Content ─────────────────────────────────────────── */}
+            <div className="relative z-10 flex flex-col px-5 pt-4 pb-3.5">
 
-                {/* ── Header row ─────────────────────────────────── */}
+                {/* ── Header row ──────────────────────────────────── */}
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                        <div className={`mb-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] ${
+                        {/* Eyebrow badge — refined glass chip */}
+                        <div className={`mb-2.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[8.5px] font-semibold uppercase tracking-[0.16em] ${
                             isLight
-                                ? 'bg-white/50 text-slate-500 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.8)]'
-                                : 'bg-white/[0.06] text-white/56 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.08)]'
+                                ? 'bg-white/45 text-slate-500/80 ring-1 ring-white/40 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.8)]'
+                                : 'bg-white/[0.05] text-white/40 ring-1 ring-white/[0.06] shadow-[inset_0_0.5px_0_rgba(255,255,255,0.07)]'
                         }`}>
-                            <Sparkles className="h-2.5 w-2.5" />
+                            <Sparkles className="h-2.5 w-2.5 opacity-70" />
                             Upcoming Event
                         </div>
-                        <h3 className={`text-[20px] font-semibold leading-[1.08] tracking-[-0.035em] ${
+                        {/* Hero title — bold, tight tracking, strong presence */}
+                        <h3 className={`text-[22px] font-bold leading-[1.04] tracking-[-0.04em] ${
                             isLight ? 'text-slate-950' : 'text-white'
                         }`}>
                             {recommendation.title}
                         </h3>
+                        {/* Date/time — quiet secondary info */}
                         <div className={`mt-1.5 flex items-center gap-1.5 text-[11px] ${
-                            isLight ? 'text-slate-500' : 'text-white/50'
+                            isLight ? 'text-slate-500/80' : 'text-white/40'
                         }`}>
-                            <CalendarClock className="h-3 w-3" />
-                            <span className="font-medium">
-                                {getDateLabel(recommendation.startTime)} • {getTimeLabel(recommendation.startTime)}
+                            <CalendarClock className="h-3 w-3 opacity-70" />
+                            <span className="font-medium tracking-[-0.01em]">
+                                {getDateLabel(recommendation.startTime)} · {getTimeLabel(recommendation.startTime)}
                             </span>
                         </div>
                     </div>
@@ -210,64 +250,73 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                             type="button"
                             onClick={onClose ?? onDismiss}
                             aria-label="Close recommendation"
-                            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                            className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
                                 isLight
-                                    ? 'bg-white/36 text-slate-400 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.7)] hover:bg-white/56 hover:text-slate-700'
-                                    : 'bg-white/[0.06] text-white/36 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.06)] hover:bg-white/[0.10] hover:text-white/64'
+                                    ? 'bg-white/30 text-slate-400 ring-1 ring-white/40 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.7)] hover:bg-white/50 hover:text-slate-700'
+                                    : 'bg-white/[0.05] text-white/30 ring-1 ring-white/[0.06] shadow-[inset_0_0.5px_0_rgba(255,255,255,0.06)] hover:bg-white/[0.09] hover:text-white/60'
                             }`}
                         >
-                            <X className="h-3.5 w-3.5" />
+                            <X className="h-3 w-3" />
                         </button>
                     )}
                 </div>
 
-                {/* ── Summary + Recommended Mode ─────────────────── */}
-                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+                {/* ── Summary + Recommended Mode ──────────────────── */}
+                <div className="mt-3 grid grid-cols-1 gap-1.5 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
                     {/* Summary pane */}
-                    <div className={`${pane(isLight)} px-4 py-3`}>
+                    <div className={`${pane(isLight)} px-3.5 py-2.5`}>
                         <div className={sectionLabel(isLight)}>Summary</div>
-                        <p className={`mt-1 text-[12px] leading-[1.5] ${
-                            isLight ? 'text-slate-700' : 'text-white/72'
+                        <p className={`mt-1 text-[11.5px] leading-[1.6] tracking-[-0.006em] ${
+                            isLight ? 'text-slate-700' : 'text-white/65'
                         }`}>
                             {recommendation.summary}
                         </p>
                     </div>
 
-                    {/* Recommended Mode pane */}
-                    <div className={`${pane(isLight)} px-4 py-3`}>
+                    {/* Recommended Mode + Confidence pane */}
+                    <div className={`${pane(isLight)} px-3.5 py-2.5`}>
                         <div className={sectionLabel(isLight)}>Recommended Mode</div>
-                        <div className={`mt-1 flex items-center gap-2 text-[13px] font-semibold ${
+                        <div className={`mt-1 flex items-center gap-2 text-[13px] font-semibold tracking-[-0.01em] ${
                             isLight ? 'text-slate-950' : 'text-white'
                         }`}>
                             <WandSparkles className={`h-3.5 w-3.5 ${isLight ? 'text-sky-600' : 'text-sky-300'}`} />
                             {recommendation.recommendedModeLabel}
                         </div>
+
+                        {/* ── Upgraded Confidence indicator ───────── */}
                         <div className="mt-2.5">
                             <div className={sectionLabel(isLight)}>Confidence</div>
                             <div className="mt-1 flex items-center gap-2">
-                                {/* Frosted confidence capsule */}
-                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] backdrop-blur-[10px] ${
-                                    isLight
-                                        ? 'bg-sky-500/[0.07] text-sky-700 shadow-[inset_0_0.5px_0_rgba(56,189,248,0.12)]'
-                                        : 'bg-sky-400/[0.08] text-sky-200 shadow-[inset_0_0.5px_0_rgba(56,189,248,0.10)]'
-                                }`}>
+                                {/* Frosted confidence capsule with semantic label */}
+                                <span className={`inline-flex rounded-full px-2 py-[2.5px] text-[9px] font-bold uppercase tracking-[0.06em] backdrop-blur-[10px] ${confidenceColor.pill}`}>
                                     {confidenceLabel}
                                 </span>
-                                <span className={`text-[11px] font-medium ${
-                                    isLight ? 'text-slate-600' : 'text-white/60'
+                                <span className={`text-[11px] font-semibold tabular-nums tracking-[-0.01em] ${
+                                    isLight ? 'text-slate-600' : 'text-white/50'
                                 }`}>
                                     {recommendation.confidence}%
                                 </span>
+                            </div>
+                            {/* Subtle visual confidence bar */}
+                            <div className={`mt-2 h-[2.5px] rounded-full overflow-hidden ${
+                                isLight ? 'bg-black/[0.04]' : 'bg-white/[0.06]'
+                            }`}>
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${recommendation.confidence}%` }}
+                                    transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1], delay: 0.25 }}
+                                    className={`h-full rounded-full ${confidenceColor.bar}`}
+                                />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* ── Why This Mode ──────────────────────────────── */}
-                <div className={`mt-2 ${pane(isLight)} px-4 py-3`}>
+                {/* ── Why This Mode ────────────────────────────────── */}
+                <div className={`mt-1.5 ${pane(isLight)} px-3.5 py-2.5`}>
                     <div className={sectionLabel(isLight)}>Why This Mode?</div>
-                    <p className={`mt-0.5 text-[12px] leading-[1.5] ${
-                        isLight ? 'text-slate-700' : 'text-white/72'
+                    <p className={`mt-0.5 text-[11.5px] leading-[1.6] tracking-[-0.006em] ${
+                        isLight ? 'text-slate-700' : 'text-white/65'
                     }`}>
                         {whyLine}
                     </p>
@@ -275,10 +324,10 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                         {recommendation.matchedSignals.map((signal) => (
                             <span
                                 key={signal}
-                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold backdrop-blur-[8px] transition-all duration-200 hover:brightness-110 ${
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-semibold backdrop-blur-[8px] transition-all duration-200 hover:brightness-110 ${
                                     isLight
-                                        ? 'bg-emerald-500/[0.06] text-emerald-700 shadow-[inset_0_0.5px_0_rgba(52,211,153,0.15)]'
-                                        : 'bg-emerald-400/[0.07] text-emerald-200 shadow-[inset_0_0.5px_0_rgba(52,211,153,0.10)]'
+                                        ? 'bg-emerald-500/[0.07] text-emerald-700 ring-1 ring-emerald-500/[0.10] shadow-[inset_0_0.5px_0_rgba(52,211,153,0.15)]'
+                                        : 'bg-emerald-400/[0.08] text-emerald-300/90 ring-1 ring-emerald-400/[0.08] shadow-[inset_0_0.5px_0_rgba(52,211,153,0.10)]'
                                 }`}
                             >
                                 <Check className="h-2.5 w-2.5" />
@@ -288,22 +337,22 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                     </div>
                 </div>
 
-                {/* ── References + Override ───────────────────────── */}
-                <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_190px]">
+                {/* ── References + Override ─────────────────────────── */}
+                <div className="mt-1.5 grid grid-cols-1 gap-1.5 md:grid-cols-[minmax(0,1fr)_176px]">
                     {recommendation.suggestedReferences.length > 0 ? (
-                        <div className={`${pane(isLight)} px-4 py-3`}>
+                        <div className={`${pane(isLight)} px-3.5 py-2.5`}>
                             <div className={sectionLabel(isLight)}>Suggested References</div>
                             <div className="mt-1.5 flex flex-wrap gap-1">
                                 {recommendation.suggestedReferences.map((reference) => (
                                     <span
                                         key={reference}
-                                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium backdrop-blur-[8px] ${
+                                        className={`inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[9px] font-medium backdrop-blur-[8px] transition-all duration-200 hover:brightness-110 ${
                                             isLight
-                                                ? 'bg-slate-500/[0.06] text-slate-600 shadow-[inset_0_0.5px_0_rgba(100,116,139,0.10)]'
-                                                : 'bg-white/[0.05] text-white/60 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.06)]'
+                                                ? 'bg-slate-500/[0.06] text-slate-600 ring-1 ring-slate-400/[0.08] shadow-[inset_0_0.5px_0_rgba(100,116,139,0.10)]'
+                                                : 'bg-white/[0.05] text-white/55 ring-1 ring-white/[0.05] shadow-[inset_0_0.5px_0_rgba(255,255,255,0.06)]'
                                         }`}
                                     >
-                                        <Check className="h-2.5 w-2.5" />
+                                        <Check className="h-2.5 w-2.5 opacity-60" />
                                         {reference}
                                     </span>
                                 ))}
@@ -311,21 +360,21 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                         </div>
                     ) : <div />}
 
-                    {/* Override dropdown — compact, secondary */}
-                    <div className={`${pane(isLight)} px-4 py-3`}>
-                        <div className={`text-[9px] font-medium tracking-[0.10em] uppercase ${
-                            isLight ? 'text-slate-400' : 'text-white/32'
+                    {/* Override dropdown — AI correction path */}
+                    <div className={`${pane(isLight)} px-3.5 py-2.5`}>
+                        <div className={`text-[9px] font-medium tracking-[0.12em] uppercase ${
+                            isLight ? 'text-slate-400/70' : 'text-white/24'
                         }`}>
-                            Wrong recommendation?
+                            Not the right mode?
                         </div>
                         <div className="relative mt-1.5">
                             <select
                                 value={selectedModeId}
                                 onChange={(event) => setSelectedModeId(event.target.value as ModeOptionId)}
-                                className={`w-full appearance-none rounded-xl px-3 py-2 text-[11px] font-medium outline-none transition-colors backdrop-blur-[10px] ${
+                                className={`w-full appearance-none rounded-xl px-3 py-[7px] text-[11px] font-medium outline-none transition-all duration-200 backdrop-blur-[10px] ${
                                     isLight
-                                        ? 'bg-white/50 text-slate-800 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.7)] focus:bg-white/70'
-                                        : 'bg-white/[0.06] text-white/86 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.06)] focus:bg-white/[0.09]'
+                                        ? 'bg-white/45 text-slate-800 ring-1 ring-white/50 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.7)] focus:bg-white/65 focus:ring-white/70'
+                                        : 'bg-white/[0.06] text-white/80 ring-1 ring-white/[0.07] shadow-[inset_0_0.5px_0_rgba(255,255,255,0.06)] focus:bg-white/[0.09] focus:ring-white/[0.12]'
                                 }`}
                             >
                                 {MODE_OPTIONS.map((option) => (
@@ -335,16 +384,18 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                                 ))}
                             </select>
                             <ChevronDown className={`pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 ${
-                                isLight ? 'text-slate-400' : 'text-white/32'
+                                isLight ? 'text-slate-400/60' : 'text-white/24'
                             }`} />
                         </div>
                     </div>
                 </div>
 
-                {/* ── Footer: error + apply ───────────────────────── */}
-                <div className="pt-3">
+                {/* ── Footer: error + apply ─────────────────────────── */}
+                <div className={`mt-3 pt-3 border-t ${
+                    isLight ? 'border-black/[0.04]' : 'border-white/[0.05]'
+                }`}>
                     {error && (
-                        <div className={`mb-2 rounded-full px-3 py-1.5 text-[10px] font-medium ${
+                        <div className={`mb-2 rounded-xl px-3 py-1.5 text-[10px] font-medium ${
                             isLight ? 'bg-rose-500/8 text-rose-700' : 'bg-rose-500/10 text-rose-200'
                         }`}>
                             {error}
@@ -378,7 +429,7 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                     </div>
                 </div>
             </div>
-        </div>
+        </motion.div>
     );
 };
 
