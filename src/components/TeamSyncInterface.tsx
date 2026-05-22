@@ -1307,6 +1307,15 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             isStreaming: true,
         });
 
+        // Auto-scroll to the new response — the user explicitly clicked an action
+        // button, so they expect to see the new AI output even if they scrolled up.
+        userHasScrolledRef.current = false;
+        setShowJumpButton(false);
+        setUnreadCount(0);
+        setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 50);
+
         try {
             requestStartTimeRef.current = Date.now();
             await window.electronAPI.generateAction({
@@ -2258,6 +2267,13 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             isStreaming: true,
         });
 
+        userHasScrolledRef.current = false;
+        setShowJumpButton(false);
+        setUnreadCount(0);
+        setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 50);
+
         try {
             await window.electronAPI.generateSystemDesignTradeoffs(requestId);
         } catch (err) {
@@ -2282,6 +2298,13 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             source: currentSourceRef.current,
             isStreaming: true,
         });
+
+        userHasScrolledRef.current = false;
+        setShowJumpButton(false);
+        setUnreadCount(0);
+        setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 50);
 
         try {
             await window.electronAPI.generateFollowUp(intent, undefined, requestId);
@@ -2346,6 +2369,13 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             source: currentSourceRef.current,
             isStreaming: true,
         });
+
+        userHasScrolledRef.current = false;
+        setShowJumpButton(false);
+        setUnreadCount(0);
+        setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 50);
 
         try {
             await window.electronAPI.generateCodeHint(currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined, undefined, requestId);
@@ -2498,6 +2528,13 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             source: currentSourceRef.current,
             isStreaming: true,
         });
+
+        userHasScrolledRef.current = false;
+        setShowJumpButton(false);
+        setUnreadCount(0);
+        setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 50);
 
         try {
             await window.electronAPI.generateAnswerNow(
@@ -2882,6 +2919,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         }
 
         // Scroll to bottom when user sends message
+        userHasScrolledRef.current = false;
+        setShowJumpButton(false);
+        setUnreadCount(0);
         setTimeout(() => {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 50);

@@ -3421,6 +3421,13 @@ async function initializeApp() {
   // Explicitly load credentials into helpers
   appState.processingHelper.loadStoredCredentials();
 
+  // Initialize IPC handlers BEFORE bootstrapPersistentState() — the AppState constructor
+  // preloads the cropper window (CropperWindowHelper.preload()) which uses preload.js.
+  // preload.ts immediately calls ipcRenderer.invoke('get-verbose-logging') on load.
+  // If we await bootstrapPersistentState() first, the cropper window can finish loading
+  // during that async gap and invoke the handler before it's registered.
+  initializeIpcHandlers(appState)
+
   // Rehydrate persisted premium, knowledge, and meeting state before the UI asks for it.
   try {
     await appState.bootstrapPersistentState();
@@ -3429,9 +3436,6 @@ async function initializeApp() {
     app.exit(1);
     return;
   }
-
-  // Initialize IPC handlers before window creation
-  initializeIpcHandlers(appState)
 
   // Apply the full disguise payload (names, dock icon, AUMID) early
   appState.applyInitialDisguise();
