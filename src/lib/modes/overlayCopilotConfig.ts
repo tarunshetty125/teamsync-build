@@ -495,12 +495,26 @@ export function resolveOverlayCopilotMode(
   activeTemplateType: ModeTemplateId | null | undefined,
   sessionMode: SessionOverlayMode,
 ): OverlayCopilotModeId {
-  if (activeTemplateType === 'sales' || activeTemplateType === 'lecture' || activeTemplateType === 'recruiting' || activeTemplateType === 'team-meet' || activeTemplateType === 'looking-for-work') {
+  // Non-interview templates always lock to their own button set
+  if (activeTemplateType === 'sales' || activeTemplateType === 'lecture' || activeTemplateType === 'recruiting' || activeTemplateType === 'team-meet') {
     return activeTemplateType;
   }
 
+  // Technical-interview: respect transcript-detected question types so
+  // buttons auto-map to coding / behavioral / system_design as detected.
+  // Falls back to the template's own config when detection is general/follow_up.
   if (activeTemplateType === 'technical-interview') {
-    return sessionMode === 'system_design' ? 'system_design' : 'technical-interview';
+    if (sessionMode === 'coding') return 'coding';
+    if (sessionMode === 'system_design') return 'system_design';
+    if (sessionMode === 'behavioral') return 'behavioral';
+    return 'technical-interview';
+  }
+
+  // Looking-for-work: allow coding / system_design passthrough when detected
+  if (activeTemplateType === 'looking-for-work') {
+    if (sessionMode === 'coding') return 'coding';
+    if (sessionMode === 'system_design') return 'system_design';
+    return 'looking-for-work';
   }
 
   return sessionMode;
