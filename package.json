@@ -208,6 +208,7 @@
     "keytar": "^7.9.0",
     "lucide-react": "^0.460.0",
     "mammoth": "^1.11.0",
+    "mermaid": "^11.15.0",
     "mongodb": "^7.2.0",
     "openai": "^6.22.0",
     "pdf-parse": "^2.4.5",

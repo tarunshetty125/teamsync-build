@@ -5,6 +5,7 @@ import {
     CLARIFY_MODE_PROMPT,
     CODE_HINT_PROMPT,
     SCREEN_SCAN_PROMPT,
+    SYSTEM_DESIGN_COPILOT_PROMPT,
     SYSTEM_DESIGN_TRADEOFFS_PROMPT,
     UNIVERSAL_ANSWER_PROMPT,
     UNIVERSAL_FOLLOW_UP_QUESTIONS_PROMPT,
@@ -301,7 +302,7 @@ function buildSessionModeDirective(mode: SessionActionMode): string {
         case 'follow_up':
             return 'Treat this as an ongoing follow-up discussion. Continue naturally from the latest exchange without restarting the answer.';
         case 'system_design':
-            return 'Treat this as a system design discussion. Focus on architecture, tradeoffs, scaling, reliability, and failure handling.';
+            return 'Treat this as a system design interview. You are an elite System Design Interview Copilot. Lead with architecture, include Mermaid diagrams, component breakdowns, data flow, database design, scaling strategy, bottleneck analysis, and CAP tradeoffs. Think like a senior FAANG engineer. Prefer practical production architecture over theory.';
         case 'general':
         default:
             return 'Treat this as a general interview conversation. Answer directly, naturally, and concisely.';
@@ -328,8 +329,16 @@ function buildModeAwareIntentRules(intent: UnifiedActionIntent, mode: SessionAct
                 ];
             case 'system_design':
                 return [
-                    'Lead with the architecture direction.',
-                    'Call out tradeoffs, scalability, reliability, and failure modes.',
+                    'Lead with architecture direction and a Mermaid diagram.',
+                    'Include component breakdown with 1-2 line descriptions per component.',
+                    'Explain the end-to-end data flow step by step.',
+                    'Cover database design: SQL vs NoSQL, schema, indexing, sharding.',
+                    'Include scaling strategy: horizontal scaling, caching, CDN, queues, replication.',
+                    'Call out bottlenecks, CAP tradeoffs, and failure modes.',
+                    'End with a concise interview-ready spoken answer.',
+                    'For large-scale systems (Uber, Netflix, etc.): include load balancer, API gateway, Redis cache, Kafka/RabbitMQ, CDN, DB replication.',
+                    'For real-time systems: include WebSockets or pub-sub.',
+                    'For search-heavy systems: include Elasticsearch/OpenSearch.',
                 ];
             case 'follow_up':
                 return [
@@ -775,6 +784,22 @@ export function buildIntentPrompt(
                 ].join('\n')),
             ];
         case 'answer_now':
+            if (responseProfile === 'system_design') {
+                return [
+                    createInstruction('intent', 'INTENT', SYSTEM_DESIGN_COPILOT_PROMPT),
+                    createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
+                    createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                        'Return a full structured system design answer.',
+                        'Follow the mandatory 10-section output structure from the intent prompt exactly.',
+                        'MUST include a Mermaid architecture diagram.',
+                        'MUST include component breakdown, data flow, database design, scaling strategy.',
+                        'MUST end with a concise interview-ready spoken answer.',
+                        'Use clean markdown with ### headers for each section.',
+                        ...modeAwareRules,
+                    ].join('\n')),
+                ];
+            }
+
             if (responseProfile === 'coding') {
                 return [
                     createInstruction('intent', 'INTENT', basePrompt),
@@ -967,6 +992,22 @@ export function buildIntentPrompt(
             ];
         case 'what_to_answer':
         default:
+            if (responseProfile === 'system_design') {
+                return [
+                    createInstruction('intent', 'INTENT', SYSTEM_DESIGN_COPILOT_PROMPT),
+                    createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
+                    createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                        'Return a full structured system design answer.',
+                        'Follow the mandatory 10-section output structure from the intent prompt exactly.',
+                        'MUST include a Mermaid architecture diagram.',
+                        'MUST include component breakdown, data flow, database design, scaling strategy.',
+                        'MUST end with a concise interview-ready spoken answer.',
+                        'Use clean markdown with ### headers for each section.',
+                        ...modeAwareRules,
+                    ].join('\n')),
+                ];
+            }
+
             if (responseProfile === 'coding') {
                 return [
                     createInstruction('intent', 'INTENT', basePrompt),

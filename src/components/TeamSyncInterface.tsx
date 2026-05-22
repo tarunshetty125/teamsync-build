@@ -40,6 +40,7 @@ import TopPill from './ui/TopPill';
 import RollingTranscript from './ui/RollingTranscript';
 import ProContextBar from './ui/ProContextBar';
 import CodeBlock from './ui/CodeBlock';
+import MermaidRenderer from './ui/MermaidRenderer';
 import { PremiumResponseCard } from './ui/PremiumResponseCard';
 import { SkeletonLoader, EmptyListeningState, ErrorFallback } from './ui/PremiumStates';
 import { SignalDiscoveryNudge } from './ui/IntelligenceDiscovery';
@@ -3034,6 +3035,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                 if (match) {
                                     const lang = match[1] || 'python';
                                     const code = match[2].trim();
+                                    if (lang.toLowerCase() === 'mermaid') {
+                                        return <MermaidRenderer key={i} chart={code} isLightTheme={isLightTheme} />;
+                                    }
                                     return <CodeBlock key={i} code={code} language={lang} isLightTheme={isLightTheme} />;
                                 }
                             }
@@ -3225,6 +3229,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                             if (match) {
                                 const lang = match[1] || 'text';
                                 const code = match[2].trim();
+                                if (lang.toLowerCase() === 'mermaid') {
+                                    return <MermaidRenderer key={i} chart={code} isLightTheme={isLightTheme} />;
+                                }
                                 return <CodeBlock key={i} code={code} language={lang} isLightTheme={isLightTheme} />;
                             }
                         }
