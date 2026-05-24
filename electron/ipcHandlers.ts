@@ -1853,6 +1853,29 @@ export function initializeIpcHandlers(appState: AppState): void {
   // STT Provider Management Handlers
   // ==========================================
 
+  const broadcastCredentialsChanged = () => {
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (!win.isDestroyed()) win.webContents.send('credentials-changed');
+    });
+  };
+
+  const autoSelectSttProviderForSavedKey = (
+    provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox',
+    apiKey: string,
+  ) => {
+    const trimmedKey = apiKey?.trim();
+    if (!trimmedKey) {
+      return;
+    }
+
+    const { CredentialsManager } = require('./services/CredentialsManager');
+    const cm = CredentialsManager.getInstance();
+    if (cm.getSttProvider() !== provider) {
+      cm.setSttProvider(provider);
+      console.log(`[IPC] Auto-promoted STT provider to ${provider} after key save`);
+    }
+  };
+
   safeHandle("set-stt-provider", async (_, provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync' | 'whisper') => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
@@ -1862,9 +1885,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       await appState.reconfigureSttProvider();
 
       // Notify all windows so the settings UI reflects the change immediately
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) win.webContents.send('credentials-changed');
-      });
+      broadcastCredentialsChanged();
 
       return { success: true };
     } catch (error: any) {
@@ -1948,13 +1969,12 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setGroqSttApiKey(apiKey);
+      autoSelectSttProviderForSavedKey('groq', apiKey);
 
       // Reconfigure the in-memory audio pipeline so the new key takes effect immediately
       await appState.reconfigureSttProvider();
 
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) win.webContents.send('credentials-changed');
-      });
+      broadcastCredentialsChanged();
       return { success: true };
     } catch (error: any) {
       console.error("Error saving Groq STT API key:", error);
@@ -1966,13 +1986,12 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setOpenAiSttApiKey(apiKey);
+      autoSelectSttProviderForSavedKey('openai', apiKey);
 
       // Reconfigure the in-memory audio pipeline so the new key takes effect immediately
       await appState.reconfigureSttProvider();
 
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) win.webContents.send('credentials-changed');
-      });
+      broadcastCredentialsChanged();
       return { success: true };
     } catch (error: any) {
       console.error("Error saving OpenAI STT API key:", error);
@@ -1985,20 +2004,12 @@ export function initializeIpcHandlers(appState: AppState): void {
       const { CredentialsManager } = require('./services/CredentialsManager');
       const cm = CredentialsManager.getInstance();
       cm.setDeepgramApiKey(apiKey);
-
-      // Auto-promote STT provider to 'deepgram' if currently 'none' and a key was provided
-      const trimmedKey = apiKey?.trim();
-      if (trimmedKey && cm.getSttProvider() === 'none') {
-        cm.setSttProvider('deepgram');
-        console.log('[IPC] set-deepgram-api-key: Auto-promoted STT provider to deepgram');
-      }
+      autoSelectSttProviderForSavedKey('deepgram', apiKey);
 
       // Reconfigure the in-memory audio pipeline so the new key takes effect immediately
       await appState.reconfigureSttProvider();
 
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) win.webContents.send('credentials-changed');
-      });
+      broadcastCredentialsChanged();
       return { success: true };
     } catch (error: any) {
       console.error("Error saving Deepgram API key:", error);
@@ -2025,13 +2036,12 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setElevenLabsApiKey(apiKey);
+      autoSelectSttProviderForSavedKey('elevenlabs', apiKey);
 
       // Reconfigure the in-memory audio pipeline so the new key takes effect immediately
       await appState.reconfigureSttProvider();
 
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) win.webContents.send('credentials-changed');
-      });
+      broadcastCredentialsChanged();
       return { success: true };
     } catch (error: any) {
       console.error("Error saving ElevenLabs API key:", error);
@@ -2043,6 +2053,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setAzureApiKey(apiKey);
+      autoSelectSttProviderForSavedKey('azure', apiKey);
+
+      await appState.reconfigureSttProvider();
+      broadcastCredentialsChanged();
       return { success: true };
     } catch (error: any) {
       console.error("Error saving Azure API key:", error);
@@ -2069,6 +2083,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setIbmWatsonApiKey(apiKey);
+      autoSelectSttProviderForSavedKey('ibmwatson', apiKey);
+
+      await appState.reconfigureSttProvider();
+      broadcastCredentialsChanged();
       return { success: true };
     } catch (error: any) {
       console.error("Error saving IBM Watson API key:", error);
@@ -2080,13 +2098,12 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setSonioxApiKey(apiKey);
+      autoSelectSttProviderForSavedKey('soniox', apiKey);
 
       // Reconfigure the in-memory audio pipeline so the new key takes effect immediately
       await appState.reconfigureSttProvider();
 
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) win.webContents.send('credentials-changed');
-      });
+      broadcastCredentialsChanged();
       return { success: true };
     } catch (error: any) {
       console.error("Error saving Soniox API key:", error);

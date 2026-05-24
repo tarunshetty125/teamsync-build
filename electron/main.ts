@@ -119,6 +119,7 @@ import { MicrophoneCapture } from "./audio/MicrophoneCapture"
 import { SttSupervisor } from "./audio/stt/SttSupervisor"
 import { DeepgramSttAdapter } from "./audio/stt/DeepgramSttAdapter"
 import { GoogleStreamingSttAdapter } from "./audio/stt/GoogleStreamingSttAdapter"
+import { LegacyProviderSttAdapter, type LegacyPrimarySttProvider } from "./audio/stt/LegacyProviderSttAdapter"
 import { WhisperFallbackSttAdapter } from "./audio/stt/WhisperFallbackSttAdapter"
 import { ElevenLabsShadowProbe } from "./audio/stt/ElevenLabsShadowProbe"
 import type { SttMetricsSnapshot, StreamingSttAdapter, SttTelemetryEvent } from "./audio/stt/SttAdapter"
@@ -1064,6 +1065,19 @@ export class AppState {
     const config = loadSttRuntimeConfig(credentialsManager);
     const configuredProvider = config.selectedProvider;
     const sttLanguage = CredentialsManager.getInstance().getSttLanguage();
+    const fallbackTail = config.priorityOrder.filter((provider) => provider === "google" || provider === "whisper");
+    const providerOrder = (() => {
+      if (configuredProvider === "none") {
+        return [] as string[];
+      }
+      if (configuredProvider === "whisper") {
+        return ["whisper"];
+      }
+      if (configuredProvider === "google") {
+        return Array.from(new Set(["google", ...fallbackTail]));
+      }
+      return Array.from(new Set([configuredProvider, ...fallbackTail]));
+    })();
 
     // 'none' means the user has explicitly disabled STT (no provider selected).
     // Return null so the pipeline skips STT without falling back to Google.
@@ -1072,13 +1086,41 @@ export class AppState {
       return null;
     }
 
-    console.log(`[Main] STT priority order for ${speaker}: ${config.priorityOrder.join(" -> ")}`);
+    console.log(`[Main] STT priority order for ${speaker}: ${providerOrder.join(" -> ")}`);
 
     const adapters: StreamingSttAdapter[] = [];
-    for (const provider of config.priorityOrder) {
+    for (const provider of providerOrder) {
       if (provider === "deepgram") {
         adapters.push(new DeepgramSttAdapter({
           apiKey: config.deepgramApiKey,
+          sourceLabel: speaker,
+        }));
+      } else if (
+        provider === "groq"
+        || provider === "openai"
+        || provider === "elevenlabs"
+        || provider === "azure"
+        || provider === "ibmwatson"
+        || provider === "soniox"
+        || provider === "teamsync"
+      ) {
+        const providerApiKeys: Partial<Record<LegacyPrimarySttProvider, string | undefined>> = {
+          groq: config.groqApiKey,
+          openai: config.openaiApiKey,
+          elevenlabs: config.elevenLabsApiKey,
+          azure: config.azureApiKey,
+          ibmwatson: config.ibmWatsonApiKey,
+          soniox: config.sonioxApiKey,
+          teamsync: config.teamsyncApiKey,
+        };
+        const providerRegions: Partial<Record<LegacyPrimarySttProvider, string | undefined>> = {
+          azure: config.azureRegion,
+          ibmwatson: config.ibmWatsonRegion,
+        };
+        adapters.push(new LegacyProviderSttAdapter({
+          provider,
+          apiKey: providerApiKeys[provider],
+          region: providerRegions[provider],
           sourceLabel: speaker,
         }));
       } else if (provider === "google") {
@@ -1111,7 +1153,7 @@ export class AppState {
       console.error(
         `[Main] ⚠️ All ${adapters.length} STT adapters are unavailable for ${speaker}. ` +
         `Check that at least one provider has valid credentials configured. ` +
-        `Provider: ${configuredProvider}, Priority: ${config.priorityOrder.join(' -> ')}`
+        `Provider: ${configuredProvider}, Priority: ${providerOrder.join(' -> ')}`
       );
     }
 
@@ -1129,7 +1171,7 @@ export class AppState {
 
     const getBroadcastProvider = () => {
       const active = stt.getActiveProviderName();
-      return active === 'inactive' ? (config.priorityOrder[0] || configuredProvider || 'deepgram') : active;
+      return active === 'inactive' ? (providerOrder[0] || configuredProvider || 'deepgram') : active;
     };
 
     stt.on("telemetry", (event: SttTelemetryEvent) => {
@@ -2415,9 +2457,20 @@ export class AppState {
     const { CredentialsManager } = require('./services/CredentialsManager');
     CredentialsManager.getInstance().setSttLanguage(key);
 
-    // 'auto' is only meaningful for TeamSyncProSTT — other providers fall back to en-US.
     const sttProvider = CredentialsManager.getInstance().getSttProvider();
-    const effectiveKey = (key === 'auto' && sttProvider !== 'teamsync') ? 'english-us' : key;
+    const providersWithNativeAutoDetection = new Set([
+      'teamsync',
+      'google',
+      'deepgram',
+      'groq',
+      'openai',
+      'elevenlabs',
+      'soniox',
+      'whisper',
+    ]);
+    const effectiveKey = (key === 'auto' && !providersWithNativeAutoDetection.has(sttProvider))
+      ? 'english-us'
+      : key;
 
     this.googleSTT?.setRecognitionLanguage(effectiveKey);
     this.googleSTT_User?.setRecognitionLanguage(effectiveKey);

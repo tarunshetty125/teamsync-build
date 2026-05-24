@@ -245,7 +245,6 @@ function buildUniformScores(): ModeConfidenceScore[] {
         modeId,
         confidence: uniform,
         signalCount: 0,
-        topKeywords: [],
+        topKeywords: [] as string[],
     }));
 }
-

@@ -6,7 +6,12 @@
 import { app, safeStorage } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import { DEFAULT_RUNTIME_STT_PROVIDER, isSupportedRuntimeSttProvider, normalizeRuntimeSttProvider } from '../audio/stt/SttRuntimeConfig';
+import {
+    DEFAULT_RUNTIME_STT_PROVIDER,
+    isSupportedRuntimeSttProvider,
+    normalizeRuntimeSttProvider,
+    type SupportedRuntimeSttProvider,
+} from '../audio/stt/SttRuntimeConfig';
 
 const CREDENTIALS_PATH = path.join(app.getPath('userData'), 'credentials.enc');
 
@@ -114,7 +119,7 @@ export class CredentialsManager {
         return this.credentials.customProviders || [];
     }
 
-    public getSttProvider(): 'deepgram' | 'google' | 'whisper' {
+    public getSttProvider(): SupportedRuntimeSttProvider {
         const rawProvider = this.credentials.sttProvider;
         const normalizedProvider = normalizeRuntimeSttProvider(rawProvider);
         if (rawProvider !== normalizedProvider) {

@@ -6,6 +6,15 @@ export interface SttRuntimeConfig {
   selectedProvider: string;
   priorityOrder: string[];
   deepgramApiKey?: string;
+  groqApiKey?: string;
+  openaiApiKey?: string;
+  elevenLabsApiKey?: string;
+  azureApiKey?: string;
+  azureRegion?: string;
+  ibmWatsonApiKey?: string;
+  ibmWatsonRegion?: string;
+  sonioxApiKey?: string;
+  teamsyncApiKey?: string;
   googleCredentialsPath: string | null;
   whisperEnabled: boolean;
   whisperModelId: string;
@@ -18,9 +27,21 @@ export interface SttRuntimeValidationResult {
   warnings: string[];
 }
 
-export const SUPPORTED_RUNTIME_STT_PROVIDERS = ["deepgram", "google", "whisper"] as const;
+export const SUPPORTED_RUNTIME_STT_PROVIDERS = [
+  "none",
+  "google",
+  "groq",
+  "openai",
+  "deepgram",
+  "elevenlabs",
+  "azure",
+  "ibmwatson",
+  "soniox",
+  "teamsync",
+  "whisper",
+] as const;
 export const DEFAULT_RUNTIME_STT_PROVIDER = "deepgram";
-export const DEFAULT_RUNTIME_STT_CHAIN = [...SUPPORTED_RUNTIME_STT_PROVIDERS];
+export const DEFAULT_RUNTIME_STT_CHAIN = ["deepgram", "google", "whisper"] as const;
 
 export type SupportedRuntimeSttProvider = typeof SUPPORTED_RUNTIME_STT_PROVIDERS[number];
 
@@ -57,7 +78,8 @@ export function normalizePriorityOrder(rawValue: string | undefined): string[] {
 
   // Enforce the production fallback chain order even if the environment variable
   // contains noise or a partial subset from an older build.
-  return baseChain.filter((provider) => deduped.size === 0 || deduped.has(provider));
+  const filtered = baseChain.filter((provider) => deduped.size === 0 || deduped.has(provider));
+  return filtered.length > 0 ? filtered : baseChain;
 }
 
 export function loadSttRuntimeConfig(credentialsManager?: any): SttRuntimeConfig {
@@ -75,6 +97,15 @@ export function loadSttRuntimeConfig(credentialsManager?: any): SttRuntimeConfig
     selectedProvider,
     priorityOrder: normalizePriorityOrder(process.env.STT_PRIORITY_ORDER),
     deepgramApiKey: credentialsManager?.getDeepgramApiKey?.()?.trim() || undefined,
+    groqApiKey: credentialsManager?.getGroqSttApiKey?.()?.trim() || undefined,
+    openaiApiKey: credentialsManager?.getOpenAiSttApiKey?.()?.trim() || undefined,
+    elevenLabsApiKey: credentialsManager?.getElevenLabsApiKey?.()?.trim() || undefined,
+    azureApiKey: credentialsManager?.getAzureApiKey?.()?.trim() || undefined,
+    azureRegion: credentialsManager?.getAzureRegion?.()?.trim?.() || credentialsManager?.getAzureRegion?.() || "eastus",
+    ibmWatsonApiKey: credentialsManager?.getIbmWatsonApiKey?.()?.trim() || undefined,
+    ibmWatsonRegion: credentialsManager?.getIbmWatsonRegion?.()?.trim?.() || credentialsManager?.getIbmWatsonRegion?.() || "us-south",
+    sonioxApiKey: credentialsManager?.getSonioxApiKey?.()?.trim() || undefined,
+    teamsyncApiKey: credentialsManager?.getTeamSyncApiKey?.()?.trim() || undefined,
     googleCredentialsPath,
     whisperEnabled: process.env.ENABLE_WHISPER_STT === "true",
     whisperModelId: process.env.STT_WHISPER_MODEL || "Xenova/whisper-tiny.en",
@@ -91,6 +122,27 @@ export function validateSttRuntimeConfig(config: SttRuntimeConfig): SttRuntimeVa
   if (config.deepgramApiKey) {
     availableProviders.add("deepgram");
   }
+  if (config.groqApiKey) {
+    availableProviders.add("groq");
+  }
+  if (config.openaiApiKey) {
+    availableProviders.add("openai");
+  }
+  if (config.elevenLabsApiKey) {
+    availableProviders.add("elevenlabs");
+  }
+  if (config.azureApiKey) {
+    availableProviders.add("azure");
+  }
+  if (config.ibmWatsonApiKey) {
+    availableProviders.add("ibmwatson");
+  }
+  if (config.sonioxApiKey) {
+    availableProviders.add("soniox");
+  }
+  if (config.teamsyncApiKey) {
+    availableProviders.add("teamsync");
+  }
   if (config.googleCredentialsPath && fs.existsSync(config.googleCredentialsPath)) {
     availableProviders.add("google");
   }
@@ -104,14 +156,37 @@ export function validateSttRuntimeConfig(config: SttRuntimeConfig): SttRuntimeVa
     }
   }
 
-  if (config.selectedProvider === "deepgram" && !config.deepgramApiKey) {
-    errors.push("Deepgram is selected but no Deepgram API key is configured.");
-  }
-  if (config.selectedProvider === "google" && (!config.googleCredentialsPath || !fs.existsSync(config.googleCredentialsPath))) {
-    errors.push("Google STT is selected but the Google credentials path is missing or invalid.");
-  }
-  if (config.selectedProvider === "whisper" && !config.whisperEnabled) {
-    errors.push("Whisper STT is selected but ENABLE_WHISPER_STT is not enabled.");
+  if (config.selectedProvider !== "none") {
+    if (config.selectedProvider === "deepgram" && !config.deepgramApiKey) {
+      errors.push("Deepgram is selected but no Deepgram API key is configured.");
+    }
+    if (config.selectedProvider === "groq" && !config.groqApiKey) {
+      errors.push("Groq STT is selected but no Groq STT API key is configured.");
+    }
+    if (config.selectedProvider === "openai" && !config.openaiApiKey) {
+      errors.push("OpenAI STT is selected but no OpenAI STT API key is configured.");
+    }
+    if (config.selectedProvider === "elevenlabs" && !config.elevenLabsApiKey) {
+      errors.push("ElevenLabs STT is selected but no ElevenLabs API key is configured.");
+    }
+    if (config.selectedProvider === "azure" && !config.azureApiKey) {
+      errors.push("Azure STT is selected but no Azure API key is configured.");
+    }
+    if (config.selectedProvider === "ibmwatson" && !config.ibmWatsonApiKey) {
+      errors.push("IBM Watson STT is selected but no IBM Watson API key is configured.");
+    }
+    if (config.selectedProvider === "soniox" && !config.sonioxApiKey) {
+      errors.push("Soniox STT is selected but no Soniox API key is configured.");
+    }
+    if (config.selectedProvider === "teamsync" && !config.teamsyncApiKey) {
+      errors.push("TeamSync STT is selected but no TeamSync API key is configured.");
+    }
+    if (config.selectedProvider === "google" && (!config.googleCredentialsPath || !fs.existsSync(config.googleCredentialsPath))) {
+      errors.push("Google STT is selected but the Google credentials path is missing or invalid.");
+    }
+    if (config.selectedProvider === "whisper" && !config.whisperEnabled) {
+      errors.push("Whisper STT is selected but ENABLE_WHISPER_STT is not enabled.");
+    }
   }
 
   if (config.googleCredentialsPath && !fs.existsSync(config.googleCredentialsPath)) {
@@ -119,13 +194,16 @@ export function validateSttRuntimeConfig(config: SttRuntimeConfig): SttRuntimeVa
   }
 
   const supportedPriority = config.priorityOrder.filter((provider) => isSupportedRuntimeSttProvider(provider));
-  if (supportedPriority.length === 0) {
-    errors.push("STT priority order resolved to an empty provider list.");
-  }
+  if (config.selectedProvider !== "none") {
+    if (supportedPriority.length === 0) {
+      errors.push("STT priority order resolved to an empty provider list.");
+    }
 
-  const anyConfiguredInPriority = supportedPriority.some((provider) => availableProviders.has(provider));
-  if (!anyConfiguredInPriority) {
-    errors.push(`No valid STT providers are configured for priority order: ${supportedPriority.join(", ") || "(empty)"}`);
+    const selectedOrFallbackProviders = new Set<string>([config.selectedProvider, ...supportedPriority]);
+    const anyConfiguredInPriority = Array.from(selectedOrFallbackProviders).some((provider) => availableProviders.has(provider));
+    if (!anyConfiguredInPriority) {
+      errors.push(`No valid STT providers are configured for selection/fallback order: ${Array.from(selectedOrFallbackProviders).join(", ") || "(empty)"}`);
+    }
   }
 
   return { errors, warnings };
