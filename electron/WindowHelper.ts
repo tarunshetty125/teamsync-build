@@ -31,6 +31,7 @@ export class WindowHelper {
   private appState: AppState
   private contentProtection: boolean = false
   private opacityTimeout: NodeJS.Timeout | null = null
+  private overlayDragStateTimeout: NodeJS.Timeout | null = null
 
   // Constants
   private static readonly OVERLAY_DEFAULT_WIDTH = 600;
@@ -59,6 +60,20 @@ export class WindowHelper {
   public setContentProtection(enable: boolean): void {
     this.contentProtection = enable
     this.applyContentProtection(enable)
+  }
+
+  private broadcastOverlayDragState(isDragging: boolean): void {
+    if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return
+    this.overlayWindow.webContents.send('overlay-drag-state-changed', isDragging)
+  }
+
+  private markOverlayDragging(): void {
+    this.broadcastOverlayDragState(true)
+    if (this.overlayDragStateTimeout) clearTimeout(this.overlayDragStateTimeout)
+    this.overlayDragStateTimeout = setTimeout(() => {
+      this.broadcastOverlayDragState(false)
+      this.overlayDragStateTimeout = null
+    }, 140)
   }
 
   private applyContentProtection(enable: boolean): void {
@@ -114,9 +129,18 @@ export class WindowHelper {
     const maxY = workArea.y + workArea.height - newHeight
     const newX = Math.min(Math.max(currentX, workArea.x), maxX)
     const newY = Math.min(Math.max(currentY, workArea.y), maxY)
+    const sizeChanged = currentBounds.width !== newWidth || currentBounds.height !== newHeight
+    const positionChanged = currentX !== newX || currentY !== newY
 
-    this.overlayWindow.setContentSize(newWidth, newHeight)
-    this.overlayWindow.setPosition(newX, newY)
+    if (!sizeChanged && !positionChanged) return
+
+    if (sizeChanged) {
+      this.overlayWindow.setContentSize(newWidth, newHeight)
+    }
+    if (positionChanged) {
+      this.overlayWindow.setPosition(newX, newY)
+    }
+
     this.overlayBounds = this.overlayWindow.getBounds()
   }
 
@@ -345,6 +369,7 @@ export class WindowHelper {
       this.overlayWindow.on("move", () => {
         if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
           this.overlayBounds = this.overlayWindow.getBounds()
+          this.markOverlayDragging()
         }
       })
 
@@ -423,6 +448,7 @@ export class WindowHelper {
     // This prevents the brief black/white frame flash before screenshots.
     this.launcherWindow?.setOpacity(0);
     this.overlayWindow?.setOpacity(0);
+    this.broadcastOverlayDragState(false);
     this.launcherWindow?.hide()
     this.overlayWindow?.hide()
     this.isWindowVisible = false
@@ -487,6 +513,7 @@ export class WindowHelper {
   // Used by IPC handlers to hide the overlay independently.
   public hideOverlay(): void {
     if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
+      this.broadcastOverlayDragState(false);
       this.overlayWindow.hide();
     }
   }
@@ -536,6 +563,7 @@ export class WindowHelper {
 
     // Tell the overlay renderer to expand to full size (e.g. after being minimised)
     this.overlayWindow?.webContents.send('ensure-expanded');
+    this.broadcastOverlayDragState(false);
 
     // Show Overlay FIRST
     if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {

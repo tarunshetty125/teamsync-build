@@ -275,6 +275,7 @@ interface ElectronAPI {
   toggleOverlayMousePassthrough: () => Promise<{ success: boolean; enabled: boolean }>
   getOverlayMousePassthrough: () => Promise<boolean>
   onOverlayMousePassthroughChanged: (callback: (enabled: boolean) => void) => () => void
+  onOverlayDragStateChanged: (callback: (dragging: boolean) => void) => () => void
 
   // Streaming listeners
   streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }) => Promise<void>
@@ -1239,6 +1240,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on('overlay-mouse-passthrough-changed', subscription)
     return () => {
       ipcRenderer.removeListener('overlay-mouse-passthrough-changed', subscription)
+    }
+  },
+
+  onOverlayDragStateChanged: (callback: (dragging: boolean) => void) => {
+    const subscription = (_: any, dragging: boolean) => callback(dragging)
+    ipcRenderer.on('overlay-drag-state-changed', subscription)
+    return () => {
+      ipcRenderer.removeListener('overlay-drag-state-changed', subscription)
     }
   },
 

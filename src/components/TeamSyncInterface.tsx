@@ -997,6 +997,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const isStealthRef = useRef<boolean>(false); // Tracks if the next expansion should be stealthy
     const overlayHideTimerRef = useRef<number | null>(null);
     const suppressOverlayResizeRef = useRef(false);
+    const lastOverlayDimensionsRef = useRef<{ width: number; height: number } | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1372,6 +1373,16 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         const height = Math.ceil(rect.height);
         if (!width || !height) return;
 
+        const previousDimensions = lastOverlayDimensionsRef.current;
+        if (
+            previousDimensions &&
+            previousDimensions.width === width &&
+            previousDimensions.height === height
+        ) {
+            return;
+        }
+
+        lastOverlayDimensionsRef.current = { width, height };
         window.electronAPI?.updateContentDimensions({ width, height });
     }, []);
 
@@ -1429,6 +1440,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     }, [isUndetectable, hideChatHidesWidget]);
 
     // Mouse Passthrough State
+    const [isOverlayDragging, setIsOverlayDragging] = useState(false);
     const [isMousePassthrough, setIsMousePassthrough] = useState(false);
     const [localOpacity, setLocalOpacity] = useState(overlayOpacity);
     useEffect(() => {
@@ -1502,6 +1514,28 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         }, 600);
         return () => clearTimeout(timer);
     }, [pushOverlayDimensions]);
+
+    useEffect(() => {
+        if (!window.electronAPI?.onOverlayDragStateChanged) return;
+
+        const unsubscribe = window.electronAPI.onOverlayDragStateChanged((dragging) => {
+            setIsOverlayDragging(prev => (prev === dragging ? prev : dragging));
+
+            if (dragging) {
+                suppressOverlayResizeRef.current = true;
+                return;
+            }
+
+            if (!isExpanded || overlayHideTimerRef.current) return;
+
+            suppressOverlayResizeRef.current = false;
+            requestAnimationFrame(() => {
+                pushOverlayDimensions(contentRef.current, { force: true });
+            });
+        });
+
+        return () => unsubscribe();
+    }, [isExpanded, pushOverlayDimensions]);
 
     // H2 Fix: useMemo instead of useEffect+state — eliminates one-render-behind lag
     const conversationContext = useMemo(() => {
@@ -3633,7 +3667,11 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     };
 
     return (
-        <div ref={contentRef} className="flex flex-col items-center w-fit mx-auto h-fit min-h-0 bg-transparent p-0 rounded-[24px] font-sans gap-2 overlay-text-primary">
+        <div
+            ref={contentRef}
+            data-overlay-dragging={isOverlayDragging ? 'true' : undefined}
+            className="flex flex-col items-center w-fit mx-auto h-fit min-h-0 bg-transparent p-0 rounded-[24px] font-sans gap-2 overlay-text-primary"
+        >
 
             <AnimatePresence>
                 {isExpanded && (
@@ -3656,16 +3694,20 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                             <motion.div
                                 aria-hidden="true"
                                 className="pointer-events-none absolute inset-x-[7.5%] top-[-2px] z-[110] h-[18px] overflow-visible"
-                                animate={{
-                                    opacity: [0.62, 1, 0.62],
-                                    scaleX: [0.985, 1.01, 0.985],
-                                    y: [0, -1, 0],
-                                }}
-                                transition={{
-                                    duration: 3.4,
-                                    repeat: Infinity,
-                                    ease: [0.4, 0, 0.2, 1],
-                                }}
+                                animate={isOverlayDragging
+                                    ? { opacity: 0.72, scaleX: 1, y: 0 }
+                                    : {
+                                        opacity: [0.62, 1, 0.62],
+                                        scaleX: [0.985, 1.01, 0.985],
+                                        y: [0, -1, 0],
+                                    }}
+                                transition={isOverlayDragging
+                                    ? { duration: 0.14, ease: 'easeOut' }
+                                    : {
+                                        duration: 3.4,
+                                        repeat: Infinity,
+                                        ease: [0.4, 0, 0.2, 1],
+                                    }}
                                 style={{ transformOrigin: 'center top' }}
                             >
                                 <div
@@ -4372,8 +4414,10 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                         <div className="relative group p-[1px] rounded-full overflow-hidden flex items-center justify-center">
                                             {/* Rotating Glowing Border */}
                                             <motion.div
-                                                animate={{ rotate: 360 }}
-                                                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                                                animate={isOverlayDragging ? { rotate: 0 } : { rotate: 360 }}
+                                                transition={isOverlayDragging
+                                                    ? { duration: 0.12, ease: 'linear' }
+                                                    : { duration: 3, repeat: Infinity, ease: "linear" }}
                                                 className="absolute inset-[-150%] opacity-70"
                                                 style={{ background: 'conic-gradient(from 0deg, transparent 0deg, transparent 290deg, #F59E0B 360deg)' }}
                                             />
