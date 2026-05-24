@@ -50,6 +50,16 @@ for (const sharedDir of sharedRuntimeDirs) {
   }
 }
 
+const sharedRuntimeFiles = [
+  path.resolve(rootDir, 'src/utils/transcriptSpeakers.ts'),
+];
+
+for (const sharedFile of sharedRuntimeFiles) {
+  if (fs.existsSync(sharedFile)) {
+    entryPoints.push(path.relative(rootDir, sharedFile));
+  }
+}
+
 const start = Date.now();
 
 build({

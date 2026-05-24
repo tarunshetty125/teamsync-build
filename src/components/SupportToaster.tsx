@@ -175,7 +175,6 @@ export const SupportToaster: React.FC<SupportToasterProps> = ({ className }) => 
                                 {/* Headline */}
                                 <h3 className="text-[26px] font-[600] leading-[1.2] text-[#F3F3F3] tracking-[-0.01em] mb-[12px] antialiased">
                                     Built by one.<br />
-                                    Used by thousands.
                                 </h3>
                                 {/* Body */}
                                 <p className="text-[14px] leading-[1.6] text-white/60 max-w-[480px] font-medium antialiased">

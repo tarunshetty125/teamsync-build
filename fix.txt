@@ -1,3 +1,7 @@
 xattr -cr ~/Downloads/TeamSync-2.5.0-arm64.dmg
 # Or for Intel Macs:
 xattr -cr ~/Downloads/TeamSync-2.6.0-x64.dmg
+
+
+
+/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/assets/entitlements.mac.plist

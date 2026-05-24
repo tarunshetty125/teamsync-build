@@ -502,11 +502,14 @@ export function resolveOverlayCopilotMode(
 
   // Technical-interview: respect transcript-detected question types so
   // buttons auto-map to coding / behavioral / system_design as detected.
-  // Falls back to the template's own config when detection is general/follow_up.
+  // Ambiguous or follow-up turns should use the detector-driven generic sets
+  // instead of the technical default actions.
   if (activeTemplateType === 'technical-interview') {
     if (sessionMode === 'coding') return 'coding';
     if (sessionMode === 'system_design') return 'system_design';
     if (sessionMode === 'behavioral') return 'behavioral';
+    if (sessionMode === 'follow_up') return 'follow_up';
+    if (sessionMode === 'general') return 'general';
     return 'technical-interview';
   }
 
