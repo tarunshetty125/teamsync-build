@@ -76,7 +76,7 @@ export async function connectToMongoDB(): Promise<Db> {
     await safeCreateIndex('licenseverify', { licenseKey: 1 });
     await safeCreateIndex('licenseverify', { deviceId: 1 });
 
-    console.log(`[MongoDB] Connected to ${dbName}`);
+    console.log(`[MongoDB] Connected to teamsync database`);
     return db;
   } catch (error) {
     console.error('[MongoDB] Connection failed:', error);
