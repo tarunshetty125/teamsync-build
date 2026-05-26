@@ -79,7 +79,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 alignItems: 'center',
                 width: 'fit-content',
                 margin: '0 auto',
-                padding: '8px',
+                padding: '28px 8px 8px',
                 minHeight: 0,
                 background: 'transparent',
                 fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif",

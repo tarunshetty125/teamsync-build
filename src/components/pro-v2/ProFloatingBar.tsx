@@ -195,45 +195,57 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             <div className="v2-bar-sep" />
 
             {/* Screen Scan — compact icon button */}
-            <button
-                onClick={onScreenScan}
-                className="v2-no-drag v2-bar-btn"
-                title="Analyse Screen"
-            >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                </svg>
-            </button>
+            <div className="relative group">
+                <button
+                    onClick={onScreenScan}
+                    className="v2-no-drag v2-bar-btn"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                    </svg>
+                </button>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    Analyse Screen
+                </div>
+            </div>
 
             {/* Show/Hide */}
-            <button
-                onClick={onToggleExpanded}
-                className="v2-no-drag v2-bar-btn"
-                title={isExpanded ? 'Hide panels' : 'Show panels'}
-            >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    {isExpanded ? (
-                        <><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" /></>
-                    ) : (
-                        <><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></>
-                    )}
-                </svg>
-            </button>
+            <div className="relative group">
+                <button
+                    onClick={onToggleExpanded}
+                    className="v2-no-drag v2-bar-btn"
+                >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        {isExpanded ? (
+                            <><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" /></>
+                        ) : (
+                            <><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></>
+                        )}
+                    </svg>
+                </button>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    {isExpanded ? 'Hide panels' : 'Show panels'}
+                </div>
+            </div>
 
             {/* End Meeting */}
-            <button
-                onClick={onEndMeeting}
-                className="v2-no-drag v2-bar-btn v2-bar-btn--end"
-                title="End Meeting"
-            >
-                <div style={{
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '2px',
-                    background: 'currentColor',
-                }} />
-            </button>
+            <div className="relative group">
+                <button
+                    onClick={onEndMeeting}
+                    className="v2-no-drag v2-bar-btn v2-bar-btn--end"
+                >
+                    <div style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '2px',
+                        background: 'currentColor',
+                    }} />
+                </button>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    End Meeting
+                </div>
+            </div>
         </motion.div>
     );
 });

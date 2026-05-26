@@ -8,8 +8,95 @@
 
 import React, { memo, useCallback, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Sparkles,
+    FileText,
+    HelpCircle,
+    Brain,
+    ArrowRight,
+    Info,
+    Zap,
+    Timer,
+    ShieldAlert,
+    LifeBuoy,
+    BadgeDollarSign,
+    Compass,
+    Handshake,
+    BookOpen,
+    Star,
+    MessageCircle,
+    ThumbsUp,
+    Flag,
+    Search,
+    FileCheck,
+    CheckCircle2,
+    CheckSquare,
+    AlertTriangle,
+    User,
+    Award,
+    Briefcase,
+    Volume2,
+    TrendingUp,
+    Scale,
+    SearchCode
+} from 'lucide-react';
 import type { OverlayQuickActionDef, OverlayRecommendationId } from '../../lib/modes/overlayCopilotConfig';
 import ProOverlayControlStrip from './ProOverlayControlStrip';
+
+const ACTION_ICONS: Record<string, React.ReactNode> = {
+    // General / Core
+    what_to_answer: <Sparkles size={14} className="text-violet-400" />,
+    recap: <FileText size={14} className="text-emerald-400" />,
+    clarify: <HelpCircle size={14} className="text-sky-400" />,
+    brainstorm: <Brain size={14} className="text-pink-400" />,
+    follow_up_questions: <ArrowRight size={14} className="text-blue-400" />,
+    
+    // Tech mode
+    tech_hint: <Info size={14} className="text-indigo-400" />,
+    tech_optimal_solution: <Zap size={14} className="text-amber-400" />,
+    tech_complexity: <Timer size={14} className="text-rose-400" />,
+    tech_edge_case: <ShieldAlert size={14} className="text-orange-400" />,
+    
+    // Sales mode
+    sales_objection: <LifeBuoy size={14} className="text-red-400" />,
+    sales_pricing: <BadgeDollarSign size={14} className="text-emerald-400" />,
+    sales_discovery: <Compass size={14} className="text-cyan-400" />,
+    sales_negotiation: <Handshake size={14} className="text-yellow-400" />,
+    
+    // Lecture mode
+    lecture_explain: <BookOpen size={14} className="text-blue-400" />,
+    lecture_summary: <FileText size={14} className="text-teal-400" />,
+    lecture_takeaway: <Star size={14} className="text-amber-400" />,
+    lecture_question: <MessageCircle size={14} className="text-purple-400" />,
+    
+    // Recruiting mode
+    recruiting_strength: <ThumbsUp size={14} className="text-green-400" />,
+    recruiting_red_flag: <Flag size={14} className="text-red-400" />,
+    recruiting_follow_up: <Search size={14} className="text-sky-400" />,
+    recruiting_evaluation: <FileCheck size={14} className="text-indigo-400" />,
+
+    // Team meeting mode
+    team_decision: <CheckCircle2 size={14} className="text-emerald-400" />,
+    team_action_item: <CheckSquare size={14} className="text-blue-400" />,
+    team_risk: <AlertTriangle size={14} className="text-orange-400" />,
+    team_owner: <User size={14} className="text-purple-400" />,
+
+    // Job Prep / STAR mode
+    job_star: <Award size={14} className="text-amber-400" />,
+    job_resume_alignment: <Briefcase size={14} className="text-sky-400" />,
+    job_confidence: <Volume2 size={14} className="text-violet-400" />,
+    job_improvement: <TrendingUp size={14} className="text-emerald-400" />,
+
+    // System Design mode
+    system_tradeoffs: <Scale size={14} className="text-rose-400" />,
+    system_clarify: <HelpCircle size={14} className="text-sky-400" />,
+    system_approaches: <Brain size={14} className="text-pink-400" />,
+    system_deep_dive: <SearchCode size={14} className="text-violet-400" />,
+};
+
+const getActionIcon = (action: OverlayQuickActionDef) => {
+    return ACTION_ICONS[action.id] || <span style={{ fontSize: '12px' }}>{action.icon}</span>;
+};
 
 interface ProInsightsPanelProps {
     currentModel: string;
@@ -167,8 +254,8 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
                             }`}
                             style={{ width: '100%', border: 'none', background: action.id === recommendedButton ? undefined : 'transparent' }}
                         >
-                            <span className="v2-action-icon" style={{ fontSize: '15px', lineHeight: 1 }}>
-                                {action.icon}
+                            <span className="v2-action-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px' }}>
+                                {getActionIcon(action)}
                             </span>
                             <span className="v2-action-label">{action.label}</span>
                         </motion.button>
