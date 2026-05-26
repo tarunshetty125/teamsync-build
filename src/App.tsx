@@ -8,6 +8,11 @@ import ModelSelectorWindow from "./components/ModelSelectorWindow"
 import SettingsOverlay from "./components/SettingsOverlay"
 import StartupSequence from "./components/StartupSequence"
 import { AnimatePresence, motion } from "framer-motion"
+
+// V2 Cluely-style overlay — lazy loaded so V1 bundle is unaffected
+const TeamSyncCluelyOverlay = React.lazy(
+  () => import('./components/pro-v2/TeamSyncCluelyOverlay')
+);
 import UpdateBanner from "./components/UpdateBanner"
 import { SupportToaster } from "./components/SupportToaster"
 import { TeamSyncQuotaBanner } from "./components/TeamSyncQuotaBanner"
@@ -149,6 +154,19 @@ const App: React.FC = () => {
   } | null>(null);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
   const bootstrapUiReady = hasLoadedLicense && hasCompletedBootstrap;
+
+  // ── Pro UI Toggle State ─────────────────────────────────────
+  const [useV2Layout, setUseV2Layout] = useState(() => localStorage.getItem('teamsync_overlay_v2') === 'true');
+
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'teamsync_overlay_v2') {
+        setUseV2Layout(e.newValue === 'true');
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const syncStartupState = useCallback(async () => {
     const reader = window.electronAPI?.forceResync ?? window.electronAPI?.getStartupState;
@@ -527,11 +545,21 @@ const App: React.FC = () => {
                   transition: 'background-color 75ms ease, border-color 75ms ease, box-shadow 75ms ease'
                 } as React.CSSProperties}
               >
-                <TeamSyncInterface
-                  onEndMeeting={handleEndMeeting}
-                  overlayOpacity={overlayOpacity}
-                  hasProContextAccess={isPremiumActive || !!activeTrial}
-                />
+                {useV2Layout ? (
+                  <React.Suspense fallback={<div className="w-full h-full bg-transparent" />}>
+                    <TeamSyncCluelyOverlay
+                      onEndMeeting={handleEndMeeting}
+                      overlayOpacity={overlayOpacity}
+                      hasProContextAccess={isPremiumActive || !!activeTrial}
+                    />
+                  </React.Suspense>
+                ) : (
+                  <TeamSyncInterface
+                    onEndMeeting={handleEndMeeting}
+                    overlayOpacity={overlayOpacity}
+                    hasProContextAccess={isPremiumActive || !!activeTrial}
+                  />
+                )}
               </div>
               <ToastViewport />
             </ToastProvider>

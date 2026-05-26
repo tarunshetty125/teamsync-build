@@ -1,0 +1,475 @@
+/* ============================================================
+   TeamSync Pro V2 — Cluely-Style Floating Surfaces
+   Glass system · Motion · Typography · Action rows
+   ============================================================ */
+
+/* ── Glass Surface Hierarchy ──────────────────────────────── */
+
+.v2-surface-bar {
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  background: rgba(18, 18, 22, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+    0 4px 24px rgba(0, 0, 0, 0.45),
+    0 1px 4px rgba(0, 0, 0, 0.25);
+  border-radius: 999px;
+}
+
+.v2-surface-insights {
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  background: linear-gradient(
+    165deg,
+    rgba(16, 16, 24, 0.82) 0%,
+    rgba(12, 12, 18, 0.78) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.04),
+    0 8px 32px rgba(0, 0, 0, 0.40),
+    0 2px 8px rgba(0, 0, 0, 0.22);
+  border-radius: 20px;
+}
+
+.v2-surface-response {
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  background: linear-gradient(
+    165deg,
+    rgba(14, 14, 22, 0.75) 0%,
+    rgba(10, 10, 16, 0.70) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.03),
+    0 8px 32px rgba(0, 0, 0, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.18);
+  border-radius: 20px;
+}
+
+/* ── Waveform Animation ───────────────────────────────────── */
+
+.v2-waveform {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+}
+
+.v2-waveform-bar {
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.85);
+  transform-origin: center center;
+  will-change: transform;
+  animation: v2-wave 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.v2-waveform-bar:nth-child(1) { animation-delay: 0ms; height: 6px; }
+.v2-waveform-bar:nth-child(2) { animation-delay: 150ms; height: 10px; }
+.v2-waveform-bar:nth-child(3) { animation-delay: 300ms; height: 14px; }
+.v2-waveform-bar:nth-child(4) { animation-delay: 150ms; height: 10px; }
+.v2-waveform-bar:nth-child(5) { animation-delay: 0ms; height: 6px; }
+
+.v2-waveform-paused .v2-waveform-bar {
+  animation: none;
+  height: 4px !important;
+  background: rgba(148, 163, 184, 0.5);
+  transition: height 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.3s ease;
+}
+
+@keyframes v2-wave {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+/* ── Recording Dot ────────────────────────────────────────── */
+
+.v2-recording-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(52, 211, 153, 0.85);
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.4);
+  animation: v2-dot-pulse 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  flex-shrink: 0;
+}
+
+.v2-recording-dot--paused {
+  background: rgba(148, 163, 184, 0.5);
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes v2-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.25); }
+}
+
+/* ── Action Row ───────────────────────────────────────────── */
+
+.v2-action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+  user-select: none;
+  background: transparent;
+  min-height: 36px;
+}
+
+.v2-action-row:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.v2-action-row:active {
+  transform: scale(0.97);
+}
+
+.v2-action-row--recommended {
+  background: rgba(139, 92, 246, 0.10) !important;
+}
+
+.v2-action-row--recommended::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 2.5px;
+  border-radius: 2px;
+  background: rgba(139, 92, 246, 0.65);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.3);
+}
+
+.v2-action-row--recommended:hover {
+  background: rgba(139, 92, 246, 0.15) !important;
+}
+
+.v2-action-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.v2-action-label {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.v2-action-row--recommended .v2-action-label {
+  color: rgba(196, 181, 253, 0.92);
+}
+
+/* ── Section Header ───────────────────────────────────────── */
+
+.v2-section-header {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.28);
+  padding: 4px 12px 6px;
+}
+
+/* ── Context Summary ──────────────────────────────────────── */
+
+.v2-context-summary {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.v2-context-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(139, 92, 246, 0.55);
+  margin-bottom: 4px;
+}
+
+.v2-context-detail {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.5;
+}
+
+/* ── Response Typography ──────────────────────────────────── */
+
+.v2-response-body {
+  font-size: 14px;
+  line-height: 1.75;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: 0.005em;
+}
+
+.v2-response-body p {
+  margin-bottom: 10px;
+}
+
+.v2-response-body h3 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 16px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.v2-response-body ul,
+.v2-response-body ol {
+  margin-left: 16px;
+  margin-bottom: 8px;
+}
+
+.v2-response-body li {
+  margin-bottom: 3px;
+  padding-left: 2px;
+}
+
+.v2-response-body code {
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* ── Panel Header ─────────────────────────────────────────── */
+
+.v2-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+}
+
+.v2-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.50);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.v2-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.v2-panel-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.40);
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.v2-panel-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.70);
+}
+
+.v2-panel-btn:active {
+  transform: scale(0.94);
+}
+
+/* ── Transcript Toggle ────────────────────────────────────── */
+
+.v2-transcript-toggle {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.40);
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.v2-transcript-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.v2-transcript-toggle--active {
+  color: rgba(139, 92, 246, 0.75);
+  background: rgba(139, 92, 246, 0.10);
+}
+
+.v2-transcript-toggle--active:hover {
+  background: rgba(139, 92, 246, 0.14);
+}
+
+/* ── Scrollbar (transcript only) ──────────────────────────── */
+
+.v2-scroll-area {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+}
+
+.v2-scroll-area::-webkit-scrollbar {
+  width: 4px;
+}
+
+.v2-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.v2-scroll-area::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 4px;
+}
+
+.v2-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* ── Response Source Pill ──────────────────────────────────── */
+
+.v2-source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── V2 Chip ──────────────────────────────────────────────── */
+
+.v2-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* ── Input Area ───────────────────────────────────────────── */
+
+.v2-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  padding: 8px 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.v2-input::placeholder {
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.v2-input:focus {
+  border-color: rgba(139, 92, 246, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Bar Separator ────────────────────────────────────────── */
+
+.v2-bar-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.10);
+  flex-shrink: 0;
+}
+
+/* ── Shimmer for empty state ──────────────────────────────── */
+
+@keyframes v2-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.v2-shimmer {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.03) 25%,
+    rgba(255,255,255,0.06) 50%,
+    rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: v2-shimmer 1.8s linear infinite;
+}
+
+/* ── Bar Action Buttons ───────────────────────────────────── */
+
+.v2-bar-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.40);
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+  flex-shrink: 0;
+}
+
+.v2-bar-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.70);
+}
+
+.v2-bar-btn:active {
+  transform: scale(0.92);
+}
+
+.v2-bar-btn--end:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: rgba(248, 113, 113, 0.90);
+}
+
+/* ── Draggable area override ──────────────────────────────── */
+
+.v2-draggable { -webkit-app-region: drag; }
+.v2-no-drag { -webkit-app-region: no-drag; }
