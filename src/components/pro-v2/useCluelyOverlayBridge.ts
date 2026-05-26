@@ -62,6 +62,22 @@ function nextRequestId(prefix: string = 'v2'): string {
 
 const INTERVIEWER_TURN_GAP_MS = 15_000;
 const LIVE_MEETING_RAG_ID = 'live-meeting-current';
+const ACTION_CONTEXT_OVERRIDE_TIMEOUT_MS = 12_000;
+
+const ACTION_CONTEXT_MESSAGES: Record<string, string> = {
+    Answer: 'Generating response guidance…',
+    Suggest: 'Preparing suggestions…',
+    Clarify: 'Breaking down the question…',
+    Brainstorm: 'Exploring approaches…',
+    FollowUp: 'Preparing follow-up ideas…',
+    'Follow Up': 'Preparing follow-up ideas…',
+    Complexity: 'Analyzing complexity…',
+    Tradeoffs: 'Evaluating tradeoffs…',
+    Scale: 'Thinking through scaling…',
+    DeepDive: 'Exploring implementation details…',
+    'Deep Dive': 'Exploring implementation details…',
+    Salary: 'Preparing negotiation guidance…',
+};
 
 export interface CluelyOverlayBridgeProps {
     onEndMeeting?: () => void;
@@ -80,6 +96,10 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const [rollingTranscript, setRollingTranscript] = useState('');
     const [rollingTranscriptSpeakerLabel, setRollingTranscriptSpeakerLabel] = useState('');
     const [isInterviewerSpeaking, setIsInterviewerSpeaking] = useState(false);
+    const [actionContextSummaryOverride, setActionContextSummaryOverride] = useState<{
+        label: string;
+        detail: string;
+    } | null>(null);
 
     const [activeModeLabel, setActiveModeLabel] = useState<string | null>(null);
     const [activeModeTemplateId, setActiveModeTemplateId] = useState<ModeTemplateId | null>(null);
@@ -113,6 +133,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const finalizedTranscriptRef = useRef('');
     const lastInterviewerFinalTimestampRef = useRef(0);
     const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const actionContextOverrideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const activeChatRequestIdRef = useRef<string | null>(null);
     const activeIntelligenceRequestIdRef = useRef<string | null>(null);
@@ -162,7 +183,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         [overlayCopilotMode, brainstormEnabled],
     );
 
-    const contextSummary = useMemo(
+    const derivedContextSummary = useMemo(
         () =>
             deriveContextSummary(
                 overlayCopilotMode,
@@ -171,6 +192,38 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [overlayCopilotMode, lastFinalSentence, currentQuestionTurnId, detectedQuestionType],
     );
+
+    const effectiveContextSummary = actionContextSummaryOverride ?? derivedContextSummary;
+
+    const prevIsProcessingRef = useRef(isProcessing);
+    useEffect(() => {
+        const wasProcessing = prevIsProcessingRef.current;
+        prevIsProcessingRef.current = isProcessing;
+        if (wasProcessing && !isProcessing) {
+            setActionContextSummaryOverride(null);
+        }
+    }, [isProcessing]);
+
+    useEffect(() => {
+        if (actionContextOverrideTimeoutRef.current) {
+            clearTimeout(actionContextOverrideTimeoutRef.current);
+            actionContextOverrideTimeoutRef.current = null;
+        }
+
+        if (!actionContextSummaryOverride || !isProcessing) return;
+
+        actionContextOverrideTimeoutRef.current = setTimeout(() => {
+            actionContextOverrideTimeoutRef.current = null;
+            setActionContextSummaryOverride(null);
+        }, ACTION_CONTEXT_OVERRIDE_TIMEOUT_MS);
+
+        return () => {
+            if (actionContextOverrideTimeoutRef.current) {
+                clearTimeout(actionContextOverrideTimeoutRef.current);
+                actionContextOverrideTimeoutRef.current = null;
+            }
+        };
+    }, [actionContextSummaryOverride, isProcessing]);
 
     const rememberIntentRequest = useCallback((intent: string, requestId: string | null) => {
         if (!requestId) {
@@ -676,6 +729,11 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
     const executeQuickAction = useCallback(
         async (action: OverlayQuickActionDef) => {
+            setActionContextSummaryOverride({
+                label: derivedContextSummary.label,
+                detail:
+                    ACTION_CONTEXT_MESSAGES[action.label] ?? `${action.label} in progress…`,
+            });
             await runAction(action.intent as string, {
                 source: action.source,
                 analyticsKey: action.analyticsKey,
@@ -684,7 +742,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 profilePreference: action.profilePreference,
             });
         },
-        [runAction],
+        [derivedContextSummary.label, runAction],
     );
 
     const getQuickActionHandler = useCallback(
@@ -848,7 +906,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         activeQuickActions,
         recommendedButton,
         detectedQuestionType,
-        contextSummary,
+        contextSummary: effectiveContextSummary,
         latestResponse,
         activeModeLabel,
         isMeetingActive,
