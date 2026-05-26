@@ -5,6 +5,14 @@ export interface TranscriptSpeakerLike {
 }
 
 const normalize = (value: string | null | undefined): string => (value || '').trim();
+const normalizeLower = (value: string | null | undefined): string => normalize(value).toLowerCase();
+
+const resolveSpeakerAlias = (value: string | null | undefined): string | null => {
+    const lower = normalizeLower(value);
+    if (lower === 'speaker_0') return 'You';
+    if (lower === 'speaker_1') return 'Interviewer';
+    return null;
+};
 
 export function isTranscriptRoleToken(value: string | null | undefined): boolean {
     const normalized = normalize(value);
@@ -26,6 +34,9 @@ export function getTranscriptSpeakerLabel(speaker: string | null | undefined): s
     const normalized = normalize(speaker);
     if (!normalized) return 'Speaker';
 
+    const alias = resolveSpeakerAlias(normalized);
+    if (alias) return alias;
+
     const lower = normalized.toLowerCase();
     if (lower === 'user') return 'You';
     if (lower === 'interviewer') return 'Interviewer';
@@ -43,16 +54,22 @@ export function getTranscriptDisplayLabel(transcript: string | TranscriptSpeaker
 
     const speakerLabel = normalize(transcript.speakerLabel);
     if (speakerLabel) {
+        const alias = resolveSpeakerAlias(speakerLabel);
+        if (alias) return alias;
         return isTranscriptRoleToken(speakerLabel) ? getTranscriptSpeakerLabel(speakerLabel) : speakerLabel;
     }
 
     const speaker = normalize(transcript.speaker);
     if (speaker) {
+        const alias = resolveSpeakerAlias(speaker);
+        if (alias) return alias;
         return isTranscriptRoleToken(speaker) ? getTranscriptSpeakerLabel(speaker) : speaker;
     }
 
     const speakerId = normalize(transcript.speakerId);
     if (speakerId) {
+        const alias = resolveSpeakerAlias(speakerId);
+        if (alias) return alias;
         return speakerId;
     }
 

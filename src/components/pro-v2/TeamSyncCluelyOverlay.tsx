@@ -10,6 +10,7 @@ import { useCluelyOverlayBridge } from './useCluelyOverlayBridge';
 import ProFloatingBar from './ProFloatingBar';
 import ProInsightsPanel from './ProInsightsPanel';
 import ProResponseSurface from './ProResponseSurface';
+import RollingTranscript from '../ui/RollingTranscript';
 import { useV2OverlayResize } from './useV2OverlayResize';
 import './pro-v2.css';
 import {
@@ -76,9 +77,10 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         bridge.setShowTranscript((prev: boolean) => !prev);
     }, [bridge.setShowTranscript]);
 
-    const transcriptLines = bridge.rollingTranscript
-        ? bridge.rollingTranscript.split('  ·  ').filter(Boolean)
-        : [];
+    const showTranscriptStrip =
+        (bridge.showTranscript && Boolean(bridge.rollingTranscript)) ||
+        bridge.sttInterviewerStatus !== 'connected' ||
+        bridge.sttUserStatus !== 'connected';
 
     return (
         <div
@@ -112,7 +114,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
 
             {/* ── Rolling transcript strip — between bar and panels ── */}
             <AnimatePresence initial={false}>
-                {bridge.showTranscript && (
+                {showTranscriptStrip && (
                     <motion.div
                         initial={{ opacity: 0, height: 0, y: 4 }}
                         animate={{ opacity: 1, height: 'auto', y: 0 }}
@@ -121,45 +123,39 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                         style={{
                             overflow: 'hidden',
                             width: '100%',
-                            paddingTop: transcriptLines.length ? 6 : 4,
+                            paddingTop: 6,
+                            paddingBottom: 4,
                         }}
                     >
                         <div
-                            className="v2-scroll-area"
                             style={{
-                                maxHeight: 120,
-                                padding: '0 18px 8px',
-                                display: 'flex',
-                                justifyContent: 'center',
+                                width: '100%',
+                                maxWidth: getV2PanelsWidth(
+                                    resolveV2ResponseWidthPx(
+                                        bridge.latestResponse?.isStreaming
+                                            ? settledResponseTextRef.current
+                                            : bridge.latestResponse?.text,
+                                    ),
+                                ),
+                                margin: '0 auto',
+                                padding: '0 18px',
                             }}
                         >
-                            <div
-                                className="v2-transcript-body"
-                                style={{
-                                    maxWidth: getV2PanelsWidth(
-                                        resolveV2ResponseWidthPx(
-                                            bridge.latestResponse?.isStreaming
-                                                ? settledResponseTextRef.current
-                                                : bridge.latestResponse?.text,
-                                        ),
-                                    ),
+                            <RollingTranscript
+                                text={bridge.showTranscript ? bridge.lastFinalSentence : ''}
+                                speakerLabel={bridge.showTranscript ? bridge.rollingTranscriptSpeakerLabel : ''}
+                                isActive={bridge.isInterviewerSpeaking}
+                                aiHasResponded={!bridge.isProcessing}
+                                interviewerChannel={{
+                                    status: bridge.sttInterviewerStatus as 'connected' | 'reconnecting' | 'failed',
+                                    error: bridge.sttInterviewerError,
+                                    provider: bridge.sttInterviewerProvider,
                                 }}
-                            >
-                                {transcriptLines.length > 0 ? (
-                                    transcriptLines.map((line, index) => (
-                                        <div
-                                            key={`${index}-${line.slice(0, 24)}`}
-                                            className="v2-transcript-line"
-                                        >
-                                            {line}
-                                        </div>
-                                    ))
-                                ) : (
-                                    <span style={{ fontStyle: 'italic', opacity: 0.7 }}>
-                                        Listening…
-                                    </span>
-                                )}
-                            </div>
+                                microphoneChannel={{
+                                    status: bridge.sttUserStatus as 'connected' | 'reconnecting' | 'failed',
+                                    error: bridge.sttUserError,
+                                }}
+                            />
                         </div>
                     </motion.div>
                 )}

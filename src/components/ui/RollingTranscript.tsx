@@ -74,6 +74,17 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
     // Trim and quote the sentence for display
     const displayText = text?.trim() ?? '';
     const quoted = displayText ? `"${displayText}"` : '';
+    const trimmedSpeakerLabel = speakerLabel?.trim() ?? '';
+    const speakerToneClass = (() => {
+        const lower = trimmedSpeakerLabel.toLowerCase();
+        if (lower === 'interviewer') {
+            return 'border-red-400/30 bg-red-500/20 text-red-200';
+        }
+        if (lower === 'you') {
+            return 'border-orange-400/30 bg-orange-500/20 text-orange-200';
+        }
+        return 'border-white/10 bg-white/[0.06] text-[var(--overlay-text-primary)]/90';
+    })();
 
     return (
         <div className="relative w-full">
@@ -122,9 +133,9 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
 
                                 {/* Sentence text */}
                                 <div className="flex min-w-0 flex-1 items-center gap-2">
-                                    {speakerLabel?.trim() ? (
-                                        <span className="inline-flex max-w-[40%] items-center rounded-full border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--overlay-text-primary)]/90">
-                                            {speakerLabel.trim()}
+                                    {trimmedSpeakerLabel ? (
+                                        <span className={`inline-flex max-w-[40%] items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] ${speakerToneClass}`}>
+                                            {trimmedSpeakerLabel}
                                         </span>
                                     ) : null}
                                     {quoted ? (
