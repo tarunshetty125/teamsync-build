@@ -261,6 +261,7 @@ export interface ElectronAPI {
   updateMeetingSummary: (id: string, updates: { overview?: string, actionItems?: string[], keyPoints?: string[], actionItemsTitle?: string, keyPointsTitle?: string }) => Promise<boolean>
   deleteMeeting: (id: string) => Promise<boolean>
   setWindowMode: (mode: 'launcher' | 'overlay', inactive?: boolean) => Promise<void>
+  setOverlayV2Layout: (enabled: boolean) => Promise<{ success: boolean }>
 
   // Intelligence Mode Events
   onIntelligenceAssistUpdate: (callback: (data: { insight: string; _sessionId?: string; requestId?: string }) => void) => () => void

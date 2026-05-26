@@ -4,17 +4,18 @@
  * Layout: Bar → Transcript pill (togglable) → Two panels side-by-side
  */
 
-import React, { useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCluelyOverlayBridge } from './useCluelyOverlayBridge';
 import ProFloatingBar from './ProFloatingBar';
 import ProInsightsPanel from './ProInsightsPanel';
 import ProResponseSurface from './ProResponseSurface';
+import { useV2OverlayResize } from './useV2OverlayResize';
 import './pro-v2.css';
-
-// ── Known layout constants ──
-const V2_PANELS_WIDTH = 320 + 6 + 480 + 24; // 830px
-const V2_BAR_ONLY_WIDTH = 520;
+import {
+    getV2PanelsWidth,
+    resolveV2ResponseWidthPx,
+} from './v2Layout';
 
 interface TeamSyncCluelyOverlayProps {
     onEndMeeting?: () => void;
@@ -33,45 +34,30 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         hasProContextAccess,
     });
 
-    const containerRef = useRef<HTMLDivElement>(null);
-    const hasResizedRef = useRef(false);
-
-    // ── IMMEDIATE resize — runs synchronously before first paint ──
-    // This ensures the Electron window is wide enough BEFORE React renders panels
-    if (!hasResizedRef.current) {
-        const width = V2_PANELS_WIDTH;
-        const height = 500; // safe initial height, will be refined
-        window.electronAPI?.updateContentDimensions?.({ width, height });
-        hasResizedRef.current = true;
-    }
-
-    // ── Resize helper (for height refinement) ──
-    const resizeWindow = useCallback(() => {
-        const container = containerRef.current;
-        if (!container) return;
-        const width = bridge.isExpanded ? V2_PANELS_WIDTH : V2_BAR_ONLY_WIDTH;
-        const height = Math.max(Math.ceil(container.scrollHeight) + 16, 60);
-        window.electronAPI?.updateContentDimensions?.({ width, height });
-    }, [bridge.isExpanded]);
-
-    // Mount-time height refinement
+    // Register pro-v2 layout with main only while this shell is mounted (v1 stays on 600px defaults).
     useEffect(() => {
-        const timers = [50, 200, 600].map(ms => setTimeout(resizeWindow, ms));
-        return () => timers.forEach(clearTimeout);
-    }, [resizeWindow]);
+        window.electronAPI?.setOverlayV2Layout?.(true).catch(() => { });
+        return () => {
+            window.electronAPI?.setOverlayV2Layout?.(false).catch(() => { });
+        };
+    }, []);
 
-    // On expand/collapse toggle
-    useEffect(() => {
-        const t1 = setTimeout(resizeWindow, 50);
-        const t2 = setTimeout(resizeWindow, 250);
-        return () => { clearTimeout(t1); clearTimeout(t2); };
-    }, [bridge.isExpanded, resizeWindow]);
+    const containerRef = React.useRef<HTMLDivElement>(null);
+    const panelsRowRef = React.useRef<HTMLDivElement>(null);
 
-    // On content changes
-    useEffect(() => {
-        const timer = setTimeout(resizeWindow, 200);
-        return () => clearTimeout(timer);
-    }, [bridge.showTranscript, bridge.latestResponse?.text, bridge.activeQuickActions.length, resizeWindow]);
+    const expandedPanelsWidth = useMemo(
+        () => getV2PanelsWidth(resolveV2ResponseWidthPx(bridge.latestResponse?.text)),
+        [bridge.latestResponse?.text],
+    );
+
+    useV2OverlayResize({
+        containerRef,
+        panelsRowRef,
+        isExpanded: bridge.isExpanded,
+        expandedPanelsWidth,
+        isMeetingActive: bridge.isMeetingActive,
+        contentRevision: `${bridge.showTranscript}-${bridge.latestResponse?.text?.length ?? 0}-${bridge.activeQuickActions.length}`,
+    });
 
     const handleToggleTranscript = useCallback(() => {
         bridge.setShowTranscript((prev: boolean) => !prev);
@@ -125,7 +111,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                         style={{
                             overflow: 'hidden',
                             width: '100%',
-                            maxWidth: `${V2_PANELS_WIDTH - 24}px`,
+                            maxWidth: `${expandedPanelsWidth - 24}px`,
                         }}
                     >
                         <div
@@ -195,11 +181,13 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
             <AnimatePresence>
                 {bridge.isExpanded && (
                     <div
+                        ref={panelsRowRef}
                         style={{
                             display: 'flex',
                             gap: '6px',
                             marginTop: '6px',
                             alignItems: 'flex-start',
+                            width: 'max-content',
                         }}
                     >
                         <ProInsightsPanel
@@ -214,6 +202,13 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                             showTranscript={bridge.showTranscript}
                             onToggleTranscript={handleToggleTranscript}
                             getQuickActionHandler={bridge.getQuickActionHandler}
+                            currentModel={bridge.currentModel}
+                            isSettingsOpen={bridge.isSettingsOpen}
+                            isMousePassthrough={bridge.isMousePassthrough}
+                            customNotesEnabled={bridge.customNotesEnabled}
+                            hasProContextAccess={bridge.hasProContextAccess}
+                            onToggleMousePassthrough={bridge.toggleMousePassthrough}
+                            onToggleCustomContext={bridge.toggleCustomContext}
                         />
 
                         <ProResponseSurface

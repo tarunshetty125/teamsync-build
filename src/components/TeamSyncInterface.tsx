@@ -1386,6 +1386,11 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         window.electronAPI?.updateContentDimensions({ width, height });
     }, []);
 
+    // Classic overlay: keep main-process default dimensions at v1 (600px). Pro v2 registers separately.
+    useEffect(() => {
+        window.electronAPI?.setOverlayV2Layout?.(false).catch(() => { });
+    }, []);
+
     useEffect(() => {
         // Load the persisted default model (not the runtime model)
         // Each new meeting starts with the default from settings

@@ -33,15 +33,50 @@ export class WindowHelper {
   private opacityTimeout: NodeJS.Timeout | null = null
   private overlayDragStateTimeout: NodeJS.Timeout | null = null
 
-  // Constants
+  // Constants — v1 overlay content is 600px; pro v2 dual-panel layout needs ~1070px
   private static readonly OVERLAY_DEFAULT_WIDTH = 600;
+  private static readonly OVERLAY_V2_DEFAULT_WIDTH = 1070;
   private static readonly OVERLAY_MIN_HEIGHT = 216;
+  private static readonly OVERLAY_V2_DEFAULT_HEIGHT = 520;
+
+  /** Set by overlay renderer when teamsync_overlay_v2 is enabled. */
+  private overlayUsesV2Layout = false;
 
   // Movement variables (apply to active window)
   private step: number = 20
 
   constructor(appState: AppState) {
     this.appState = appState
+  }
+
+  public setOverlayUsesV2Layout(enabled: boolean): void {
+    this.overlayUsesV2Layout = enabled;
+    // When returning to v1, clamp remembered bounds so switchToOverlay does not
+    // reopen at the wider pro-v2 width.
+    if (!enabled && this.overlayBounds && this.overlayBounds.width > WindowHelper.OVERLAY_DEFAULT_WIDTH) {
+      this.overlayBounds = {
+        ...this.overlayBounds,
+        width: WindowHelper.OVERLAY_DEFAULT_WIDTH,
+      };
+    }
+    console.log(`[WindowHelper] Overlay layout profile: ${enabled ? 'pro-v2' : 'v1'}`);
+  }
+
+  private getOverlayDefaultWidth(): number {
+    return this.overlayUsesV2Layout
+      ? WindowHelper.OVERLAY_V2_DEFAULT_WIDTH
+      : WindowHelper.OVERLAY_DEFAULT_WIDTH;
+  }
+
+  private getOverlayDefaultHeight(currentHeight: number, maxAllowedHeight: number): number {
+    const floor = WindowHelper.OVERLAY_MIN_HEIGHT;
+    if (this.overlayUsesV2Layout) {
+      return Math.min(
+        Math.max(currentHeight, WindowHelper.OVERLAY_V2_DEFAULT_HEIGHT),
+        maxAllowedHeight,
+      );
+    }
+    return Math.max(Math.min(currentHeight, maxAllowedHeight), floor);
   }
 
   private getDisplayWorkArea(bounds?: Electron.Rectangle): Electron.Rectangle {
@@ -584,12 +619,15 @@ export class WindowHelper {
             width: Math.min(savedBounds.width, maxAllowedWidth),
             height: Math.min(savedBounds.height, maxAllowedHeight)
           }
-        : {
-            x: Math.floor(workArea.x + (workArea.width - WindowHelper.OVERLAY_DEFAULT_WIDTH) / 2),
-            y: Math.floor(workArea.y + (workArea.height - WindowHelper.OVERLAY_DEFAULT_WIDTH) / 2),
-            width: WindowHelper.OVERLAY_DEFAULT_WIDTH,
-            height: Math.max(Math.min(currentBounds.height, maxAllowedHeight), WindowHelper.OVERLAY_MIN_HEIGHT)
-          };
+        : (() => {
+            const defaultWidth = this.getOverlayDefaultWidth();
+            return {
+              x: Math.floor(workArea.x + (workArea.width - defaultWidth) / 2),
+              y: Math.floor(workArea.y + (workArea.height - defaultWidth) / 2),
+              width: defaultWidth,
+              height: this.getOverlayDefaultHeight(currentBounds.height, maxAllowedHeight),
+            };
+          })();
 
       this.overlayWindow.setBounds(targetBounds);
       this.overlayBounds = this.overlayWindow.getBounds();

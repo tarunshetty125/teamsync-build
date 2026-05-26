@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo, useReducer } from 'react';
+import { useShortcuts } from '../../hooks/useShortcuts';
 import {
     getOverlayQuickActions,
     getRecommendedOverlayAction,
@@ -224,7 +225,8 @@ export interface CluelyOverlayBridgeProps {
 }
 
 export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
-    const { onEndMeeting, overlayOpacity = 0.65 } = props;
+    const { onEndMeeting, overlayOpacity = 0.65, hasProContextAccess = false } = props;
+    const { isShortcutPressed } = useShortcuts();
 
     // ── Core State ──
     const [messages, setMessages] = useState<V2Message[]>([]);
@@ -265,7 +267,11 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const activeRequestIdRef = useRef<string | null>(null);
     const requestStartTimeRef = useRef<number | null>(null);
+    const [currentModel, setCurrentModel] = useState('gemini-3-flash-preview');
     const currentModelRef = useRef('gemini-3-flash-preview');
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isMousePassthrough, setIsMousePassthrough] = useState(false);
+    const [customNotesEnabled, setCustomNotesEnabled] = useState(true);
     const currentSourceRef = useRef<string | undefined>();
     const seqRef = useRef(0);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -324,6 +330,15 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             if (data?.mode) setSession({ currentMode: data.mode });
         });
         return () => unsub?.();
+    }, []);
+
+    // Expand when main switches to overlay (same as v1 TeamSyncInterface)
+    useEffect(() => {
+        if (!window.electronAPI?.onEnsureExpanded) return;
+        const unsubscribe = window.electronAPI.onEnsureExpanded(() => {
+            setIsExpanded(true);
+        });
+        return () => unsubscribe();
     }, []);
 
     // ── IPC: Meeting lifecycle ──
@@ -641,12 +656,84 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
     // ── Model sync ──
     useEffect(() => {
+        currentModelRef.current = currentModel;
+    }, [currentModel]);
+
+    useEffect(() => {
+        if (window.electronAPI?.getDefaultModel) {
+            window.electronAPI.getDefaultModel()
+                .then((result: { model?: string }) => {
+                    if (result?.model) {
+                        setCurrentModel(result.model);
+                        currentModelRef.current = result.model;
+                        window.electronAPI.setModel?.(result.model).catch(() => { });
+                    }
+                })
+                .catch(() => { });
+        }
+    }, []);
+
+    useEffect(() => {
         if (!window.electronAPI?.onModelChanged) return;
         const unsubscribe = window.electronAPI.onModelChanged((modelId: string) => {
+            setCurrentModel(prev => (prev === modelId ? prev : modelId));
             currentModelRef.current = modelId;
         });
         return () => unsubscribe();
     }, []);
+
+    // ── Overlay settings popup visibility ──
+    useEffect(() => {
+        if (!window.electronAPI?.onSettingsVisibilityChange) return;
+        const unsubscribe = window.electronAPI.onSettingsVisibilityChange((isVisible: boolean) => {
+            setIsSettingsOpen(isVisible);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // ── Mouse passthrough ──
+    useEffect(() => {
+        window.electronAPI?.getOverlayMousePassthrough?.().then(setIsMousePassthrough).catch(() => { });
+        const unsub = window.electronAPI?.onOverlayMousePassthroughChanged?.((v: boolean) => {
+            setIsMousePassthrough(v);
+        });
+        return () => unsub?.();
+    }, []);
+
+    const toggleMousePassthrough = useCallback(() => {
+        setIsMousePassthrough(prev => {
+            const next = !prev;
+            window.electronAPI?.setOverlayMousePassthrough?.(next);
+            return next;
+        });
+    }, []);
+
+    // ── Custom context toggle (Pro) ──
+    useEffect(() => {
+        if (!hasProContextAccess) return;
+        window.electronAPI?.getCustomNotesEnabled?.()
+            .then((res: { success?: boolean; enabled?: boolean }) => {
+                if (res?.success) setCustomNotesEnabled(Boolean(res.enabled));
+            })
+            .catch(() => { });
+    }, [hasProContextAccess]);
+
+    const toggleCustomContext = useCallback(async () => {
+        const next = !customNotesEnabled;
+        setCustomNotesEnabled(next);
+        await window.electronAPI?.setCustomNotesEnabled?.(next);
+    }, [customNotesEnabled]);
+
+    // Keyboard shortcut: mouse passthrough (same as v1 overlay)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isShortcutPressed(e, 'toggleMousePassthrough')) return;
+            e.preventDefault();
+            toggleMousePassthrough();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isShortcutPressed, toggleMousePassthrough]);
 
     // ── Brainstorm toggle sync ──
     useEffect(() => {
@@ -878,6 +965,11 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         sttUserStatus,
         sttUserError,
         overlayOpacity,
+        hasProContextAccess,
+        currentModel,
+        isSettingsOpen,
+        isMousePassthrough,
+        customNotesEnabled,
 
         // Setters
         setInputValue,
@@ -893,6 +985,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         handleScreenScan,
         handleReset,
         toggleExpanded,
+        toggleMousePassthrough,
+        toggleCustomContext,
 
         // Refs
         scrollContainerRef,

@@ -962,6 +962,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Window Mode
   setWindowMode: (mode: 'launcher' | 'overlay', inactive?: boolean) => ipcRenderer.invoke("set-window-mode", mode, inactive),
+  setOverlayV2Layout: (enabled: boolean) => ipcRenderer.invoke("set-overlay-v2-layout", enabled),
 
   // Intelligence Mode Events
   onIntelligenceAssistUpdate: (callback: (data: { insight: string; requestId?: string }) => void) => {

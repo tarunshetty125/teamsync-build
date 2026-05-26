@@ -1,7 +1,7 @@
 /**
  * ProResponseSurface.tsx — Surface 3
  * 
- * AI reading surface (right, adaptive width 460–580px).
+ * AI reading surface (right, adaptive width 480–720px).
  * Dynamic height: fit-content, max 75vh, grows with content.
  * Uses existing PremiumResponseCard for rendering.
  * Label: "TeamSync Intelligence"
@@ -13,6 +13,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { SkeletonLoader, EmptyListeningState } from '../ui/PremiumStates';
 import type { V2Message } from './useCluelyOverlayBridge';
+import { resolveV2ResponseWidthPx, V2_RESPONSE_MIN_WIDTH, V2_RESPONSE_MAX_WIDTH } from './v2Layout';
 
 interface ProResponseSurfaceProps {
     latestResponse: V2Message | null;
@@ -57,15 +58,10 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
     // Chips
     const chips = latestResponse?.chips;
 
-    // Adaptive width: wider for longer responses
-    const adaptiveWidth = useMemo(() => {
-        if (!latestResponse?.text) return '480px';
-        const len = latestResponse.text.length;
-        if (len > 1500) return '580px';
-        if (len > 800) return '540px';
-        if (len > 400) return '510px';
-        return '480px';
-    }, [latestResponse?.text]);
+    const responseWidthPx = useMemo(
+        () => resolveV2ResponseWidthPx(latestResponse?.text),
+        [latestResponse?.text],
+    );
 
     return (
         <motion.div
@@ -75,13 +71,14 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1], delay: 0.08 }}
             className="v2-surface-response v2-no-drag"
             style={{
-                minWidth: '480px',
-                maxWidth: '580px',
-                width: adaptiveWidth,
+                minWidth: `${V2_RESPONSE_MIN_WIDTH}px`,
+                maxWidth: `${V2_RESPONSE_MAX_WIDTH}px`,
+                width: `${responseWidthPx}px`,
+                flex: '0 0 auto',
                 display: 'flex',
                 flexDirection: 'column',
                 willChange: 'transform, opacity',
-                transition: 'width 0.3s cubic-bezier(0.22, 1, 0.36, 1)',
+                transition: 'width 0.35s cubic-bezier(0.22, 1, 0.36, 1)',
             }}
         >
             {/* ── Header ── */}
@@ -137,6 +134,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                     maxHeight: '65vh',
                     padding: '4px 20px 20px',
                     overflowY: 'auto',
+                    overflowX: 'auto',
                 }}
             >
                 <AnimatePresence mode="wait">

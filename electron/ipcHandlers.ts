@@ -447,6 +447,11 @@ export function initializeIpcHandlers(appState: AppState): void {
     return { success: true };
   })
 
+  safeHandle("set-overlay-v2-layout", async (_, enabled: boolean) => {
+    appState.getWindowHelper().setOverlayUsesV2Layout(!!enabled);
+    return { success: true };
+  })
+
 
   safeHandle("delete-screenshot", async (event, filePath: string) => {
     // Guard: only allow deletion of files within the app's own userData directory
