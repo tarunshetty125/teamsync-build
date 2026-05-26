@@ -10,8 +10,11 @@
 import React, { memo, useCallback, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { SkeletonLoader, EmptyListeningState } from '../ui/PremiumStates';
+import CodeBlock from '../ui/CodeBlock';
+import MermaidRenderer from '../ui/MermaidRenderer';
 import type { V2Message } from './useCluelyOverlayBridge';
 import { resolveV2ResponseWidthPx, V2_RESPONSE_MIN_WIDTH, V2_RESPONSE_MAX_WIDTH } from './v2Layout';
 
@@ -194,55 +197,11 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                                     )}
                                 </div>
                             ) : (
-                                <ReactMarkdown
-                                    remarkPlugins={[remarkGfm]}
-                                    components={{
-                                        p: ({ children }) => <p style={{ marginBottom: '10px' }}>{children}</p>,
-                                        strong: ({ children }) => <strong style={{ fontWeight: 600, color: 'rgba(255,255,255,0.95)' }}>{children}</strong>,
-                                        ul: ({ children }) => <ul style={{ marginLeft: '16px', marginBottom: '8px', listStyleType: 'disc' }}>{children}</ul>,
-                                        ol: ({ children }) => <ol style={{ marginLeft: '16px', marginBottom: '8px', listStyleType: 'decimal' }}>{children}</ol>,
-                                        li: ({ children }) => <li style={{ marginBottom: '3px', paddingLeft: '2px' }}>{children}</li>,
-                                        h3: ({ children }) => (
-                                            <h3 style={{
-                                                fontSize: '11px',
-                                                fontWeight: 700,
-                                                letterSpacing: '0.06em',
-                                                textTransform: 'uppercase',
-                                                color: 'rgba(255,255,255,0.30)',
-                                                marginTop: '16px',
-                                                marginBottom: '6px',
-                                                paddingBottom: '6px',
-                                                borderBottom: '1px solid rgba(255,255,255,0.06)',
-                                            }}>
-                                                {children}
-                                            </h3>
-                                        ),
-                                        code: ({ children }) => (
-                                            <code style={{
-                                                fontSize: '12px',
-                                                fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace",
-                                                background: 'rgba(255,255,255,0.06)',
-                                                padding: '1px 5px',
-                                                borderRadius: '4px',
-                                                color: 'rgba(255,255,255,0.82)',
-                                            }}>
-                                                {children}
-                                            </code>
-                                        ),
-                                        a: ({ href, children }) => (
-                                            <a
-                                                href={href}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                style={{ textDecoration: 'underline', opacity: 0.8 }}
-                                            >
-                                                {children}
-                                            </a>
-                                        ),
-                                    }}
-                                >
-                                    {latestResponse.text}
-                                </ReactMarkdown>
+                                <V2ResponseText
+                                    text={latestResponse.text}
+                                    isStreaming={!!isStreaming}
+                                    isCode={!!latestResponse.isCode}
+                                />
                             )}
 
                             {/* Streaming cursor */}
@@ -300,6 +259,150 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
             </div>
         </motion.div>
     );
+});
+
+const V2_MARKDOWN_COMPONENTS: Components = {
+    p: ({ children }) => <p style={{ marginBottom: '10px' }}>{children}</p>,
+    strong: ({ children }) => <strong style={{ fontWeight: 600, color: 'rgba(255,255,255,0.95)' }}>{children}</strong>,
+    ul: ({ children }) => <ul style={{ marginLeft: '16px', marginBottom: '8px', listStyleType: 'disc' }}>{children}</ul>,
+    ol: ({ children }) => <ol style={{ marginLeft: '16px', marginBottom: '8px', listStyleType: 'decimal' }}>{children}</ol>,
+    li: ({ children }) => <li style={{ marginBottom: '3px', paddingLeft: '2px' }}>{children}</li>,
+    h3: ({ children }) => (
+        <h3 style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: 'rgba(255,255,255,0.30)',
+            marginTop: '16px',
+            marginBottom: '6px',
+            paddingBottom: '6px',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+        }}>
+            {children}
+        </h3>
+    ),
+    code: ({ children, className }) => {
+        const isFenced = typeof className === 'string' && className.startsWith('language-');
+        if (isFenced) {
+            return <code className={className}>{children}</code>;
+        }
+        return (
+            <code style={{
+                fontSize: '12px',
+                fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace",
+                background: 'rgba(255,255,255,0.06)',
+                padding: '1px 5px',
+                borderRadius: '4px',
+                color: 'rgba(255,255,255,0.82)',
+            }}>
+                {children}
+            </code>
+        );
+    },
+    pre: ({ children }) => <pre className="v2-response-pre">{children}</pre>,
+    a: ({ href, children }) => (
+        <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'underline', opacity: 0.8 }}
+        >
+            {children}
+        </a>
+    ),
+};
+
+function parseFencePart(part: string): { lang: string; code: string } | null {
+    if (!part.startsWith('```')) return null;
+    const match = part.match(/```[ \t]*([A-Za-z0-9_-]*)\s*([\s\S]*?)(?:```|$)/);
+    if (match) {
+        return { lang: match[1] || 'text', code: match[2].trim() };
+    }
+    const code = part.replace(/^```[ \t]*[A-Za-z0-9_-]*\s*/, '').replace(/```$/, '').trim();
+    return code ? { lang: 'text', code } : null;
+}
+
+const V2ResponseText = memo<{
+    text: string;
+    isStreaming?: boolean;
+    isCode?: boolean;
+}>(function V2ResponseText({ text, isStreaming, isCode }) {
+    if (isStreaming) {
+        return (
+            <div
+                className="v2-response-streaming"
+                style={{
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    fontSize: '14px',
+                    lineHeight: 1.75,
+                    color: 'rgba(255,255,255,0.88)',
+                }}
+            >
+                {text}
+            </div>
+        );
+    }
+
+    if (!text.includes('```')) {
+        return (
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={V2_MARKDOWN_COMPONENTS}>
+                {text}
+            </ReactMarkdown>
+        );
+    }
+
+    const parts = text.split(/(```[\s\S]*?(?:```|$))/g);
+    const body = (
+        <>
+            {parts.map((part, i) => {
+                if (part.startsWith('```')) {
+                    const parsed = parseFencePart(part);
+                    if (!parsed || !parsed.code) return null;
+                    const lang = parsed.lang.toLowerCase();
+                    if (lang === 'mermaid') {
+                        return <MermaidRenderer key={i} chart={parsed.code} isLightTheme={false} />;
+                    }
+                    return (
+                        <CodeBlock
+                            key={i}
+                            code={parsed.code}
+                            language={parsed.lang || 'text'}
+                            isLightTheme={false}
+                        />
+                    );
+                }
+                if (!part.trim()) return null;
+                return (
+                    <ReactMarkdown
+                        key={i}
+                        remarkPlugins={[remarkGfm]}
+                        components={V2_MARKDOWN_COMPONENTS}
+                    >
+                        {part}
+                    </ReactMarkdown>
+                );
+            })}
+        </>
+    );
+
+    if (isCode) {
+        return (
+            <div className="v2-code-section">
+                <div className="v2-code-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <polyline points="16 18 22 12 16 6" />
+                        <polyline points="8 6 2 12 8 18" />
+                    </svg>
+                    Code Solution
+                </div>
+                <div className="v2-code-section-body">{body}</div>
+            </div>
+        );
+    }
+
+    return <>{body}</>;
 });
 
 // Chip color helpers

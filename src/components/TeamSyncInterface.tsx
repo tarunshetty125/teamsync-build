@@ -1943,12 +1943,17 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceActionToken((data) => {
+            // Manual input already streams through gemini-stream-* IPC.
+            // Ignoring the mirrored manual_chat action channel prevents duplicated chunks
+            // that corrupt markdown/code fences and break Mermaid rendering.
+            if (data.intent === 'manual_chat') return;
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             if (!data.requestId || activeUiRequestIdRef.current !== data.requestId) return;
             appendTokenToRequest(data.requestId, data.token);
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceActionResult((data) => {
+            if (data.intent === 'manual_chat') return;
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             if (!data.requestId) return;
             if (userHasScrolledRef.current) {
@@ -2166,6 +2171,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         }));
 
         cleanups.push(window.electronAPI.onIntelligenceError((data) => {
+            if (data.mode === 'manual') return;
             // V2 Guard
             if (data._sessionId && activeSessionIdRef.current && data._sessionId !== activeSessionIdRef.current) return;
             if (data.requestId) {
@@ -2988,7 +2994,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             const streamContext = [
                 conversationContext.trim(),
                 finalizedTranscriptRef.current.slice(-700),
-                'RESPONSE RULES:\n- 3-5 bullets max when listing items.\n- Keep the answer under 120 words for non-code responses.\n- If the question asks about code, algorithms, or implementation: ALWAYS include full, working code in a fenced ```code``` block. Code blocks do NOT count toward the word limit.\n- No preamble.'
+                'RESPONSE RULES:\n- ANY coding / DSA: **Problem:**, **Approach:**, **Complexity:**, **Solution:** (mandatory fenced code).\n- ANY system design: full 10-section architecture answer with ```mermaid``` diagram, components, data flow, DB, scaling, tradeoffs (mandatory).\n- Other: under 120 words; 3-5 bullets when listing.\n- No preamble.'
             ].filter(Boolean).join('\n') || undefined;
             await window.electronAPI.streamGeminiChat(
                 userText || 'Analyze this screenshot',

@@ -1,5 +1,5 @@
 import type { SessionMode } from './SessionTracker';
-import type { UnifiedActionIntent } from './ActionContextBuilder';
+import { getQuestionResponseProfile, type UnifiedActionIntent } from './ActionContextBuilder';
 
 export interface ActionOutputValidationResult {
     valid: boolean;
@@ -155,6 +155,58 @@ function validateDirectAnswer(content: string): ActionOutputValidationResult {
     };
 }
 
+function validateCodingInterviewAnswer(content: string): ActionOutputValidationResult {
+    const trimmed = content.trim();
+    const hasCodeBlock = /```[\s\S]+?```/.test(trimmed);
+    const hasApproach = /\*\*approach\*\*|^approach:/im.test(trimmed);
+    const hasComplexity = /\*\*complexity\*\*|^complexity:/im.test(trimmed);
+
+    if (hasCodeBlock && (hasApproach || hasComplexity || trimmed.length > 200)) {
+        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+    }
+
+    if (hasCodeBlock) {
+        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+    }
+
+    if (trimmed.length > 120 && !hasCodeBlock) {
+        return {
+            valid: false,
+            correctedContent: trimmed,
+            autoCorrected: false,
+            issues: ['coding_missing_code_block'],
+        };
+    }
+
+    return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+}
+
+function validateSystemDesignInterviewAnswer(content: string): ActionOutputValidationResult {
+    const trimmed = content.trim();
+    const hasMermaid = /```mermaid[\s\S]+?```/i.test(trimmed);
+    const sectionHeaders = (trimmed.match(/^#{2,3}\s+\d+\./gm) || []).length;
+    const hasComponents = /\b(component|api gateway|database|cache|queue|kafka|redis)\b/i.test(trimmed);
+
+    if (hasMermaid && (sectionHeaders >= 3 || hasComponents)) {
+        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+    }
+
+    if (hasMermaid && trimmed.length > 250) {
+        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+    }
+
+    if (trimmed.length > 200 && !hasMermaid) {
+        return {
+            valid: false,
+            correctedContent: trimmed,
+            autoCorrected: false,
+            issues: ['system_design_missing_mermaid_diagram'],
+        };
+    }
+
+    return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+}
+
 function validateCodingScreenScan(content: string): ActionOutputValidationResult {
     const trimmed = content.trim();
     // Lenient validation: accept the response if it has meaningful content.
@@ -185,7 +237,8 @@ function validateCodingScreenScan(content: string): ActionOutputValidationResult
 export function validateActionOutput(
     intent: UnifiedActionIntent,
     mode: SessionMode,
-    content: string
+    content: string,
+    question?: string
 ): ActionOutputValidationResult {
     const trimmed = content.trim();
     if (!trimmed) {
@@ -195,6 +248,22 @@ export function validateActionOutput(
             autoCorrected: false,
             issues: ['empty_output'],
         };
+    }
+
+    const profile = question
+        ? getQuestionResponseProfile(question, mode, intent)
+        : mode === 'coding'
+            ? 'coding'
+            : mode === 'system_design'
+                ? 'system_design'
+                : 'general';
+
+    if (profile === 'system_design' && (intent === 'manual_chat' || intent === 'what_to_answer' || intent === 'answer_now')) {
+        return validateSystemDesignInterviewAnswer(trimmed);
+    }
+
+    if (profile === 'coding' && (intent === 'manual_chat' || intent === 'what_to_answer')) {
+        return validateCodingInterviewAnswer(trimmed);
     }
 
     switch (intent) {

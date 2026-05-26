@@ -30,6 +30,10 @@ const V2_SIGNAL_RULES: SignalRule[] = [
     { category: 'coding', signal: 'coding.structure', weight: 2.1, pattern: /\b(matrix|traversal|array|string|tree|graph|linked list|heap|stack|queue)\b/i },
     { category: 'coding', signal: 'coding.complexity', weight: 2.6, pattern: /\b(time complexity|space complexity|big o|complexity)\b/i },
     { category: 'coding', signal: 'coding.implementation', weight: 2.0, pattern: /\b(implement|implementation|code|function|class|method)\b/i },
+    { category: 'coding', signal: 'coding.problem_statement', weight: 2.5, pattern: /\bgiven\s+(?:an?\s+)?(?:array|list|matrix|grid|string|tree|graph|integer)/i },
+    { category: 'coding', signal: 'coding.return_clause', weight: 2.3, pattern: /\breturn\s+(?:the\s+)?(?:indices?|minimum|maximum|count|all|length|true|false)/i },
+    { category: 'coding', signal: 'coding.io_format', weight: 2.4, pattern: /\b(?:input|output|constraints?|example\s+\d+)\s*:/i },
+    { category: 'coding', signal: 'coding.write_function', weight: 2.2, pattern: /\bwrite\s+(?:a\s+)?(?:function|program|algorithm|solution)\b/i },
 
     { category: 'system_design', signal: 'system.design_prompt', weight: 3.2, pattern: /\bdesign\s+(?:(?:a|an|the)\s+)?(?:whatsapp|instagram|twitter|youtube|uber|notification|chat|feed|service|system|platform|api|messaging)\b/i },
     { category: 'system_design', signal: 'system.scale', weight: 2.8, pattern: /\b(scale|scalable|scaling|millions of users|high traffic)\b/i },
@@ -37,6 +41,8 @@ const V2_SIGNAL_RULES: SignalRule[] = [
     { category: 'system_design', signal: 'system.infrastructure', weight: 2.3, pattern: /\b(cache|database|load balanc(?:er|ing)|queue|replication|sharding|throughput|latency|availability|rate limit(?:ing)?)\b/i },
     { category: 'system_design', signal: 'system.product', weight: 2.2, pattern: /\b(whatsapp|instagram|twitter|youtube|uber)\b/i },
     { category: 'system_design', signal: 'system.notification', weight: 3.0, pattern: /\b(notification system|feed system|messaging system|chat system)\b/i },
+    { category: 'system_design', signal: 'system.design_verb', weight: 2.8, pattern: /\bdesign\s+(?:a |an |the )?(?:scalable|distributed|real[\s-]?time)?/i },
+    { category: 'system_design', signal: 'system.url_shortener', weight: 2.5, pattern: /\b(url shortener|paste\s*bin|rate limiter|web crawler|news feed)\b/i },
 
     { category: 'behavioral', signal: 'behavioral.time_story', weight: 3.5, pattern: /\b(tell me about a time|describe a situation|share an example)\b/i },
     { category: 'behavioral', signal: 'behavioral.prompt', weight: 1.6, pattern: /\b(tell me about (?:a|an))\b/i },

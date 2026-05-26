@@ -73,12 +73,14 @@ export class CodingBrain implements Brain {
                 key: 'output_contract',
                 title: 'OUTPUT CONTRACT',
                 content: [
-                    'Start with one direct answer sentence.',
-                    `Then add an "Approach:" section with ${minBullets} to ${maxBullets} short bullet points.`,
-                    'Include a "Complexity:" line with time and space when algorithmic.',
-                    'Include code only if the user explicitly asked for implementation.',
-                    'Keep it interview-ready and concise.',
-                    `Keep the response under ${strategy.maxWords} words (excluding code).`,
+                    'Structure your answer in this order:',
+                    '1. **Problem:** — restate inputs, outputs, and constraints in 1-2 sentences.',
+                    `2. **Approach:** — ${minBullets} to ${maxBullets} bullets (algorithm, data structure, why).`,
+                    '3. **Complexity:** — time and space with brief reasoning.',
+                    '4. **Solution:** — FULL working code in a fenced markdown block (required).',
+                    '',
+                    'The code must be complete and runnable — not pseudocode.',
+                    `Keep prose under ${strategy.maxWords} words (code block excluded).`,
                 ].join('\n'),
             });
         }

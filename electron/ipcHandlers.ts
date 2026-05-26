@@ -2660,6 +2660,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     return { mode: appState.getIntelligenceManager().getSessionMode() };
   });
 
+  safeHandle("session:get-id", async () => {
+    return { sessionId: appState.getIntelligenceManager().getSessionId() };
+  });
+
   safeHandle("session:set-mode", async (_, mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => {
     const intelligenceManager = appState.getIntelligenceManager();
     intelligenceManager.setSessionMode(mode);

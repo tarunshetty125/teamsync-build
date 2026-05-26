@@ -189,6 +189,7 @@ interface ElectronAPI {
   resetIntelligence: () => Promise<{ success: boolean; error?: string }>
   cancelIntelligenceRequest: () => Promise<{ success: boolean; error?: string }>
   getSessionMode: () => Promise<{ mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
+  getSessionId: () => Promise<{ sessionId: string }>
   setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => Promise<{ success: boolean; mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
 
   // Meeting Lifecycle
@@ -919,6 +920,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getRecentBenchmarks: (limit: number = 20) => ipcRenderer.invoke("benchmark:get-recent", limit),
   resetIntelligence: () => ipcRenderer.invoke("reset-intelligence"),
   getSessionMode: () => ipcRenderer.invoke("session:get-mode"),
+  getSessionId: () => ipcRenderer.invoke("session:get-id"),
   setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => ipcRenderer.invoke("session:set-mode", mode),
 
   // Action Button Mode (Dynamic Recap / Brainstorm toggle)
@@ -1112,8 +1114,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("intelligence-error", subscription)
     }
   },
-  onSessionReset: (callback: () => void) => {
-    const subscription = () => callback()
+  onSessionReset: (callback: (payload?: { sessionId: string }) => void) => {
+    const subscription = (_: unknown, payload?: { sessionId: string }) => callback(payload)
     ipcRenderer.on("session-reset", subscription)
     return () => {
       ipcRenderer.removeListener("session-reset", subscription)

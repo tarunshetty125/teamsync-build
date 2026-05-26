@@ -16,7 +16,10 @@ type ResizeOpts = {
     panelsRowRef: React.RefObject<HTMLDivElement | null>;
     isExpanded: boolean;
     expandedPanelsWidth: number;
+    showTranscript?: boolean;
 };
+
+const RESIZE_THROTTLE_MS = 250;
 
 function computeDimensions(
     container: HTMLDivElement | null,
@@ -51,10 +54,24 @@ export function useV2OverlayResize({
     panelsRowRef,
     isExpanded,
     expandedPanelsWidth,
+    showTranscript,
     isMeetingActive,
+    isProcessing = false,
     contentRevision = 0,
-}: ResizeOpts & { isMeetingActive: boolean; contentRevision?: number | string }) {
+}: ResizeOpts & { isMeetingActive: boolean; isProcessing?: boolean; contentRevision?: number | string }) {
     const burstTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+    const isTransitioningRef = useRef(false);
+    const lastResizeAtRef = useRef(0);
+    const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const wasProcessingRef = useRef(isProcessing);
+
+    useEffect(() => {
+        isTransitioningRef.current = true;
+        const t = setTimeout(() => {
+            isTransitioningRef.current = false;
+        }, 400);
+        return () => clearTimeout(t);
+    }, [isExpanded, showTranscript]);
 
     const pushDimensions = useCallback(() => {
         const dims = computeDimensions(
@@ -66,6 +83,22 @@ export function useV2OverlayResize({
         window.electronAPI?.updateContentDimensions?.(dims);
     }, [containerRef, panelsRowRef, isExpanded, expandedPanelsWidth]);
 
+    const pushDimensionsThrottled = useCallback(() => {
+        const now = Date.now();
+        const elapsed = now - lastResizeAtRef.current;
+        if (elapsed >= RESIZE_THROTTLE_MS) {
+            lastResizeAtRef.current = now;
+            pushDimensions();
+            return;
+        }
+        if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
+        resizeTimerRef.current = setTimeout(() => {
+            lastResizeAtRef.current = Date.now();
+            resizeTimerRef.current = null;
+            pushDimensions();
+        }, RESIZE_THROTTLE_MS - elapsed);
+    }, [pushDimensions]);
+
     const scheduleResizeBurst = useCallback(() => {
         burstTimersRef.current.forEach(clearTimeout);
         burstTimersRef.current = [];
@@ -75,22 +108,20 @@ export function useV2OverlayResize({
         }
     }, [pushDimensions]);
 
-    useEffect(() => () => {
-        burstTimersRef.current.forEach(clearTimeout);
-    }, []);
+    useEffect(
+        () => () => {
+            burstTimersRef.current.forEach(clearTimeout);
+            if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
+        },
+        [],
+    );
 
-    // Initial + content-driven resize
     useEffect(() => {
-        scheduleResizeBurst();
-    }, [
-        scheduleResizeBurst,
-        isExpanded,
-        expandedPanelsWidth,
-        isMeetingActive,
-        contentRevision,
-    ]);
+        pushDimensions();
+        const t = setTimeout(pushDimensions, 16);
+        return () => clearTimeout(t);
+    }, [pushDimensions, isExpanded, expandedPanelsWidth, isMeetingActive, contentRevision]);
 
-    // Meeting start / session reset / switch to overlay — main may apply v1-sized bounds first
     useEffect(() => {
         if (!window.electronAPI?.onSessionReset) return;
         const unsubSession = window.electronAPI.onSessionReset(() => {
@@ -108,14 +139,24 @@ export function useV2OverlayResize({
     }, [scheduleResizeBurst]);
 
     useEffect(() => {
+        if (wasProcessingRef.current && !isProcessing) {
+            scheduleResizeBurst();
+        }
+        wasProcessingRef.current = isProcessing;
+    }, [isProcessing, scheduleResizeBurst]);
+
+    useEffect(() => {
         const row = panelsRowRef.current;
         if (!row || !isExpanded) return;
-        const observer = new ResizeObserver(() => pushDimensions());
+        const observer = new ResizeObserver(() => {
+            if (isTransitioningRef.current) return;
+            pushDimensionsThrottled();
+        });
         observer.observe(row);
         if (containerRef.current) observer.observe(containerRef.current);
         pushDimensions();
         return () => observer.disconnect();
-    }, [containerRef, panelsRowRef, isExpanded, pushDimensions]);
+    }, [containerRef, panelsRowRef, isExpanded, pushDimensions, pushDimensionsThrottled]);
 
     return { pushDimensions, scheduleResizeBurst };
 }

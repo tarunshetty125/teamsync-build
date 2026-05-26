@@ -53,6 +53,10 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
     };
 
     const handleInputKeyDown = useCallback((e: React.KeyboardEvent) => {
+        // Important for overlay: prevent any window-level key handlers from also
+        // acting on keystrokes while the user is typing in the input.
+        e.stopPropagation();
+
         if (e.key === 'Enter' && inputValue.trim()) {
             e.preventDefault();
             onSubmit(inputValue);
@@ -147,6 +151,8 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                     value={inputValue}
                     onChange={e => onInputChange(e.target.value)}
                     onKeyDown={handleInputKeyDown}
+                    onKeyUp={e => e.stopPropagation()}
+                    onKeyPress={e => e.stopPropagation()}
                     placeholder="Ask TeamSync..."
                     style={{
                         width: '170px',

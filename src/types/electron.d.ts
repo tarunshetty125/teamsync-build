@@ -222,6 +222,7 @@ export interface ElectronAPI {
   cancelIntelligenceRequest: () => Promise<{ success: boolean; error?: string }>
   cancelIntelligenceByRequest: (requestId: string) => Promise<{ success: boolean; error?: string }>
   getSessionMode: () => Promise<{ mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
+  getSessionId: () => Promise<{ sessionId: string }>
   setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => Promise<{ success: boolean; mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
 
   // Dynamic Action Button Mode

@@ -415,13 +415,44 @@
   word-break: break-word;
 }
 
-.v2-response-body pre {
+.v2-response-body pre,
+.v2-response-body .v2-response-pre {
   overflow-x: auto;
   max-width: 100%;
   padding: 10px 12px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.v2-code-section {
+  margin: 4px 0 8px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px solid rgba(139, 92, 246, 0.14);
+}
+
+.v2-code-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(196, 181, 253, 0.75);
+}
+
+.v2-code-section-label svg {
+  opacity: 0.7;
+}
+
+.v2-code-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .v2-response-body pre code {

@@ -4,7 +4,7 @@
  * Layout: Bar → Transcript pill (togglable) → Two panels side-by-side
  */
 
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCluelyOverlayBridge } from './useCluelyOverlayBridge';
 import ProFloatingBar from './ProFloatingBar';
@@ -45,9 +45,20 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
     const containerRef = React.useRef<HTMLDivElement>(null);
     const panelsRowRef = React.useRef<HTMLDivElement>(null);
 
+    const settledResponseTextRef = useRef<string | undefined>();
+    if (!bridge.latestResponse?.isStreaming && bridge.latestResponse?.text) {
+        settledResponseTextRef.current = bridge.latestResponse.text;
+    }
     const expandedPanelsWidth = useMemo(
-        () => getV2PanelsWidth(resolveV2ResponseWidthPx(bridge.latestResponse?.text)),
-        [bridge.latestResponse?.text],
+        () =>
+            getV2PanelsWidth(
+                resolveV2ResponseWidthPx(
+                    bridge.latestResponse?.isStreaming
+                        ? settledResponseTextRef.current
+                        : bridge.latestResponse?.text,
+                ),
+            ),
+        [bridge.latestResponse?.text, bridge.latestResponse?.isStreaming],
     );
 
     useV2OverlayResize({
@@ -56,19 +67,14 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         isExpanded: bridge.isExpanded,
         expandedPanelsWidth,
         isMeetingActive: bridge.isMeetingActive,
-        contentRevision: `${bridge.showTranscript}-${bridge.latestResponse?.text?.length ?? 0}-${bridge.activeQuickActions.length}`,
+        showTranscript: bridge.showTranscript,
+        isProcessing: bridge.isProcessing,
+        contentRevision: `${bridge.showTranscript}-${bridge.activeQuickActions.length}`,
     });
 
     const handleToggleTranscript = useCallback(() => {
         bridge.setShowTranscript((prev: boolean) => !prev);
     }, [bridge.setShowTranscript]);
-
-    // Latest transcript line for the pill
-    const latestTranscriptLine = useMemo(() => {
-        if (!bridge.rollingTranscript) return '';
-        const lines = bridge.rollingTranscript.split('  ·  ').filter(Boolean);
-        return lines.length > 0 ? lines[lines.length - 1].trim() : '';
-    }, [bridge.rollingTranscript]);
 
     return (
         <div
@@ -99,83 +105,6 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 onInputChange={bridge.setInputValue}
                 onScreenScan={bridge.handleScreenScan}
             />
-
-            {/* ── Transcript Pill (compact, between bar and panels) ── */}
-            <AnimatePresence>
-                {bridge.showTranscript && bridge.isExpanded && (
-                    <motion.div
-                        initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                        animate={{ opacity: 1, height: 'auto', marginTop: 6 }}
-                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                        style={{
-                            overflow: 'hidden',
-                            width: '100%',
-                            maxWidth: `${expandedPanelsWidth - 24}px`,
-                        }}
-                    >
-                        <div
-                            className="v2-no-drag"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '6px 14px',
-                                borderRadius: '999px',
-                                background: 'rgba(18, 18, 24, 0.75)',
-                                backdropFilter: 'blur(16px)',
-                                WebkitBackdropFilter: 'blur(16px)',
-                                border: '1px solid rgba(255, 255, 255, 0.08)',
-                            }}
-                        >
-                            {/* Live dot */}
-                            <span style={{
-                                width: '5px',
-                                height: '5px',
-                                borderRadius: '50%',
-                                background: bridge.isInterviewerSpeaking
-                                    ? 'rgba(52, 211, 153, 0.85)'
-                                    : 'rgba(148, 163, 184, 0.45)',
-                                flexShrink: 0,
-                                animation: bridge.isInterviewerSpeaking
-                                    ? 'v2-dot-pulse 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite'
-                                    : 'none',
-                            }} />
-
-                            {/* Speaker label */}
-                            {bridge.rollingTranscriptSpeakerLabel && (
-                                <span style={{
-                                    fontSize: '10px',
-                                    fontWeight: 600,
-                                    letterSpacing: '0.06em',
-                                    textTransform: 'uppercase' as const,
-                                    color: 'rgba(255, 255, 255, 0.30)',
-                                    flexShrink: 0,
-                                }}>
-                                    {bridge.rollingTranscriptSpeakerLabel}
-                                </span>
-                            )}
-
-                            {/* Latest transcript text — single line, truncated */}
-                            <span style={{
-                                fontSize: '12px',
-                                color: 'rgba(255, 255, 255, 0.55)',
-                                fontStyle: 'italic',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                flex: 1,
-                                minWidth: 0,
-                            }}>
-                                {latestTranscriptLine
-                                    ? `"${latestTranscriptLine}"`
-                                    : 'Listening…'
-                                }
-                            </span>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
             {/* ── Surfaces 2 & 3: Panels side-by-side ── */}
             <AnimatePresence>

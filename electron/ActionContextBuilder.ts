@@ -15,6 +15,8 @@ import {
     buildScreenScanMessage,
 } from './llm/prompts';
 import type { ScreenContentMode } from './llm';
+import { looksLikeCodingInterviewQuestion } from './intelligence/codingQuestionHeuristics';
+import { looksLikeSystemDesignInterviewQuestion } from './intelligence/systemDesignQuestionHeuristics';
 
 export type UnifiedActionIntent =
     | 'what_to_answer'
@@ -392,16 +394,16 @@ export function getQuestionResponseProfile(
     const normalized = question.trim().toLowerCase();
     const wordCount = normalized.split(/\s+/).filter(Boolean).length;
 
-    if (mode === 'coding'
-        || intent === 'code_hint'
-        || /\b(code|coding|algorithm|leetcode|debug|bug|implement|implementation|function|class|array|string|graph|tree|dynamic programming|dp|time complexity|space complexity)\b/i.test(normalized)) {
-        return 'coding';
-    }
-
     if (mode === 'system_design'
         || intent === 'system_design_tradeoffs'
-        || /\b(system design|design a|architecture|scalab|latency|throughput|availability|partition|replication|cache|load balancer|queue|database|shard|failover)\b/i.test(normalized)) {
+        || looksLikeSystemDesignInterviewQuestion(question)) {
         return 'system_design';
+    }
+
+    if (mode === 'coding'
+        || intent === 'code_hint'
+        || looksLikeCodingInterviewQuestion(question)) {
+        return 'coding';
     }
 
     if (mode === 'follow_up'
@@ -418,6 +420,51 @@ export function getQuestionResponseProfile(
     }
 
     return 'general';
+}
+
+/** Full coding-interview shape for manual input and what-to-answer on DSA/coding questions. */
+function buildCodingInterviewOutputContract(): string {
+    return [
+        'Return a complete coding interview answer with these sections in order:',
+        '',
+        '**Problem:**',
+        'Restate the problem in 1-2 sentences (inputs, outputs, constraints).',
+        '',
+        '**Approach:**',
+        '3-5 short bullets: algorithm, data structure, and why it fits.',
+        '',
+        '**Complexity:**',
+        'Time and space complexity with one-line reasoning each.',
+        '',
+        '**Solution:**',
+        'FULL working code in a fenced markdown block with the correct language tag.',
+        'Code must compile and run — not pseudocode or placeholders.',
+        '',
+        'CRITICAL: You MUST include the **Solution:** code block for EVERY coding/DSA problem (any title, any platform). Description-only answers are invalid.',
+        'Word limits do not apply to the code block.',
+    ].join('\n');
+}
+
+/** Full system-design interview shape for manual input and actions. */
+function buildSystemDesignInterviewOutputContract(): string {
+    return [
+        'Return a complete system design interview answer using ### headers in this order:',
+        '',
+        '### 1. High-Level Understanding',
+        '### 2. Clarifying Questions (2-5 bullets)',
+        '### 3. Requirements (Functional + Non-Functional)',
+        '### 4. Architecture Diagram — MANDATORY fenced ```mermaid``` diagram',
+        '### 5. Component Breakdown',
+        '### 6. Data Flow (numbered steps)',
+        '### 7. Database Design',
+        '### 8. Scaling Strategy',
+        '### 9. Bottlenecks & Tradeoffs',
+        '### 10. Interview-Ready Final Answer (spoken summary)',
+        '',
+        'CRITICAL: Applies to EVERY system design question (any product, scale, or platform).',
+        'Description-only answers without diagram and components are invalid.',
+        'Use real component names (API Gateway, Redis, Kafka, DB, etc.) — no placeholders.',
+    ].join('\n');
 }
 
 function buildContextPriorityRules(profileApplied: boolean): string[] {
@@ -789,12 +836,7 @@ export function buildIntentPrompt(
                     createInstruction('intent', 'INTENT', SYSTEM_DESIGN_COPILOT_PROMPT),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        'Return a full structured system design answer.',
-                        'Follow the mandatory 10-section output structure from the intent prompt exactly.',
-                        'MUST include a Mermaid architecture diagram.',
-                        'MUST include component breakdown, data flow, database design, scaling strategy.',
-                        'MUST end with a concise interview-ready spoken answer.',
-                        'Use clean markdown with ### headers for each section.',
+                        buildSystemDesignInterviewOutputContract(),
                         ...modeAwareRules,
                     ].join('\n')),
                 ];
@@ -805,12 +847,8 @@ export function buildIntentPrompt(
                     createInstruction('intent', 'INTENT', basePrompt),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        'Return a coding answer the user can say immediately.',
-                        'Start with one direct answer sentence.',
-                        'Then add an "Approach:" section with 2 to 4 short bullet points.',
-                        'Then add a "Complexity:" line with time and space when algorithmic.',
-                        'Keep it moderate and interview-ready, not long-form.',
-                        'Do not include full code unless the user explicitly asked for implementation.',
+                        buildCodingInterviewOutputContract(),
+                        'Keep prose sections concise; the code block is mandatory.',
                         ...modeAwareRules,
                     ].join('\n')),
                 ];
@@ -863,18 +901,26 @@ export function buildIntentPrompt(
                 ].join('\n')),
             ];
         case 'manual_chat':
+            if (responseProfile === 'system_design') {
+                return [
+                    createInstruction('intent', 'INTENT', SYSTEM_DESIGN_COPILOT_PROMPT),
+                    createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
+                    createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                        'Return only the final answer.',
+                        buildSystemDesignInterviewOutputContract(),
+                        'No preamble or meta-commentary.',
+                    ].join('\n')),
+                ];
+            }
+
             if (responseProfile === 'coding') {
                 return [
                     createInstruction('intent', 'INTENT', basePrompt),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
                         'Return only the final answer.',
-                        'For coding questions, use this order: Direct answer, Approach, Complexity.',
-                        'Approach: 2 to 4 short bullets.',
-                        'Complexity: include time and space when algorithmic.',
-                        'Include code only if the user explicitly asked for code, implementation, or a fix.',
-                        'Keep it moderate and high-signal.',
-                        'No preamble.',
+                        buildCodingInterviewOutputContract(),
+                        'No preamble or meta-commentary.',
                     ].join('\n')),
                 ];
             }
@@ -997,12 +1043,7 @@ export function buildIntentPrompt(
                     createInstruction('intent', 'INTENT', SYSTEM_DESIGN_COPILOT_PROMPT),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        'Return a full structured system design answer.',
-                        'Follow the mandatory 10-section output structure from the intent prompt exactly.',
-                        'MUST include a Mermaid architecture diagram.',
-                        'MUST include component breakdown, data flow, database design, scaling strategy.',
-                        'MUST end with a concise interview-ready spoken answer.',
-                        'Use clean markdown with ### headers for each section.',
+                        buildSystemDesignInterviewOutputContract(),
                         ...modeAwareRules,
                     ].join('\n')),
                 ];
@@ -1013,11 +1054,8 @@ export function buildIntentPrompt(
                     createInstruction('intent', 'INTENT', basePrompt),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        'Return a strong next coding answer for the user.',
-                        'Start with one direct answer sentence.',
-                        'Then add an "Approach:" section with 2 to 4 short bullets.',
-                        'Then add one concise "Complexity:" line when algorithmic.',
-                        'Keep it moderate and ready to say aloud.',
+                        buildCodingInterviewOutputContract(),
+                        'Keep prose sections interview-ready; the code block is mandatory.',
                         ...modeAwareRules,
                     ].join('\n')),
                 ];

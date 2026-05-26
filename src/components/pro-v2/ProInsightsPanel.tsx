@@ -6,7 +6,7 @@
  * Scrollable: transcript section only (below actions).
  */
 
-import React, { memo, useCallback, useState, useEffect, useRef } from 'react';
+import React, { memo, useCallback, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Sparkles,
@@ -142,18 +142,6 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
     const panelRef = useRef<HTMLDivElement>(null);
     const [copiedText, setCopiedText] = useState(false);
 
-    // Debug: verify actions pipeline
-    useEffect(() => {
-        console.log('[V2 InsightsPanel]', {
-            mode: overlayCopilotMode,
-            quickActions: activeQuickActions.map(a => a.id),
-            recommendedAction: recommendedButton,
-            actionCount: activeQuickActions.length,
-        });
-    }, [overlayCopilotMode, activeQuickActions, recommendedButton]);
-
-
-
     const handleCopy = useCallback(() => {
         const text = rollingTranscript || lastFinalSentence || 'No transcript available';
         navigator.clipboard.writeText(text).catch(() => {});
@@ -273,6 +261,50 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
                     </div>
                 )}
             </div>
+
+            {/* ── Transcript (below summary + actions) ── */}
+            <AnimatePresence initial={false}>
+                {showTranscript && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                        style={{ overflow: 'hidden', flexShrink: 0 }}
+                    >
+                        <div className="v2-section-header" style={{ padding: '4px 14px 6px' }}>
+                            Transcript
+                        </div>
+                        <div
+                            className="v2-scroll-area"
+                            style={{
+                                maxHeight: '140px',
+                                padding: '0 14px 12px',
+                                fontSize: '12px',
+                                lineHeight: 1.55,
+                                color: 'rgba(255, 255, 255, 0.55)',
+                            }}
+                        >
+                            {transcriptLines.length > 0 ? (
+                                transcriptLines.map((line, i) => (
+                                    <div
+                                        key={`${i}-${line.slice(0, 24)}`}
+                                        style={{
+                                            marginBottom: i < transcriptLines.length - 1 ? '6px' : 0,
+                                        }}
+                                    >
+                                        {line}
+                                    </div>
+                                ))
+                            ) : (
+                                <span style={{ fontStyle: 'italic', opacity: 0.7 }}>
+                                    Listening…
+                                </span>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 });

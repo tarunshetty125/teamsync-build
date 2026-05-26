@@ -875,7 +875,7 @@ export class IntelligenceEngine extends EventEmitter {
                         transcriptStrategy: contextLayers.transcriptStrategy,
                         requestId: activeRequestId,
                     });
-                    const finalValidation = validateActionOutput(budgeted.prompt.intent, budgeted.prompt.mode, finalContent);
+                    const finalValidation = validateActionOutput(budgeted.prompt.intent, budgeted.prompt.mode, finalContent, budgeted.prompt.question);
                     this.recordBenchmark({
                         activeTemplateType,
                         sessionMode,
@@ -1249,13 +1249,13 @@ export class IntelligenceEngine extends EventEmitter {
         sessionIdSnapshot: string;
     }): Promise<string | null> {
         const { prompt, content, maxTokens, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
-        const validation = validateActionOutput(prompt.intent, prompt.mode, content);
+        const validation = validateActionOutput(prompt.intent, prompt.mode, content, prompt.question);
         if (validation.valid) {
             return validation.correctedContent.trim();
         }
 
         if (validation.correctedContent.trim()) {
-            const correctedValidation = validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent);
+            const correctedValidation = validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent, prompt.question);
             if (correctedValidation.valid) {
                 return correctedValidation.correctedContent.trim();
             }
@@ -1291,12 +1291,12 @@ export class IntelligenceEngine extends EventEmitter {
             return buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question);
         }
 
-        const repairedValidation = validateActionOutput(prompt.intent, prompt.mode, repaired);
+        const repairedValidation = validateActionOutput(prompt.intent, prompt.mode, repaired, prompt.question);
         if (repairedValidation.valid) {
             return repairedValidation.correctedContent.trim();
         }
         if (repairedValidation.correctedContent.trim()) {
-            const correctedRepairValidation = validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent);
+            const correctedRepairValidation = validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent, prompt.question);
             if (correctedRepairValidation.valid) {
                 return correctedRepairValidation.correctedContent.trim();
             }

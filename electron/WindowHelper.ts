@@ -160,20 +160,31 @@ export class WindowHelper {
     const maxAllowedHeight = Math.floor(workArea.height * 0.9)
     const newWidth = Math.min(Math.max(width, 300), maxAllowedWidth) // min 300, max 90%
     const newHeight = Math.min(Math.max(height, 1), maxAllowedHeight) // min 1, max 90%
+
+    // Keep horizontal center point aligned when resizing V2 layout to prevent left-side jumping
+    let calculatedX = currentX
+    if (this.overlayUsesV2Layout) {
+      const currentCenter = currentX + Math.floor(currentBounds.width / 2)
+      calculatedX = currentCenter - Math.floor(newWidth / 2)
+    }
+
     const maxX = workArea.x + workArea.width - newWidth
     const maxY = workArea.y + workArea.height - newHeight
-    const newX = Math.min(Math.max(currentX, workArea.x), maxX)
+    const newX = Math.min(Math.max(calculatedX, workArea.x), maxX)
     const newY = Math.min(Math.max(currentY, workArea.y), maxY)
     const sizeChanged = currentBounds.width !== newWidth || currentBounds.height !== newHeight
     const positionChanged = currentX !== newX || currentY !== newY
 
     if (!sizeChanged && !positionChanged) return
 
-    if (sizeChanged) {
-      this.overlayWindow.setContentSize(newWidth, newHeight)
-    }
-    if (positionChanged) {
-      this.overlayWindow.setPosition(newX, newY)
+    // Apply both dimensions and coordinates atomically to prevent separate-frame resize flicker
+    if (sizeChanged || positionChanged) {
+      this.overlayWindow.setBounds({
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight
+      })
     }
 
     this.overlayBounds = this.overlayWindow.getBounds()
