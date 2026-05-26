@@ -25,6 +25,17 @@ const REGEX_FOLLOW_UP_STRONG = /(follow.?up|continuation|building on|going back 
 const REGEX_CODING_BOOST = /(faster|efficient)/;
 const REGEX_SYSTEM_BOOST = /(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/;
 
+/** Loose STT-friendly signals — one hit is enough to nudge classification. */
+const REGEX_CODING_LOOSE = /(write code|coding question|data struct|hash ?map|binary|recursion|iterate|loop|array|string|sort|search|tree|graph|stack|queue|leetcode|big o|runtime|implement|algorithm|solve)/;
+const REGEX_SYSTEM_LOOSE = /(system design|design (?:this|a|the)|architect|scal(e|ing|ability)|microservice|database|api|backend|frontend|storage|traffic|users|requests|shard|replicat|cache|cdn|queue|load|latency|throughput|high availability|distributed|monolith)/;
+const REGEX_BEHAVIORAL_LOOSE = /(tell me about|your experience|a time when|situation|on your team|leadership|conflict|challenge|project|worked on|background|resume|impact|outcome|failure|mistake|collaborat|deadline|priorit)/;
+const REGEX_FOLLOW_UP_LOOSE = /(follow up|go deeper|more detail|elaborate|expand on|what about|you mentioned|earlier you|continue from|clarify that|repeat that)/;
+
+/** Classification tuned for messy live speech — prefer catching intent over precision. */
+const MIN_PRIMARY_SCORE = 1;
+const SWITCH_THRESHOLD = 1;
+const STRONG_SIGNAL_SCORE = 2;
+
 export function normalizeTranscript(text: string): string {
     let t = text.toLowerCase();
     t = t.replace(new RegExp(REGEX_NORMALIZE_BROKEN.source, 'g'), '$1$2');
@@ -73,13 +84,18 @@ export function detectQuestionType(
     scores.follow_up += cap(REGEX_FOLLOW_UP_CORE) * 3;
     scores.follow_up += cap(REGEX_FOLLOW_UP_STRONG) * 2;
 
+    if (REGEX_CODING_LOOSE.test(t)) scores.coding += 2;
+    if (REGEX_SYSTEM_LOOSE.test(t)) scores.system_design += 2;
+    if (REGEX_BEHAVIORAL_LOOSE.test(t)) scores.behavioral += 2;
+    if (REGEX_FOLLOW_UP_LOOSE.test(t)) scores.follow_up += 2;
+
     const wordCount = t.split(/\s+/).filter((w: string) => w.length > 0).length;
-    if (scores.general >= scores.follow_up && wordCount <= 8 && wordCount >= 2) {
+    if (scores.general >= scores.follow_up && wordCount <= 12 && wordCount >= 2) {
         scores.follow_up = Math.max(scores.follow_up, 2);
     }
 
     if (currentType !== 'general') {
-        scores[currentType] += 0.5;
+        scores[currentType] += 1;
     }
 
     const entries = (Object.entries(scores) as [DetectedQuestionType, number][])
@@ -89,12 +105,11 @@ export function detectQuestionType(
     const [primary, primaryScore] = entries[0];
     const [, secondScore] = entries[1] || [null, 0];
 
-    if (primaryScore < 2) {
+    if (primaryScore < MIN_PRIMARY_SCORE) {
         return { nextType: 'general' };
     }
 
-    const nextStrong = primaryScore >= 3 ? primary : undefined;
-    const SWITCH_THRESHOLD = 2;
+    const nextStrong = primaryScore >= STRONG_SIGNAL_SCORE ? primary : undefined;
     if (primary !== currentType && currentType !== 'general' && (primaryScore - secondScore) < SWITCH_THRESHOLD) {
         return { nextType: currentType, nextStrong };
     }
@@ -125,7 +140,7 @@ export function intentReducer(state: IntentState, action: IntentAction): IntentS
 
         case 'EVALUATE': {
             if (action.seq < state.seq) return state;
-            if (!action.combinedText || action.combinedText.length < 5) return state;
+            if (!action.combinedText || action.combinedText.length < 3) return state;
 
             const { nextType, nextStrong } = detectQuestionType(
                 action.combinedText,

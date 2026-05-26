@@ -1,44 +1,67 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-    getRecommendedOverlayAction,
-    type OverlayCopilotModeId,
-    type OverlayRecommendationId,
-} from '../modes/overlayCopilotConfig';
+import type { OverlayCopilotModeId, OverlayQuickActionId } from '../modes/overlayCopilotConfig';
+import { resolveRecommendedOverlayAction } from './overlayRecommendationResolver';
+import type { DetectedQuestionType } from './overlayIntent';
 import { normalizeTranscript } from './overlayIntent';
 
 type UseOverlayRecommendationOptions = {
     overlayCopilotMode: OverlayCopilotModeId;
-    detectedQuestionType: string;
+    detectedQuestionType: DetectedQuestionType;
     isMeetingActive: boolean;
     lastFinalSentenceRef: React.RefObject<string>;
+    finalizedTranscriptRef: React.RefObject<string>;
     currentQuestionTurnId: string;
+    activeQuickActionIds: OverlayQuickActionId[];
+    /** Bumps on each finalized transcript line so highlight updates without a new turn id. */
+    transcriptRevision: string;
 };
 
 /**
- * Debounced recommended-action highlight (V1 parity).
- * Recomputes when copilot mode / detection changes, not only on new transcript turns.
+ * Auto-highlight for the best quick action in the current visible set.
+ * Works for every copilot mode (sales, lecture, coding, etc.) using transcript
+ * pattern rules + intent classification fallback.
  */
 export function useOverlayRecommendation({
     overlayCopilotMode,
     detectedQuestionType,
     isMeetingActive,
     lastFinalSentenceRef,
+    finalizedTranscriptRef,
     currentQuestionTurnId,
+    activeQuickActionIds,
+    transcriptRevision,
 }: UseOverlayRecommendationOptions) {
-    const [recommendedButton, setRecommendedButton] =
-        useState<OverlayRecommendationId>('what_to_answer');
-    const recommendedButtonRef = useRef<OverlayRecommendationId>('what_to_answer');
+    const visibleIdsRef = useRef(activeQuickActionIds);
+    visibleIdsRef.current = activeQuickActionIds;
+
+    const [recommendedButton, setRecommendedButton] = useState<OverlayQuickActionId>('what_to_answer');
+    const recommendedButtonRef = useRef<OverlayQuickActionId>('what_to_answer');
     const recommendationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const recommendationLockTurnIdRef = useRef<string | null>(null);
 
+    const buildCombinedTranscript = useCallback(() => {
+        const recentFinalized = finalizedTranscriptRef.current?.slice(-500).trim() || '';
+        const latest = lastFinalSentenceRef.current?.trim() || '';
+        return normalizeTranscript([recentFinalized, latest].filter(Boolean).join(' '));
+    }, [finalizedTranscriptRef, lastFinalSentenceRef]);
+
     const applyRecommendation = useCallback(() => {
-        const combined = normalizeTranscript(lastFinalSentenceRef.current?.trim() || '');
-        const nextRecommendation = getRecommendedOverlayAction(overlayCopilotMode, combined);
+        const visible = visibleIdsRef.current;
+        if (visible.length === 0) return;
+
+        const combined = buildCombinedTranscript();
+        const nextRecommendation = resolveRecommendedOverlayAction(
+            overlayCopilotMode,
+            combined,
+            visible,
+            { detectedQuestionType },
+        );
+
         if (nextRecommendation !== recommendedButtonRef.current) {
             recommendedButtonRef.current = nextRecommendation;
             setRecommendedButton(nextRecommendation);
         }
-    }, [overlayCopilotMode, lastFinalSentenceRef]);
+    }, [overlayCopilotMode, detectedQuestionType, buildCombinedTranscript]);
 
     const resetRecommendation = useCallback(() => {
         if (recommendationTimerRef.current) {
@@ -46,14 +69,26 @@ export function useOverlayRecommendation({
             recommendationTimerRef.current = null;
         }
         recommendationLockTurnIdRef.current = null;
-        recommendedButtonRef.current = 'what_to_answer';
-        setRecommendedButton('what_to_answer');
-    }, []);
+
+        const visible = visibleIdsRef.current;
+        const fallback = resolveRecommendedOverlayAction(overlayCopilotMode, '', visible, {
+            detectedQuestionType: 'general',
+        });
+        recommendedButtonRef.current = fallback;
+        setRecommendedButton(fallback);
+    }, [overlayCopilotMode]);
 
     useEffect(() => {
         if (!isMeetingActive) return;
         applyRecommendation();
-    }, [overlayCopilotMode, detectedQuestionType, isMeetingActive, applyRecommendation]);
+    }, [
+        overlayCopilotMode,
+        detectedQuestionType,
+        isMeetingActive,
+        applyRecommendation,
+        activeQuickActionIds.join(','),
+        transcriptRevision,
+    ]);
 
     useEffect(() => {
         if (!currentQuestionTurnId) return;

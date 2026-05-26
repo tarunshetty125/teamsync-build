@@ -40,7 +40,7 @@ import {
     Scale,
     SearchCode
 } from 'lucide-react';
-import type { OverlayQuickActionDef, OverlayRecommendationId } from '../../lib/modes/overlayCopilotConfig';
+import type { OverlayQuickActionDef, OverlayQuickActionId } from '../../lib/modes/overlayCopilotConfig';
 import ProOverlayControlStrip from './ProOverlayControlStrip';
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
@@ -108,7 +108,7 @@ interface ProInsightsPanelProps {
     onToggleCustomContext: () => void;
     contextSummary: { label: string; detail: string };
     activeQuickActions: OverlayQuickActionDef[];
-    recommendedButton: OverlayRecommendationId;
+    recommendedButton: OverlayQuickActionId;
     overlayCopilotMode: string;
     lastFinalSentence: string;
     rollingTranscript: string;

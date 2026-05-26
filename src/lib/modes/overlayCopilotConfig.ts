@@ -387,7 +387,7 @@ const CONFIGS: Record<OverlayCopilotModeId, OverlayModeConfig> = {
     recommendedRules: [
       { actionId: 'answer_now', patterns: [/tell me about yourself/i, /introduce yourself/i] },
       { actionId: 'recap', patterns: [/\bsummari[sz]e\b/i, /\brecap\b/i, /\boverview\b/i, /\btl;dr\b/i] },
-      { actionId: 'clarify', patterns: [/\bexplain\b/i, /\bwhat is\b/i, /\bhow does\b/i, /\bclarif/i] },
+      { actionId: 'clarify', patterns: [/explain/i, /what is/i, /how does/i, /how do/i, /clarif/i, /mean by/i] },
       { actionId: 'follow_up_questions', patterns: [/\bfollow.?up\b/i, /\bnext\b/i, /then what/i] },
     ],
     defaultRecommendedActionId: 'what_to_answer',
@@ -404,10 +404,10 @@ const CONFIGS: Record<OverlayCopilotModeId, OverlayModeConfig> = {
   coding: {
     actionIds: ['tech_hint', 'tech_optimal_solution', 'tech_complexity', 'tech_edge_case'],
     recommendedRules: [
-      { actionId: 'tech_complexity', patterns: [/\bcomplexity\b/i, /\bbig o\b/i, /\btime complexity\b/i, /\bspace complexity\b/i] },
-      { actionId: 'tech_edge_case', patterns: [/\bedge case\b/i, /\bcorner case\b/i, /\btest case\b/i] },
-      { actionId: 'tech_hint', patterns: [/\bhint\b/i, /\bstuck\b/i, /\bdebug\b/i, /\berror\b/i, /\bbug\b/i] },
-      { actionId: 'tech_optimal_solution', patterns: [/\boptimal\b/i, /\boptimi[sz]e\b/i, /\bbest\b/i, /\befficient\b/i] },
+      { actionId: 'tech_complexity', patterns: [/complex/i, /big o/i, /time complex/i, /space complex/i, /runtime/i, /efficien/i] },
+      { actionId: 'tech_edge_case', patterns: [/edge case/i, /corner case/i, /test case/i, /empty input/i, /null/i] },
+      { actionId: 'tech_hint', patterns: [/hint/i, /stuck/i, /debug/i, /error/i, /bug/i, /struggl/i, /nudge/i] },
+      { actionId: 'tech_optimal_solution', patterns: [/optimal/i, /optimi[sz]/i, /best/i, /efficien/i, /implement/i, /algorithm/i, /solve/i, /write (?:a )?function/i, /how would you/i, /data struct/i] },
     ],
     defaultRecommendedActionId: 'tech_optimal_solution',
   },
@@ -422,29 +422,30 @@ const CONFIGS: Record<OverlayCopilotModeId, OverlayModeConfig> = {
   system_design: {
     actionIds: ['system_tradeoffs', 'system_clarify', 'system_approaches', 'system_deep_dive'],
     recommendedRules: [
-      { actionId: 'system_tradeoffs', patterns: [/\btrade[\s-]?off/i, /\bscale\b/i, /\blatency\b/i, /\bthroughput\b/i, /\breliab/i] },
-      { actionId: 'system_clarify', patterns: [/\bclarify\b/i, /\bconstraint\b/i, /\brequirement\b/i] },
-      { actionId: 'system_deep_dive', patterns: [/\bdeep dive\b/i, /\bdetails\b/i, /\bops\b/i, /\bcache\b/i, /\bdata model\b/i] },
+      { actionId: 'system_tradeoffs', patterns: [/trade[\s-]?off/i, /scale/i, /scalab/i, /latency/i, /throughput/i, /reliab/i, /system design/i, /traffic/i, /users/i] },
+      { actionId: 'system_clarify', patterns: [/clarif/i, /constraint/i, /requirement/i, /functional/i, /scope/i, /assumption/i] },
+      { actionId: 'system_approaches', patterns: [/approach/i, /architect/i, /high level/i, /design pattern/i, /component/i] },
+      { actionId: 'system_deep_dive', patterns: [/deep dive/i, /detail/i, /ops/i, /cache/i, /data model/i, /shard/i, /database/i, /storage/i] },
     ],
     defaultRecommendedActionId: 'system_tradeoffs',
   },
   'technical-interview': {
     actionIds: ['tech_hint', 'tech_optimal_solution', 'tech_complexity', 'tech_edge_case'],
     recommendedRules: [
-      { actionId: 'tech_complexity', patterns: [/\bcomplexity\b/i, /\bbig o\b/i, /\btime complexity\b/i, /\bspace complexity\b/i] },
-      { actionId: 'tech_edge_case', patterns: [/\bedge case\b/i, /\bcorner case\b/i, /\btest case\b/i, /\binput\b/i] },
-      { actionId: 'tech_hint', patterns: [/\bhint\b/i, /\bstuck\b/i, /\bdebug\b/i, /\berror\b/i, /\bbug\b/i] },
-      { actionId: 'tech_optimal_solution', patterns: [/\boptimal\b/i, /\boptimi[sz]e\b/i, /\bbest\b/i, /\befficient\b/i, /\bapproach\b/i] },
+      { actionId: 'tech_complexity', patterns: [/complex/i, /big o/i, /time complex/i, /space complex/i, /runtime/i] },
+      { actionId: 'tech_edge_case', patterns: [/edge case/i, /corner case/i, /test case/i, /input/i] },
+      { actionId: 'tech_hint', patterns: [/hint/i, /stuck/i, /debug/i, /error/i, /bug/i, /struggl/i] },
+      { actionId: 'tech_optimal_solution', patterns: [/optimal/i, /optimi[sz]/i, /best/i, /efficien/i, /approach/i, /solve/i, /implement/i] },
     ],
     defaultRecommendedActionId: 'tech_optimal_solution',
   },
   sales: {
     actionIds: ['sales_objection', 'sales_pricing', 'sales_discovery', 'sales_negotiation'],
     recommendedRules: [
-      { actionId: 'sales_pricing', patterns: [/\bprice\b/i, /\bpricing\b/i, /\bcost\b/i, /\bbudget\b/i, /\bdiscount\b/i, /\broi\b/i] },
-      { actionId: 'sales_negotiation', patterns: [/\bnegotia/i, /\bdiscount\b/i, /\bprocurement\b/i, /\bterms\b/i] },
-      { actionId: 'sales_objection', patterns: [/\bobjection\b/i, /\bconcern\b/i, /\btoo expensive\b/i, /\bnot sure\b/i, /\bhesitant\b/i, /\bpushback\b/i] },
-      { actionId: 'sales_discovery', patterns: [/\bpain\b/i, /\bproblem\b/i, /\bchallenge\b/i, /\bworkflow\b/i, /\bgoal\b/i] },
+      { actionId: 'sales_pricing', patterns: [/price/i, /pricing/i, /cost/i, /budget/i, /discount/i, /roi/i, /expensive/i, /quote/i] },
+      { actionId: 'sales_negotiation', patterns: [/negotia/i, /discount/i, /procurement/i, /terms/i, /contract/i, /deal/i] },
+      { actionId: 'sales_objection', patterns: [/objection/i, /concern/i, /too expensive/i, /not sure/i, /hesitant/i, /pushback/i, /push back/i] },
+      { actionId: 'sales_discovery', patterns: [/pain/i, /problem/i, /challenge/i, /workflow/i, /goal/i, /need/i, /use case/i] },
     ],
     defaultRecommendedActionId: 'sales_objection',
   },
@@ -534,10 +535,11 @@ export function getOverlayQuickActions(
   return actionIds.map((id) => ACTIONS[id]);
 }
 
-export function getRecommendedOverlayAction(
+export function getMatchedRecommendedOverlayAction(
   modeId: OverlayCopilotModeId,
   combinedText: string,
-): OverlayRecommendationId {
+): OverlayRecommendationId | null {
+  if (!combinedText.trim()) return null;
   const config = CONFIGS[modeId] ?? CONFIGS.general;
 
   for (const rule of config.recommendedRules) {
@@ -546,5 +548,18 @@ export function getRecommendedOverlayAction(
     }
   }
 
+  return null;
+}
+
+export function getRecommendedOverlayAction(
+  modeId: OverlayCopilotModeId,
+  combinedText: string,
+): OverlayRecommendationId {
+  const matched = getMatchedRecommendedOverlayAction(modeId, combinedText);
+  if (matched) return matched;
+
+  const config = CONFIGS[modeId] ?? CONFIGS.general;
   return config.defaultRecommendedActionId;
 }
+
+export { resolveRecommendedOverlayAction } from '../overlay/overlayRecommendationResolver.ts';

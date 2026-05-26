@@ -192,13 +192,21 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         seqRef.current = 0;
     }, []);
 
+    const activeQuickActionIds = useMemo(
+        () => activeQuickActions.map((action) => action.id),
+        [activeQuickActions],
+    );
+
     const { recommendedButton, resetRecommendation, unlockRecommendationForTurn } =
         useOverlayRecommendation({
             overlayCopilotMode,
             detectedQuestionType,
             isMeetingActive,
             lastFinalSentenceRef,
+            finalizedTranscriptRef,
             currentQuestionTurnId,
+            activeQuickActionIds,
+            transcriptRevision: lastFinalSentence,
         });
 
     const onSessionReset = useCallback(() => {
