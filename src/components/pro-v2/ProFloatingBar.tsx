@@ -76,9 +76,9 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            initial={{ opacity: 0, y: -6, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             className="v2-surface-bar v2-draggable"
             style={{
                 display: 'flex',
@@ -102,18 +102,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             </div>
 
             {/* Timer */}
-            <span
-                className="v2-no-drag"
-                style={{
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    fontVariantNumeric: 'tabular-nums',
-                    letterSpacing: '0.04em',
-                    color: 'rgba(255, 255, 255, 0.55)',
-                    minWidth: '36px',
-                    textAlign: 'center',
-                }}
-            >
+            <span className="v2-no-drag v2-bar-timer">
                 {formatTime(elapsed)}
             </span>
 
@@ -148,25 +137,13 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
 
                 <input
                     ref={inputRef}
+                    className="v2-bar-input"
                     value={inputValue}
                     onChange={e => onInputChange(e.target.value)}
                     onKeyDown={handleInputKeyDown}
                     onKeyUp={e => e.stopPropagation()}
                     onKeyPress={e => e.stopPropagation()}
                     placeholder="Ask TeamSync..."
-                    style={{
-                        width: '170px',
-                        height: '28px',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
-                        borderRadius: '8px',
-                        color: 'rgba(255, 255, 255, 0.88)',
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        padding: '0 28px 0 24px',
-                        outline: 'none',
-                        letterSpacing: '0.01em',
-                    }}
                 />
 
                 {/* Send button */}

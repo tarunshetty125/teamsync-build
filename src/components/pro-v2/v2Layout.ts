@@ -1,7 +1,7 @@
 /** Shared pro-v2 overlay layout constants. */
 
 export const V2_INSIGHTS_WIDTH = 320;
-export const V2_PANEL_GAP = 6;
+export const V2_PANEL_GAP = 7;
 export const V2_CONTAINER_PADDING = 24;
 export const V2_BAR_ONLY_WIDTH = 420;
 

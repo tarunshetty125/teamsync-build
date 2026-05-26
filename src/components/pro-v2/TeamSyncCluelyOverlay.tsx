@@ -1,7 +1,7 @@
 /**
  * TeamSyncCluelyOverlay.tsx — V2 Top-Level Shell
- * 
- * Layout: Bar → Transcript pill (togglable) → Two panels side-by-side
+ *
+ * Layout: Bar → Rolling transcript strip → Two panels side-by-side
  */
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -76,6 +76,10 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         bridge.setShowTranscript((prev: boolean) => !prev);
     }, [bridge.setShowTranscript]);
 
+    const transcriptLines = bridge.rollingTranscript
+        ? bridge.rollingTranscript.split('  ·  ').filter(Boolean)
+        : [];
+
     return (
         <div
             ref={containerRef}
@@ -106,18 +110,67 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 onScreenScan={bridge.handleScreenScan}
             />
 
+            {/* ── Rolling transcript strip — between bar and panels ── */}
+            <AnimatePresence initial={false}>
+                {bridge.showTranscript && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0, y: 4 }}
+                        animate={{ opacity: 1, height: 'auto', y: 0 }}
+                        exit={{ opacity: 0, height: 0, y: -2 }}
+                        transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                        style={{
+                            overflow: 'hidden',
+                            width: '100%',
+                            paddingTop: transcriptLines.length ? 6 : 4,
+                        }}
+                    >
+                        <div
+                            className="v2-scroll-area"
+                            style={{
+                                maxHeight: 120,
+                                padding: '0 18px 8px',
+                                display: 'flex',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <div
+                                className="v2-transcript-body"
+                                style={{
+                                    maxWidth: getV2PanelsWidth(
+                                        resolveV2ResponseWidthPx(
+                                            bridge.latestResponse?.isStreaming
+                                                ? settledResponseTextRef.current
+                                                : bridge.latestResponse?.text,
+                                        ),
+                                    ),
+                                }}
+                            >
+                                {transcriptLines.length > 0 ? (
+                                    transcriptLines.map((line, index) => (
+                                        <div
+                                            key={`${index}-${line.slice(0, 24)}`}
+                                            className="v2-transcript-line"
+                                        >
+                                            {line}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <span style={{ fontStyle: 'italic', opacity: 0.7 }}>
+                                        Listening…
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* ── Surfaces 2 & 3: Panels side-by-side ── */}
             <AnimatePresence>
                 {bridge.isExpanded && (
                     <div
                         ref={panelsRowRef}
-                        style={{
-                            display: 'flex',
-                            gap: '6px',
-                            marginTop: '6px',
-                            alignItems: 'flex-start',
-                            width: 'max-content',
-                        }}
+                        className="v2-panels-row"
                     >
                         <ProInsightsPanel
                             contextSummary={bridge.contextSummary}

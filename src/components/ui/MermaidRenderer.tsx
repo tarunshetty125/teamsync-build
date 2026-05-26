@@ -6,6 +6,99 @@ import React, { useState, useCallback, useEffect, useRef, memo } from 'react';
 import { Copy, Check, ChevronDown, AlertTriangle } from 'lucide-react';
 import mermaid from 'mermaid';
 
+function normalizeMermaidSource(input: string): string {
+    let s = (input ?? '').trim();
+    if (!s) return '';
+
+    // Some models accidentally include fences inside fences (or paste backticks verbatim).
+    // Keep this renderer resilient by stripping any surrounding markdown fences.
+    if (s.startsWith('```')) {
+        s = s.replace(/^```[^\n]*\n?/, '').replace(/\n?```$/, '').trim();
+    }
+
+    // If the model includes an explicit "mermaid" prefix line, strip it.
+    s = s.replace(/^mermaid[\s\r\n]+/i, '').trim();
+
+    // If we still have stray trailing backticks (e.g. "``" instead of "```"),
+    // remove them to prevent Mermaid parse errors.
+    s = s.replace(/`{1,3}\s*$/g, '').trim();
+
+    // Drop any standalone fence lines that might have leaked into the chart.
+    s = s.replace(/^\s*`{1,3}\s*$/gm, '').trim();
+
+    // Some model outputs use `->` instead of Mermaid's common `-->` in flowcharts.
+    // Normalize for better compatibility.
+    s = s.replace(/\s*-\>\s*/g, ' --> ').trim();
+
+    // Extract only the Mermaid "program" portion.
+    // In broken outputs, the chart string can include extra non-mermaid markdown/text
+    // (or even key-like tokens) before/after the actual diagram, which makes Mermaid throw.
+    const lines = s.split(/\r?\n/);
+
+    const diagramHeaderRe = /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\b/i;
+    const dirRe = /^(graph|flowchart)\s+([A-Za-z]{1,3})\b/i;
+
+    function looksLikeMermaidLine(line: string): boolean {
+        const t = line.trim();
+        if (!t) return true;
+        if (t.startsWith('%%')) return true;
+        if (/^(graph|flowchart)\b/i.test(t)) return true;
+        if (/^(sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph)\b/i.test(t)) return true;
+        if (/^C4(Context|Container|Component|Dynamic|Deployment)\b/i.test(t)) return true;
+        if (t.startsWith('subgraph ')) return true;
+        if (/^end\s*$/i.test(t)) return true;
+        if (/^(linkStyle|classDef|style)\b/i.test(t)) return true;
+        if (t.includes('-->')) return true;
+        if (t.includes(' --> ')) return true;
+        if (t.includes('->')) return true; // before normalization, just in case
+        return false;
+    }
+
+    // Find the first line that looks like a Mermaid diagram header.
+    let startIdx = lines.findIndex((l) => diagramHeaderRe.test(l.trim()));
+    if (startIdx === -1) {
+        // Fallback: find the first line containing an edge operator.
+        startIdx = lines.findIndex((l) => l.includes('-->') || l.includes('-->'));
+    }
+    if (startIdx === -1) return s;
+
+    const cleaned: string[] = [];
+    for (let i = startIdx; i < lines.length; i++) {
+        const raw = lines[i];
+        if (i === startIdx) {
+            const headerMatch = dirRe.exec(raw.trim());
+            if (headerMatch) {
+                cleaned.push(`${headerMatch[1]} ${headerMatch[2]}`);
+                continue;
+            }
+        }
+
+        if (!looksLikeMermaidLine(raw)) break;
+        cleaned.push(raw);
+    }
+
+    const out = cleaned.join('\n').trim();
+    return out || s;
+}
+
+function normalizeMermaidSvg(svg: string): string {
+    // Mermaid sometimes emits fixed width/height; in tight containers this can collapse/clip.
+    // Prefer responsive SVG driven by viewBox.
+    let out = svg;
+    out = out.replace(/\s(width|height)="[^"]*"/g, '');
+
+    // Ensure SVG scales to container width.
+    out = out.replace(
+        /<svg([^>]*?)>/i,
+        (m, attrs) => {
+            const hasStyle = /style="/i.test(attrs);
+            const stylePatch = 'style="max-width:100%;height:auto;display:block;"';
+            return `<svg${attrs} ${hasStyle ? '' : stylePatch}>`;
+        },
+    );
+    return out;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -106,8 +199,13 @@ const CopyDiagramButton = memo<{ chart: string; isLightTheme: boolean }>(
         return (
             <button
                 onClick={handleCopy}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg transition-all duration-200"
                 style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 8px',
+                    borderRadius: 10,
+                    transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease',
                     background: copied
                         ? (isLightTheme ? 'rgba(34,197,94,0.08)' : 'rgba(34,197,94,0.12)')
                         : (isLightTheme ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)'),
@@ -120,8 +218,8 @@ const CopyDiagramButton = memo<{ chart: string; isLightTheme: boolean }>(
                 }}
                 title={copied ? 'Copied!' : 'Copy diagram source'}
             >
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                <span className="text-[9px] font-medium tracking-wide">
+                {copied ? <Check width={12} height={12} /> : <Copy width={12} height={12} />}
+                <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.04em' }}>
                     {copied ? 'Copied' : 'Copy Diagram'}
                 </span>
             </button>
@@ -222,7 +320,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
         }, []);
 
         useEffect(() => {
-            const trimmedChart = chart.trim();
+            const trimmedChart = normalizeMermaidSource(chart);
 
             // Skip empty or unchanged charts
             if (!trimmedChart) {
@@ -252,7 +350,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                     // Only update if this is still the latest render
                     if (!mountedRef.current || renderIdRef.current !== currentRenderId) return;
 
-                    setSvgHtml(svg);
+                    setSvgHtml(normalizeMermaidSvg(svg));
                     setIsRendering(false);
                     setError(null);
                 } catch (err: any) {
@@ -332,19 +430,37 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
             >
                 {/* Header */}
                 <div
-                    className="flex items-center justify-between px-4 py-2"
+                    className="px-4 py-2"
                     style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
                         borderBottom: `1px solid ${isLightTheme ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)'}`,
                         background: isLightTheme ? 'rgba(99,102,241,0.02)' : 'rgba(255,255,255,0.015)',
                     }}
                 >
-                    <div className="flex items-center gap-2">
-                        <span className="text-[13px]">📐</span>
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            minWidth: 0,
+                        }}
+                    >
+                        <span style={{ fontSize: 13 }}>📐</span>
                         <span
-                            className="text-[10px] font-bold tracking-[0.08em] uppercase"
                             style={{ color: isLightTheme ? 'rgba(99,102,241,0.7)' : 'rgba(129,140,248,0.7)' }}
                         >
-                            Architecture Diagram
+                            <span
+                                style={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    letterSpacing: '0.08em',
+                                    textTransform: 'uppercase',
+                                }}
+                            >
+                                Architecture Diagram
+                            </span>
                         </span>
                     </div>
                     <CopyDiagramButton chart={chart} isLightTheme={isLightTheme} />
@@ -353,8 +469,11 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                 {/* Diagram SVG */}
                 <div
                     ref={containerRef}
-                    className="px-4 py-5 flex items-center justify-center overflow-x-auto"
+                    className="px-4 py-5 overflow-x-auto"
                     style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                         animation: 'mermaidFadeIn 0.4s cubic-bezier(0.22,1,0.36,1) both',
                     }}
                     dangerouslySetInnerHTML={{ __html: svgHtml }}

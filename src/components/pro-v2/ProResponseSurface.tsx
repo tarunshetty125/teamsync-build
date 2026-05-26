@@ -68,10 +68,11 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.97 }}
+            layout
+            initial={{ opacity: 0, y: 10, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.97 }}
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1], delay: 0.08 }}
+            exit={{ opacity: 0, y: 6, scale: 0.99 }}
+            transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1], delay: 0.06, layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
             className="v2-surface-response v2-no-drag"
             style={{
                 minWidth: `${V2_RESPONSE_MIN_WIDTH}px`,
@@ -86,7 +87,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         >
             {/* ── Header ── */}
             <div className="v2-panel-header">
-                <div className="v2-panel-title">
+                <div className="v2-panel-title v2-panel-title--primary">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
                         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                         <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
@@ -132,13 +133,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
             {/* ── Response Body — dynamic height ── */}
             <div
                 ref={scrollContainerRef as React.RefObject<HTMLDivElement>}
-                className="v2-scroll-area"
-                style={{
-                    maxHeight: '65vh',
-                    padding: '4px 20px 20px',
-                    overflowY: 'auto',
-                    overflowX: 'auto',
-                }}
+                className="v2-scroll-area v2-response-scroll"
             >
                 <AnimatePresence mode="wait">
                     {isProcessing && !latestResponse?.text ? (
@@ -154,9 +149,9 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                     ) : latestResponse?.text ? (
                         <motion.div
                             key={`response-${latestResponse.id}`}
-                            initial={{ opacity: 0, y: 4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                            initial={{ opacity: 0, y: 6, scale: 0.995 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                             className="v2-response-body"
                         >
                             {/* Negotiation coaching card */}
@@ -261,27 +256,59 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
     );
 });
 
+const MERMAID_DIAGRAM_RE =
+    /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram-v2|stateDiagram|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)/i;
+
+function isMermaidLanguage(lang: string): boolean {
+    const normalized = lang.trim().toLowerCase();
+    return normalized === 'mermaid' || normalized.startsWith('mermaid');
+}
+
+function looksLikeMermaidSource(code: string): boolean {
+    const trimmed = code.trim();
+    if (!trimmed) return false;
+    if (/^mermaid[\s\r\n]/i.test(trimmed)) return true;
+    return MERMAID_DIAGRAM_RE.test(trimmed);
+}
+
+function normalizeMermaidChart(code: string): string {
+    return code.replace(/^mermaid[\s\r\n]+/i, '').trim();
+}
+
+function resolveFenceContent(parsed: { lang: string; code: string }):
+    | { kind: 'mermaid'; chart: string }
+    | { kind: 'code'; lang: string; code: string } {
+    const lang = parsed.lang.trim();
+    if (isMermaidLanguage(lang)) {
+        return { kind: 'mermaid', chart: parsed.code };
+    }
+    if (looksLikeMermaidSource(parsed.code)) {
+        return { kind: 'mermaid', chart: normalizeMermaidChart(parsed.code) };
+    }
+    return { kind: 'code', lang: lang || 'text', code: parsed.code };
+}
+
+function isFenceClosed(part: string): boolean {
+    const trimmed = part.trimEnd();
+    return trimmed.endsWith('```') && trimmed.length > 3;
+}
+
+function extractMermaidChartFromPre(children: React.ReactNode): string | null {
+    if (!React.isValidElement(children)) return null;
+    const child = children as React.ReactElement<{ className?: string; children?: React.ReactNode }>;
+    const className = child.props?.className || '';
+    if (typeof className !== 'string' || !className.includes('language-mermaid')) return null;
+    const chart = String(child.props.children ?? '').replace(/\n$/, '').trim();
+    return chart || null;
+}
+
 const V2_MARKDOWN_COMPONENTS: Components = {
     p: ({ children }) => <p style={{ marginBottom: '10px' }}>{children}</p>,
-    strong: ({ children }) => <strong style={{ fontWeight: 600, color: 'rgba(255,255,255,0.95)' }}>{children}</strong>,
+    strong: ({ children }) => <strong style={{ fontWeight: 500, color: 'rgba(255,255,255,0.96)' }}>{children}</strong>,
     ul: ({ children }) => <ul style={{ marginLeft: '16px', marginBottom: '8px', listStyleType: 'disc' }}>{children}</ul>,
     ol: ({ children }) => <ol style={{ marginLeft: '16px', marginBottom: '8px', listStyleType: 'decimal' }}>{children}</ol>,
     li: ({ children }) => <li style={{ marginBottom: '3px', paddingLeft: '2px' }}>{children}</li>,
-    h3: ({ children }) => (
-        <h3 style={{
-            fontSize: '11px',
-            fontWeight: 700,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            color: 'rgba(255,255,255,0.30)',
-            marginTop: '16px',
-            marginBottom: '6px',
-            paddingBottom: '6px',
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
-        }}>
-            {children}
-        </h3>
-    ),
+    h3: ({ children }) => <h3>{children}</h3>,
     code: ({ children, className }) => {
         const isFenced = typeof className === 'string' && className.startsWith('language-');
         if (isFenced) {
@@ -300,7 +327,13 @@ const V2_MARKDOWN_COMPONENTS: Components = {
             </code>
         );
     },
-    pre: ({ children }) => <pre className="v2-response-pre">{children}</pre>,
+    pre: ({ children }) => {
+        const mermaidChart = extractMermaidChartFromPre(children);
+        if (mermaidChart) {
+            return <MermaidRenderer chart={mermaidChart} isLightTheme={false} />;
+        }
+        return <pre className="v2-response-pre">{children}</pre>;
+    },
     a: ({ href, children }) => (
         <a
             href={href}
@@ -323,28 +356,73 @@ function parseFencePart(part: string): { lang: string; code: string } | null {
     return code ? { lang: 'text', code } : null;
 }
 
-const V2ResponseText = memo<{
-    text: string;
-    isStreaming?: boolean;
-    isCode?: boolean;
-}>(function V2ResponseText({ text, isStreaming, isCode }) {
-    if (isStreaming) {
+function renderFenceBlock(part: string, key: number, allowOpenMermaid: boolean) {
+    const parsed = parseFencePart(part);
+    if (!parsed || !parsed.code) return null;
+
+    const closed = isFenceClosed(part);
+    const resolved = resolveFenceContent(parsed);
+
+    function sanitizePossiblyUnclosedMermaidChart(chart: string): string {
+        // If the model forgets the closing ``` then our split() will include the rest
+        // of the markdown response inside the mermaid payload. Mermaid will then
+        // fail to parse and we show a fallback box.
+        // Heuristic: stop the mermaid content at the next markdown section header
+        // or a new fenced block.
+        const s = chart.trim();
+        if (!s) return s;
+
+        const beforeNextHeading = s.split(/\n\s*#{1,6}\s+/)[0].trim();
+        const beforeNextFence = beforeNextHeading.split(/\n\s*```/)[0].trim();
+        const cleaned = (beforeNextFence || beforeNextHeading || s)
+            // If the model leaked a partial fence (e.g. "``") at the end, remove it.
+            .replace(/`{1,3}\s*$/g, '')
+            .trim();
+        return cleaned;
+    }
+
+    if (resolved.kind === 'mermaid') {
+        const chartForRender =
+            closed
+                ? resolved.chart
+                : sanitizePossiblyUnclosedMermaidChart(resolved.chart);
+
+        if (!closed && !allowOpenMermaid) {
+            return (
+                <pre key={key} className="v2-response-pre v2-response-pre--streaming">
+                    {chartForRender}
+                </pre>
+            );
+        }
+
         return (
-            <div
-                className="v2-response-streaming"
-                style={{
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    fontSize: '14px',
-                    lineHeight: 1.75,
-                    color: 'rgba(255,255,255,0.88)',
-                }}
-            >
-                {text}
-            </div>
+            <MermaidRenderer
+                key={`${key}-${chartForRender.length}`}
+                chart={chartForRender}
+                isLightTheme={false}
+            />
         );
     }
 
+    if (!closed) {
+        return (
+            <pre key={key} className="v2-response-pre v2-response-pre--streaming">
+                {resolved.code}
+            </pre>
+        );
+    }
+
+    return (
+        <CodeBlock
+            key={key}
+            code={resolved.code}
+            language={resolved.lang}
+            isLightTheme={false}
+        />
+    );
+}
+
+function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
     if (!text.includes('```')) {
         return (
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={V2_MARKDOWN_COMPONENTS}>
@@ -354,24 +432,11 @@ const V2ResponseText = memo<{
     }
 
     const parts = text.split(/(```[\s\S]*?(?:```|$))/g);
-    const body = (
+    return (
         <>
             {parts.map((part, i) => {
                 if (part.startsWith('```')) {
-                    const parsed = parseFencePart(part);
-                    if (!parsed || !parsed.code) return null;
-                    const lang = parsed.lang.toLowerCase();
-                    if (lang === 'mermaid') {
-                        return <MermaidRenderer key={i} chart={parsed.code} isLightTheme={false} />;
-                    }
-                    return (
-                        <CodeBlock
-                            key={i}
-                            code={parsed.code}
-                            language={parsed.lang || 'text'}
-                            isLightTheme={false}
-                        />
-                    );
+                    return renderFenceBlock(part, i, allowOpenMermaid);
                 }
                 if (!part.trim()) return null;
                 return (
@@ -386,8 +451,21 @@ const V2ResponseText = memo<{
             })}
         </>
     );
+}
 
-    if (isCode) {
+function responseContainsMermaid(text: string): boolean {
+    return /```[ \t]*mermaid/i.test(text) || looksLikeMermaidSource(text);
+}
+
+const V2ResponseText = memo<{
+    text: string;
+    isStreaming?: boolean;
+    isCode?: boolean;
+}>(function V2ResponseText({ text, isStreaming, isCode }) {
+    const body = renderV2ResponseBody(text, !isStreaming);
+    const wrapAsCodeSection = Boolean(isCode) && !responseContainsMermaid(text);
+
+    if (wrapAsCodeSection) {
         return (
             <div className="v2-code-section">
                 <div className="v2-code-section-label">
