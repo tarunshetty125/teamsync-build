@@ -38,7 +38,7 @@ export interface AssistantResponse {
     questionContext: string;
 }
 
-export type SessionMode = 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design';
+export type SessionMode = 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design';
 
 export class SessionTracker {
     // Context management (mirrors Swift ContextManager)

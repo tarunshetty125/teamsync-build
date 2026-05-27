@@ -2664,7 +2664,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     return { sessionId: appState.getIntelligenceManager().getSessionId() };
   });
 
-  safeHandle("session:set-mode", async (_, mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => {
+  safeHandle("session:set-mode", async (_, mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design') => {
     const intelligenceManager = appState.getIntelligenceManager();
     intelligenceManager.setSessionMode(mode);
     BrowserWindow.getAllWindows().forEach(win => {

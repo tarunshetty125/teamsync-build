@@ -452,7 +452,7 @@ const CONFIGS: Record<OverlayCopilotModeId, OverlayModeConfig> = {
     defaultRecommendedActionId: 'tech_optimal_solution',
   },
   follow_up: {
-    actionIds: DEFAULT_DYNAMIC_ACTIONS,
+    actionIds: ['what_to_answer', 'clarify', 'recap', 'follow_up_questions'],
     recommendedRules: [
       { actionId: 'follow_up_questions', patterns: [/\bfollow.?up\b/i, /\bnext\b/i, /then what/i] },
       { actionId: 'clarify', patterns: [/\bclarify\b/i, /\brepeat\b/i, /\bagain\b/i] },

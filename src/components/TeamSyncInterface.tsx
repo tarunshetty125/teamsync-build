@@ -296,7 +296,7 @@ function getSuggestedAnswerIntent(question: string): string {
 
 // ── Context-Aware Question Type Detection (mirrors IntentClassifier patterns) ──
 type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'follow_up' | 'general';
-type SessionMode = DetectedQuestionType;
+type SessionMode = DetectedQuestionType | 'salary';
 
 type ActionIntent =
     | 'what_to_answer'

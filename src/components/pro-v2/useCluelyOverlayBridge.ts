@@ -22,6 +22,7 @@ import {
 } from '../../lib/overlay/screenScanMode';
 import {
     intentReducer,
+    isSalaryRelatedText,
     type DetectedQuestionType,
     type IntentState,
 } from '../../lib/overlay/overlayIntent';
@@ -63,6 +64,8 @@ function nextRequestId(prefix: string = 'v2'): string {
 const INTERVIEWER_TURN_GAP_MS = 15_000;
 const LIVE_MEETING_RAG_ID = 'live-meeting-current';
 const ACTION_CONTEXT_OVERRIDE_TIMEOUT_MS = 12_000;
+const MANUAL_SESSION_MODE_KEY = 'teamsync_overlay_manual_session_mode';
+const MANUAL_SESSION_MODE_EXPLICIT_KEY = 'teamsync_overlay_manual_session_mode_explicit';
 
 const ACTION_CONTEXT_MESSAGES: Record<string, string> = {
     Answer: 'Generating response guidance…',
@@ -85,6 +88,26 @@ export interface CluelyOverlayBridgeProps {
     hasProContextAccess?: boolean;
 }
 
+function readPersistedManualSessionMode(): SessionMode | null {
+    try {
+        if (localStorage.getItem(MANUAL_SESSION_MODE_EXPLICIT_KEY) !== 'true') return null;
+        const stored = localStorage.getItem(MANUAL_SESSION_MODE_KEY);
+        if (
+            stored === 'behavioral'
+            || stored === 'coding'
+            || stored === 'follow_up'
+            || stored === 'general'
+            || stored === 'salary'
+            || stored === 'system_design'
+        ) {
+            return stored;
+        }
+    } catch {
+        /* ignore localStorage access issues */
+    }
+    return null;
+}
+
 export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const { onEndMeeting, overlayOpacity = 0.65, hasProContextAccess = false } = props;
     const { isShortcutPressed } = useShortcuts();
@@ -105,7 +128,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const [activeModeTemplateId, setActiveModeTemplateId] = useState<ModeTemplateId | null>(null);
     const [isMeetingActive, setIsMeetingActive] = useState(false);
     const [session, setSession] = useState<{ currentMode: SessionMode }>({ currentMode: 'general' });
-    const sessionRef = useRef(session);
+    const manualSessionModeRef = useRef<SessionMode | null>(readPersistedManualSessionMode());
     const [brainstormEnabled, setBrainstormEnabled] = useState<boolean>(() => {
         try {
             return localStorage.getItem('teamsync_brainstorm_enabled') !== 'false';
@@ -129,6 +152,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const [sttUserStatus, setSttUserStatus] = useState<string>('connected');
     const [sttUserError, setSttUserError] = useState<string | undefined>();
 
+    const currentTurnTextRef = useRef('');
     const lastFinalSentenceRef = useRef('');
     const finalizedTranscriptRef = useRef('');
     const lastInterviewerFinalTimestampRef = useRef(0);
@@ -161,14 +185,24 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     });
     const [meetingStartTime, setMeetingStartTime] = useState(() => Date.now());
 
-    useEffect(() => {
-        sessionRef.current = session;
-    }, [session]);
-
     // ── Negotiation context auto-toggle (V1 parity) ──
     const [negotiationContextEnabled, setNegotiationContextEnabled] = useState(false);
     const [hasNegotiationScript, setHasNegotiationScript] = useState(false);
     const negotiationAutoEnabledRef = useRef(false);
+
+    const persistManualSessionMode = useCallback((mode: SessionMode | null) => {
+        try {
+            if (!mode) {
+                localStorage.removeItem(MANUAL_SESSION_MODE_KEY);
+                localStorage.removeItem(MANUAL_SESSION_MODE_EXPLICIT_KEY);
+                return;
+            }
+            localStorage.setItem(MANUAL_SESSION_MODE_KEY, mode);
+            localStorage.setItem(MANUAL_SESSION_MODE_EXPLICIT_KEY, 'true');
+        } catch {
+            /* ignore localStorage access issues */
+        }
+    }, []);
 
     useEffect(() => {
         if (!hasProContextAccess) return;
@@ -192,23 +226,11 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         } catch { /* silent */ }
     }, [hasProContextAccess]);
 
-    // Auto-detect salary questions in transcript and toggle negotiation context
-    const SALARY_PATTERNS = useMemo(() => [
-        /\bsalary\b/i, /\bcompensation\b/i, /\btotal\s*comp/i,
-        /\b(?:salary|pay)\s*expect/i, /\bexpect.*(?:salary|pay|comp|ctc|lpa)/i,
-        /\bpackage\b/i, /\boffer\b/i, /\bctc\b/i, /\bin[\s-]?hand/i, /\bnegotiat/i,
-        /\bhow much.*(?:pay|earn|make|want|expect)/i, /\bwhat.*(?:pay|earning|making|expect)/i,
-        /\bcurrent.*(?:salary|ctc|comp|lpa)/i, /\bexpected.*(?:salary|ctc|comp|lpa)/i,
-        /\blpa\b/i, /\blakhs?\b/i, /\bcrores?\b/i, /\bper\s*annum/i,
-        /\btake\s*home/i, /\bhike\b/i, /\bincrement\b/i, /\bappraisal\b/i,
-        /\bcounter\s*offer/i, /\bnotice\s*period/i, /\bbuyout/i,
-    ], []);
-
     useEffect(() => {
         if (!currentQuestionTurnId || !hasProContextAccess || !hasNegotiationScript) return;
-        const text = lastFinalSentenceRef.current?.trim() || '';
+        const text = currentTurnTextRef.current?.trim() || lastFinalSentenceRef.current?.trim() || '';
         if (text.length < 5) return;
-        const isSalary = text.length >= 5 && SALARY_PATTERNS.some(p => p.test(text));
+        const isSalary = isSalaryRelatedText(text);
 
         if (isSalary && !negotiationContextEnabled) {
             negotiationAutoEnabledRef.current = true;
@@ -217,12 +239,14 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             negotiationAutoEnabledRef.current = false;
             handleToggleNegotiationContext(false);
         }
-    }, [currentQuestionTurnId, hasProContextAccess, hasNegotiationScript, negotiationContextEnabled, handleToggleNegotiationContext, SALARY_PATTERNS]);
+    }, [currentQuestionTurnId, hasProContextAccess, hasNegotiationScript, negotiationContextEnabled, handleToggleNegotiationContext]);
 
     const detectedQuestionType = intentState.detectedType;
-    const currentSessionMode = session.currentMode;
+    const pinnedSessionMode = manualSessionModeRef.current;
     const recommendationMode: SessionMode =
-        currentSessionMode === 'system_design' ? 'system_design' : detectedQuestionType;
+        pinnedSessionMode
+            ? (detectedQuestionType === 'salary' ? 'salary' : pinnedSessionMode)
+            : detectedQuestionType;
     const overlayCopilotMode = useMemo(
         () =>
             resolveOverlayCopilotMode(
@@ -294,7 +318,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const resetOverlayRecommendationState = useCallback(() => {
         currentQuestionTurnIdRef.current = null;
         setCurrentQuestionTurnId('');
-        setSession({ currentMode: 'general' });
+        setSession({ currentMode: manualSessionModeRef.current ?? 'general' });
         dispatchIntent({ type: 'RESET' });
         seqRef.current = 0;
     }, []);
@@ -304,7 +328,12 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         [activeQuickActions],
     );
 
-    const { recommendedButton, resetRecommendation, unlockRecommendationForTurn } =
+    const {
+        recommendedButton,
+        resetRecommendation,
+        pinRecommendationForTurn,
+        unlockRecommendationForTurn,
+    } =
         useOverlayRecommendation({
             overlayCopilotMode,
             detectedQuestionType,
@@ -316,6 +345,24 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             transcriptRevision: lastFinalSentence,
         });
 
+    const markCurrentTurnFromText = useCallback((text: string) => {
+        const nextText = text.trim();
+        if (nextText.length < 3) return;
+
+        unlockRecommendationForTurn();
+        currentTurnTextRef.current = nextText;
+        const questionTurnId = nextRequestId('question-turn');
+        currentQuestionTurnIdRef.current = questionTurnId;
+        setCurrentQuestionTurnId(questionTurnId);
+        const seq = ++seqRef.current;
+        dispatchIntent({
+            type: 'EVALUATE',
+            combinedText: nextText,
+            now: performance.now(),
+            seq,
+        });
+    }, [unlockRecommendationForTurn]);
+
     const onSessionReset = useCallback(() => {
         void window.electronAPI.cancelGeminiChatStream?.().catch(() => {});
         void window.electronAPI.cancelIntelligenceRequest?.().catch(() => {});
@@ -326,6 +373,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         setIsProcessing(false);
         setRollingTranscript('');
         setRollingTranscriptSpeakerLabel('');
+        currentTurnTextRef.current = '';
         finalizedTranscriptRef.current = '';
         setLastFinalSentence('');
         lastFinalSentenceRef.current = '';
@@ -355,8 +403,14 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
     const cancelInFlightOverlayRequests = useCallback(async (nextRequestId?: string) => {
         const cancelIds = new Set<string>();
+        if (activeChatRequestIdRef.current && activeChatRequestIdRef.current !== nextRequestId) {
+            cancelIds.add(activeChatRequestIdRef.current);
+        }
         if (activeIntelligenceRequestIdRef.current && activeIntelligenceRequestIdRef.current !== nextRequestId) {
             cancelIds.add(activeIntelligenceRequestIdRef.current);
+        }
+        if (activeRagRequestIdRef.current && activeRagRequestIdRef.current !== nextRequestId) {
+            cancelIds.add(activeRagRequestIdRef.current);
         }
         if (activeScreenScanRequestIdRef.current && activeScreenScanRequestIdRef.current !== nextRequestId) {
             cancelIds.add(activeScreenScanRequestIdRef.current);
@@ -364,6 +418,18 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         Object.values(activeIntentRequestIdsRef.current).forEach((id) => {
             if (id && id !== nextRequestId) cancelIds.add(id);
         });
+
+        if (cancelIds.size > 0) {
+            setMessages((prev) => prev.map((message) => {
+                if (!message.requestId || !cancelIds.has(message.requestId) || !message.isStreaming) {
+                    return message;
+                }
+                return {
+                    ...message,
+                    isStreaming: false,
+                };
+            }));
+        }
 
         await Promise.allSettled([
             window.electronAPI.cancelGeminiChatStream?.(),
@@ -509,14 +575,24 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     useEffect(() => {
         window.electronAPI?.getSessionMode?.()
             .then((result: any) => {
-                if (result?.mode) setSession({ currentMode: result.mode });
+                if (!result?.mode) return;
+                const nextMode = result.mode as SessionMode;
+                if (!manualSessionModeRef.current && nextMode !== 'general') {
+                    manualSessionModeRef.current = nextMode;
+                    persistManualSessionMode(nextMode);
+                }
+                setSession({ currentMode: manualSessionModeRef.current ?? nextMode });
             })
             .catch(() => {});
         const unsub = window.electronAPI?.onSessionModeChanged?.((data: any) => {
-            if (data?.mode) setSession({ currentMode: data.mode });
+            if (!data?.mode) return;
+            const nextMode = data.mode as SessionMode;
+            manualSessionModeRef.current = nextMode;
+            persistManualSessionMode(nextMode);
+            setSession({ currentMode: nextMode });
         });
         return () => unsub?.();
-    }, []);
+    }, [persistManualSessionMode]);
 
     useEffect(() => {
         if (!window.electronAPI?.onEnsureExpanded) return;
@@ -593,6 +669,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     }
                     lastInterviewerFinalTimestampRef.current = now;
                     setLastFinalSentence(lastFinalSentenceRef.current);
+                    currentTurnTextRef.current = lastFinalSentenceRef.current;
 
                     const questionTurnId = nextRequestId('question-turn');
                     recomputeIntentFromFinalTranscript(questionTurnId);
@@ -783,6 +860,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
     const executeQuickAction = useCallback(
         async (action: OverlayQuickActionDef) => {
+            pinRecommendationForTurn(action.id, currentQuestionTurnIdRef.current);
             setActionContextSummaryOverride({
                 label: derivedContextSummary.label,
                 detail:
@@ -796,7 +874,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 profilePreference: action.profilePreference,
             });
         },
-        [derivedContextSummary.label, runAction],
+        [derivedContextSummary.label, pinRecommendationForTurn, runAction],
     );
 
     const getQuickActionHandler = useCallback(
@@ -812,6 +890,17 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             if (!userText) return;
 
             await cancelInFlightOverlayRequests();
+            markCurrentTurnFromText(userText);
+
+            if (hasProContextAccess && hasNegotiationScript) {
+                if (isSalaryRelatedText(userText) && !negotiationContextEnabled) {
+                    negotiationAutoEnabledRef.current = true;
+                    void handleToggleNegotiationContext(true);
+                } else if (!isSalaryRelatedText(userText) && negotiationAutoEnabledRef.current && negotiationContextEnabled) {
+                    negotiationAutoEnabledRef.current = false;
+                    void handleToggleNegotiationContext(false);
+                }
+            }
 
             setInputValue('');
             setIsExpanded(true);
@@ -873,7 +962,14 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 });
             }
         },
-        [cancelInFlightOverlayRequests],
+        [
+            cancelInFlightOverlayRequests,
+            handleToggleNegotiationContext,
+            hasNegotiationScript,
+            hasProContextAccess,
+            markCurrentTurnFromText,
+            negotiationContextEnabled,
+        ],
     );
 
     const handleEndMeeting = useCallback(() => {
@@ -910,9 +1006,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 },
             ]);
 
-            const scanMode = getScreenScanModeForSessionMode(
-                sessionRef.current.currentMode as OverlaySessionMode,
-            );
+            const scanMode = getScreenScanModeForSessionMode(recommendationMode as OverlaySessionMode);
             console.debug('[V2][ScreenScan] handleScreenScan', {
                 requestId,
                 scanMode,
@@ -932,7 +1026,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             activeScreenScanRequestIdRef.current = null;
             rememberIntentRequest('screen_scan', null);
         }
-    }, [cancelInFlightOverlayRequests, rememberIntentRequest]);
+    }, [cancelInFlightOverlayRequests, recommendationMode, rememberIntentRequest]);
 
     const toggleExpanded = useCallback(() => {
         setIsExpanded((prev) => !prev);

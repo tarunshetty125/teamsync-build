@@ -60,7 +60,7 @@ import { ModesManager } from './services/ModesManager';
 import type { ModeTemplateId } from '../src/lib/modes/types';
 import { ModePredictor } from './intelligence/adaptive/ModePredictor';
 
-type UserControlledMode = Extract<ConversationIntent, 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design'>;
+type UserControlledMode = 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design';
 
 // Mode types
 export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm' | 'system_design_tradeoffs' | 'screen_scan' | 'answer_now';
@@ -127,6 +127,14 @@ function isFailureResponseText(content: string): boolean {
 }
 
 function getIntentResultForMode(mode: UserControlledMode) {
+    if (mode === 'salary') {
+        return {
+            intent: 'general' as const,
+            confidence: 1,
+            answerShape: 'Answer like a compensation negotiation copilot: stay direct, confident, and specific about tradeoffs, range framing, and next-step wording.',
+        };
+    }
+
     return {
         intent: mode,
         confidence: 1,
@@ -142,6 +150,8 @@ function buildUserControlledModeContext(mode: UserControlledMode): string {
             return 'MODE: coding\nPrioritize implementation details, correctness, and concise technical reasoning.';
         case 'follow_up':
             return 'MODE: follow_up\nContinue naturally from the latest context without restarting from scratch.';
+        case 'salary':
+            return 'MODE: salary\nFocus on compensation framing, negotiation leverage, anchoring, and confident but professional phrasing.';
         case 'system_design':
             return 'MODE: system_design\nFocus on architecture, tradeoffs, scalability, and failure handling.';
         case 'general':

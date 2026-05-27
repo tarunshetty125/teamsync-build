@@ -188,9 +188,9 @@ interface ElectronAPI {
   getRecentBenchmarks: (limit?: number) => Promise<any[]>
   resetIntelligence: () => Promise<{ success: boolean; error?: string }>
   cancelIntelligenceRequest: () => Promise<{ success: boolean; error?: string }>
-  getSessionMode: () => Promise<{ mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
+  getSessionMode: () => Promise<{ mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design' }>
   getSessionId: () => Promise<{ sessionId: string }>
-  setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => Promise<{ success: boolean; mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }>
+  setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design') => Promise<{ success: boolean; mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design' }>
 
   // Meeting Lifecycle
   startMeeting: (metadata?: any) => Promise<{ success: boolean; error?: string }>
@@ -222,7 +222,7 @@ interface ElectronAPI {
   onIntelligenceActionResult: (callback: (data: { intent: string; content: string; requestId?: string; mode: string; profileApplied?: boolean }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
   onIntelligenceError: (callback: (data: { error: string; mode: string; requestId?: string }) => void) => () => void
-  onSessionModeChanged: (callback: (data: { mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }) => void) => () => void
+  onSessionModeChanged: (callback: (data: { mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design' }) => void) => () => void
 
   // Model Management
   getDefaultModel: () => Promise<{ model: string }>
@@ -921,7 +921,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   resetIntelligence: () => ipcRenderer.invoke("reset-intelligence"),
   getSessionMode: () => ipcRenderer.invoke("session:get-mode"),
   getSessionId: () => ipcRenderer.invoke("session:get-id"),
-  setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design') => ipcRenderer.invoke("session:set-mode", mode),
+  setSessionMode: (mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design') => ipcRenderer.invoke("session:set-mode", mode),
 
   // Action Button Mode (Dynamic Recap / Brainstorm toggle)
   getActionButtonMode: () => ipcRenderer.invoke("get-action-button-mode"),
@@ -1121,7 +1121,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("session-reset", subscription)
     }
   },
-  onSessionModeChanged: (callback: (data: { mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design' }) => void) => {
+  onSessionModeChanged: (callback: (data: { mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design' }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("session-mode-changed", subscription)
     return () => {

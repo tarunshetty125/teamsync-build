@@ -15,7 +15,7 @@ import { MeetingPersistence } from './MeetingPersistence';
 import type { ConversationIntent, ScreenContentMode } from './llm';
 import type { ActionRagContext, UnifiedActionIntent } from './ActionContextBuilder';
 
-type UserControlledMode = Extract<ConversationIntent, 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design'>;
+type UserControlledMode = 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design';
 
 // Re-export types for backward compatibility
 export type { TranscriptSegment, SuggestionTrigger, ContextItem } from './SessionTracker';

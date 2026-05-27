@@ -183,16 +183,11 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
         if (window.electronAPI.onIntelligenceActionToken) {
             cleanups.push(
                 window.electronAPI.onIntelligenceActionToken((data: any) => {
-                    if (data.intent === 'manual_chat') return;
+                    if (data.intent === 'manual_chat' || data.intent === 'screen_scan') return;
                     if (ctx.isStalePayload(data._sessionId)) return;
-                    const isScreenScan = data.intent === 'screen_scan';
-                    const requestId = isScreenScan
-                        ? data.requestId || ctx.activeScreenScanRequestIdRef.current
-                        : data.requestId || ctx.activeIntelligenceRequestIdRef.current;
+                    const requestId = data.requestId || ctx.activeIntelligenceRequestIdRef.current;
                     if (!requestId) return;
-                    if (isScreenScan) {
-                        if (!matchesRequestChannel(ctx, requestId, 'screen_scan')) return;
-                    } else if (!matchesRequestChannel(ctx, requestId, 'intelligence')) {
+                    if (!matchesRequestChannel(ctx, requestId, 'intelligence')) {
                         return;
                     }
                     if (!data.token) return;
@@ -204,33 +199,10 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
         if (window.electronAPI.onIntelligenceActionResult) {
             cleanups.push(
                 window.electronAPI.onIntelligenceActionResult((data: any) => {
-                    if (data.intent === 'manual_chat') return;
+                    if (data.intent === 'manual_chat' || data.intent === 'screen_scan') return;
                     if (ctx.isStalePayload(data._sessionId)) return;
-                    const isScreenScan = data.intent === 'screen_scan';
-                    const requestId = isScreenScan
-                        ? data.requestId || ctx.activeScreenScanRequestIdRef.current
-                        : data.requestId || ctx.activeIntelligenceRequestIdRef.current;
+                    const requestId = data.requestId || ctx.activeIntelligenceRequestIdRef.current;
                     if (!requestId) return;
-                    if (isScreenScan) {
-                        if (!matchesRequestChannel(ctx, requestId, 'screen_scan')) return;
-                        if (typeof data.content === 'string') {
-                            ctx.setMessages((prev) => {
-                                const idx = prev.findIndex((msg) => msg.requestId === requestId);
-                                if (idx < 0) return prev;
-                                const u = [...prev];
-                                u[idx] = {
-                                    ...u[idx],
-                                    text: data.content,
-                                    isCode: data.content.includes('```'),
-                                };
-                                return u;
-                            });
-                        }
-                        ctx.finishStreamingMessage(requestId, 'screen_scan');
-                        ctx.activeScreenScanRequestIdRef.current = null;
-                        ctx.rememberIntentRequest('screen_scan', null);
-                        return;
-                    }
                     if (!matchesRequestChannel(ctx, requestId, 'intelligence')) return;
                     ctx.finishStreamingMessage(requestId, data.intent);
                     ctx.rememberIntentRequest(data.intent, null);

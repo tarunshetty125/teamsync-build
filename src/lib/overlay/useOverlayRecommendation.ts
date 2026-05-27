@@ -80,12 +80,14 @@ export function useOverlayRecommendation({
 
     useEffect(() => {
         if (!isMeetingActive) return;
+        if (currentQuestionTurnId && recommendationLockTurnIdRef.current === currentQuestionTurnId) return;
         applyRecommendation();
     }, [
         overlayCopilotMode,
         detectedQuestionType,
         isMeetingActive,
         applyRecommendation,
+        currentQuestionTurnId,
         activeQuickActionIds.join(','),
         transcriptRevision,
     ]);
@@ -115,6 +117,11 @@ export function useOverlayRecommendation({
         recommendedButton,
         recommendedButtonRef,
         resetRecommendation,
+        pinRecommendationForTurn: (buttonId: OverlayQuickActionId, turnId?: string | null) => {
+            recommendationLockTurnIdRef.current = turnId || currentQuestionTurnId || null;
+            recommendedButtonRef.current = buttonId;
+            setRecommendedButton(buttonId);
+        },
         unlockRecommendationForTurn: () => {
             recommendationLockTurnIdRef.current = null;
         },
