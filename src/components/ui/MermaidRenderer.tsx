@@ -64,38 +64,38 @@ function normalizeMermaidSvg(
     const overrideStyleMarker = 'data-mermaid-override="true"';
     const nodeFill = isLightTheme
         ? 'rgba(99,102,241,0.08)'
-        : (useCementPalette ? 'rgba(148,163,184,0.14)' : 'rgba(99,102,241,0.18)');
+        : (useCementPalette ? '#1F1F23' : 'rgba(99,102,241,0.18)');
     const nodeStroke = isLightTheme
         ? 'rgba(99,102,241,0.35)'
-        : (useCementPalette ? 'rgba(214,211,209,0.38)' : 'rgba(129,140,248,0.65)');
-    const nodeText = isLightTheme ? '#1F2937' : (useCementPalette ? '#E7E5E4' : '#F3F4F6');
+        : (useCementPalette ? 'rgba(255,255,255,0.12)' : 'rgba(129,140,248,0.65)');
+    const nodeText = isLightTheme ? '#1F2937' : (useCementPalette ? '#F5F5F7' : '#F3F4F6');
     const edgeStroke = isLightTheme
         ? 'rgba(100,116,139,0.6)'
-        : (useCementPalette ? 'rgba(168,162,158,0.7)' : 'rgba(148,163,184,0.65)');
+        : (useCementPalette ? 'rgba(255,255,255,0.22)' : 'rgba(148,163,184,0.65)');
     const labelBg = isLightTheme
         ? 'rgba(255,255,255,0.9)'
-        : (useCementPalette ? 'rgba(41,37,36,0.9)' : 'rgba(15,23,42,0.85)');
+        : (useCementPalette ? 'rgba(24,24,28,0.88)' : 'rgba(15,23,42,0.85)');
     const clusterFill = isLightTheme
         ? 'rgba(241,245,249,0.6)'
-        : (useCementPalette ? 'rgba(68,64,60,0.34)' : 'rgba(30,41,59,0.5)');
+        : (useCementPalette ? 'rgba(255,255,255,0.03)' : 'rgba(30,41,59,0.5)');
     const clusterStroke = isLightTheme
         ? 'rgba(148,163,184,0.35)'
-        : (useCementPalette ? 'rgba(168,162,158,0.26)' : 'rgba(148,163,184,0.2)');
+        : (useCementPalette ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.2)');
     const noteFill = isLightTheme
         ? 'rgba(255,255,255,0.9)'
-        : (useCementPalette ? 'rgba(41,37,36,0.92)' : 'rgba(30,41,59,0.9)');
+        : (useCementPalette ? '#18181C' : 'rgba(30,41,59,0.9)');
     const noteStroke = isLightTheme
         ? 'rgba(100,116,139,0.35)'
-        : (useCementPalette ? 'rgba(168,162,158,0.48)' : 'rgba(148,163,184,0.45)');
+        : (useCementPalette ? 'rgba(255,255,255,0.12)' : 'rgba(148,163,184,0.45)');
     const actorBg = isLightTheme
         ? 'rgba(241,245,249,0.95)'
-        : (useCementPalette ? 'rgba(68,64,60,0.76)' : 'rgba(30,41,59,0.85)');
+        : (useCementPalette ? '#232327' : 'rgba(30,41,59,0.85)');
     const actorStroke = isLightTheme
         ? 'rgba(100,116,139,0.4)'
-        : (useCementPalette ? 'rgba(168,162,158,0.64)' : 'rgba(148,163,184,0.6)');
+        : (useCementPalette ? 'rgba(255,255,255,0.12)' : 'rgba(148,163,184,0.6)');
     const actorLine = isLightTheme
         ? 'rgba(100,116,139,0.5)'
-        : (useCementPalette ? 'rgba(168,162,158,0.56)' : 'rgba(148,163,184,0.5)');
+        : (useCementPalette ? 'rgba(255,255,255,0.22)' : 'rgba(148,163,184,0.5)');
 
     const overrideStyle = `<style ${overrideStyleMarker}>
     /* ── Global text visibility ── */
@@ -249,14 +249,20 @@ interface MermaidRendererProps {
 let mermaidInitialized = false;
 let currentMermaidTheme: string | null = null;
 
-function ensureMermaidInitialized(isDark: boolean) {
-    const targetTheme = isDark ? 'dark' : 'default';
+function ensureMermaidInitialized(
+    isDark: boolean,
+    variant: 'default' | 'pro-v2' = 'default',
+) {
+    const targetTheme = `${isDark ? 'dark' : 'default'}:${variant}`;
     if (mermaidInitialized && currentMermaidTheme === targetTheme) return;
+
+    const useCementPalette = isDark && variant === 'pro-v2';
+    const mermaidTheme: 'dark' | 'default' = isDark ? 'dark' : 'default';
 
     mermaid.initialize({
         startOnLoad: false,
         securityLevel: 'loose',
-        theme: targetTheme,
+        theme: mermaidTheme,
         suppressErrorRendering: true,
         fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         fontSize: 13,
@@ -279,31 +285,31 @@ function ensureMermaidInitialized(isDark: boolean) {
         },
         themeVariables: isDark
             ? {
-                primaryColor: 'rgba(99,102,241,0.85)',
-                primaryTextColor: '#F3F4F6',
-                textColor: '#F3F4F6',
-                labelTextColor: '#F3F4F6',
-                actorTextColor: '#F3F4F6',
-                primaryBorderColor: 'rgba(99,102,241,0.5)',
-                lineColor: 'rgba(148,163,184,0.6)',
-                signalColor: 'rgba(148,163,184,0.6)',
-                signalTextColor: '#F3F4F6',
-                secondaryColor: 'rgba(30,41,59,0.9)',
-                tertiaryColor: 'rgba(51,65,85,0.7)',
+                primaryColor: useCementPalette ? '#1F1F23' : 'rgba(99,102,241,0.85)',
+                primaryTextColor: useCementPalette ? '#F5F5F7' : '#F3F4F6',
+                textColor: useCementPalette ? '#F5F5F7' : '#F3F4F6',
+                labelTextColor: useCementPalette ? '#F5F5F7' : '#F3F4F6',
+                actorTextColor: useCementPalette ? '#F5F5F7' : '#F3F4F6',
+                primaryBorderColor: useCementPalette ? 'rgba(255,255,255,0.12)' : 'rgba(99,102,241,0.5)',
+                lineColor: useCementPalette ? 'rgba(255,255,255,0.22)' : 'rgba(148,163,184,0.6)',
+                signalColor: useCementPalette ? 'rgba(255,255,255,0.22)' : 'rgba(148,163,184,0.6)',
+                signalTextColor: useCementPalette ? '#F5F5F7' : '#F3F4F6',
+                secondaryColor: useCementPalette ? 'rgba(31,31,35,0.94)' : 'rgba(30,41,59,0.9)',
+                tertiaryColor: useCementPalette ? 'rgba(255,255,255,0.03)' : 'rgba(51,65,85,0.7)',
                 background: 'transparent',
-                mainBkg: 'rgba(30,41,59,0.85)',
-                actorBkg: '#1F2937',
-                actorBorder: '#9CA3AF',
-                actorLineColor: 'rgba(148,163,184,0.6)',
-                nodeBorder: 'rgba(99,102,241,0.45)',
-                clusterBkg: 'rgba(30,41,59,0.5)',
-                clusterBorder: 'rgba(148,163,184,0.2)',
-                titleColor: '#F3F4F6',
-                edgeLabelBackground: 'rgba(15,23,42,0.85)',
-                nodeTextColor: '#F3F4F6',
-                noteTextColor: '#F3F4F6',
-                noteBkgColor: '#111827',
-                noteBorderColor: 'rgba(148,163,184,0.5)',
+                mainBkg: useCementPalette ? 'rgba(31,31,35,0.94)' : 'rgba(30,41,59,0.85)',
+                actorBkg: useCementPalette ? '#232327' : '#1F2937',
+                actorBorder: useCementPalette ? 'rgba(255,255,255,0.12)' : '#9CA3AF',
+                actorLineColor: useCementPalette ? 'rgba(255,255,255,0.22)' : 'rgba(148,163,184,0.6)',
+                nodeBorder: useCementPalette ? 'rgba(255,255,255,0.12)' : 'rgba(99,102,241,0.45)',
+                clusterBkg: useCementPalette ? 'rgba(255,255,255,0.03)' : 'rgba(30,41,59,0.5)',
+                clusterBorder: useCementPalette ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.2)',
+                titleColor: useCementPalette ? '#F5F5F7' : '#F3F4F6',
+                edgeLabelBackground: useCementPalette ? 'rgba(24,24,28,0.88)' : 'rgba(15,23,42,0.85)',
+                nodeTextColor: useCementPalette ? '#F5F5F7' : '#F3F4F6',
+                noteTextColor: useCementPalette ? '#F5F5F7' : '#F3F4F6',
+                noteBkgColor: useCementPalette ? '#18181C' : '#111827',
+                noteBorderColor: useCementPalette ? 'rgba(255,255,255,0.12)' : 'rgba(148,163,184,0.5)',
             }
             : {
                 primaryColor: 'rgba(99,102,241,0.15)',
@@ -525,7 +531,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
             const diagramType = normalized.diagramType || detectDiagramType(trimmedChart);
 
             // Initialize mermaid with correct theme
-            ensureMermaidInitialized(!isLightTheme);
+            ensureMermaidInitialized(!isLightTheme, variant);
 
             // Async render
             (async () => {
@@ -617,13 +623,17 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                 style={{
                     background: isLightTheme
                         ? 'linear-gradient(135deg, rgba(241,245,249,0.7) 0%, rgba(99,102,241,0.03) 100%)'
-                        : 'linear-gradient(135deg, rgba(15,23,42,0.5) 0%, rgba(99,102,241,0.06) 100%)',
-                    border: `1px solid ${isLightTheme ? 'rgba(99,102,241,0.10)' : 'rgba(99,102,241,0.12)'}`,
+                        : variant === 'pro-v2'
+                            ? 'linear-gradient(180deg, rgba(23,23,27,0.82) 0%, rgba(17,17,20,0.72) 100%)'
+                            : 'linear-gradient(135deg, rgba(15,23,42,0.5) 0%, rgba(99,102,241,0.06) 100%)',
+                    border: `1px solid ${isLightTheme ? 'rgba(99,102,241,0.10)' : variant === 'pro-v2' ? 'rgba(255,255,255,0.10)' : 'rgba(99,102,241,0.12)'}`,
                     boxShadow: isLightTheme
                         ? '0 2px 12px rgba(99,102,241,0.06), inset 0 1px 0 rgba(255,255,255,0.8)'
-                        : '0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03)',
-                    backdropFilter: 'blur(16px) saturate(130%)',
-                    WebkitBackdropFilter: 'blur(16px) saturate(130%)',
+                        : variant === 'pro-v2'
+                            ? '0 14px 30px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(255,255,255,0.03)'
+                            : '0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03)',
+                    backdropFilter: variant === 'pro-v2' ? 'blur(20px) saturate(140%)' : 'blur(16px) saturate(130%)',
+                    WebkitBackdropFilter: variant === 'pro-v2' ? 'blur(20px) saturate(140%)' : 'blur(16px) saturate(130%)',
                     transition: 'box-shadow 0.3s ease, transform 0.3s ease',
                     isolation: 'isolate',
                     opacity: 1,
@@ -637,7 +647,11 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         borderBottom: `1px solid ${isLightTheme ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)'}`,
-                        background: isLightTheme ? 'rgba(99,102,241,0.02)' : 'rgba(255,255,255,0.015)',
+                        background: isLightTheme
+                            ? 'rgba(99,102,241,0.02)'
+                            : variant === 'pro-v2'
+                                ? 'linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.02) 100%)'
+                                : 'rgba(255,255,255,0.015)',
                     }}
                 >
                     <div
@@ -650,7 +664,13 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                     >
                         <span style={{ fontSize: 13 }}>📐</span>
                         <span
-                            style={{ color: isLightTheme ? 'rgba(99,102,241,0.7)' : 'rgba(129,140,248,0.7)' }}
+                            style={{
+                                color: isLightTheme
+                                    ? 'rgba(99,102,241,0.7)'
+                                    : variant === 'pro-v2'
+                                        ? 'rgba(245,245,247,0.72)'
+                                        : 'rgba(129,140,248,0.7)',
+                            }}
                         >
                             <span
                                 style={{
@@ -690,7 +710,9 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                     .group\\/mermaid:hover {
                         box-shadow: ${isLightTheme
                         ? '0 4px 20px rgba(99,102,241,0.10), inset 0 1px 0 rgba(255,255,255,0.8)'
-                        : '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)'
+                        : variant === 'pro-v2'
+                            ? '0 18px 34px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.12)'
+                            : '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)'
                     } !important;
                     }
                     .group\\/mermaid svg {

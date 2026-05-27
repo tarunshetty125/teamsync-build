@@ -374,7 +374,7 @@ function parseFencePart(part: string): { lang: string; code: string } | null {
     if (!/^`{3,4}/.test(part)) return null;
     // Match opening fence: ```lang id="xxx" or ```lang or just ```
     // Strip any trailing attributes (id="...", etc.) from the language line
-    const headerMatch = part.match(/^`{3,4}[ \t]*([A-Za-z0-9_-]*)(?:\s+[^\n]*)?\n?/);
+    const headerMatch = part.match(/^`{3,4}[ \t]*([A-Za-z0-9_#+.-]*)(?:\s+[^\n]*)?\n?/);
     const lang = headerMatch?.[1] || 'text';
     // Remove the opening fence header
     let code = part.replace(/^`{3,4}[ \t]*[^\n]*\n?/, '');
@@ -494,11 +494,11 @@ function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
 
     // Split on fenced code blocks. Match closing as ``` (proper) or `` on its own line (malformed).
     // Models frequently emit `` instead of ``` as closing fence.
-    const parts = normalizedText.split(/(```[\s\S]*?(?:```|$))/g);
+    const parts = normalizedText.split(/(`{3,4}[\s\S]*?(?:\n\s*`{3,4}\s*(?=\n|$)|$))/g);
     return (
         <>
             {parts.map((part, i) => {
-                if (part.startsWith('```')) {
+                if (/^`{3,4}/.test(part)) {
                     return renderFenceBlock(part, i, allowOpenMermaid);
                 }
                 if (!part.trim()) return null;

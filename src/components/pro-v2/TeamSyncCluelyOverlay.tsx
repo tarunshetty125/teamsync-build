@@ -18,6 +18,17 @@ import {
     resolveV2ResponseWidthPx,
 } from './v2Layout';
 
+function getTranscriptPillText(rollingTranscript: string, lastFinalSentence: string): string {
+    const normalizedRolling = rollingTranscript.trim();
+    if (normalizedRolling) {
+        const segments = normalizedRolling.split('  ·  ').map((segment) => segment.trim()).filter(Boolean);
+        if (segments.length > 0) {
+            return segments[segments.length - 1];
+        }
+    }
+    return lastFinalSentence.trim();
+}
+
 interface TeamSyncCluelyOverlayProps {
     onEndMeeting?: () => void;
     overlayOpacity?: number;
@@ -77,8 +88,13 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         bridge.setShowTranscript((prev: boolean) => !prev);
     }, [bridge.setShowTranscript]);
 
+    const transcriptPillText = useMemo(
+        () => getTranscriptPillText(bridge.rollingTranscript, bridge.lastFinalSentence),
+        [bridge.lastFinalSentence, bridge.rollingTranscript],
+    );
+
     const showTranscriptStrip =
-        (bridge.showTranscript && Boolean(bridge.rollingTranscript)) ||
+        bridge.showTranscript ||
         bridge.sttInterviewerStatus !== 'connected' ||
         bridge.sttUserStatus !== 'connected';
 
@@ -142,10 +158,11 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                             }}
                         >
                             <RollingTranscript
-                                text={bridge.showTranscript ? bridge.lastFinalSentence : ''}
+                                text={bridge.showTranscript ? transcriptPillText : ''}
                                 speakerLabel={bridge.showTranscript ? bridge.rollingTranscriptSpeakerLabel : ''}
                                 isActive={bridge.isInterviewerSpeaking}
                                 aiHasResponded={!bridge.isProcessing}
+                                variant="pro-v2"
                                 interviewerChannel={{
                                     status: bridge.sttInterviewerStatus as 'connected' | 'reconnecting' | 'failed',
                                     error: bridge.sttInterviewerError,

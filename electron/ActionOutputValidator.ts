@@ -319,7 +319,14 @@ export function validateActionOutput(
         return validateSystemDesignInterviewAnswer(trimmed);
     }
 
-    if (profile === 'coding' && (intent === 'manual_chat' || intent === 'what_to_answer')) {
+    if (profile === 'coding' && (
+        intent === 'manual_chat'
+        || intent === 'what_to_answer'
+        || intent === 'answer_now'
+        || intent === 'clarify'
+        || intent === 'brainstorm'
+        || intent === 'code_hint'
+    )) {
         return validateCodingInterviewAnswer(trimmed);
     }
 

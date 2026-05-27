@@ -25,12 +25,14 @@ interface RollingTranscriptProps {
     /** User microphone channel */
     microphoneChannel?: ChannelStatus;
     onCopyDiagnostics?: () => void;
+    variant?: 'default' | 'pro-v2';
 }
 
 const RollingTranscript: React.FC<RollingTranscriptProps> = ({
     text, speakerLabel, isActive: _isActive = true, aiHasResponded = false, surfaceStyle: _surfaceStyle,
     interviewerChannel, microphoneChannel,
-    onCopyDiagnostics
+    onCopyDiagnostics,
+    variant = 'default',
 }) => {
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -70,6 +72,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
         : {};
 
     const isCompactStrip = anyReconnecting && !anyFailed;
+    const isProV2 = variant === 'pro-v2';
 
     // Trim and quote the sentence for display
     const displayText = text?.trim() ?? '';
@@ -86,16 +89,39 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
         return 'border-white/10 bg-white/[0.06] text-[var(--overlay-text-primary)]/90';
     })();
 
+    const rootStyle: React.CSSProperties = isProV2
+        ? {
+            display: 'flex',
+            justifyContent: 'center',
+            width: '100%',
+        }
+        : {};
+
+    const shellStyle: React.CSSProperties = isProV2
+        ? {
+            width: 'fit-content',
+            maxWidth: '100%',
+            padding: 0,
+            borderRadius: 999,
+            border: '1px solid rgba(255,255,255,0.14)',
+            background: 'linear-gradient(180deg, rgba(22,22,26,0.72) 0%, rgba(15,15,18,0.62) 100%)',
+            boxShadow: '0 14px 28px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 rgba(255,255,255,0.03)',
+            backdropFilter: 'blur(24px) saturate(150%)',
+            WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+            overflow: 'hidden',
+        }
+        : {};
+
     return (
-        <div className="relative w-full">
+        <div className="relative w-full" style={rootStyle}>
             <div
                 className="relative w-full overflow-hidden"
-                style={stateSurface}
+                style={{ ...shellStyle, ...stateSurface }}
             >
                 {anyFailed && <div className="absolute inset-0 bg-red-500/10 stt-pulse-red" />}
                 {anyReconnecting && !anyFailed && <div className="absolute inset-0 bg-amber-500/10 stt-pulse-amber" />}
 
-                <div className={isCompactStrip ? 'w-fit mx-auto pt-1 pb-1' : 'w-[90%] mx-auto pt-2 pb-1'}>
+                <div className={isCompactStrip ? 'w-fit mx-auto pt-1 pb-1 px-3' : isProV2 ? 'w-fit max-w-full mx-auto px-4 py-2' : 'w-[90%] mx-auto pt-2 pb-1'}>
 
                     {/* ── Normal transcript pill ── */}
                     {isNormal && (
@@ -106,7 +132,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -4 }}
                                 transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
-                                className="flex items-center gap-2 min-h-[28px]"
+                                className={`flex items-center gap-2 min-h-[28px] ${isProV2 ? 'max-w-[min(72vw,760px)]' : ''}`}
                             >
                                 {/* Status dot: green+pulse when waiting, grey when AI responded */}
                                 <motion.span
@@ -140,7 +166,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                     ) : null}
                                     {quoted ? (
                                         <span
-                                            className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] italic leading-snug"
+                                            className={`min-w-0 flex-1 overflow-hidden text-[13px] italic leading-snug ${isProV2 ? 'whitespace-nowrap text-ellipsis' : 'whitespace-nowrap text-ellipsis'}`}
                                             style={{
                                                 color: aiHasResponded
                                                     ? 'var(--overlay-text-muted)'

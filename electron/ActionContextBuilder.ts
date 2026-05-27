@@ -789,6 +789,19 @@ export function buildIntentPrompt(
 
     switch (intent) {
         case 'clarify':
+            if (responseProfile === 'coding') {
+                return [
+                    createInstruction('intent', 'INTENT', basePrompt),
+                    createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
+                    createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                        'Return only the final answer.',
+                        buildCodingInterviewOutputContract(),
+                        'Focus the explanation on time/space complexity, dominant factors, and the key tradeoff.',
+                        'Keep the full code block present even when the user asked about one aspect only.',
+                        'No preamble or meta-commentary.',
+                    ].join('\n')),
+                ];
+            }
             return [
                 createInstruction('intent', 'INTENT', basePrompt),
                 createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
@@ -814,6 +827,19 @@ export function buildIntentPrompt(
                 ].join('\n')),
             ];
         case 'brainstorm':
+            if (responseProfile === 'coding') {
+                return [
+                    createInstruction('intent', 'INTENT', basePrompt),
+                    createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
+                    createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                        'Return only the final answer.',
+                        buildCodingInterviewOutputContract(),
+                        'Use the Approach and Edge Cases to surface 3 to 5 important edge cases, tradeoffs, or alternative branches.',
+                        'Keep the full code block present so the implementation stays usable.',
+                        'No preamble or meta-commentary.',
+                    ].join('\n')),
+                ];
+            }
             return [
                 createInstruction('intent', 'INTENT', basePrompt),
                 createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
@@ -973,6 +999,19 @@ export function buildIntentPrompt(
                 ].join('\n')),
             ];
         case 'code_hint':
+            if (responseProfile === 'coding') {
+                return [
+                    createInstruction('intent', 'INTENT', basePrompt),
+                    createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
+                    createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                        'Return only the final answer.',
+                        buildCodingInterviewOutputContract(),
+                        'Lead the Approach with the single most important hint or invariant.',
+                        'Still include the full executable code solution in a valid fenced markdown block.',
+                        'No preamble or meta-commentary.',
+                    ].join('\n')),
+                ];
+            }
             return [
                 createInstruction('intent', 'INTENT', basePrompt),
                 createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),

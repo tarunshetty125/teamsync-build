@@ -16,6 +16,7 @@ const LANG_DISPLAY: Record<string, string> = {
     java: 'Java', go: 'Go', rust: 'Rust', rs: 'Rust',
     rb: 'Ruby', ruby: 'Ruby',
     cpp: 'C++', c: 'C', cs: 'C#', csharp: 'C#',
+    'c++': 'C++', 'c#': 'C#',
     swift: 'Swift', kotlin: 'Kotlin', kt: 'Kotlin',
     sql: 'SQL', sh: 'Shell', bash: 'Shell', zsh: 'Shell',
     json: 'JSON', yaml: 'YAML', yml: 'YAML',
