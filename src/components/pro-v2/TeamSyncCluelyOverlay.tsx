@@ -73,15 +73,20 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         [bridge.latestResponse?.text, bridge.latestResponse?.isStreaming],
     );
 
+    const showTranscriptStrip =
+        bridge.showTranscript ||
+        bridge.sttInterviewerStatus !== 'connected' ||
+        bridge.sttUserStatus !== 'connected';
+
     useV2OverlayResize({
         containerRef,
         panelsRowRef,
         isExpanded: bridge.isExpanded,
         expandedPanelsWidth,
         isMeetingActive: bridge.isMeetingActive,
-        showTranscript: bridge.showTranscript,
+        showTranscriptStrip,
         isProcessing: bridge.isProcessing,
-        contentRevision: `${bridge.showTranscript}-${bridge.activeQuickActions.length}`,
+        contentRevision: `${showTranscriptStrip}-${bridge.activeQuickActions.length}`,
     });
 
     const handleToggleTranscript = useCallback(() => {
@@ -92,11 +97,6 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         () => getTranscriptPillText(bridge.rollingTranscript, bridge.lastFinalSentence),
         [bridge.lastFinalSentence, bridge.rollingTranscript],
     );
-
-    const showTranscriptStrip =
-        bridge.showTranscript ||
-        bridge.sttInterviewerStatus !== 'connected' ||
-        bridge.sttUserStatus !== 'connected';
 
     return (
         <div

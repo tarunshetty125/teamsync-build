@@ -16,29 +16,34 @@ type ResizeOpts = {
     panelsRowRef: React.RefObject<HTMLDivElement | null>;
     isExpanded: boolean;
     expandedPanelsWidth: number;
-    showTranscript?: boolean;
+    showTranscriptStrip?: boolean;
 };
 
 const RESIZE_THROTTLE_MS = 250;
+const V2_COLLAPSE_HOLD_MS = 380;
+const V2_COLLAPSED_HEIGHT = 60;
+const V2_COLLAPSED_WITH_TRANSCRIPT_HEIGHT = 152;
 
 function computeDimensions(
     container: HTMLDivElement | null,
     panelsRow: HTMLDivElement | null,
     isExpanded: boolean,
     expandedPanelsWidth: number,
-    isTransitioning: boolean,
+    showTranscriptStrip: boolean,
+    shouldHoldExpandedShell: boolean,
 ): { width: number; height: number } {
     if (!isExpanded) {
-        if (isTransitioning) {
-            // Keep expanded dimensions during the collapse transition to prevent clipping/navbar jump
+        if (shouldHoldExpandedShell) {
             const height = container
                 ? Math.max(Math.ceil(container.scrollHeight) + 16, V2_OVERLAY_WINDOW_DEFAULT_HEIGHT)
                 : V2_OVERLAY_WINDOW_DEFAULT_HEIGHT;
             return { width: expandedPanelsWidth, height };
         }
-        const height = container
-            ? Math.max(Math.ceil(container.scrollHeight) + 16, 60)
-            : 60;
+        // Keep collapsed sizing deterministic so AnimatePresence exit frames from the
+        // panels cannot re-measure the old expanded stack and force a tall shell.
+        const height = showTranscriptStrip
+            ? V2_COLLAPSED_WITH_TRANSCRIPT_HEIGHT
+            : V2_COLLAPSED_HEIGHT;
         return { width: V2_BAR_ONLY_WIDTH, height };
     }
 
@@ -62,36 +67,46 @@ export function useV2OverlayResize({
     panelsRowRef,
     isExpanded,
     expandedPanelsWidth,
-    showTranscript,
+    showTranscriptStrip = false,
     isMeetingActive,
     isProcessing = false,
     contentRevision = 0,
 }: ResizeOpts & { isMeetingActive: boolean; isProcessing?: boolean; contentRevision?: number | string }) {
     const burstTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-    const isTransitioningRef = useRef(false);
     const lastResizeAtRef = useRef(0);
     const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const collapseReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const collapseHoldUntilRef = useRef(0);
     const wasProcessingRef = useRef(isProcessing);
+    const burstGenerationRef = useRef(0);
 
     const prevExpandedRef = useRef(isExpanded);
-    const prevTranscriptRef = useRef(showTranscript);
+    const prevTranscriptRef = useRef(showTranscriptStrip);
 
-    if (prevExpandedRef.current !== isExpanded || prevTranscriptRef.current !== showTranscript) {
-        isTransitioningRef.current = true;
+    if (prevExpandedRef.current !== isExpanded || prevTranscriptRef.current !== showTranscriptStrip) {
+        if (prevExpandedRef.current && !isExpanded) {
+            collapseHoldUntilRef.current = Date.now() + V2_COLLAPSE_HOLD_MS;
+        } else if (isExpanded) {
+            collapseHoldUntilRef.current = 0;
+        }
         prevExpandedRef.current = isExpanded;
-        prevTranscriptRef.current = showTranscript;
+        prevTranscriptRef.current = showTranscriptStrip;
     }
 
-    const pushDimensions = useCallback(() => {
+    const pushDimensions = useCallback((generation?: number) => {
+        if (typeof generation === 'number' && generation !== burstGenerationRef.current) return;
+        const shouldHoldExpandedShell =
+            !isExpanded && Date.now() < collapseHoldUntilRef.current;
         const dims = computeDimensions(
             containerRef.current,
             panelsRowRef.current,
             isExpanded,
             expandedPanelsWidth,
-            isTransitioningRef.current,
+            showTranscriptStrip,
+            shouldHoldExpandedShell,
         );
         window.electronAPI?.updateContentDimensions?.(dims);
-    }, [containerRef, panelsRowRef, isExpanded, expandedPanelsWidth]);
+    }, [containerRef, panelsRowRef, isExpanded, expandedPanelsWidth, showTranscriptStrip]);
 
     const pushDimensionsThrottled = useCallback(() => {
         const now = Date.now();
@@ -112,32 +127,51 @@ export function useV2OverlayResize({
     const scheduleResizeBurst = useCallback(() => {
         burstTimersRef.current.forEach(clearTimeout);
         burstTimersRef.current = [];
-        pushDimensions();
-        for (const ms of [0, 16, 50, 100, 200, 400, 800, 1200]) {
-            burstTimersRef.current.push(setTimeout(pushDimensions, ms));
+        if (resizeTimerRef.current) {
+            clearTimeout(resizeTimerRef.current);
+            resizeTimerRef.current = null;
+        }
+        const generation = ++burstGenerationRef.current;
+        pushDimensions(generation);
+        for (const ms of [16, 50, 100, 200, 400, 800, 1200]) {
+            burstTimersRef.current.push(setTimeout(() => pushDimensions(generation), ms));
         }
     }, [pushDimensions]);
-
-    useEffect(() => {
-        isTransitioningRef.current = true;
-        const t = setTimeout(() => {
-            isTransitioningRef.current = false;
-            pushDimensions();
-        }, 400);
-        return () => clearTimeout(t);
-    }, [isExpanded, showTranscript, pushDimensions]);
 
     useEffect(
         () => () => {
             burstTimersRef.current.forEach(clearTimeout);
             if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
+            if (collapseReleaseTimerRef.current) clearTimeout(collapseReleaseTimerRef.current);
         },
         [],
     );
 
     useEffect(() => {
+        if (collapseReleaseTimerRef.current) {
+            clearTimeout(collapseReleaseTimerRef.current);
+            collapseReleaseTimerRef.current = null;
+        }
+
+        if (!isExpanded && collapseHoldUntilRef.current > Date.now()) {
+            const remaining = collapseHoldUntilRef.current - Date.now();
+            collapseReleaseTimerRef.current = setTimeout(() => {
+                collapseReleaseTimerRef.current = null;
+                pushDimensions();
+            }, remaining + 16);
+        }
+
+        return () => {
+            if (collapseReleaseTimerRef.current) {
+                clearTimeout(collapseReleaseTimerRef.current);
+                collapseReleaseTimerRef.current = null;
+            }
+        };
+    }, [isExpanded, pushDimensions]);
+
+    useEffect(() => {
         scheduleResizeBurst();
-    }, [scheduleResizeBurst, isExpanded, expandedPanelsWidth, isMeetingActive, contentRevision, showTranscript]);
+    }, [scheduleResizeBurst, isExpanded, expandedPanelsWidth, isMeetingActive, contentRevision, showTranscriptStrip]);
 
     useEffect(() => {
         if (!window.electronAPI?.onSessionReset) return;
@@ -167,7 +201,6 @@ export function useV2OverlayResize({
         if (!container) return;
 
         const observer = new ResizeObserver(() => {
-            if (isTransitioningRef.current) return;
             pushDimensionsThrottled();
         });
         observer.observe(container);

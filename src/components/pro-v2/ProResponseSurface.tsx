@@ -74,11 +74,10 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
   
     return (
         <motion.div
-            layout
-            initial={{ opacity: 0, y: 10, scale: 0.985 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 6, scale: 0.99 }}
-            transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1], delay: 0.06, layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1], delay: 0.06 }}
             className="v2-surface-response v2-no-drag"
             style={{
                 minWidth: `${V2_RESPONSE_MIN_WIDTH}px`,

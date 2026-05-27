@@ -164,9 +164,9 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
     return (
         <motion.div
             ref={panelRef}
-            initial={{ opacity: 0, y: 10, scale: 0.985 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 6, scale: 0.99 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
             transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1], delay: 0.04 }}
             className="v2-surface-insights v2-no-drag"
             style={{
