@@ -110,7 +110,7 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
                     >
                         <FileText size={14} className={customNotesEnabled ? 'animate-flame-yellow' : ''} />
                     </button>
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    <div className="absolute top-full right-0 mt-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                         Custom context: {customNotesEnabled ? 'ON' : 'OFF'}
                     </div>
                 </div>
