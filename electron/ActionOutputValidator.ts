@@ -42,6 +42,52 @@ function extractSentences(content: string): string[] {
         .filter(Boolean);
 }
 
+function normalizeSystemDesignMermaid(content: string): { text: string; changed: boolean } {
+    const lines = content.replace(/\r\n?/g, '\n').split('\n');
+    const output: string[] = [];
+    let insideMermaid = false;
+    let changed = false;
+
+    for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i];
+
+        if (!insideMermaid) {
+            if (/^\s*`{1,4}\s*mermaid\b[^\n]*$/i.test(line)) {
+                output.push('```mermaid');
+                insideMermaid = true;
+                changed = true;
+                continue;
+            }
+            output.push(line);
+            continue;
+        }
+
+        if (/^\s*`{1,4}\s*$/.test(line)) {
+            output.push('```');
+            insideMermaid = false;
+            changed = true;
+            continue;
+        }
+
+        if (/^\s*#{1,6}\s+\S/.test(line) || /^\s*\*\*[^*\n]+:\*\*/.test(line)) {
+            output.push('```');
+            insideMermaid = false;
+            changed = true;
+            i -= 1;
+            continue;
+        }
+
+        output.push(line);
+    }
+
+    if (insideMermaid) {
+        output.push('```');
+        changed = true;
+    }
+
+    return { text: output.join('\n').trim(), changed };
+}
+
 function validateClarify(content: string): ActionOutputValidationResult {
     const trimmed = content.trim();
     // Accept any substantive response — a real LLM answer is always better
@@ -182,17 +228,28 @@ function validateCodingInterviewAnswer(content: string): ActionOutputValidationR
 }
 
 function validateSystemDesignInterviewAnswer(content: string): ActionOutputValidationResult {
-    const trimmed = content.trim();
+    const normalized = normalizeSystemDesignMermaid(content);
+    const trimmed = normalized.text.trim();
     const hasMermaid = /```mermaid[\s\S]+?```/i.test(trimmed);
     const sectionHeaders = (trimmed.match(/^#{2,3}\s+\d+\./gm) || []).length;
     const hasComponents = /\b(component|api gateway|database|cache|queue|kafka|redis)\b/i.test(trimmed);
 
     if (hasMermaid && (sectionHeaders >= 3 || hasComponents)) {
-        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+        return {
+            valid: true,
+            correctedContent: trimmed,
+            autoCorrected: normalized.changed,
+            issues: normalized.changed ? ['normalized_mermaid_fences'] : [],
+        };
     }
 
     if (hasMermaid && trimmed.length > 250) {
-        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+        return {
+            valid: true,
+            correctedContent: trimmed,
+            autoCorrected: normalized.changed,
+            issues: normalized.changed ? ['normalized_mermaid_fences'] : [],
+        };
     }
 
     if (trimmed.length > 200 && !hasMermaid) {

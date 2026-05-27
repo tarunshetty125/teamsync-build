@@ -465,6 +465,11 @@ function buildSystemDesignInterviewOutputContract(): string {
         'CRITICAL: Applies to EVERY system design question (any product, scale, or platform).',
         'Description-only answers without diagram and components are invalid.',
         'Use real component names (API Gateway, Redis, Kafka, DB, etc.) — no placeholders.',
+        'For Mermaid, use the exact fence format ```mermaid on its own line and ``` on its own closing line.',
+        'Do not add attributes after mermaid, do not use ``mermaid, and do not leave the fence open.',
+        'Architecture diagrams must use graph TD or flowchart TD with --> arrows only.',
+        'Reuse the exact same node IDs consistently across the whole diagram.',
+        'Use sequenceDiagram only when the prompt explicitly asks for a sequence or login flow.',
     ].join('\n');
 }
 

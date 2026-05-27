@@ -5,45 +5,19 @@
 import React, { useState, useCallback, useEffect, useRef, memo } from 'react';
 import { Copy, Check, ChevronDown, AlertTriangle } from 'lucide-react';
 import mermaid from 'mermaid';
+import { normalizeMermaidChartSource } from '../../lib/overlay/v2Mermaid';
 
 // ---------------------------------------------------------------------------
 // Normalization — hardened for streamed / malformed model output
 // ---------------------------------------------------------------------------
 
-function normalizeMermaidSource(input: string): string {
-    let s = (input ?? '').trim();
-    if (!s) return '';
-
-    // ── Strip malformed opening fences ──
-    // Models may emit: ` ``mermaid  |  `mermaid  |  ```mermaid id="xxx"  |  ````mermaid
-    // We aggressively strip 1-4 backtick opening fences including any trailing id/attrs.
-    s = s.replace(/^`{1,4}\s*(?:mermaid\b[^\n]*)?\s*\n?/, '').trim();
-
-    // ── Strip malformed closing fences ──
-    // Trailing backticks (1-4) on their own line or at end of string
-    s = s.replace(/\n?\s*`{1,4}\s*$/, '').trim();
-
-    // ── If the model includes an explicit "mermaid" prefix line, strip it ──
-    s = s.replace(/^mermaid[\s\r\n]+/i, '').trim();
-
-    // ── Remove dangling orphan backticks from streamed partial markdown ──
-    // Lines that are nothing but backticks
-    s = s.replace(/^\s*`+\s*$/gm, '').trim();
-    // Trailing backticks at end of last line
-    s = s.replace(/`+\s*$/g, '').trim();
-
-    const normalized = s.trim();
-    if (!normalized) return '';
-
-    // ── Safe flowchart arrow normalization ONLY ──
-    // Convert -> to --> only in graph/flowchart diagrams.
-    // Do NOT touch sequenceDiagram or other diagram types.
-    const isFlowchart = /(^|\n)\s*(graph|flowchart)\b/i.test(normalized);
-    if (isFlowchart) {
-        return normalized.replace(/(^|[^-])\->(?!-)/g, '$1 --> ');
-    }
-
-    return normalized;
+function normalizeMermaidSource(input: string): { chart: string; diagramType: string; issues: string[] } {
+    const normalized = normalizeMermaidChartSource(input);
+    return {
+        chart: normalized.chart,
+        diagramType: normalized.diagramType,
+        issues: normalized.issues,
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -68,7 +42,11 @@ function detectDiagramType(source: string): string {
 // SVG post-processing — inject override styles & make responsive
 // ---------------------------------------------------------------------------
 
-function normalizeMermaidSvg(svg: string, isLightTheme: boolean): string {
+function normalizeMermaidSvg(
+    svg: string,
+    isLightTheme: boolean,
+    variant: 'default' | 'pro-v2' = 'default',
+): string {
     let out = svg;
 
     // Mermaid sometimes emits fixed width/height on the root <svg>; prefer responsive via viewBox.
@@ -82,19 +60,42 @@ function normalizeMermaidSvg(svg: string, isLightTheme: boolean): string {
         },
     );
 
+    const useCementPalette = variant === 'pro-v2' && !isLightTheme;
     const overrideStyleMarker = 'data-mermaid-override="true"';
-    const nodeFill = isLightTheme ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.18)';
-    const nodeStroke = isLightTheme ? 'rgba(99,102,241,0.35)' : 'rgba(129,140,248,0.65)';
-    const nodeText = isLightTheme ? '#1F2937' : '#F3F4F6';
-    const edgeStroke = isLightTheme ? 'rgba(100,116,139,0.6)' : 'rgba(148,163,184,0.65)';
-    const labelBg = isLightTheme ? 'rgba(255,255,255,0.9)' : 'rgba(15,23,42,0.85)';
-    const clusterFill = isLightTheme ? 'rgba(241,245,249,0.6)' : 'rgba(30,41,59,0.5)';
-    const clusterStroke = isLightTheme ? 'rgba(148,163,184,0.35)' : 'rgba(148,163,184,0.2)';
-    const noteFill = isLightTheme ? 'rgba(255,255,255,0.9)' : 'rgba(30,41,59,0.9)';
-    const noteStroke = isLightTheme ? 'rgba(100,116,139,0.35)' : 'rgba(148,163,184,0.45)';
-    const actorBg = isLightTheme ? 'rgba(241,245,249,0.95)' : 'rgba(30,41,59,0.85)';
-    const actorStroke = isLightTheme ? 'rgba(100,116,139,0.4)' : 'rgba(148,163,184,0.6)';
-    const actorLine = isLightTheme ? 'rgba(100,116,139,0.5)' : 'rgba(148,163,184,0.5)';
+    const nodeFill = isLightTheme
+        ? 'rgba(99,102,241,0.08)'
+        : (useCementPalette ? 'rgba(148,163,184,0.14)' : 'rgba(99,102,241,0.18)');
+    const nodeStroke = isLightTheme
+        ? 'rgba(99,102,241,0.35)'
+        : (useCementPalette ? 'rgba(214,211,209,0.38)' : 'rgba(129,140,248,0.65)');
+    const nodeText = isLightTheme ? '#1F2937' : (useCementPalette ? '#E7E5E4' : '#F3F4F6');
+    const edgeStroke = isLightTheme
+        ? 'rgba(100,116,139,0.6)'
+        : (useCementPalette ? 'rgba(168,162,158,0.7)' : 'rgba(148,163,184,0.65)');
+    const labelBg = isLightTheme
+        ? 'rgba(255,255,255,0.9)'
+        : (useCementPalette ? 'rgba(41,37,36,0.9)' : 'rgba(15,23,42,0.85)');
+    const clusterFill = isLightTheme
+        ? 'rgba(241,245,249,0.6)'
+        : (useCementPalette ? 'rgba(68,64,60,0.34)' : 'rgba(30,41,59,0.5)');
+    const clusterStroke = isLightTheme
+        ? 'rgba(148,163,184,0.35)'
+        : (useCementPalette ? 'rgba(168,162,158,0.26)' : 'rgba(148,163,184,0.2)');
+    const noteFill = isLightTheme
+        ? 'rgba(255,255,255,0.9)'
+        : (useCementPalette ? 'rgba(41,37,36,0.92)' : 'rgba(30,41,59,0.9)');
+    const noteStroke = isLightTheme
+        ? 'rgba(100,116,139,0.35)'
+        : (useCementPalette ? 'rgba(168,162,158,0.48)' : 'rgba(148,163,184,0.45)');
+    const actorBg = isLightTheme
+        ? 'rgba(241,245,249,0.95)'
+        : (useCementPalette ? 'rgba(68,64,60,0.76)' : 'rgba(30,41,59,0.85)');
+    const actorStroke = isLightTheme
+        ? 'rgba(100,116,139,0.4)'
+        : (useCementPalette ? 'rgba(168,162,158,0.64)' : 'rgba(148,163,184,0.6)');
+    const actorLine = isLightTheme
+        ? 'rgba(100,116,139,0.5)'
+        : (useCementPalette ? 'rgba(168,162,158,0.56)' : 'rgba(148,163,184,0.5)');
 
     const overrideStyle = `<style ${overrideStyleMarker}>
     /* ── Global text visibility ── */
@@ -237,6 +238,8 @@ function normalizeMermaidSvg(svg: string, isLightTheme: boolean): string {
 interface MermaidRendererProps {
     chart: string;
     isLightTheme?: boolean;
+    renderPhase?: 'streaming' | 'settled';
+    variant?: 'default' | 'pro-v2';
 }
 
 // ---------------------------------------------------------------------------
@@ -467,7 +470,12 @@ const ErrorFallback = memo<{ chart: string; error: string; isLightTheme: boolean
 // ---------------------------------------------------------------------------
 
 const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
-    function MermaidRenderer({ chart, isLightTheme = false }) {
+    function MermaidRenderer({
+        chart,
+        isLightTheme = false,
+        renderPhase = 'settled',
+        variant = 'default',
+    }) {
         const containerRef = useRef<HTMLDivElement>(null);
         const [svgHtml, setSvgHtml] = useState<string | null>(null);
         const [error, setError] = useState<string | null>(null);
@@ -484,7 +492,8 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
         }, []);
 
         useEffect(() => {
-            const trimmedChart = normalizeMermaidSource(chart);
+            const normalized = normalizeMermaidSource(chart);
+            const trimmedChart = normalized.chart;
 
             // Skip empty charts
             if (!trimmedChart) {
@@ -494,17 +503,18 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
             }
 
             // Deduplicate — don't re-render same chart that already succeeded
-            if (trimmedChart === lastChartRef.current && svgHtml) return;
+            const renderFingerprint = `${renderPhase}:${trimmedChart}`;
+            if (renderFingerprint === lastChartRef.current && svgHtml) return;
 
             // If this is the same chart that previously failed, allow a retry
             // (the chart prop changed → stream completed → re-render attempt)
-            const isRetryOfFailed = trimmedChart === lastFailedChartRef.current;
+            const isRetryOfFailed = renderFingerprint === lastFailedChartRef.current;
             if (isRetryOfFailed && retryCountRef.current >= 2) {
                 // Already retried twice for this exact source, don't loop
                 return;
             }
 
-            lastChartRef.current = trimmedChart;
+            lastChartRef.current = renderFingerprint;
 
             const currentRenderId = getUniqueMermaidId();
             renderIdRef.current = currentRenderId;
@@ -512,7 +522,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
             setIsRendering(true);
             setError(null);
 
-            const diagramType = detectDiagramType(trimmedChart);
+            const diagramType = normalized.diagramType || detectDiagramType(trimmedChart);
 
             // Initialize mermaid with correct theme
             ensureMermaidInitialized(!isLightTheme);
@@ -525,7 +535,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                     // Only update if this is still the latest render
                     if (!mountedRef.current || renderIdRef.current !== currentRenderId) return;
 
-                    setSvgHtml(normalizeMermaidSvg(svg, isLightTheme));
+                    setSvgHtml(normalizeMermaidSvg(svg, isLightTheme, variant));
                     setIsRendering(false);
                     setError(null);
                     lastFailedChartRef.current = '';
@@ -536,10 +546,12 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                     console.warn('[MermaidRenderer]', {
                         normalizedSource: trimmedChart,
                         diagramType,
+                        repairs: normalized.issues,
+                        renderPhase,
                         error: err,
                     });
 
-                    lastFailedChartRef.current = trimmedChart;
+                    lastFailedChartRef.current = renderFingerprint;
                     retryCountRef.current += 1;
                     setError(err?.message || 'Failed to parse diagram');
                     setIsRendering(false);
@@ -555,10 +567,13 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                 const staleEl = document.getElementById(currentRenderId);
                 staleEl?.remove();
             };
-        }, [chart, isLightTheme]);
+        }, [chart, isLightTheme, renderPhase, variant]);
 
         // Error state
         if (error) {
+            if (variant === 'pro-v2' && renderPhase === 'streaming') {
+                return <pre className="v2-response-pre v2-response-pre--streaming">{chart}</pre>;
+            }
             return <ErrorFallback chart={chart} error={error} isLightTheme={isLightTheme} />;
         }
 

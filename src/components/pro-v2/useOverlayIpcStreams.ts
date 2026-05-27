@@ -80,12 +80,6 @@ function appendToken(
         }
         const u = [...prev];
         const nextText = mergeStreamChunk(u[idx].text, token);
-        console.debug('[V2][ScreenScan] appendToken applied', {
-            requestId,
-            tokenLength: token.length,
-            previousLength: u[idx].text.length,
-            nextLength: nextText.length,
-        });
         u[idx] = { ...u[idx], text: nextText, isCode: nextText.includes('```') };
         return u;
     });

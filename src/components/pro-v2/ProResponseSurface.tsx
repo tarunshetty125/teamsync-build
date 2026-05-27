@@ -17,6 +17,11 @@ import CodeBlock from '../ui/CodeBlock';
 import MermaidRenderer from '../ui/MermaidRenderer';
 import type { V2Message } from './useCluelyOverlayBridge';
 import { resolveV2ResponseWidthPx, V2_RESPONSE_MIN_WIDTH, V2_RESPONSE_MAX_WIDTH } from './v2Layout';
+import {
+    looksLikeMermaidSource,
+    normalizeMermaidChartSource,
+    normalizeV2MermaidMarkdown,
+} from '../../lib/overlay/v2Mermaid';
 
 interface ProResponseSurfaceProps {
     latestResponse: V2Message | null;
@@ -271,23 +276,13 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
     );
 });
 
-const MERMAID_DIAGRAM_RE =
-    /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram-v2|stateDiagram|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)/i;
-
 function isMermaidLanguage(lang: string): boolean {
     const normalized = lang.trim().toLowerCase();
     return normalized === 'mermaid' || normalized.startsWith('mermaid');
 }
 
-function looksLikeMermaidSource(code: string): boolean {
-    const trimmed = code.trim();
-    if (!trimmed) return false;
-    if (/^mermaid[\s\r\n]/i.test(trimmed)) return true;
-    return MERMAID_DIAGRAM_RE.test(trimmed);
-}
-
 function normalizeMermaidChart(code: string): string {
-    return code.replace(/^mermaid[\s\r\n]+/i, '').trim();
+    return normalizeMermaidChartSource(code).chart;
 }
 
 function resolveFenceContent(parsed: { lang: string; code: string }):
@@ -352,7 +347,14 @@ const V2_MARKDOWN_COMPONENTS: Components = {
     pre: ({ children }) => {
         const mermaidChart = extractMermaidChartFromPre(children);
         if (mermaidChart) {
-            return <MermaidRenderer chart={mermaidChart} isLightTheme={false} />;
+            return (
+                <MermaidRenderer
+                    chart={mermaidChart}
+                    isLightTheme={false}
+                    variant="pro-v2"
+                    renderPhase="settled"
+                />
+            );
         }
         return <pre className="v2-response-pre">{children}</pre>;
     },
@@ -369,15 +371,15 @@ const V2_MARKDOWN_COMPONENTS: Components = {
 };
 
 function parseFencePart(part: string): { lang: string; code: string } | null {
-    if (!part.startsWith('```')) return null;
+    if (!/^`{3,4}/.test(part)) return null;
     // Match opening fence: ```lang id="xxx" or ```lang or just ```
     // Strip any trailing attributes (id="...", etc.) from the language line
-    const headerMatch = part.match(/^```[ \t]*([A-Za-z0-9_-]*)(?:\s+[^\n]*)?\n?/);
+    const headerMatch = part.match(/^`{3,4}[ \t]*([A-Za-z0-9_-]*)(?:\s+[^\n]*)?\n?/);
     const lang = headerMatch?.[1] || 'text';
     // Remove the opening fence header
-    let code = part.replace(/^```[ \t]*[^\n]*\n?/, '');
+    let code = part.replace(/^`{3,4}[ \t]*[^\n]*\n?/, '');
     // Remove closing fence: ``` (proper) or `` (malformed, models often emit 2 backticks)
-    code = code.replace(/\n?\s*`{2,3}\s*$/, '');
+    code = code.replace(/\n?\s*`{1,4}\s*$/, '');
     code = code.trim();
     return code ? { lang, code } : null;
 }
@@ -430,6 +432,8 @@ function renderFenceBlock(part: string, key: number, allowOpenMermaid: boolean) 
                 key={`${key}-${chartForRender.length}`}
                 chart={chartForRender}
                 isLightTheme={false}
+                variant="pro-v2"
+                renderPhase={allowOpenMermaid ? 'settled' : 'streaming'}
             />
         );
     }
@@ -453,14 +457,16 @@ function renderFenceBlock(part: string, key: number, allowOpenMermaid: boolean) 
 }
 
 function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
-    if (!text.includes('```')) {
+    const normalizedText = normalizeV2MermaidMarkdown(text, { isStreaming: !allowOpenMermaid });
+
+    if (!normalizedText.includes('```')) {
         if (allowOpenMermaid) {
             const mermaidStartRe = /(^|\n)\s*(mermaid\b|graph|flowchart|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\b/i;
-            const match = mermaidStartRe.exec(text);
+            const match = mermaidStartRe.exec(normalizedText);
             if (match) {
                 const startIndex = match.index + (match[1] ? match[1].length : 0);
-                const before = text.slice(0, startIndex).trim();
-                const chartSource = text.slice(startIndex).trim();
+                const before = normalizedText.slice(0, startIndex).trim();
+                const chartSource = normalizedText.slice(startIndex).trim();
                 return (
                     <>
                         {before && (
@@ -468,7 +474,12 @@ function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
                                 {before}
                             </ReactMarkdown>
                         )}
-                        <MermaidRenderer chart={chartSource} isLightTheme={false} />
+                        <MermaidRenderer
+                            chart={chartSource}
+                            isLightTheme={false}
+                            variant="pro-v2"
+                            renderPhase="settled"
+                        />
                     </>
                 );
             }
@@ -476,14 +487,14 @@ function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
 
         return (
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={V2_MARKDOWN_COMPONENTS}>
-                {text}
+                {normalizedText}
             </ReactMarkdown>
         );
     }
 
     // Split on fenced code blocks. Match closing as ``` (proper) or `` on its own line (malformed).
     // Models frequently emit `` instead of ``` as closing fence.
-    const parts = text.split(/(```[\s\S]*?(?:```|\n``\s*(?:\n|$)|$))/g);
+    const parts = normalizedText.split(/(```[\s\S]*?(?:```|$))/g);
     return (
         <>
             {parts.map((part, i) => {
@@ -506,7 +517,8 @@ function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
 }
 
 function responseContainsMermaid(text: string): boolean {
-    return /```[ \t]*mermaid/i.test(text) || looksLikeMermaidSource(text);
+    const normalizedText = normalizeV2MermaidMarkdown(text, { isStreaming: false });
+    return /```[ \t]*mermaid/i.test(normalizedText) || looksLikeMermaidSource(normalizedText);
 }
 
 const V2ResponseText = memo<{

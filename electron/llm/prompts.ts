@@ -800,6 +800,10 @@ Rules:
 - Include services, APIs, DBs, queues, caches, load balancers when relevant.
 - Prefer real-world architecture patterns.
 - Never overcomplicate.
+- Use the exact opening fence \`\`\`mermaid and exact closing fence \`\`\` with no fence attributes.
+- For architecture diagrams, start with graph TD or flowchart TD and use --> arrows only, never ->.
+- Reuse the exact same node IDs consistently across the entire diagram.
+- Use sequenceDiagram only if the user explicitly asks for a sequence or login flow.
 
 ### 5. Component Breakdown
 Explain each major component in 1-2 lines.
