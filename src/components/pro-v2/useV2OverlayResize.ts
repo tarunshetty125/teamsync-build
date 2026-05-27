@@ -26,8 +26,16 @@ function computeDimensions(
     panelsRow: HTMLDivElement | null,
     isExpanded: boolean,
     expandedPanelsWidth: number,
+    isTransitioning: boolean,
 ): { width: number; height: number } {
     if (!isExpanded) {
+        if (isTransitioning) {
+            // Keep expanded dimensions during the collapse transition to prevent clipping/navbar jump
+            const height = container
+                ? Math.max(Math.ceil(container.scrollHeight) + 16, V2_OVERLAY_WINDOW_DEFAULT_HEIGHT)
+                : V2_OVERLAY_WINDOW_DEFAULT_HEIGHT;
+            return { width: expandedPanelsWidth, height };
+        }
         const height = container
             ? Math.max(Math.ceil(container.scrollHeight) + 16, 60)
             : 60;
@@ -65,13 +73,14 @@ export function useV2OverlayResize({
     const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const wasProcessingRef = useRef(isProcessing);
 
-    useEffect(() => {
+    const prevExpandedRef = useRef(isExpanded);
+    const prevTranscriptRef = useRef(showTranscript);
+
+    if (prevExpandedRef.current !== isExpanded || prevTranscriptRef.current !== showTranscript) {
         isTransitioningRef.current = true;
-        const t = setTimeout(() => {
-            isTransitioningRef.current = false;
-        }, 400);
-        return () => clearTimeout(t);
-    }, [isExpanded, showTranscript]);
+        prevExpandedRef.current = isExpanded;
+        prevTranscriptRef.current = showTranscript;
+    }
 
     const pushDimensions = useCallback(() => {
         const dims = computeDimensions(
@@ -79,6 +88,7 @@ export function useV2OverlayResize({
             panelsRowRef.current,
             isExpanded,
             expandedPanelsWidth,
+            isTransitioningRef.current,
         );
         window.electronAPI?.updateContentDimensions?.(dims);
     }, [containerRef, panelsRowRef, isExpanded, expandedPanelsWidth]);
@@ -108,6 +118,15 @@ export function useV2OverlayResize({
         }
     }, [pushDimensions]);
 
+    useEffect(() => {
+        isTransitioningRef.current = true;
+        const t = setTimeout(() => {
+            isTransitioningRef.current = false;
+            pushDimensions();
+        }, 400);
+        return () => clearTimeout(t);
+    }, [isExpanded, showTranscript, pushDimensions]);
+
     useEffect(
         () => () => {
             burstTimersRef.current.forEach(clearTimeout);
@@ -117,10 +136,8 @@ export function useV2OverlayResize({
     );
 
     useEffect(() => {
-        pushDimensions();
-        const t = setTimeout(pushDimensions, 16);
-        return () => clearTimeout(t);
-    }, [pushDimensions, isExpanded, expandedPanelsWidth, isMeetingActive, contentRevision]);
+        scheduleResizeBurst();
+    }, [scheduleResizeBurst, isExpanded, expandedPanelsWidth, isMeetingActive, contentRevision, showTranscript]);
 
     useEffect(() => {
         if (!window.electronAPI?.onSessionReset) return;
@@ -146,14 +163,20 @@ export function useV2OverlayResize({
     }, [isProcessing, scheduleResizeBurst]);
 
     useEffect(() => {
-        const row = panelsRowRef.current;
-        if (!row || !isExpanded) return;
+        const container = containerRef.current;
+        if (!container) return;
+
         const observer = new ResizeObserver(() => {
             if (isTransitioningRef.current) return;
             pushDimensionsThrottled();
         });
-        observer.observe(row);
-        if (containerRef.current) observer.observe(containerRef.current);
+        observer.observe(container);
+
+        const row = panelsRowRef.current;
+        if (row && isExpanded) {
+            observer.observe(row);
+        }
+
         pushDimensions();
         return () => observer.disconnect();
     }, [containerRef, panelsRowRef, isExpanded, pushDimensions, pushDimensionsThrottled]);
