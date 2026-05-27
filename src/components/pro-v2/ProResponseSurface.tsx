@@ -71,21 +71,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         [latestResponse?.text],
     );
 
-    useEffect(() => {
-        console.debug('[V2][ProResponseSurface] render gate', {
-            latestResponseId: latestResponse?.id ?? null,
-            requestId: latestResponse?.requestId ?? null,
-            intent: latestResponse?.intent ?? null,
-            source,
-            isProcessing,
-            isStreaming: latestResponse?.isStreaming ?? null,
-            textLength: latestResponse?.text.length ?? 0,
-            showingSkeleton: isProcessing && !latestResponse?.text,
-            showingResponse: Boolean(latestResponse?.text),
-            showingEmpty: !isProcessing && !latestResponse?.text,
-        });
-    }, [isProcessing, latestResponse, source]);
-
+  
     return (
         <motion.div
             layout

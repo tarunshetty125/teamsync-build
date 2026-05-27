@@ -70,7 +70,7 @@
   overflow: hidden;
   backdrop-filter: var(--v2-glass-blur);
   -webkit-backdrop-filter: var(--v2-glass-blur);
-  background: rgba(18, 18, 22, 0.58);
+  background: rgba(10, 10, 14, 0.74);
   border: var(--v2-glass-border);
   border-radius: 20px;
   box-shadow:

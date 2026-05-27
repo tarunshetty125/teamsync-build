@@ -1010,7 +1010,9 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 },
             ]);
 
-            const scanMode = getScreenScanModeForSessionMode(recommendationMode as OverlaySessionMode);
+            const scanMode = getScreenScanModeForSessionMode(
+                session.currentMode as OverlaySessionMode,
+            );
             console.debug('[V2][ScreenScan] handleScreenScan', {
                 requestId,
                 scanMode,
@@ -1030,7 +1032,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             activeScreenScanRequestIdRef.current = null;
             rememberIntentRequest('screen_scan', null);
         }
-    }, [cancelInFlightOverlayRequests, recommendationMode, rememberIntentRequest]);
+    }, [cancelInFlightOverlayRequests, rememberIntentRequest, session.currentMode]);
 
     const toggleExpanded = useCallback(() => {
         setIsExpanded((prev) => !prev);

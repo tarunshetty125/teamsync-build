@@ -44,6 +44,41 @@ function containsCodePatterns(text: string): boolean {
     return countMatches(text, patterns) >= 2;
 }
 
+function looksLikeCodingProblemStatement(text: string): boolean {
+    const platformSignals = [
+        /\bleetcode\b/i,
+        /\bhackerrank\b/i,
+        /\bcodeforces\b/i,
+        /\bgeeksforgeeks\b/i,
+    ];
+
+    const problemSignals = [
+        /\bexample\s*[0-9]+\b/i,
+        /\bconstraints?\b/i,
+        /\binput\b/i,
+        /\boutput\b/i,
+        /\bcompanies\b/i,
+        /\bsubmissions?\b/i,
+        /\baccepted\b/i,
+        /\brelated topics\b/i,
+        /\breturn\b/i,
+        /\b1\s*<=\s*[a-z]/i,
+        /\bthe test cases are generated\b/i,
+        /\b(?:easy|medium|hard)\b/i,
+    ];
+
+    const titleSignals = [
+        /\b\d{2,4}\.\s+[A-Z][A-Za-z0-9'(),\-/: ]+/,
+        /\bproblem\s+\d{2,4}\b/i,
+    ];
+
+    const matchedPlatforms = countMatches(text, platformSignals);
+    const matchedProblemSignals = countMatches(text, problemSignals);
+    const matchedTitles = countMatches(text, titleSignals);
+
+    return matchedTitles >= 1 || (matchedPlatforms >= 1 && matchedProblemSignals >= 2) || matchedProblemSignals >= 4;
+}
+
 function containsInterviewQuestion(text: string): boolean {
     const patterns = [
         /\b(what is|why did|why do|how would|walk me through|tell me about|describe|explain)\b/i,
@@ -89,6 +124,7 @@ export function detectScreenContentMode(text: string): ScreenContentMode {
 
     if (!normalized) return 'ui_general';
     if (containsCodePatterns(normalized)) return 'coding';
+    if (looksLikeCodingProblemStatement(normalized)) return 'coding';
     if (containsInterviewQuestion(normalized)) return 'interview_question';
     if (looksLikeSlide(normalized)) return 'slides_presentation';
     if (looksLikeDocumentText(normalized)) return 'document_text';

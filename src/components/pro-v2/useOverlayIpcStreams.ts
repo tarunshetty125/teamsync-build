@@ -85,6 +85,24 @@ function appendToken(
     });
 }
 
+function hydrateFinalMessage(
+    ctx: OverlayIpcStreamsContext,
+    requestId: string,
+    text: string,
+) {
+    ctx.setMessages((prev) => {
+        const idx = prev.findIndex((msg) => msg.requestId === requestId);
+        if (idx < 0) return prev;
+        const u = [...prev];
+        u[idx] = {
+            ...u[idx],
+            text,
+            isCode: text.includes('```'),
+        };
+        return u;
+    });
+}
+
 export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
     useEffect(() => {
         const cleanups: Array<() => void> = [];
@@ -177,11 +195,15 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
         if (window.electronAPI.onIntelligenceActionToken) {
             cleanups.push(
                 window.electronAPI.onIntelligenceActionToken((data: any) => {
-                    if (data.intent === 'manual_chat' || data.intent === 'screen_scan') return;
+                    if (data.intent === 'manual_chat') return;
                     if (ctx.isStalePayload(data._sessionId)) return;
-                    const requestId = data.requestId || ctx.activeIntelligenceRequestIdRef.current;
+                    const isScreenScan = data.intent === 'screen_scan';
+                    const requestId = isScreenScan
+                        ? data.requestId || ctx.activeScreenScanRequestIdRef.current
+                        : data.requestId || ctx.activeIntelligenceRequestIdRef.current;
                     if (!requestId) return;
-                    if (!matchesRequestChannel(ctx, requestId, 'intelligence')) {
+                    const channel: OverlayRequestChannel = isScreenScan ? 'screen_scan' : 'intelligence';
+                    if (!matchesRequestChannel(ctx, requestId, channel)) {
                         return;
                     }
                     if (!data.token) return;
@@ -193,38 +215,36 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
         if (window.electronAPI.onIntelligenceActionResult) {
             cleanups.push(
                 window.electronAPI.onIntelligenceActionResult((data: any) => {
-                    if (data.intent === 'manual_chat' || data.intent === 'screen_scan') return;
+                    if (data.intent === 'manual_chat') return;
                     if (ctx.isStalePayload(data._sessionId)) return;
-                    const requestId = data.requestId || ctx.activeIntelligenceRequestIdRef.current;
+                    const isScreenScan = data.intent === 'screen_scan';
+                    const requestId = isScreenScan
+                        ? data.requestId || ctx.activeScreenScanRequestIdRef.current
+                        : data.requestId || ctx.activeIntelligenceRequestIdRef.current;
                     if (!requestId) return;
-                    if (!matchesRequestChannel(ctx, requestId, 'intelligence')) return;
+                    const channel: OverlayRequestChannel = isScreenScan ? 'screen_scan' : 'intelligence';
+                    if (!matchesRequestChannel(ctx, requestId, channel)) return;
+                    if (isScreenScan && typeof data.content === 'string') {
+                        hydrateFinalMessage(ctx, requestId, data.content);
+                    }
                     ctx.finishStreamingMessage(requestId, data.intent);
-                    ctx.rememberIntentRequest(data.intent, null);
+                    if (isScreenScan) {
+                        ctx.activeScreenScanRequestIdRef.current = null;
+                        ctx.rememberIntentRequest('screen_scan', null);
+                    } else {
+                        ctx.rememberIntentRequest(data.intent, null);
+                    }
                 }),
             );
         }
 
         if (window.electronAPI.onIntelligenceScreenScanToken) {
             cleanups.push(
-                window.electronAPI.onIntelligenceScreenScanToken((data: any) => {
-                    if (ctx.isStalePayload(data._sessionId)) return;
-                    const requestId = ctx.resolveIntentRequestId('screen_scan', data.requestId);
-                    console.debug('[V2][ScreenScan] token event', {
-                        incomingRequestId: data.requestId,
-                        resolvedRequestId: requestId,
-                        activeScreenScanRequestId: ctx.activeScreenScanRequestIdRef.current,
-                        tokenLength: typeof data.token === 'string' ? data.token.length : 0,
-                        mode: data.mode,
-                    });
-                    if (!requestId) return;
-                    if (
-                        ctx.activeScreenScanRequestIdRef.current &&
-                        requestId !== ctx.activeScreenScanRequestIdRef.current
-                    ) {
-                        return;
-                    }
-                    if (!data.token) return;
-                    appendToken(ctx, requestId, data.token);
+                window.electronAPI.onIntelligenceScreenScanToken(() => {
+                    // Screen scan tokens normally arrive through the generic
+                    // intelligence-action-token channel. Keeping this listener
+                    // mounted avoids contract drift, but we intentionally no-op
+                    // here to prevent double-appending the same chunks.
                 }),
             );
         }
@@ -249,29 +269,7 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
                         return;
                     }
                     if (typeof data.answer === 'string') {
-                        ctx.setMessages((prev) => {
-                            const idx = prev.findIndex((msg) => msg.requestId === requestId);
-                            if (idx < 0) {
-                                console.warn('[V2][ScreenScan] result missed message', {
-                                    requestId,
-                                    answerLength: data.answer.length,
-                                    knownRequestIds: prev.map((msg) => msg.requestId).filter(Boolean),
-                                });
-                                return prev;
-                            }
-                            const u = [...prev];
-                            console.debug('[V2][ScreenScan] hydrating final answer', {
-                                requestId,
-                                previousLength: u[idx].text.length,
-                                nextLength: data.answer.length,
-                            });
-                            u[idx] = {
-                                ...u[idx],
-                                text: data.answer,
-                                isCode: data.answer.includes('```'),
-                            };
-                            return u;
-                        });
+                        hydrateFinalMessage(ctx, requestId, data.answer);
                     }
                     ctx.finishStreamingMessage(requestId, 'screen_scan');
                     ctx.activeScreenScanRequestIdRef.current = null;
