@@ -7,7 +7,7 @@
  * Label: "TeamSync Intelligence"
  */
 
-import React, { memo, useCallback, useState, useMemo } from 'react';
+import React, { memo, useCallback, useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
@@ -65,6 +65,21 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         () => resolveV2ResponseWidthPx(latestResponse?.text),
         [latestResponse?.text],
     );
+
+    useEffect(() => {
+        console.debug('[V2][ProResponseSurface] render gate', {
+            latestResponseId: latestResponse?.id ?? null,
+            requestId: latestResponse?.requestId ?? null,
+            intent: latestResponse?.intent ?? null,
+            source,
+            isProcessing,
+            isStreaming: latestResponse?.isStreaming ?? null,
+            textLength: latestResponse?.text.length ?? 0,
+            showingSkeleton: isProcessing && !latestResponse?.text,
+            showingResponse: Boolean(latestResponse?.text),
+            showingEmpty: !isProcessing && !latestResponse?.text,
+        });
+    }, [isProcessing, latestResponse, source]);
 
     return (
         <motion.div

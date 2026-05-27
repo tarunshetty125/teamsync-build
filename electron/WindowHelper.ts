@@ -332,6 +332,16 @@ export class WindowHelper {
     this.overlayWindow = new BrowserWindow(overlaySettings)
     this.overlayWindow.setContentProtection(this.contentProtection)
 
+    this.overlayWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      const levelLabel =
+        level === 0 ? 'log' :
+        level === 1 ? 'warn' :
+        level === 2 ? 'error' :
+        level === 3 ? 'debug' :
+        'info';
+      console.log(`[OverlayRenderer:${levelLabel}] ${message} (${sourceId}:${line})`);
+    });
+
     if (process.platform === "darwin") {
       this.overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
       this.overlayWindow.setHiddenInMissionControl(true)

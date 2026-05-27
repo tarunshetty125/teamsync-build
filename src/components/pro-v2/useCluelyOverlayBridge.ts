@@ -913,6 +913,12 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             const scanMode = getScreenScanModeForSessionMode(
                 sessionRef.current.currentMode as OverlaySessionMode,
             );
+            console.debug('[V2][ScreenScan] handleScreenScan', {
+                requestId,
+                scanMode,
+                screenshotPath: data.path,
+                hasPreview: Boolean(data.preview),
+            });
             window.electronAPI.runScreenAnalysis({
                 requestId,
                 image: data.path,
@@ -947,6 +953,19 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         }
         return null;
     }, [messages]);
+
+    useEffect(() => {
+        console.debug('[V2][Bridge] latestResponse recomputed', {
+            totalMessages: messages.length,
+            latestResponseId: latestResponse?.id ?? null,
+            latestResponseRequestId: latestResponse?.requestId ?? null,
+            latestResponseIntent: latestResponse?.intent ?? null,
+            latestResponseSource: latestResponse?.source ?? null,
+            latestResponseIsStreaming: latestResponse?.isStreaming ?? null,
+            latestResponseTextLength: latestResponse?.text.length ?? 0,
+            isProcessing,
+        });
+    }, [isProcessing, latestResponse, messages.length]);
 
     return {
         messages,
