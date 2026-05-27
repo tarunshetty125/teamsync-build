@@ -105,7 +105,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                width: 'fit-content',
+                width: '100%',
                 margin: '0 auto',
                 padding: '28px 8px 8px',
                 minHeight: 0,
@@ -118,6 +118,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 isExpanded={bridge.isExpanded}
                 isProcessing={bridge.isProcessing}
                 isMeetingActive={bridge.isMeetingActive}
+                isTranscriptPaused={bridge.isTranscriptPaused}
                 meetingStartTime={bridge.meetingStartTime}
                 inputValue={bridge.inputValue}
                 onToggleExpanded={bridge.toggleExpanded}
@@ -126,6 +127,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 onSubmit={bridge.handleManualSubmit}
                 onInputChange={bridge.setInputValue}
                 onScreenScan={bridge.handleScreenScan}
+                onToggleTranscriptPause={bridge.toggleTranscriptPause}
             />
 
             {/* ── Rolling transcript strip — between bar and panels ── */}

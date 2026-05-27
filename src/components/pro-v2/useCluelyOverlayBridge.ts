@@ -10,6 +10,7 @@ import {
     getOverlayQuickActions,
     resolveOverlayCopilotMode,
     type OverlayQuickActionDef,
+    type OverlayQuickActionId,
 } from '../../lib/modes/overlayCopilotConfig';
 import type { ModeTemplateId } from '../../lib/modes/types';
 import { analytics, detectProviderType } from '../../lib/analytics/analytics.service';
@@ -50,6 +51,18 @@ export interface V2Message {
 
 type SessionMode = DetectedQuestionType;
 type ActionIntent = 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now';
+type ContextSummary = { label: string; detail: string };
+type FrozenTranscriptUiSnapshot = {
+    rollingTranscript: string;
+    rollingTranscriptSpeakerLabel: string;
+    lastFinalSentence: string;
+    isInterviewerSpeaking: boolean;
+    overlayCopilotMode: ReturnType<typeof resolveOverlayCopilotMode>;
+    activeQuickActions: OverlayQuickActionDef[];
+    recommendedButton: OverlayQuickActionId;
+    detectedQuestionType: DetectedQuestionType;
+    contextSummary: ContextSummary;
+};
 
 let v2MsgCounter = 0;
 function nextMsgId(): string {
@@ -119,6 +132,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const [rollingTranscript, setRollingTranscript] = useState('');
     const [rollingTranscriptSpeakerLabel, setRollingTranscriptSpeakerLabel] = useState('');
     const [isInterviewerSpeaking, setIsInterviewerSpeaking] = useState(false);
+    const [isTranscriptPaused, setIsTranscriptPaused] = useState(false);
     const [actionContextSummaryOverride, setActionContextSummaryOverride] = useState<{
         label: string;
         detail: string;
@@ -155,9 +169,14 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const currentTurnTextRef = useRef('');
     const lastFinalSentenceRef = useRef('');
     const finalizedTranscriptRef = useRef('');
+    const rollingTranscriptRef = useRef('');
+    const rollingTranscriptSpeakerLabelRef = useRef('');
+    const isInterviewerSpeakingRef = useRef(false);
+    const isTranscriptPausedRef = useRef(false);
     const lastInterviewerFinalTimestampRef = useRef(0);
     const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const actionContextOverrideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const frozenTranscriptUiSnapshotRef = useRef<FrozenTranscriptUiSnapshot | null>(null);
 
     const activeChatRequestIdRef = useRef<string | null>(null);
     const activeIntelligenceRequestIdRef = useRef<string | null>(null);
@@ -247,7 +266,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         pinnedSessionMode
             ? (detectedQuestionType === 'salary' ? 'salary' : pinnedSessionMode)
             : detectedQuestionType;
-    const overlayCopilotMode = useMemo(
+    const liveOverlayCopilotMode = useMemo(
         () =>
             resolveOverlayCopilotMode(
                 isMeetingActive ? activeModeTemplateId : 'general',
@@ -256,22 +275,22 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         [activeModeTemplateId, isMeetingActive, recommendationMode],
     );
 
-    const activeQuickActions = useMemo(
-        () => getOverlayQuickActions(overlayCopilotMode, brainstormEnabled),
-        [overlayCopilotMode, brainstormEnabled],
+    const liveActiveQuickActions = useMemo(
+        () => getOverlayQuickActions(liveOverlayCopilotMode, brainstormEnabled),
+        [liveOverlayCopilotMode, brainstormEnabled],
     );
 
     const derivedContextSummary = useMemo(
         () =>
             deriveContextSummary(
-                overlayCopilotMode,
+                liveOverlayCopilotMode,
                 lastFinalSentenceRef.current || finalizedTranscriptRef.current,
             ),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [overlayCopilotMode, lastFinalSentence, currentQuestionTurnId, detectedQuestionType],
+        [liveOverlayCopilotMode, lastFinalSentence, currentQuestionTurnId, detectedQuestionType],
     );
 
-    const effectiveContextSummary = actionContextSummaryOverride ?? derivedContextSummary;
+    const liveContextSummary = actionContextSummaryOverride ?? derivedContextSummary;
 
     const prevIsProcessingRef = useRef(isProcessing);
     useEffect(() => {
@@ -324,8 +343,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     }, []);
 
     const activeQuickActionIds = useMemo(
-        () => activeQuickActions.map((action) => action.id),
-        [activeQuickActions],
+        () => liveActiveQuickActions.map((action) => action.id),
+        [liveActiveQuickActions],
     );
 
     const {
@@ -335,7 +354,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         unlockRecommendationForTurn,
     } =
         useOverlayRecommendation({
-            overlayCopilotMode,
+            overlayCopilotMode: liveOverlayCopilotMode,
             detectedQuestionType,
             isMeetingActive,
             lastFinalSentenceRef,
@@ -344,6 +363,49 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             activeQuickActionIds,
             transcriptRevision: lastFinalSentence,
         });
+
+    const syncTranscriptUiFromRefs = useCallback(() => {
+        setRollingTranscript(rollingTranscriptRef.current);
+        setRollingTranscriptSpeakerLabel(rollingTranscriptSpeakerLabelRef.current);
+        setLastFinalSentence(lastFinalSentenceRef.current);
+        setIsInterviewerSpeaking(isInterviewerSpeakingRef.current);
+    }, []);
+
+    useEffect(() => {
+        isTranscriptPausedRef.current = isTranscriptPaused;
+    }, [isTranscriptPaused]);
+
+    const toggleTranscriptPause = useCallback(() => {
+        if (isTranscriptPausedRef.current) {
+            isTranscriptPausedRef.current = false;
+            setIsTranscriptPaused(false);
+            return;
+        }
+
+        isTranscriptPausedRef.current = true;
+        frozenTranscriptUiSnapshotRef.current = {
+            rollingTranscript,
+            rollingTranscriptSpeakerLabel,
+            lastFinalSentence,
+            isInterviewerSpeaking,
+            overlayCopilotMode: liveOverlayCopilotMode,
+            activeQuickActions: liveActiveQuickActions,
+            recommendedButton,
+            detectedQuestionType,
+            contextSummary: liveContextSummary,
+        };
+        setIsTranscriptPaused(true);
+    }, [
+        rollingTranscript,
+        rollingTranscriptSpeakerLabel,
+        lastFinalSentence,
+        isInterviewerSpeaking,
+        liveOverlayCopilotMode,
+        liveActiveQuickActions,
+        recommendedButton,
+        detectedQuestionType,
+        liveContextSummary,
+    ]);
 
     const markCurrentTurnFromText = useCallback((text: string) => {
         const nextText = text.trim();
@@ -373,11 +435,18 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         setIsProcessing(false);
         setRollingTranscript('');
         setRollingTranscriptSpeakerLabel('');
+        setIsInterviewerSpeaking(false);
+        setIsTranscriptPaused(false);
         currentTurnTextRef.current = '';
         finalizedTranscriptRef.current = '';
+        rollingTranscriptRef.current = '';
+        rollingTranscriptSpeakerLabelRef.current = '';
+        isInterviewerSpeakingRef.current = false;
+        isTranscriptPausedRef.current = false;
         setLastFinalSentence('');
         lastFinalSentenceRef.current = '';
         lastInterviewerFinalTimestampRef.current = 0;
+        frozenTranscriptUiSnapshotRef.current = null;
 
         activeChatRequestIdRef.current = null;
         activeIntelligenceRequestIdRef.current = null;
@@ -474,6 +543,20 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         },
         [unlockRecommendationForTurn],
     );
+
+    useEffect(() => {
+        if (isTranscriptPaused) return;
+        if (!frozenTranscriptUiSnapshotRef.current) return;
+
+        frozenTranscriptUiSnapshotRef.current = null;
+        syncTranscriptUiFromRefs();
+
+        const latestFinal = lastFinalSentenceRef.current.trim();
+        if (latestFinal.length < 3) return;
+
+        const questionTurnId = nextRequestId('question-turn');
+        recomputeIntentFromFinalTranscript(questionTurnId);
+    }, [isTranscriptPaused, recomputeIntentFromFinalTranscript, syncTranscriptUiFromRefs]);
 
     const finishStreamingMessage = useCallback((requestId: string, intent?: string) => {
         setIsProcessing(false);
@@ -645,8 +728,14 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 if (transcript.speaker !== 'interviewer') return;
 
                 const transcriptLabel = getTranscriptDisplayLabel(transcript);
-                setRollingTranscriptSpeakerLabel(transcriptLabel);
-                setIsInterviewerSpeaking(!transcript.final);
+                const isPaused = isTranscriptPausedRef.current;
+                rollingTranscriptSpeakerLabelRef.current = transcriptLabel;
+                isInterviewerSpeakingRef.current = !transcript.final;
+
+                if (!isPaused) {
+                    setRollingTranscriptSpeakerLabel(transcriptLabel);
+                    setIsInterviewerSpeaking(!transcript.final);
+                }
 
                 if (transcript.final) {
                     const now = Date.now();
@@ -655,7 +744,10 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     if (finalizedTranscriptRef.current.length > 5000) {
                         finalizedTranscriptRef.current = finalizedTranscriptRef.current.slice(-5000);
                     }
-                    setRollingTranscript(finalizedTranscriptRef.current);
+                    rollingTranscriptRef.current = finalizedTranscriptRef.current;
+                    if (!isPaused) {
+                        setRollingTranscript(finalizedTranscriptRef.current);
+                    }
 
                     const gapSinceLastFinal = now - lastInterviewerFinalTimestampRef.current;
                     if (
@@ -668,20 +760,30 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                         lastFinalSentenceRef.current = transcript.text;
                     }
                     lastInterviewerFinalTimestampRef.current = now;
-                    setLastFinalSentence(lastFinalSentenceRef.current);
                     currentTurnTextRef.current = lastFinalSentenceRef.current;
 
-                    const questionTurnId = nextRequestId('question-turn');
-                    recomputeIntentFromFinalTranscript(questionTurnId);
+                    if (!isPaused) {
+                        setLastFinalSentence(lastFinalSentenceRef.current);
+                        const questionTurnId = nextRequestId('question-turn');
+                        recomputeIntentFromFinalTranscript(questionTurnId);
+                    }
 
                     if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
-                    speakingTimerRef.current = setTimeout(() => setIsInterviewerSpeaking(false), 3000);
+                    speakingTimerRef.current = setTimeout(() => {
+                        isInterviewerSpeakingRef.current = false;
+                        if (!isTranscriptPausedRef.current) {
+                            setIsInterviewerSpeaking(false);
+                        }
+                    }, 3000);
                 } else {
-                    setRollingTranscript(
+                    rollingTranscriptRef.current =
                         finalizedTranscriptRef.current +
-                            (finalizedTranscriptRef.current ? '  ·  ' : '') +
-                            transcript.text,
-                    );
+                        (finalizedTranscriptRef.current ? '  ·  ' : '') +
+                        transcript.text;
+
+                    if (!isPaused) {
+                        setRollingTranscript(rollingTranscriptRef.current);
+                    }
                 }
             }),
         );
@@ -860,12 +962,14 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
     const executeQuickAction = useCallback(
         async (action: OverlayQuickActionDef) => {
-            pinRecommendationForTurn(action.id, currentQuestionTurnIdRef.current);
-            setActionContextSummaryOverride({
-                label: derivedContextSummary.label,
-                detail:
-                    ACTION_CONTEXT_MESSAGES[action.label] ?? `${action.label} in progress…`,
-            });
+            if (!isTranscriptPausedRef.current) {
+                pinRecommendationForTurn(action.id, currentQuestionTurnIdRef.current);
+                setActionContextSummaryOverride({
+                    label: derivedContextSummary.label,
+                    detail:
+                        ACTION_CONTEXT_MESSAGES[action.label] ?? `${action.label} in progress…`,
+                });
+            }
             await runAction(action.intent as string, {
                 source: action.source,
                 analyticsKey: action.analyticsKey,
@@ -890,7 +994,9 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             if (!userText) return;
 
             await cancelInFlightOverlayRequests();
-            markCurrentTurnFromText(userText);
+            if (!isTranscriptPausedRef.current) {
+                markCurrentTurnFromText(userText);
+            }
 
             if (hasProContextAccess && hasNegotiationScript) {
                 if (isSalaryRelatedText(userText) && !negotiationContextEnabled) {
@@ -1067,22 +1173,52 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         });
     }, [isProcessing, latestResponse, messages.length]);
 
+    const frozenTranscriptUiSnapshot = frozenTranscriptUiSnapshotRef.current;
+    const visibleRollingTranscript = isTranscriptPaused
+        ? frozenTranscriptUiSnapshot?.rollingTranscript ?? rollingTranscript
+        : rollingTranscript;
+    const visibleRollingTranscriptSpeakerLabel = isTranscriptPaused
+        ? frozenTranscriptUiSnapshot?.rollingTranscriptSpeakerLabel ?? rollingTranscriptSpeakerLabel
+        : rollingTranscriptSpeakerLabel;
+    const visibleLastFinalSentence = isTranscriptPaused
+        ? frozenTranscriptUiSnapshot?.lastFinalSentence ?? lastFinalSentence
+        : lastFinalSentence;
+    const visibleIsInterviewerSpeaking = isTranscriptPaused
+        ? frozenTranscriptUiSnapshot?.isInterviewerSpeaking ?? isInterviewerSpeaking
+        : isInterviewerSpeaking;
+    const visibleOverlayCopilotMode = isTranscriptPaused
+        ? frozenTranscriptUiSnapshot?.overlayCopilotMode ?? liveOverlayCopilotMode
+        : liveOverlayCopilotMode;
+    const visibleActiveQuickActions = isTranscriptPaused
+        ? frozenTranscriptUiSnapshot?.activeQuickActions ?? liveActiveQuickActions
+        : liveActiveQuickActions;
+    const visibleRecommendedButton = isTranscriptPaused
+        ? frozenTranscriptUiSnapshot?.recommendedButton ?? recommendedButton
+        : recommendedButton;
+    const visibleDetectedQuestionType = isTranscriptPaused
+        ? frozenTranscriptUiSnapshot?.detectedQuestionType ?? detectedQuestionType
+        : detectedQuestionType;
+    const visibleContextSummary = isTranscriptPaused
+        ? frozenTranscriptUiSnapshot?.contextSummary ?? liveContextSummary
+        : liveContextSummary;
+
     return {
         messages,
         isProcessing,
         isExpanded,
-        lastFinalSentence,
-        rollingTranscript,
-        rollingTranscriptSpeakerLabel,
-        isInterviewerSpeaking,
-        overlayCopilotMode,
-        activeQuickActions,
-        recommendedButton,
-        detectedQuestionType,
-        contextSummary: effectiveContextSummary,
+        lastFinalSentence: visibleLastFinalSentence,
+        rollingTranscript: visibleRollingTranscript,
+        rollingTranscriptSpeakerLabel: visibleRollingTranscriptSpeakerLabel,
+        isInterviewerSpeaking: visibleIsInterviewerSpeaking,
+        overlayCopilotMode: visibleOverlayCopilotMode,
+        activeQuickActions: visibleActiveQuickActions,
+        recommendedButton: visibleRecommendedButton,
+        detectedQuestionType: visibleDetectedQuestionType,
+        contextSummary: visibleContextSummary,
         latestResponse,
         activeModeLabel,
         isMeetingActive,
+        isTranscriptPaused,
         inputValue,
         showTranscript,
         meetingStartTime,
@@ -1108,6 +1244,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         handleScreenScan,
         handleReset,
         toggleExpanded,
+        toggleTranscriptPause,
         toggleMousePassthrough,
         toggleCustomContext,
         scrollContainerRef,

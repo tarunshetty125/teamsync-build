@@ -7,11 +7,13 @@
 
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { motion } from 'framer-motion';
+import { Pause, Play } from 'lucide-react';
 
 interface ProFloatingBarProps {
     isExpanded: boolean;
     isProcessing: boolean;
     isMeetingActive: boolean;
+    isTranscriptPaused: boolean;
     meetingStartTime: number;
     inputValue: string;
     onToggleExpanded: () => void;
@@ -20,12 +22,14 @@ interface ProFloatingBarProps {
     onSubmit: (text: string) => void;
     onInputChange: (val: string) => void;
     onScreenScan: () => void;
+    onToggleTranscriptPause: () => void;
 }
 
 const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
     isExpanded,
     isProcessing: _isProcessing,
     isMeetingActive,
+    isTranscriptPaused,
     meetingStartTime,
     inputValue,
     onToggleExpanded,
@@ -34,6 +38,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
     onSubmit,
     onInputChange,
     onScreenScan,
+    onToggleTranscriptPause,
 }) {
     const [elapsed, setElapsed] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +110,26 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             <span className="v2-no-drag v2-bar-timer">
                 {formatTime(elapsed)}
             </span>
+
+            <div className="relative group">
+                <button
+                    onClick={onToggleTranscriptPause}
+                    className={`v2-no-drag v2-transcript-pause-btn ${isTranscriptPaused ? 'v2-transcript-pause-btn--paused' : 'v2-transcript-pause-btn--listening'}`}
+                    aria-pressed={isTranscriptPaused}
+                    aria-label={isTranscriptPaused ? 'Resume Listening' : 'Pause Listening'}
+                >
+                    <span className="v2-transcript-pause-btn__icon" aria-hidden="true">
+                        {isTranscriptPaused ? (
+                            <Play size={12} strokeWidth={2.2} />
+                        ) : (
+                            <Pause size={12} strokeWidth={2.2} />
+                        )}
+                    </span>
+                </button>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    {isTranscriptPaused ? 'Resume Listening' : 'Pause Listening'}
+                </div>
+            </div>
 
             <div className="v2-bar-sep" />
 

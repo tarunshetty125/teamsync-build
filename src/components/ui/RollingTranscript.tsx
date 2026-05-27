@@ -99,7 +99,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
 
     const shellStyle: React.CSSProperties = isProV2
         ? {
-            width: 'fit-content',
+            width: '100%',
             maxWidth: '100%',
             padding: 0,
             borderRadius: 999,
@@ -121,7 +121,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                 {anyFailed && <div className="absolute inset-0 bg-red-500/10 stt-pulse-red" />}
                 {anyReconnecting && !anyFailed && <div className="absolute inset-0 bg-amber-500/10 stt-pulse-amber" />}
 
-                <div className={isCompactStrip ? 'w-fit mx-auto pt-1 pb-1 px-3' : isProV2 ? 'w-fit max-w-full mx-auto px-4 py-2' : 'w-[90%] mx-auto pt-2 pb-1'}>
+                <div className={isCompactStrip ? 'w-fit mx-auto pt-1 pb-1 px-3' : isProV2 ? 'w-full px-4 py-2' : 'w-[90%] mx-auto pt-2 pb-1'}>
 
                     {/* ── Normal transcript pill ── */}
                     {isNormal && (
@@ -132,7 +132,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -4 }}
                                 transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
-                                className={`flex items-center gap-2 min-h-[28px] ${isProV2 ? 'max-w-[min(72vw,760px)]' : ''}`}
+                                className={`flex items-center gap-2 min-h-[28px] ${isProV2 ? 'w-full' : ''}`}
                             >
                                 {/* Status dot: green+pulse when waiting, grey when AI responded */}
                                 <motion.span

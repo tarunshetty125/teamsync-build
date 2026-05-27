@@ -3,7 +3,7 @@
 export const V2_INSIGHTS_WIDTH = 320;
 export const V2_PANEL_GAP = 7;
 export const V2_CONTAINER_PADDING = 24;
-export const V2_BAR_ONLY_WIDTH = 420;
+export const V2_BAR_ONLY_WIDTH = 600;
 
 export const V2_RESPONSE_MIN_WIDTH = 480;
 export const V2_RESPONSE_MAX_WIDTH = 720;
