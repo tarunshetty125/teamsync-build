@@ -3,6 +3,7 @@ export type OverlaySessionMode =
     | 'system_design'
     | 'behavioral'
     | 'follow_up'
+    | 'salary'
     | 'general';
 
 export type ScreenScanMode = 'coding' | 'interview_question' | 'ui_general';

@@ -37,7 +37,9 @@ import {
     Volume2,
     TrendingUp,
     Scale,
-    SearchCode
+    SearchCode,
+    DollarSign,
+    Anchor
 } from 'lucide-react';
 import type { OverlayQuickActionDef, OverlayQuickActionId } from '../../lib/modes/overlayCopilotConfig';
 import ProOverlayControlStrip from './ProOverlayControlStrip';
@@ -91,6 +93,12 @@ const ACTION_ICONS: Record<string, React.ReactNode> = {
     system_clarify: <HelpCircle size={14} className="text-sky-400" />,
     system_approaches: <Brain size={14} className="text-pink-400" />,
     system_deep_dive: <SearchCode size={14} className="text-violet-400" />,
+
+    // Salary mode
+    salary_negotiate: <Handshake size={14} className="text-emerald-400" />,
+    salary_counter: <DollarSign size={14} className="text-amber-400" />,
+    salary_confidence: <Volume2 size={14} className="text-violet-400" />,
+    salary_anchor: <Anchor size={14} className="text-cyan-400" />,
 };
 
 const getActionIcon = (action: OverlayQuickActionDef) => {

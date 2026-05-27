@@ -450,6 +450,7 @@ function buildSystemDesignInterviewOutputContract(): string {
     return [
         'Return a complete system design interview answer using ### headers in this order:',
         '',
+        '### Problem Description — Brief natural-language description of the problem being solved. Explain WHAT system is being designed, WHY it matters, and what the core challenge is. Frame the problem like a confident engineer before diving into the solution.',
         '### 1. High-Level Understanding',
         '### 2. Clarifying Questions (2-5 bullets)',
         '### 3. Requirements (Functional + Non-Functional)',

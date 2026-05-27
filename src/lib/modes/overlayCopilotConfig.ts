@@ -1,6 +1,6 @@
 import type { ModeTemplateId } from './types';
 
-export type SessionOverlayMode = 'behavioral' | 'coding' | 'follow_up' | 'general' | 'system_design';
+export type SessionOverlayMode = 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design';
 export type OverlayCopilotModeId = ModeTemplateId | SessionOverlayMode;
 export type OverlayActionIntent =
   | 'what_to_answer'
@@ -42,7 +42,11 @@ export type OverlayQuickActionId =
   | 'system_tradeoffs'
   | 'system_clarify'
   | 'system_approaches'
-  | 'system_deep_dive';
+  | 'system_deep_dive'
+  | 'salary_negotiate'
+  | 'salary_counter'
+  | 'salary_confidence'
+  | 'salary_anchor';
 
 export interface OverlayQuickActionDef {
   id: OverlayQuickActionId;
@@ -372,6 +376,42 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     additionalContext: 'System design mode: suggest the best deeper-dive question about scaling, data model, caching, reliability, or operations.',
     profilePreference: 'force_off',
   },
+  salary_negotiate: {
+    id: 'salary_negotiate',
+    label: 'Negotiate',
+    icon: '🤝',
+    intent: 'what_to_answer',
+    source: 'Salary Negotiation',
+    analyticsKey: 'salary_negotiate',
+    additionalContext: 'Salary negotiation mode: help the candidate craft a confident, professional negotiation response. Focus on anchoring high, value framing, total compensation framing, and avoiding premature commitment. Keep it concise and actionable.',
+  },
+  salary_counter: {
+    id: 'salary_counter',
+    label: 'Counter',
+    icon: '💰',
+    intent: 'brainstorm',
+    source: 'Counter Offer Strategy',
+    analyticsKey: 'salary_counter',
+    additionalContext: 'Salary negotiation mode: suggest counter-offer strategies. Include specific phrasing, leverage points, and how to present the counter without damaging the relationship. Factor in base, equity, signing bonus, and other levers.',
+  },
+  salary_confidence: {
+    id: 'salary_confidence',
+    label: 'Confidence',
+    icon: '🗣️',
+    intent: 'clarify',
+    source: 'Confidence Coaching',
+    analyticsKey: 'salary_confidence',
+    additionalContext: 'Salary negotiation mode: coach the candidate on tone, delivery, and confidence. Help them sound professional, grounded, and assertive without being aggressive. Suggest specific phrases and body language cues.',
+  },
+  salary_anchor: {
+    id: 'salary_anchor',
+    label: 'Anchor',
+    icon: '⚓',
+    intent: 'follow_up_questions',
+    source: 'Anchoring Strategy',
+    analyticsKey: 'salary_anchor',
+    additionalContext: 'Salary negotiation mode: suggest the best anchoring strategy. Help set the right initial number, explain the psychology of anchoring, and provide talking points for justifying the anchor with market data and personal value.',
+  },
 };
 
 const DEFAULT_DYNAMIC_ACTIONS = (brainstormEnabled: boolean): OverlayQuickActionId[] => [
@@ -490,12 +530,25 @@ const CONFIGS: Record<OverlayCopilotModeId, OverlayModeConfig> = {
     ],
     defaultRecommendedActionId: 'job_star',
   },
+  salary: {
+    actionIds: ['salary_negotiate', 'salary_counter', 'salary_confidence', 'salary_anchor'],
+    recommendedRules: [
+      { actionId: 'salary_negotiate', patterns: [/negotiat/i, /salary/i, /compensation/i, /comp/i, /ctc/i, /package/i, /offer/i] },
+      { actionId: 'salary_counter', patterns: [/counter/i, /too low/i, /increase/i, /raise/i, /more/i, /higher/i, /bump/i] },
+      { actionId: 'salary_confidence', patterns: [/nervous/i, /confident/i, /how.*say/i, /what.*say/i, /phrasing/i, /tone/i] },
+      { actionId: 'salary_anchor', patterns: [/anchor/i, /first number/i, /range/i, /market rate/i, /band/i, /expect/i] },
+    ],
+    defaultRecommendedActionId: 'salary_negotiate',
+  },
 };
 
 export function resolveOverlayCopilotMode(
   activeTemplateType: ModeTemplateId | null | undefined,
   sessionMode: SessionOverlayMode,
 ): OverlayCopilotModeId {
+  // Salary can surface in ANY interview context — always passthrough to salary buttons
+  if (sessionMode === 'salary') return 'salary';
+
   // Non-interview templates always lock to their own button set
   if (activeTemplateType === 'sales' || activeTemplateType === 'lecture' || activeTemplateType === 'recruiting' || activeTemplateType === 'team-meet') {
     return activeTemplateType;

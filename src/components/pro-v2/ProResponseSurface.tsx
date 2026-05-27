@@ -290,7 +290,14 @@ function resolveFenceContent(parsed: { lang: string; code: string }):
 
 function isFenceClosed(part: string): boolean {
     const trimmed = part.trimEnd();
-    return trimmed.endsWith('```') && trimmed.length > 3;
+    // Models often emit `` (2 backticks) instead of ``` (3) as closing fence.
+    // Match both. The part always starts with ```, so length > 3 avoids self-match.
+    if (trimmed.length <= 3) return false;
+    // Check for ``` closing
+    if (trimmed.endsWith('```')) return true;
+    // Check for `` on its own line as malformed closing
+    if (/\n\s*``\s*$/.test(trimmed)) return true;
+    return false;
 }
 
 function extractMermaidChartFromPre(children: React.ReactNode): string | null {
@@ -348,12 +355,16 @@ const V2_MARKDOWN_COMPONENTS: Components = {
 
 function parseFencePart(part: string): { lang: string; code: string } | null {
     if (!part.startsWith('```')) return null;
-    const match = part.match(/```[ \t]*([A-Za-z0-9_-]*)\s*([\s\S]*?)(?:```|$)/);
-    if (match) {
-        return { lang: match[1] || 'text', code: match[2].trim() };
-    }
-    const code = part.replace(/^```[ \t]*[A-Za-z0-9_-]*\s*/, '').replace(/```$/, '').trim();
-    return code ? { lang: 'text', code } : null;
+    // Match opening fence: ```lang id="xxx" or ```lang or just ```
+    // Strip any trailing attributes (id="...", etc.) from the language line
+    const headerMatch = part.match(/^```[ \t]*([A-Za-z0-9_-]*)(?:\s+[^\n]*)?\n?/);
+    const lang = headerMatch?.[1] || 'text';
+    // Remove the opening fence header
+    let code = part.replace(/^```[ \t]*[^\n]*\n?/, '');
+    // Remove closing fence: ``` (proper) or `` (malformed, models often emit 2 backticks)
+    code = code.replace(/\n?\s*`{2,3}\s*$/, '');
+    code = code.trim();
+    return code ? { lang, code } : null;
 }
 
 function renderFenceBlock(part: string, key: number, allowOpenMermaid: boolean) {
@@ -368,12 +379,16 @@ function renderFenceBlock(part: string, key: number, allowOpenMermaid: boolean) 
         // of the markdown response inside the mermaid payload. Mermaid will then
         // fail to parse and we show a fallback box.
         // Heuristic: stop the mermaid content at the next markdown section header
-        // or a new fenced block.
+        // or a new fenced block — but be careful not to truncate valid Mermaid
+        // keywords (e.g. "end" in subgraphs/loops).
         const s = chart.trim();
         if (!s) return s;
 
-        const beforeNextHeading = s.split(/\n\s*#{1,6}\s+/)[0].trim();
-        const beforeNextFence = beforeNextHeading.split(/\n\s*```/)[0].trim();
+        // Split on markdown headings (## 5. Title, ### Architecture, etc.)
+        // \S matches any non-whitespace start char (digits, letters, etc.)
+        const beforeNextHeading = s.split(/\n\s*#{1,6}\s+\S/)[0].trim();
+        // Split on a new triple-backtick fence opening (not Mermaid syntax)
+        const beforeNextFence = beforeNextHeading.split(/\n\s*```[a-zA-Z]/)[0].trim();
         const cleaned = (beforeNextFence || beforeNextHeading || s)
             // If the model leaked a partial fence (e.g. "``") at the end, remove it.
             .replace(/`{1,3}\s*$/g, '')
@@ -424,6 +439,26 @@ function renderFenceBlock(part: string, key: number, allowOpenMermaid: boolean) 
 
 function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
     if (!text.includes('```')) {
+        if (allowOpenMermaid) {
+            const mermaidStartRe = /(^|\n)\s*(mermaid\b|graph|flowchart|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\b/i;
+            const match = mermaidStartRe.exec(text);
+            if (match) {
+                const startIndex = match.index + (match[1] ? match[1].length : 0);
+                const before = text.slice(0, startIndex).trim();
+                const chartSource = text.slice(startIndex).trim();
+                return (
+                    <>
+                        {before && (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={V2_MARKDOWN_COMPONENTS}>
+                                {before}
+                            </ReactMarkdown>
+                        )}
+                        <MermaidRenderer chart={chartSource} isLightTheme={false} />
+                    </>
+                );
+            }
+        }
+
         return (
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={V2_MARKDOWN_COMPONENTS}>
                 {text}
@@ -431,7 +466,9 @@ function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
         );
     }
 
-    const parts = text.split(/(```[\s\S]*?(?:```|$))/g);
+    // Split on fenced code blocks. Match closing as ``` (proper) or `` on its own line (malformed).
+    // Models frequently emit `` instead of ``` as closing fence.
+    const parts = text.split(/(```[\s\S]*?(?:```|\n``\s*(?:\n|$)|$))/g);
     return (
         <>
             {parts.map((part, i) => {
@@ -462,7 +499,12 @@ const V2ResponseText = memo<{
     isStreaming?: boolean;
     isCode?: boolean;
 }>(function V2ResponseText({ text, isStreaming, isCode }) {
-    const body = renderV2ResponseBody(text, !isStreaming);
+    // During streaming: render Mermaid blocks that have complete fences.
+    // Incomplete / open fences show as raw pre blocks (handled by renderFenceBlock).
+    // This ensures completed Mermaid diagrams appear even mid-stream,
+    // and the final completed response always triggers a proper render.
+    const allowOpenMermaid = !isStreaming;
+    const body = renderV2ResponseBody(text, allowOpenMermaid);
     const wrapAsCodeSection = Boolean(isCode) && !responseContainsMermaid(text);
 
     if (wrapAsCodeSection) {

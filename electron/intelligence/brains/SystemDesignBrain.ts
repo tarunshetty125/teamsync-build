@@ -72,6 +72,7 @@ export class SystemDesignBrain implements Brain {
                 title: 'OUTPUT CONTRACT',
                 content: [
                     'Use ### section headers in this order:',
+                    'Problem Description — brief description of the problem being solved, what system is being designed and why it matters',
                     '1. High-Level Understanding',
                     '2. Clarifying Questions (2-5 bullets)',
                     '3. Requirements (functional + non-functional)',

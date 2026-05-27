@@ -761,6 +761,12 @@ Prefer practical production architecture over theory.
 <mandatory_output_structure>
 ALWAYS return responses in this exact order. Use markdown headers for each section.
 
+### Problem Description
+Start with a brief, natural-language description of the problem being solved.
+Explain WHAT system is being designed, WHY it matters, and what the core challenge is.
+This should read like a confident engineer framing the problem before diving into the solution.
+Example: "We're designing a food delivery platform like Zomato that needs to handle millions of concurrent orders, real-time restaurant availability, and payment processing — all with sub-second latency for the end user."
+
 ### 1. High-Level Understanding
 Briefly explain what the interviewer is asking.
 Example: "Goal: Design a scalable ride-sharing system handling real-time matching, pricing, and trip lifecycle."

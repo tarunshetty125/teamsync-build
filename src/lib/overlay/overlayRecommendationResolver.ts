@@ -44,7 +44,7 @@ const UNIVERSAL_TRANSCRIPT_SIGNALS: Array<{
   },
   {
     patterns: [/\bnegotia/i, /\bprocurement\b/i, /\bterms\b/i],
-    candidates: ['sales_negotiation', 'sales_pricing'],
+    candidates: ['sales_negotiation', 'sales_pricing', 'salary_negotiate'],
   },
   {
     patterns: [/\bpain point\b/i, /\bworkflow\b/i, /\bdiscovery\b/i, /\buse case\b/i],
@@ -118,6 +118,18 @@ const UNIVERSAL_TRANSCRIPT_SIGNALS: Array<{
     patterns: [/example/i, /experience/i, /project/i, /challenge/i, /impact/i],
     candidates: ['what_to_answer', 'job_star', 'recruiting_strength', 'sales_discovery'],
   },
+  {
+    patterns: [/salary/i, /compensation/i, /\bcomp\b/i, /\bctc\b/i, /total comp/i, /package/i, /\boffer\b/i],
+    candidates: ['salary_negotiate', 'salary_counter', 'salary_anchor', 'sales_pricing'],
+  },
+  {
+    patterns: [/counter.?offer/i, /too low/i, /higher/i, /raise/i, /increase/i, /bump/i, /more money/i],
+    candidates: ['salary_counter', 'salary_negotiate', 'sales_negotiation'],
+  },
+  {
+    patterns: [/anchor/i, /first number/i, /market rate/i, /band/i, /range/i],
+    candidates: ['salary_anchor', 'salary_negotiate'],
+  },
 ];
 
 /**
@@ -152,6 +164,11 @@ const MODE_INTENT_VISIBLE_PREFERENCE: Partial<
   follow_up: {
     follow_up: ['follow_up_questions', 'clarify'],
     behavioral: ['what_to_answer', 'follow_up_questions'],
+  },
+  salary: {
+    salary: ['salary_negotiate', 'salary_counter', 'salary_confidence', 'salary_anchor'],
+    general: ['salary_negotiate', 'salary_anchor'],
+    behavioral: ['salary_negotiate', 'salary_confidence'],
   },
   sales: {
     general: ['sales_discovery', 'sales_objection'],
@@ -194,6 +211,7 @@ const GLOBAL_INTENT_VISIBLE_PREFERENCE: Record<SessionOverlayMode, OverlayQuickA
   system_design: ['system_tradeoffs', 'system_clarify', 'system_approaches', 'system_deep_dive'],
   behavioral: ['what_to_answer', 'job_star', 'follow_up_questions', 'clarify', 'recap', 'brainstorm'],
   follow_up: ['follow_up_questions', 'clarify', 'what_to_answer'],
+  salary: ['salary_negotiate', 'salary_counter', 'salary_confidence', 'salary_anchor'],
   general: ['what_to_answer', 'clarify', 'follow_up_questions', 'recap', 'brainstorm'],
 };
 

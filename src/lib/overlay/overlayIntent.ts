@@ -8,6 +8,7 @@ export type DetectedQuestionType =
     | 'system_design'
     | 'behavioral'
     | 'follow_up'
+    | 'salary'
     | 'general';
 
 const REGEX_NORMALIZE_BROKEN = /(\w)\.\s+(\w)/;
@@ -25,16 +26,22 @@ const REGEX_FOLLOW_UP_STRONG = /(follow.?up|continuation|building on|going back 
 const REGEX_CODING_BOOST = /(faster|efficient)/;
 const REGEX_SYSTEM_BOOST = /(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/;
 
+const REGEX_SALARY_CORE = /(\bsalary\b|\bcompensation\b|\btotal\s*comp|\bnegotiat|\bctc\b|\bin[\s-]?hand\b|\blpa\b|\blakhs?\b|\bcrores?\b|\bper\s*annum|\btake\s*home|\bgross\s*(?:salary|pay|income)|\bnet\s*(?:salary|pay|income)|\bhike\b|\bincrement\b|\bappraisal\b)/;
+const REGEX_SALARY_STRONG = /(\bpackage\b|\boffer\b|\bpay\s*(?:expect|scale|band|range|grade)|\bexpect.*(?:salary|pay|comp|ctc|lpa)|\bcurrent.*(?:salary|ctc|comp|lpa|package)|\bexpected.*(?:salary|ctc|comp|lpa|package)|\bhow much.*(?:pay|earn|make|want|expect|offer)|\bwhat.*(?:pay|earning|making|expect|offer)|\bcounter\s*offer|\bbase\s*(?:pay|salary)|\bstock\s*option|\bequity|\bsigning\s*bonus|\brsu|\bvesting|\bjoining\s*bonus|\bretention\s*bonus|\bvariable\s*(?:pay|comp)|\bfixed\s*(?:pay|comp)|\bnotice\s*period|\bbuyout|\brelocation|\bperks|\bbenefits|\bgratuity|\bprovident\s*fund|\bpf\b|\beps\b|\bhra\b)/;
+const REGEX_SALARY_LOOSE = /(salary|compensation|comp|negotiate|negotiation|offer|package|pay|ctc|counter|bonus|equity|stock|vesting|raise|increment|hike|band|range|market rate|lpa|lakhs?|crores?|per annum|take home|gross|net|appraisal|promotion|onsite|offshore|billing|cost to company|hand salary|annual|monthly|stipend|allowance|reimbursement|insurance|medical|gratuity|notice period|buyout|retention|joining bonus|variable|fixed|base pay|relocation|perks|benefits|expected|current|offered|revised|breakup|structure|component|deduction)/;
+const REGEX_SALARY_BOOST = /(money|paying|afford|expensive|budget|worth|value|deserve|fair|reasonable|competitive|market|industry|standard|benchmark|average|median|percentile)/;
+
 /** Loose STT-friendly signals — one hit is enough to nudge classification. */
 const REGEX_CODING_LOOSE = /(write code|coding question|data struct|hash ?map|binary|recursion|iterate|loop|array|string|sort|search|tree|graph|stack|queue|leetcode|big o|runtime|implement|algorithm|solve)/;
 const REGEX_SYSTEM_LOOSE = /(system design|design (?:this|a|the)|architect|scal(e|ing|ability)|microservice|database|api|backend|frontend|storage|traffic|users|requests|shard|replicat|cache|cdn|queue|load|latency|throughput|high availability|distributed|monolith)/;
-const REGEX_BEHAVIORAL_LOOSE = /(tell me about|your experience|a time when|situation|on your team|leadership|conflict|challenge|project|worked on|background|resume|impact|outcome|failure|mistake|collaborat|deadline|priorit)/;
+const REGEX_BEHAVIORAL_LOOSE = /(tell me about|your experience|a time when|situation|on your team|leadership|conflict|challenge|project|worked on|background|resume|impact|outcome|failure|mistake|collaborat|deadline|priorit|why should we|why do you want|where do you see|what motivates|what drives|strengths?|weakness|hobbies|interests|culture|values|team|manager|supervisor|company|organization|role|position|opportunity|growth|career|passion|personality|work.?life|balance|remote|hybrid|flexible|environment)/;
 const REGEX_FOLLOW_UP_LOOSE = /(follow up|go deeper|more detail|elaborate|expand on|what about|you mentioned|earlier you|continue from|clarify that|repeat that)/;
 
+
 /** Classification tuned for messy live speech — prefer catching intent over precision. */
-const MIN_PRIMARY_SCORE = 1;
-const SWITCH_THRESHOLD = 1;
-const STRONG_SIGNAL_SCORE = 2;
+const MIN_PRIMARY_SCORE = 2;
+const SWITCH_THRESHOLD = 2;
+const STRONG_SIGNAL_SCORE = 3;
 
 export function normalizeTranscript(text: string): string {
     let t = text.toLowerCase();
@@ -62,6 +69,7 @@ export function detectQuestionType(
         system_design: 0,
         behavioral: 0,
         follow_up: 0,
+        salary: 0,
         general: 0,
     };
 
@@ -83,19 +91,23 @@ export function detectQuestionType(
     scores.system_design += cap(REGEX_SYSTEM_BOOST);
     scores.follow_up += cap(REGEX_FOLLOW_UP_CORE) * 3;
     scores.follow_up += cap(REGEX_FOLLOW_UP_STRONG) * 2;
+    scores.salary += cap(REGEX_SALARY_CORE) * 3;
+    scores.salary += cap(REGEX_SALARY_STRONG) * 2;
+    scores.salary += cap(REGEX_SALARY_BOOST);
 
     if (REGEX_CODING_LOOSE.test(t)) scores.coding += 2;
     if (REGEX_SYSTEM_LOOSE.test(t)) scores.system_design += 2;
     if (REGEX_BEHAVIORAL_LOOSE.test(t)) scores.behavioral += 2;
     if (REGEX_FOLLOW_UP_LOOSE.test(t)) scores.follow_up += 2;
+    if (REGEX_SALARY_LOOSE.test(t)) scores.salary += 2;
 
     const wordCount = t.split(/\s+/).filter((w: string) => w.length > 0).length;
-    if (scores.general >= scores.follow_up && wordCount <= 12 && wordCount >= 2) {
+    if (scores.general >= scores.follow_up && wordCount <= 8 && wordCount >= 2) {
         scores.follow_up = Math.max(scores.follow_up, 2);
     }
 
     if (currentType !== 'general') {
-        scores[currentType] += 1;
+        scores[currentType] += 0.5;
     }
 
     const entries = (Object.entries(scores) as [DetectedQuestionType, number][])
@@ -111,6 +123,7 @@ export function detectQuestionType(
 
     const nextStrong = primaryScore >= STRONG_SIGNAL_SCORE ? primary : undefined;
     if (primary !== currentType && currentType !== 'general' && (primaryScore - secondScore) < SWITCH_THRESHOLD) {
+        // Hysteresis: only switch if the primary intent beats the secondary cleanly
         return { nextType: currentType, nextStrong };
     }
 
@@ -140,7 +153,7 @@ export function intentReducer(state: IntentState, action: IntentAction): IntentS
 
         case 'EVALUATE': {
             if (action.seq < state.seq) return state;
-            if (!action.combinedText || action.combinedText.length < 3) return state;
+            if (!action.combinedText || action.combinedText.length < 5) return state;
 
             const { nextType, nextStrong } = detectQuestionType(
                 action.combinedText,

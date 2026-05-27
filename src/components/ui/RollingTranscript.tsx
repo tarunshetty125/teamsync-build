@@ -67,9 +67,9 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
 
     const stateSurface: React.CSSProperties = anyFailed
         ? { background: 'linear-gradient(180deg, rgba(220,38,38,0.12) 0%, rgba(220,38,38,0.04) 50%, transparent 100%)' }
-        : anyReconnecting
-            ? { background: 'linear-gradient(180deg, rgba(202,138,4,0.10) 0%, rgba(202,138,4,0.025) 50%, transparent 100%)' }
-            : {};
+        : {};
+
+    const isCompactStrip = anyReconnecting && !anyFailed;
 
     // Trim and quote the sentence for display
     const displayText = text?.trim() ?? '';
@@ -95,7 +95,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                 {anyFailed && <div className="absolute inset-0 bg-red-500/10 stt-pulse-red" />}
                 {anyReconnecting && !anyFailed && <div className="absolute inset-0 bg-amber-500/10 stt-pulse-amber" />}
 
-                <div className="w-[90%] mx-auto pt-2 pb-1">
+                <div className={isCompactStrip ? 'w-fit mx-auto pt-1 pb-1' : 'w-[90%] mx-auto pt-2 pb-1'}>
 
                     {/* ── Normal transcript pill ── */}
                     {isNormal && (

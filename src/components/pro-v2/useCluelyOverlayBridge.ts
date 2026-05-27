@@ -117,7 +117,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const [intentState, dispatchIntent] = useReducer(intentReducer, {
         detectedType: 'general',
         lastStrongType: 'general',
-        lastStrongAt: 0,
+        lastStrongAt: performance.now(),
         seq: 0,
     } satisfies IntentState);
     const [currentQuestionTurnId, setCurrentQuestionTurnId] = useState('');
@@ -164,6 +164,60 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     useEffect(() => {
         sessionRef.current = session;
     }, [session]);
+
+    // ── Negotiation context auto-toggle (V1 parity) ──
+    const [negotiationContextEnabled, setNegotiationContextEnabled] = useState(false);
+    const [hasNegotiationScript, setHasNegotiationScript] = useState(false);
+    const negotiationAutoEnabledRef = useRef(false);
+
+    useEffect(() => {
+        if (!hasProContextAccess) return;
+        window.electronAPI?.profileGetNegotiationState?.()
+            .then((res: { hasScript?: boolean; isActive?: boolean }) => {
+                if (typeof res?.hasScript === 'boolean') setHasNegotiationScript(res.hasScript);
+                if (typeof res?.isActive === 'boolean') setNegotiationContextEnabled(res.isActive);
+            })
+            .catch(() => {});
+    }, [hasProContextAccess]);
+
+    const handleToggleNegotiationContext = useCallback(async (enabled: boolean) => {
+        if (!hasProContextAccess || !window.electronAPI?.profileSetNegotiationContextEnabled) return;
+        try {
+            const result = await window.electronAPI.profileSetNegotiationContextEnabled(enabled);
+            if (result?.success) {
+                const nextEnabled = Boolean(result.enabled ?? result.isActive ?? enabled);
+                setNegotiationContextEnabled(nextEnabled);
+                if (typeof result.hasScript === 'boolean') setHasNegotiationScript(result.hasScript);
+            }
+        } catch { /* silent */ }
+    }, [hasProContextAccess]);
+
+    // Auto-detect salary questions in transcript and toggle negotiation context
+    const SALARY_PATTERNS = useMemo(() => [
+        /\bsalary\b/i, /\bcompensation\b/i, /\btotal\s*comp/i,
+        /\b(?:salary|pay)\s*expect/i, /\bexpect.*(?:salary|pay|comp|ctc|lpa)/i,
+        /\bpackage\b/i, /\boffer\b/i, /\bctc\b/i, /\bin[\s-]?hand/i, /\bnegotiat/i,
+        /\bhow much.*(?:pay|earn|make|want|expect)/i, /\bwhat.*(?:pay|earning|making|expect)/i,
+        /\bcurrent.*(?:salary|ctc|comp|lpa)/i, /\bexpected.*(?:salary|ctc|comp|lpa)/i,
+        /\blpa\b/i, /\blakhs?\b/i, /\bcrores?\b/i, /\bper\s*annum/i,
+        /\btake\s*home/i, /\bhike\b/i, /\bincrement\b/i, /\bappraisal\b/i,
+        /\bcounter\s*offer/i, /\bnotice\s*period/i, /\bbuyout/i,
+    ], []);
+
+    useEffect(() => {
+        if (!currentQuestionTurnId || !hasProContextAccess || !hasNegotiationScript) return;
+        const text = lastFinalSentenceRef.current?.trim() || '';
+        if (text.length < 5) return;
+        const isSalary = text.length >= 5 && SALARY_PATTERNS.some(p => p.test(text));
+
+        if (isSalary && !negotiationContextEnabled) {
+            negotiationAutoEnabledRef.current = true;
+            handleToggleNegotiationContext(true);
+        } else if (!isSalary && negotiationAutoEnabledRef.current && negotiationContextEnabled) {
+            negotiationAutoEnabledRef.current = false;
+            handleToggleNegotiationContext(false);
+        }
+    }, [currentQuestionTurnId, hasProContextAccess, hasNegotiationScript, negotiationContextEnabled, handleToggleNegotiationContext, SALARY_PATTERNS]);
 
     const detectedQuestionType = intentState.detectedType;
     const currentSessionMode = session.currentMode;

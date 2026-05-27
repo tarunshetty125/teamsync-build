@@ -6,94 +6,225 @@ import React, { useState, useCallback, useEffect, useRef, memo } from 'react';
 import { Copy, Check, ChevronDown, AlertTriangle } from 'lucide-react';
 import mermaid from 'mermaid';
 
+// ---------------------------------------------------------------------------
+// Normalization — hardened for streamed / malformed model output
+// ---------------------------------------------------------------------------
+
 function normalizeMermaidSource(input: string): string {
     let s = (input ?? '').trim();
     if (!s) return '';
 
-    // Some models accidentally include fences inside fences (or paste backticks verbatim).
-    // Keep this renderer resilient by stripping any surrounding markdown fences.
-    if (s.startsWith('```')) {
-        s = s.replace(/^```[^\n]*\n?/, '').replace(/\n?```$/, '').trim();
-    }
+    // ── Strip malformed opening fences ──
+    // Models may emit: ` ``mermaid  |  `mermaid  |  ```mermaid id="xxx"  |  ````mermaid
+    // We aggressively strip 1-4 backtick opening fences including any trailing id/attrs.
+    s = s.replace(/^`{1,4}\s*(?:mermaid\b[^\n]*)?\s*\n?/, '').trim();
 
-    // If the model includes an explicit "mermaid" prefix line, strip it.
+    // ── Strip malformed closing fences ──
+    // Trailing backticks (1-4) on their own line or at end of string
+    s = s.replace(/\n?\s*`{1,4}\s*$/, '').trim();
+
+    // ── If the model includes an explicit "mermaid" prefix line, strip it ──
     s = s.replace(/^mermaid[\s\r\n]+/i, '').trim();
 
-    // If we still have stray trailing backticks (e.g. "``" instead of "```"),
-    // remove them to prevent Mermaid parse errors.
-    s = s.replace(/`{1,3}\s*$/g, '').trim();
+    // ── Remove dangling orphan backticks from streamed partial markdown ──
+    // Lines that are nothing but backticks
+    s = s.replace(/^\s*`+\s*$/gm, '').trim();
+    // Trailing backticks at end of last line
+    s = s.replace(/`+\s*$/g, '').trim();
 
-    // Drop any standalone fence lines that might have leaked into the chart.
-    s = s.replace(/^\s*`{1,3}\s*$/gm, '').trim();
+    const normalized = s.trim();
+    if (!normalized) return '';
 
-    // Some model outputs use `->` instead of Mermaid's common `-->` in flowcharts.
-    // Normalize for better compatibility.
-    s = s.replace(/\s*-\>\s*/g, ' --> ').trim();
-
-    // Extract only the Mermaid "program" portion.
-    // In broken outputs, the chart string can include extra non-mermaid markdown/text
-    // (or even key-like tokens) before/after the actual diagram, which makes Mermaid throw.
-    const lines = s.split(/\r?\n/);
-
-    const diagramHeaderRe = /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment)\b/i;
-    const dirRe = /^(graph|flowchart)\s+([A-Za-z]{1,3})\b/i;
-
-    function looksLikeMermaidLine(line: string): boolean {
-        const t = line.trim();
-        if (!t) return true;
-        if (t.startsWith('%%')) return true;
-        if (/^(graph|flowchart)\b/i.test(t)) return true;
-        if (/^(sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|journey|gantt|pie|mindmap|timeline|gitGraph)\b/i.test(t)) return true;
-        if (/^C4(Context|Container|Component|Dynamic|Deployment)\b/i.test(t)) return true;
-        if (t.startsWith('subgraph ')) return true;
-        if (/^end\s*$/i.test(t)) return true;
-        if (/^(linkStyle|classDef|style)\b/i.test(t)) return true;
-        if (t.includes('-->')) return true;
-        if (t.includes(' --> ')) return true;
-        if (t.includes('->')) return true; // before normalization, just in case
-        return false;
+    // ── Safe flowchart arrow normalization ONLY ──
+    // Convert -> to --> only in graph/flowchart diagrams.
+    // Do NOT touch sequenceDiagram or other diagram types.
+    const isFlowchart = /(^|\n)\s*(graph|flowchart)\b/i.test(normalized);
+    if (isFlowchart) {
+        return normalized.replace(/(^|[^-])\->(?!-)/g, '$1 --> ');
     }
 
-    // Find the first line that looks like a Mermaid diagram header.
-    let startIdx = lines.findIndex((l) => diagramHeaderRe.test(l.trim()));
-    if (startIdx === -1) {
-        // Fallback: find the first line containing an edge operator.
-        startIdx = lines.findIndex((l) => l.includes('-->') || l.includes('-->'));
-    }
-    if (startIdx === -1) return s;
-
-    const cleaned: string[] = [];
-    for (let i = startIdx; i < lines.length; i++) {
-        const raw = lines[i];
-        if (i === startIdx) {
-            const headerMatch = dirRe.exec(raw.trim());
-            if (headerMatch) {
-                cleaned.push(`${headerMatch[1]} ${headerMatch[2]}`);
-                continue;
-            }
-        }
-
-        if (!looksLikeMermaidLine(raw)) break;
-        cleaned.push(raw);
-    }
-
-    const out = cleaned.join('\n').trim();
-    return out || s;
+    return normalized;
 }
 
-function normalizeMermaidSvg(svg: string): string {
-    // Mermaid sometimes emits fixed width/height; in tight containers this can collapse/clip.
-    // Prefer responsive SVG driven by viewBox.
+// ---------------------------------------------------------------------------
+// Detect diagram type for logging
+// ---------------------------------------------------------------------------
+
+function detectDiagramType(source: string): string {
+    const first = source.trim().split(/[\s\n]/)[0]?.toLowerCase() || 'unknown';
+    const types = [
+        'graph', 'flowchart', 'sequenceDiagram', 'classDiagram',
+        'stateDiagram', 'stateDiagram-v2', 'erDiagram', 'journey',
+        'gantt', 'pie', 'mindmap', 'timeline', 'gitGraph',
+        'C4Context', 'C4Container', 'C4Component', 'C4Dynamic', 'C4Deployment',
+    ];
+    for (const t of types) {
+        if (first === t.toLowerCase()) return t;
+    }
+    return first;
+}
+
+// ---------------------------------------------------------------------------
+// SVG post-processing — inject override styles & make responsive
+// ---------------------------------------------------------------------------
+
+function normalizeMermaidSvg(svg: string, isLightTheme: boolean): string {
     let out = svg;
-    out = out.replace(/\s(width|height)="[^"]*"/g, '');
+
+    // Mermaid sometimes emits fixed width/height on the root <svg>; prefer responsive via viewBox.
+    // IMPORTANT: Only strip from the root <svg>, NOT from child elements like <rect>, <foreignObject>.
+    // Stripping width/height from rects/foreignObjects collapses nodes to 0×0 (arrows-only bug).
+    out = out.replace(
+        /(<svg\s)([^>]*?)>/i,
+        (_m, svgOpen, attrs) => {
+            const cleanedAttrs = attrs.replace(/\s?(width|height)="[^"]*"/g, '');
+            return `${svgOpen}${cleanedAttrs}>`;
+        },
+    );
+
+    const overrideStyleMarker = 'data-mermaid-override="true"';
+    const nodeFill = isLightTheme ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.18)';
+    const nodeStroke = isLightTheme ? 'rgba(99,102,241,0.35)' : 'rgba(129,140,248,0.65)';
+    const nodeText = isLightTheme ? '#1F2937' : '#F3F4F6';
+    const edgeStroke = isLightTheme ? 'rgba(100,116,139,0.6)' : 'rgba(148,163,184,0.65)';
+    const labelBg = isLightTheme ? 'rgba(255,255,255,0.9)' : 'rgba(15,23,42,0.85)';
+    const clusterFill = isLightTheme ? 'rgba(241,245,249,0.6)' : 'rgba(30,41,59,0.5)';
+    const clusterStroke = isLightTheme ? 'rgba(148,163,184,0.35)' : 'rgba(148,163,184,0.2)';
+    const noteFill = isLightTheme ? 'rgba(255,255,255,0.9)' : 'rgba(30,41,59,0.9)';
+    const noteStroke = isLightTheme ? 'rgba(100,116,139,0.35)' : 'rgba(148,163,184,0.45)';
+    const actorBg = isLightTheme ? 'rgba(241,245,249,0.95)' : 'rgba(30,41,59,0.85)';
+    const actorStroke = isLightTheme ? 'rgba(100,116,139,0.4)' : 'rgba(148,163,184,0.6)';
+    const actorLine = isLightTheme ? 'rgba(100,116,139,0.5)' : 'rgba(148,163,184,0.5)';
+
+    const overrideStyle = `<style ${overrideStyleMarker}>
+    /* ── Global text visibility ── */
+    text, tspan {
+        fill: ${nodeText} !important;
+        color: ${nodeText} !important;
+        opacity: 1 !important;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    }
+    /* ── foreignObject (html labels) ── */
+    foreignObject {
+        overflow: visible !important;
+    }
+    foreignObject * {
+        color: ${nodeText} !important;
+        opacity: 1 !important;
+    }
+    foreignObject div, foreignObject span, foreignObject p {
+        color: ${nodeText} !important;
+        fill: ${nodeText} !important;
+    }
+    /* ── Flowchart / Graph nodes ── */
+    .node rect, .node polygon, .node ellipse, .node circle, .node path {
+        fill: ${nodeFill};
+        stroke: ${nodeStroke};
+        stroke-width: 1.2px;
+    }
+    .node text, .nodeLabel, .label text, .edgeLabel text {
+        fill: ${nodeText} !important;
+        color: ${nodeText} !important;
+    }
+    /* ── Decision / rhombus ── */
+    .node polygon {
+        fill: ${nodeFill};
+        stroke: ${nodeStroke};
+    }
+    /* ── Edges ── */
+    .edgePath path, .flowchart-link {
+        stroke: ${edgeStroke} !important;
+    }
+    .edgeLabel, .label {
+        background: ${labelBg};
+    }
+    /* ── Subgraphs / clusters ── */
+    .cluster rect {
+        fill: ${clusterFill};
+        stroke: ${clusterStroke};
+    }
+    .cluster text {
+        fill: ${nodeText} !important;
+    }
+    /* ── Sequence Diagram — actors, messages, notes ── */
+    .actor rect, .actor {
+        fill: ${actorBg} !important;
+        stroke: ${actorStroke} !important;
+    }
+    .actor-line, .messageLine0, .messageLine1 {
+        stroke: ${actorLine} !important;
+    }
+    text.actor > tspan {
+        fill: ${nodeText} !important;
+        font-weight: 500;
+    }
+    .messageText, .loopText, .labelText {
+        fill: ${nodeText} !important;
+        color: ${nodeText} !important;
+    }
+    .sequenceNumber {
+        fill: ${nodeText} !important;
+    }
+    .activation0, .activation1, .activation2 {
+        fill: ${isLightTheme ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.25)'} !important;
+        stroke: ${nodeStroke} !important;
+    }
+    /* ── Notes ── */
+    .note rect, .note {
+        fill: ${noteFill};
+        stroke: ${noteStroke};
+    }
+    .note text, .noteText {
+        fill: ${nodeText} !important;
+    }
+    /* ── State diagrams ── */
+    .stateGroup rect {
+        fill: ${nodeFill} !important;
+        stroke: ${nodeStroke} !important;
+    }
+    .stateGroup text {
+        fill: ${nodeText} !important;
+    }
+    .statediagram-state .state-title {
+        fill: ${nodeText} !important;
+    }
+    /* ── Class diagrams ── */
+    .classGroup rect {
+        fill: ${nodeFill} !important;
+        stroke: ${nodeStroke} !important;
+    }
+    .classGroup text, .classLabel text {
+        fill: ${nodeText} !important;
+    }
+    /* ── Labels (edge labels, etc.) ── */
+    .labelBox {
+        fill: ${labelBg} !important;
+        stroke: ${noteStroke} !important;
+    }
+    .labelText, .loopText {
+        fill: ${nodeText} !important;
+    }
+    /* ── Arrowheads ── */
+    marker path {
+        fill: ${edgeStroke} !important;
+        stroke: ${edgeStroke} !important;
+    }
+    /* ── Prevent parent opacity/filter leaking ── */
+    .mermaid-container svg {
+        opacity: 1 !important;
+        filter: none !important;
+        mix-blend-mode: normal !important;
+    }
+    </style>`;
 
     // Ensure SVG scales to container width.
     out = out.replace(
         /<svg([^>]*?)>/i,
-        (m, attrs) => {
+        (_m, attrs) => {
             const hasStyle = /style="/i.test(attrs);
             const stylePatch = 'style="max-width:100%;height:auto;display:block;"';
-            return `<svg${attrs} ${hasStyle ? '' : stylePatch}>`;
+            const injectedStyle = out.includes(overrideStyleMarker) ? '' : overrideStyle;
+            return `<svg${attrs} ${hasStyle ? '' : stylePatch}>${injectedStyle}`;
         },
     );
     return out;
@@ -109,7 +240,7 @@ interface MermaidRendererProps {
 }
 
 // ---------------------------------------------------------------------------
-// Mermaid initialization (once)
+// Mermaid initialization (once per theme)
 // ---------------------------------------------------------------------------
 
 let mermaidInitialized = false;
@@ -134,38 +265,69 @@ function ensureMermaidInitialized(isDark: boolean) {
             rankSpacing: 50,
             useMaxWidth: true,
         },
+        sequence: {
+            actorMargin: 50,
+            boxMargin: 10,
+            boxTextMargin: 5,
+            noteMargin: 10,
+            messageMargin: 35,
+            mirrorActors: true,
+            useMaxWidth: true,
+        },
         themeVariables: isDark
             ? {
                 primaryColor: 'rgba(99,102,241,0.85)',
-                primaryTextColor: '#E5E7EB',
+                primaryTextColor: '#F3F4F6',
+                textColor: '#F3F4F6',
+                labelTextColor: '#F3F4F6',
+                actorTextColor: '#F3F4F6',
                 primaryBorderColor: 'rgba(99,102,241,0.5)',
                 lineColor: 'rgba(148,163,184,0.6)',
+                signalColor: 'rgba(148,163,184,0.6)',
+                signalTextColor: '#F3F4F6',
                 secondaryColor: 'rgba(30,41,59,0.9)',
                 tertiaryColor: 'rgba(51,65,85,0.7)',
                 background: 'transparent',
                 mainBkg: 'rgba(30,41,59,0.85)',
+                actorBkg: '#1F2937',
+                actorBorder: '#9CA3AF',
+                actorLineColor: 'rgba(148,163,184,0.6)',
                 nodeBorder: 'rgba(99,102,241,0.45)',
                 clusterBkg: 'rgba(30,41,59,0.5)',
                 clusterBorder: 'rgba(148,163,184,0.2)',
-                titleColor: '#E5E7EB',
+                titleColor: '#F3F4F6',
                 edgeLabelBackground: 'rgba(15,23,42,0.85)',
-                nodeTextColor: '#E5E7EB',
+                nodeTextColor: '#F3F4F6',
+                noteTextColor: '#F3F4F6',
+                noteBkgColor: '#111827',
+                noteBorderColor: 'rgba(148,163,184,0.5)',
             }
             : {
                 primaryColor: 'rgba(99,102,241,0.15)',
                 primaryTextColor: '#1E293B',
+                textColor: '#1E293B',
+                labelTextColor: '#1E293B',
+                actorTextColor: '#1E293B',
                 primaryBorderColor: 'rgba(99,102,241,0.35)',
                 lineColor: 'rgba(100,116,139,0.5)',
+                signalColor: 'rgba(100,116,139,0.5)',
+                signalTextColor: '#1E293B',
                 secondaryColor: 'rgba(241,245,249,0.9)',
                 tertiaryColor: 'rgba(226,232,240,0.7)',
                 background: 'transparent',
                 mainBkg: 'rgba(241,245,249,0.95)',
+                actorBkg: 'rgba(241,245,249,0.95)',
+                actorBorder: 'rgba(100,116,139,0.4)',
+                actorLineColor: 'rgba(100,116,139,0.5)',
                 nodeBorder: 'rgba(99,102,241,0.3)',
                 clusterBkg: 'rgba(241,245,249,0.6)',
                 clusterBorder: 'rgba(148,163,184,0.25)',
                 titleColor: '#1E293B',
                 edgeLabelBackground: 'rgba(255,255,255,0.9)',
                 nodeTextColor: '#1E293B',
+                noteTextColor: '#1E293B',
+                noteBkgColor: 'rgba(241,245,249,0.9)',
+                noteBorderColor: 'rgba(100,116,139,0.35)',
             },
     });
 
@@ -312,6 +474,8 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
         const [isRendering, setIsRendering] = useState(true);
         const renderIdRef = useRef<string>('');
         const lastChartRef = useRef<string>('');
+        const lastFailedChartRef = useRef<string>('');
+        const retryCountRef = useRef<number>(0);
         const mountedRef = useRef(true);
 
         useEffect(() => {
@@ -322,15 +486,24 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
         useEffect(() => {
             const trimmedChart = normalizeMermaidSource(chart);
 
-            // Skip empty or unchanged charts
+            // Skip empty charts
             if (!trimmedChart) {
                 setIsRendering(false);
                 setError('Empty diagram');
                 return;
             }
 
-            // Deduplicate — don't re-render same chart
+            // Deduplicate — don't re-render same chart that already succeeded
             if (trimmedChart === lastChartRef.current && svgHtml) return;
+
+            // If this is the same chart that previously failed, allow a retry
+            // (the chart prop changed → stream completed → re-render attempt)
+            const isRetryOfFailed = trimmedChart === lastFailedChartRef.current;
+            if (isRetryOfFailed && retryCountRef.current >= 2) {
+                // Already retried twice for this exact source, don't loop
+                return;
+            }
+
             lastChartRef.current = trimmedChart;
 
             const currentRenderId = getUniqueMermaidId();
@@ -338,6 +511,8 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
 
             setIsRendering(true);
             setError(null);
+
+            const diagramType = detectDiagramType(trimmedChart);
 
             // Initialize mermaid with correct theme
             ensureMermaidInitialized(!isLightTheme);
@@ -350,13 +525,22 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                     // Only update if this is still the latest render
                     if (!mountedRef.current || renderIdRef.current !== currentRenderId) return;
 
-                    setSvgHtml(normalizeMermaidSvg(svg));
+                    setSvgHtml(normalizeMermaidSvg(svg, isLightTheme));
                     setIsRendering(false);
                     setError(null);
+                    lastFailedChartRef.current = '';
+                    retryCountRef.current = 0;
                 } catch (err: any) {
                     if (!mountedRef.current || renderIdRef.current !== currentRenderId) return;
 
-                    console.warn('[MermaidRenderer] Parse error:', err?.message || err);
+                    console.warn('[MermaidRenderer]', {
+                        normalizedSource: trimmedChart,
+                        diagramType,
+                        error: err,
+                    });
+
+                    lastFailedChartRef.current = trimmedChart;
+                    retryCountRef.current += 1;
                     setError(err?.message || 'Failed to parse diagram');
                     setIsRendering(false);
 
@@ -414,7 +598,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
         // Rendered diagram
         return (
             <div
-                className="my-2.5 rounded-2xl overflow-hidden group/mermaid"
+                className="mermaid-container my-2.5 rounded-2xl overflow-hidden group/mermaid"
                 style={{
                     background: isLightTheme
                         ? 'linear-gradient(135deg, rgba(241,245,249,0.7) 0%, rgba(99,102,241,0.03) 100%)'
@@ -426,6 +610,8 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                     backdropFilter: 'blur(16px) saturate(130%)',
                     WebkitBackdropFilter: 'blur(16px) saturate(130%)',
                     transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+                    isolation: 'isolate',
+                    opacity: 1,
                 }}
             >
                 {/* Header */}
@@ -469,12 +655,13 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                 {/* Diagram SVG */}
                 <div
                     ref={containerRef}
-                    className="px-4 py-5 overflow-x-auto"
+                    className="px-4 py-5 overflow-x-auto mermaid"
                     style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         animation: 'mermaidFadeIn 0.4s cubic-bezier(0.22,1,0.36,1) both',
+                        opacity: 1,
                     }}
                     dangerouslySetInnerHTML={{ __html: svgHtml }}
                 />
@@ -495,7 +682,8 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                         max-width: 100%;
                         height: auto;
                     }
-                `}</style>
+                `}
+                </style>
             </div>
         );
     },
