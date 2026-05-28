@@ -304,7 +304,7 @@ function buildSessionModeDirective(mode: SessionActionMode): string {
         case 'follow_up':
             return 'Treat this as an ongoing follow-up discussion. Continue naturally from the latest exchange without restarting the answer.';
         case 'system_design':
-            return 'Treat this as a system design interview. You are an elite System Design Interview Copilot. Lead with architecture, include Mermaid diagrams, component breakdowns, data flow, database design, scaling strategy, bottleneck analysis, and CAP tradeoffs. Think like a senior FAANG engineer. Prefer practical production architecture over theory.';
+            return 'Treat this as a system design interview. You are an elite System Design Interview Copilot. Lead with architecture, include architecture_json diagrams, component breakdowns, data flow, database design, scaling strategy, bottleneck analysis, and CAP tradeoffs. Think like a senior FAANG engineer. Prefer practical production architecture over theory.';
         case 'general':
         default:
             return 'Treat this as a general interview conversation. Answer directly, naturally, and concisely.';
@@ -331,7 +331,7 @@ function buildModeAwareIntentRules(intent: UnifiedActionIntent, mode: SessionAct
                 ];
             case 'system_design':
                 return [
-                    'Lead with architecture direction and a Mermaid diagram.',
+                    'Lead with architecture direction and a fenced architecture_json diagram.',
                     'Include component breakdown with 1-2 line descriptions per component.',
                     'Explain the end-to-end data flow step by step.',
                     'Cover database design: SQL vs NoSQL, schema, indexing, sharding.',
@@ -454,7 +454,7 @@ function buildSystemDesignInterviewOutputContract(): string {
         '### 1. High-Level Understanding',
         '### 2. Clarifying Questions (2-5 bullets)',
         '### 3. Requirements (Functional + Non-Functional)',
-        '### 4. Architecture Diagram — MANDATORY fenced ```mermaid``` diagram',
+        '### 4. Architecture Diagram — explain the architecture briefly, then include MANDATORY fenced ```architecture_json```',
         '### 5. Component Breakdown',
         '### 6. Data Flow (numbered steps)',
         '### 7. Database Design',
@@ -463,13 +463,17 @@ function buildSystemDesignInterviewOutputContract(): string {
         '### 10. Interview-Ready Final Answer (spoken summary)',
         '',
         'CRITICAL: Applies to EVERY system design question (any product, scale, or platform).',
-        'Description-only answers without diagram and components are invalid.',
+        'Description-only answers without architecture_json and components are invalid.',
         'Use real component names (API Gateway, Redis, Kafka, DB, etc.) — no placeholders.',
-        'For Mermaid, use the exact fence format ```mermaid on its own line and ``` on its own closing line.',
-        'Do not add attributes after mermaid, do not use ``mermaid, and do not leave the fence open.',
-        'Architecture diagrams must use graph TD or flowchart TD with --> arrows only.',
-        'Reuse the exact same node IDs consistently across the whole diagram.',
-        'Use sequenceDiagram only when the prompt explicitly asks for a sequence or login flow.',
+        'The architecture_json must be valid JSON only inside the fence. No comments, no trailing commas.',
+        'Use this exact shape:',
+        '```architecture_json',
+        '{"diagram":{"type":"architecture","direction":"TB","nodes":[{"id":"client","label":"Client App","kind":"client"},{"id":"gateway","label":"API Gateway","kind":"gateway"},{"id":"service","label":"Core Service","kind":"service"},{"id":"db","label":"Primary Database","kind":"database"}],"edges":[{"source":"client","target":"gateway","label":"requests"},{"source":"gateway","target":"service","label":"routes"},{"source":"service","target":"db","label":"reads/writes"}]}}',
+        '```',
+        'Allowed node kinds only: client, gateway, service, database, cache, queue, storage, external.',
+        'Allowed edge fields only: source, target, label.',
+        'Keep node IDs lowercase, stable, and reused exactly in edges.',
+        'Do not include Mermaid unless architecture_json is impossible; Mermaid is fallback only.',
     ].join('\n');
 }
 

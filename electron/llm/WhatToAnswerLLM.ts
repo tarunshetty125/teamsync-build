@@ -96,6 +96,10 @@ FORMAT:
 RULES:
 * Sound spoken, direct, and interview-ready
 * Use concrete system design language: cache, queue, read/write path, partitioning, replicas, consistency, latency, failure handling
+* Include a valid fenced \`\`\`architecture_json\`\`\` block for architecture diagrams when the answer is a full system design
+* architecture_json shape: {"diagram":{"type":"architecture","direction":"TB","nodes":[{"id":"gateway","label":"API Gateway","kind":"gateway"}],"edges":[{"source":"gateway","target":"service","label":"routes"}]}}
+* Allowed node kinds: client, gateway, service, database, cache, queue, storage, external
+* Allowed edge fields: source, target, label
 * Do NOT answer like a textbook definition
 * Do NOT write code
 * Do NOT skip trade-offs or failure modes

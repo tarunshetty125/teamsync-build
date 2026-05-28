@@ -88,6 +88,13 @@ function normalizeSystemDesignMermaid(content: string): { text: string; changed:
     return { text: output.join('\n').trim(), changed };
 }
 
+function hasArchitectureJson(content: string): boolean {
+    if (/```[ \t]*(architecture_json|json)[^\n]*\n[\s\S]*"diagram"\s*:[\s\S]*?```/i.test(content)) {
+        return true;
+    }
+    return /architecture_json\s*:?\s*\{[\s\S]*"diagram"\s*:[\s\S]*"nodes"\s*:[\s\S]*"edges"\s*:/i.test(content);
+}
+
 function validateClarify(content: string): ActionOutputValidationResult {
     const trimmed = content.trim();
     // Accept any substantive response — a real LLM answer is always better
@@ -231,10 +238,11 @@ function validateSystemDesignInterviewAnswer(content: string): ActionOutputValid
     const normalized = normalizeSystemDesignMermaid(content);
     const trimmed = normalized.text.trim();
     const hasMermaid = /```mermaid[\s\S]+?```/i.test(trimmed);
+    const hasArchitectureDiagramJson = hasArchitectureJson(trimmed);
     const sectionHeaders = (trimmed.match(/^#{2,3}\s+\d+\./gm) || []).length;
     const hasComponents = /\b(component|api gateway|database|cache|queue|kafka|redis)\b/i.test(trimmed);
 
-    if (hasMermaid && (sectionHeaders >= 3 || hasComponents)) {
+    if ((hasArchitectureDiagramJson || hasMermaid) && (sectionHeaders >= 3 || hasComponents)) {
         return {
             valid: true,
             correctedContent: trimmed,
@@ -243,7 +251,7 @@ function validateSystemDesignInterviewAnswer(content: string): ActionOutputValid
         };
     }
 
-    if (hasMermaid && trimmed.length > 250) {
+    if ((hasArchitectureDiagramJson || hasMermaid) && trimmed.length > 250) {
         return {
             valid: true,
             correctedContent: trimmed,
@@ -252,12 +260,12 @@ function validateSystemDesignInterviewAnswer(content: string): ActionOutputValid
         };
     }
 
-    if (trimmed.length > 200 && !hasMermaid) {
+    if (trimmed.length > 200 && !hasMermaid && !hasArchitectureDiagramJson) {
         return {
             valid: false,
             correctedContent: trimmed,
             autoCorrected: false,
-            issues: ['system_design_missing_mermaid_diagram'],
+            issues: ['system_design_missing_architecture_diagram'],
         };
     }
 

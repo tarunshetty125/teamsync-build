@@ -17,6 +17,11 @@ import CodeBlock from '../ui/CodeBlock';
 import MermaidRenderer from '../ui/MermaidRenderer';
 import type { V2Message } from './useCluelyOverlayBridge';
 import { resolveV2ResponseWidthPx, V2_RESPONSE_MIN_WIDTH, V2_RESPONSE_MAX_WIDTH } from './v2Layout';
+import ArchitectureRenderer from './architecture/ArchitectureRenderer';
+import {
+    looksLikeSystemDesignResponse,
+    parseArchitectureResponse,
+} from './architecture/architectureParser';
 import {
     looksLikeMermaidSource,
     normalizeMermaidChartSource,
@@ -441,7 +446,7 @@ function renderFenceBlock(part: string, key: number, allowOpenMermaid: boolean) 
     );
 }
 
-function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
+function renderStandardV2ResponseBody(text: string, allowOpenMermaid: boolean) {
     const normalizedText = normalizeV2MermaidMarkdown(text, { isStreaming: !allowOpenMermaid });
 
     if (!normalizedText.includes('```')) {
@@ -499,6 +504,33 @@ function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
             })}
         </>
     );
+}
+
+function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
+    const normalizedText = normalizeV2MermaidMarkdown(text, { isStreaming: !allowOpenMermaid });
+    const parsedArchitecture = parseArchitectureResponse(normalizedText, { isStreaming: !allowOpenMermaid });
+    const shouldUseArchitectureRenderer =
+        parsedArchitecture.state !== 'missing'
+        || looksLikeSystemDesignResponse(normalizedText);
+
+    if (shouldUseArchitectureRenderer) {
+        return (
+            <>
+                {parsedArchitecture.markdown && (
+                    <>{renderStandardV2ResponseBody(parsedArchitecture.markdown, allowOpenMermaid)}</>
+                )}
+                <ArchitectureRenderer
+                    state={parsedArchitecture.state}
+                    diagram={parsedArchitecture.diagram}
+                    mermaidChart={parsedArchitecture.mermaidChart}
+                    fallbackDiagram={parsedArchitecture.fallbackDiagram}
+                    isStreaming={!allowOpenMermaid}
+                />
+            </>
+        );
+    }
+
+    return renderStandardV2ResponseBody(normalizedText, allowOpenMermaid);
 }
 
 function responseContainsMermaid(text: string): boolean {

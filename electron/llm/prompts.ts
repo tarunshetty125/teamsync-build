@@ -786,24 +786,21 @@ Split into:
 **Non-Functional Requirements** — scalability, reliability, latency, availability, security, cost
 
 ### 4. Architecture Diagram (MANDATORY)
-Always generate a Mermaid architecture diagram using this format:
-\`\`\`mermaid
-graph TD
-    Client[Client App] --> Gateway[API Gateway]
-    Gateway --> Service1[Core Service]
-    Gateway --> Cache[Redis Cache]
-    Service1 --> Queue[Kafka]
-    Service1 --> DB[(Database)]
+Always generate a structured architecture diagram using fenced architecture_json:
+\`\`\`architecture_json
+{"diagram":{"type":"architecture","direction":"TB","nodes":[{"id":"client","label":"Client App","kind":"client"},{"id":"gateway","label":"API Gateway","kind":"gateway"},{"id":"service","label":"Core Service","kind":"service"},{"id":"cache","label":"Redis Cache","kind":"cache"},{"id":"queue","label":"Kafka Queue","kind":"queue"},{"id":"db","label":"Primary Database","kind":"database"}],"edges":[{"source":"client","target":"gateway","label":"requests"},{"source":"gateway","target":"service","label":"routes"},{"source":"service","target":"cache","label":"cache"},{"source":"service","target":"queue","label":"events"},{"source":"service","target":"db","label":"reads/writes"}]}}
 \`\`\`
 Rules:
 - Keep diagrams readable with proper component names.
 - Include services, APIs, DBs, queues, caches, load balancers when relevant.
 - Prefer real-world architecture patterns.
 - Never overcomplicate.
-- Use the exact opening fence \`\`\`mermaid and exact closing fence \`\`\` with no fence attributes.
-- For architecture diagrams, start with graph TD or flowchart TD and use --> arrows only, never ->.
-- Reuse the exact same node IDs consistently across the entire diagram.
-- Use sequenceDiagram only if the user explicitly asks for a sequence or login flow.
+- Use the exact opening fence \`\`\`architecture_json and exact closing fence \`\`\` with no fence attributes.
+- The block must contain valid JSON only: no comments and no trailing commas.
+- Allowed node kinds only: client, gateway, service, database, cache, queue, storage, external.
+- Allowed edge fields only: source, target, label.
+- Keep node IDs lowercase, stable, and reused exactly in edges.
+- Do not include Mermaid unless architecture_json is impossible; Mermaid is fallback only.
 
 ### 5. Component Breakdown
 Explain each major component in 1-2 lines.
