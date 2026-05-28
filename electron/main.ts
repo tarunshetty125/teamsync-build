@@ -3193,6 +3193,12 @@ export class AppState {
           setTimeout(() => { this.modelSelectorWindowHelper.setIgnoreBlur(false); }, 500);
         }
       }, 150);
+    } else if (process.platform === 'win32') {
+      if (state) {
+        this.hideTray();
+      } else {
+        this.showTray();
+      }
     }
   }
 
@@ -3524,12 +3530,19 @@ async function initializeApp() {
 
   // Apply initial stealth state based on isUndetectable setting.
   // NOTE: app.dock.hide() was already called pre-emptively before createWindow()
-  // when isUndetectable=true. Here we only need to initialize the tray for non-stealth mode.
+  // when isUndetectable=true. Now that windows exist, StealthManager can rehydrate
+  // L0-L6 cleanly and recover any stale runtime marker from a crash/force-quit.
+  try {
+    StealthManager.getInstance().recoverStartupState(appState.getUndetectable());
+  } catch (e) {
+    console.warn('[Main] Stealth startup recovery failed:', e);
+  }
+
   if (!appState.getUndetectable()) {
     // Normal mode: show tray (dock is already showing — no need to call dock.show() again)
     appState.showTray();
   }
-  // Stealth mode: dock is already hidden, tray stays hidden, no action needed here.
+  // Stealth mode: dock/taskbar/tray hiding is handled by StealthManager + platform branch.
   // Register global shortcuts using KeybindManager
   KeybindManager.getInstance().registerGlobalShortcuts()
 

@@ -322,12 +322,12 @@ const REGEX_NORMALIZE_FILLER = /\b(yeah|um|uh|uh+m|like|so|okay|ok|well|you know
 const REGEX_NORMALIZE_SPACE = /\s+/;
 
 const REGEX_CODING_CORE = /(write code|write a? ?(?:function|program|method|class|script)|implement|how to code)/;
-const REGEX_SYSTEM_DIRECT = /\b(system design|design (?:a|an|the)\s+(?:system|backend|architecture|platform|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network|streaming|video|marketplace|e ?commerce|storage|distributed system)|design (?:twitter|instagram|uber|netflix|youtube|whatsapp|slack|discord)|redesign (?:the )?(?:backend|system|architecture|platform|service|app)|architecture of (?:the )?(?:system|backend|platform|service|app|database)|build(?:ing)? (?:a|an|the)\s+(?:platform|system|backend|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network))\b/;
+const REGEX_SYSTEM_DIRECT = /\b(system design|design (?:a|an|the)\s+(?:system|backend|architecture|platform|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network|streaming|video|marketplace|e ?commerce|storage|distributed system)|(?:design|build|scale|architect)\s+(?:twitter|instagram|uber|netflix|youtube|whatsapp|slack|discord|flipkart|swiggy|zomato|amazon|paytm|upi|google drive|dropbox|stripe)(?:\s+(?:backend|system|architecture|platform|service|app))?|redesign (?:the )?(?:backend|system|architecture|platform|service|app)|architecture of (?:the )?(?:system|backend|platform|service|app|database)|build(?:ing)? (?:a|an|the)\s+(?:platform|system|backend|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network))\b/;
 const REGEX_SYSTEM_ARCH = /\b(backend|front ?end|service|services|distributed|microservice|api gateway|gateway|queue|message queue|event[-\s]?driven|cache|caching|redis|kafka|database|db|storage|partition|replication|shard(?:ing)?|load balanc(?:er|ing)|cdn|edge|availability|consistency|latency|throughput|qps|rps|slo|sla|index(?:es)?|read write|read\/write|pipeline|worker|job queue|cron|batch|stream(?:ing)?|pub ?sub|pubsub)\b/;
-const REGEX_SYSTEM_SCALE = /\b(scale|scaling|scalable|million|billion|users?|traffic|spike|spikes|burst|high traffic|peak traffic|performance|bottleneck|concurren|throughput|latency|qps|rps|requests per second|low latency|high throughput|capacity|growth|high load|load spike|load test|sudden(?:ly)? (?:spike|traffic|load)|surge|\d+\s*(?:k|m|b|thousand|million|billion))\b/;
-const REGEX_SYSTEM_FRAMING = /\b(suppose|imagine|let s say|lets say|what if|consider|assume|scenario|in production|real[-\s]?world|in the real world|if suddenly|suddenly|at scale|in practice)\b/;
-const REGEX_SYSTEM_REASONING = /\b(tradeoff|trade-?off|pros? and cons|optimiz|handle|redesign|architecture|improv|fail(?:ed|ure|s)?|failure|fallback|retry|recover|recovery|failover|consistency|availability|durability|reliability|fault toleran|resilien|degrad|graceful|circuit breaker|rate limit|idempotent|backoff|queueing|bottleneck)\b/;
-const REGEX_NON_SYSTEM_DESIGN = /\b(singleton|factory|observer|strategy|decorator|adapter|prototype|builder|solid|oop|object oriented|design pattern|class diagram|uml|inheritance|polymorphism|encapsulation)\b/;
+const REGEX_SYSTEM_SCALE = /\b(scale|scaling|scalable|millions?(?: of)? users?|billions?(?: of)? users?|100m users?|10m users?|users? at scale|traffic|spike|spikes|burst|high traffic|peak traffic|performance|bottleneck|concurren|throughput|latency|qps|rps|requests per second|low latency|high throughput|capacity|growth|high load|load spike|load test|sudden(?:ly)? (?:spike|traffic|load)|traffic surge|surge|fault toleran|redundan|high availability|\bha\b|\d+\s*(?:k|m|b|thousand|million|billion))\b/;
+const REGEX_SYSTEM_FRAMING = /\b(suppose|imagine|let s say|lets say|what if|consider|assume|scenario|in production|real[-\s]?world|in the real world|if suddenly|suddenly|at scale|in practice|what would happen|what happens|how would(?: you| we| this| the system)?|walk me through (?:the )?(?:architecture|system|backend|design)|talk through (?:the )?(?:architecture|system|backend|design))\b/;
+const REGEX_SYSTEM_REASONING = /\b(tradeoff|trade-?off|pros? and cons|optimiz|handle|redesign|architecture|improv|fail(?:ed|ure|s)?|failure|fallback|retry|retries|recover|recovery|failover|avoid downtime|downtime|single point of failure|consistency|availability|durability|reliability|fault toleran|resilien|degrad|graceful|circuit breaker|rate limit|idempotent|backoff|queueing|bottleneck)\b/;
+const REGEX_NON_SYSTEM_DESIGN = /\b(singleton|factory|observer|strategy|decorator|adapter|prototype|builder|solid|oop|object oriented|design patterns?|class diagram|uml|inheritance|polymorphism|encapsulation|bfs|dfs|binary tree|tree traversal|traversal|dynamic programming|dp\b|algorithm|leetcode|database normalization|normalization|normal forms?|1nf|2nf|3nf)\b/;
 const REGEX_BEHAVIORAL_CORE = /(tell me about a time|describe a situation|give me an example|share an experience|tell me about yourself|introduce yourself|walk me through (?:your )?(?:background|resume)|background|resume|personal experience|worked on|built|developed|impact|result|outcome)/;
 
 const REGEX_CODING_STRONG = /(algorithm|debug this|snippet|boilerplate|optimize|refactor|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|time complexity|space complexity)/;
@@ -338,8 +338,9 @@ const REGEX_FOLLOW_UP_STRONG = /(follow.?up|continuation|building on|going back 
 const REGEX_CODING_BOOST = /(faster|efficient)/;
 const SYSTEM_SIGNAL_MIN_BUCKETS = 2;
 const SYSTEM_SIGNAL_MIN_SCORE = 3;
-const INTENT_TRANSCRIPT_SEGMENTS = 6;
-const INTENT_TRANSCRIPT_MAX_CHARS = 700;
+const SYSTEM_FAST_SWITCH_SCORE = 5;
+const INTENT_TRANSCRIPT_SEGMENTS = 8;
+const INTENT_TRANSCRIPT_MAX_CHARS = 1200;
 
 type SystemSignalScore = {
     score: number;
@@ -363,7 +364,7 @@ function normalizeTranscript(text: string) {
     return t;
 }
 
-function scoreSystemDesignSignals(t: string, cap: (regex: RegExp) => number): SystemSignalScore {
+function scoreSystemDesignSignals(cap: (regex: RegExp) => number): SystemSignalScore {
     const directHits = cap(REGEX_SYSTEM_DIRECT);
     const archHits = cap(REGEX_SYSTEM_ARCH);
     const scaleHits = cap(REGEX_SYSTEM_SCALE);
@@ -377,7 +378,11 @@ function scoreSystemDesignSignals(t: string, cap: (regex: RegExp) => number): Sy
         + scaleHits * 2
         + reasoningHits * 1.5
         + framingHits;
-    const strong = directHits > 0 || (archHits > 0 && scaleHits > 0 && reasoningHits > 0);
+    const strong =
+        directHits > 0
+        || (archHits > 0 && scaleHits > 0 && reasoningHits > 0)
+        || (archHits >= 2 && (framingHits > 0 || reasoningHits > 0))
+        || (archHits > 0 && reasoningHits >= 2);
 
     return {
         score,
@@ -448,7 +453,7 @@ function detectQuestionType(
     scores.follow_up += cap(REGEX_FOLLOW_UP_CORE) * 3;
     scores.follow_up += cap(REGEX_FOLLOW_UP_STRONG) * 2;
 
-    const systemSignals = scoreSystemDesignSignals(t, cap);
+    const systemSignals = scoreSystemDesignSignals(cap);
     const systemSignalDensity =
         systemSignals.directHits
         + systemSignals.archHits
@@ -465,7 +470,15 @@ function detectQuestionType(
         scores.system_design += Math.min(systemSignals.score, 0.5);
     }
 
-    if (REGEX_NON_SYSTEM_DESIGN.test(t) && !systemSignals.strong && systemSignals.bucketHits < SYSTEM_SIGNAL_MIN_BUCKETS) {
+    const hasNonSystemDesignSignal = REGEX_NON_SYSTEM_DESIGN.test(t);
+    if (
+        hasNonSystemDesignSignal
+        && systemSignals.directHits === 0
+        && systemSignals.scaleHits === 0
+        && systemSignals.reasoningHits === 0
+    ) {
+        scores.system_design = 0;
+    } else if (hasNonSystemDesignSignal && !systemSignals.strong && systemSignals.bucketHits < SYSTEM_SIGNAL_MIN_BUCKETS) {
         scores.system_design = Math.max(0, scores.system_design - 2);
     }
 
@@ -498,6 +511,14 @@ function detectQuestionType(
 
     // Hysteresis: only switch if the primary intent beats the secondary intent cleanly
     const SWITCH_THRESHOLD = 2;
+    if (
+        primary !== currentType
+        && primary === 'system_design'
+        && scores.system_design >= SYSTEM_FAST_SWITCH_SCORE
+    ) {
+        return { nextType: 'system_design', nextStrong };
+    }
+
     if (primary !== currentType && currentType !== 'general' && (primaryScore - secondScore) < SWITCH_THRESHOLD) {
         return { nextType: currentType, nextStrong };
     }

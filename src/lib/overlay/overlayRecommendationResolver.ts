@@ -19,6 +19,18 @@ const UNIVERSAL_TRANSCRIPT_SIGNALS: Array<{
   candidates: OverlayQuickActionId[];
 }> = [
   {
+    patterns: [
+      /system design/i,
+      /design (?:a |the |this )?(?:system|backend|architecture|platform|service|api)/i,
+      /(?:design|build|scale|architect)\s+(?:uber|instagram|netflix|youtube|whatsapp|twitter|discord|slack|flipkart|swiggy|zomato|amazon|paytm|upi|google drive|dropbox|stripe)/i,
+      /how would (?:you|we|this|the system).*(?:scale|backend|service|database|cache|redis|shard|traffic|latency|throughput|recover|fail|retry)/i,
+      /(?:redis|cache|database|backend|service|api|queue|kafka).*(?:fail|recover|retry|scale|traffic|shard)/i,
+      /(?:million|millions|100m|10m|qps|rps|traffic spike|high traffic|throughput|latency).*(?:backend|service|api|database|cache|queue|handle|scale)/i,
+      /(?:shard|sharding|caching|load balanc|fault toleran|single point of failure|avoid downtime|high availability)/i,
+    ],
+    candidates: ['system_tradeoffs', 'system_approaches', 'system_deep_dive', 'system_clarify'],
+  },
+  {
     patterns: [/tell me about yourself/i, /introduce yourself/i, /walk me through your background/i],
     candidates: ['what_to_answer', 'job_star', 'sales_discovery', 'lecture_explain', 'recruiting_strength'],
   },

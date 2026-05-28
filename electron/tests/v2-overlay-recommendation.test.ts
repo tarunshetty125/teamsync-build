@@ -7,7 +7,41 @@ import {
     resolveOverlayCopilotMode,
 } from '../../src/lib/modes/overlayCopilotConfig.ts';
 import { resolveRecommendedOverlayAction } from '../../src/lib/overlay/overlayRecommendationResolver.ts';
-import { detectQuestionType, normalizeTranscript } from '../../src/lib/overlay/overlayIntent.ts';
+import {
+    detectQuestionType,
+    intentReducer,
+    normalizeTranscript,
+    type DetectedQuestionType,
+    type IntentState,
+} from '../../src/lib/overlay/overlayIntent.ts';
+
+function classifyRolling(segments: string[], initial: DetectedQuestionType = 'general'): DetectedQuestionType {
+    let current = initial;
+    for (let i = 0; i < segments.length; i++) {
+        const combined = segments.slice(Math.max(0, i - 7), i + 1).join(' ');
+        current = detectQuestionType(combined, current, current).nextType;
+    }
+    return current;
+}
+
+function reduceRolling(segments: string[], initial: DetectedQuestionType = 'general'): IntentState {
+    let state: IntentState = {
+        detectedType: initial,
+        lastStrongType: initial,
+        lastStrongAt: 0,
+        seq: 0,
+    };
+    for (let i = 0; i < segments.length; i++) {
+        const combined = segments.slice(Math.max(0, i - 7), i + 1).join(' ');
+        state = intentReducer(state, {
+            type: 'EVALUATE',
+            combinedText: combined,
+            now: (i + 1) * 1000,
+            seq: i + 1,
+        });
+    }
+    return state;
+}
 
 test('resolveOverlayCopilotMode maps coding detection under technical-interview', () => {
     const mode = resolveOverlayCopilotMode('technical-interview', 'coding');
@@ -59,6 +93,70 @@ test('system design detection maps to system_design copilot mode', () => {
         normalizeTranscript(text),
     );
     assert.equal(recommended, 'system_tradeoffs');
+});
+
+test('system design accumulates weak interview signals across finalized chunks', () => {
+    const nextType = classifyRolling([
+        'Suppose we suddenly have millions of users',
+        'traffic spikes',
+        'how would backend handle this',
+    ]);
+    assert.equal(nextType, 'system_design');
+});
+
+test('system design catches failure recovery from fragmented speech', () => {
+    const nextType = classifyRolling([
+        'Redis fails',
+        'what happens',
+        'how do we recover',
+    ]);
+    assert.equal(nextType, 'system_design');
+});
+
+test('system design catches architecture-only shard and cache prompts', () => {
+    assert.equal(detectQuestionType('How would you shard database', 'general', 'general').nextType, 'system_design');
+    assert.equal(detectQuestionType('How would caching work here', 'general', 'general').nextType, 'system_design');
+});
+
+test('system design catches big-tech backend design prompts', () => {
+    assert.equal(detectQuestionType('Design Uber backend', 'general', 'general').nextType, 'system_design');
+});
+
+test('system design suppresses OOP, DSA, traversal, and normalization false positives', () => {
+    assert.notEqual(detectQuestionType('Explain singleton pattern', 'general', 'general').nextType, 'system_design');
+    assert.notEqual(detectQuestionType('Difference between BFS and DFS', 'general', 'general').nextType, 'system_design');
+    assert.notEqual(detectQuestionType('Binary tree traversal', 'general', 'general').nextType, 'system_design');
+    assert.notEqual(detectQuestionType('How would database normalization work', 'general', 'general').nextType, 'system_design');
+    assert.notEqual(detectQuestionType('database', 'general', 'general').nextType, 'system_design');
+});
+
+test('system design catches retry follow-up after backend discussion', () => {
+    const nextType = classifyRolling([
+        'we are discussing the backend service and database path',
+        'how would retries work',
+    ]);
+    assert.equal(nextType, 'system_design');
+});
+
+test('intent reducer switches rapidly coding to system design to behavioral', () => {
+    let state = reduceRolling(['implement binary search on an array']);
+    assert.equal(state.detectedType, 'coding');
+
+    state = intentReducer(state, {
+        type: 'EVALUATE',
+        combinedText: 'How would you scale this API for high traffic',
+        now: 2000,
+        seq: 2,
+    });
+    assert.equal(state.detectedType, 'system_design');
+
+    state = intentReducer(state, {
+        type: 'EVALUATE',
+        combinedText: 'Tell me about a time you handled conflict on your team',
+        now: 3000,
+        seq: 3,
+    });
+    assert.equal(state.detectedType, 'behavioral');
 });
 
 test('resolveRecommendedOverlayAction always returns a visible quick action', () => {

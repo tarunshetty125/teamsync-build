@@ -40,7 +40,13 @@ export function useOverlayRecommendation({
     const recommendationLockTurnIdRef = useRef<string | null>(null);
 
     const buildCombinedTranscript = useCallback(() => {
-        const recentFinalized = finalizedTranscriptRef.current?.slice(-500).trim() || '';
+        const recentFinalized = (finalizedTranscriptRef.current || '')
+            .split('  ·  ')
+            .filter(Boolean)
+            .slice(-8)
+            .join(' ')
+            .slice(-1200)
+            .trim();
         const latest = lastFinalSentenceRef.current?.trim() || '';
         return normalizeTranscript([recentFinalized, latest].filter(Boolean).join(' '));
     }, [finalizedTranscriptRef, lastFinalSentenceRef]);

@@ -10,14 +10,17 @@
  *   L1  Window Surface     — contentProtection, windowSharingType, AX suppression
  *   L2  OS Integration     — dock/tray/Mission Control/Exposé hiding
  *   L3  Event Blocking     — Apple Events suppression, Accessibility API evasion
- *   L4  Forensic Cleanup   — log suppression, crash reporter neutralisation
+ *   L4  Metadata Hygiene   — app naming, crash metadata, production-safe logs
+ *   L5  Resilience         — startup recovery, lifecycle reassertion, clean revert
+ *   L6  Platform Parity    — small OS adapters around official Electron APIs
  *
  * Usage:
  *   StealthManager.getInstance().engage()   — enable advanced stealth
  *   StealthManager.getInstance().disengage() — revert to normal
  */
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, powerMonitor, screen } from 'electron';
+import type { EventEmitter } from 'events';
 import { SettingsManager } from './SettingsManager';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -51,6 +54,16 @@ export interface StealthConfig {
   /** Whether to exclude from Mission Control / Exposé */
   excludeFromMissionControl: boolean;
 }
+
+type StealthPlatformName = 'darwin' | 'win32' | 'linux';
+
+type StealthPlatformAdapter = {
+  readonly name: StealthPlatformName;
+  applyOSVisibility: () => void;
+  revertOSVisibility: () => void;
+  applyOSVisibilityToWindow: (win: BrowserWindow) => void;
+  reassertAfterLifecycle: (reason: string) => void;
+};
 
 // ─── Default Configuration ──────────────────────────────────────────────────────
 
@@ -92,6 +105,10 @@ export class StealthManager {
   private _originalAppName: string;
   private _scrubbedEnvKeys: string[] = [];
   private _scrubbedEnvBackup: Record<string, string> = {};
+  private _platformAdapter: StealthPlatformAdapter;
+  private _windowsHiddenFromTaskbar: Set<number> = new Set();
+  private _lifecycleHandlers: Array<{ target: EventEmitter; event: string; handler: (...args: any[]) => void }> = [];
+  private _reassertTimer: NodeJS.Timeout | null = null;
   /** Tracked Apple Event handlers so they can be removed on disengage */
   private _appleEventHandlers: Array<{ event: string; handler: (...args: any[]) => void }> = [];
   /** Tracked browser-window-created handler for cleanup */
@@ -102,6 +119,7 @@ export class StealthManager {
     this._originalArgv0 = process.argv[0] || '';
     this._originalAppName = (() => { try { return app.getName(); } catch { return 'TeamSync'; } })();
     this.config = { ...DEFAULT_CONFIG };
+    this._platformAdapter = this._createPlatformAdapter();
 
     // Rehydrate persisted config — wrapped for safety on first-launch
     try {
@@ -118,6 +136,45 @@ export class StealthManager {
     return StealthManager.instance;
   }
 
+  private _createPlatformAdapter(): StealthPlatformAdapter {
+    if (process.platform === 'darwin') {
+      return {
+        name: 'darwin',
+        applyOSVisibility: () => this._applyDarwinOSVisibility(),
+        revertOSVisibility: () => this._revertDarwinOSVisibility(),
+        applyOSVisibilityToWindow: (_win: BrowserWindow) => {
+          // macOS dock/app-switcher visibility is app-level; per-window Mission
+          // Control handling belongs to L1 window protection.
+        },
+        reassertAfterLifecycle: (reason: string) => {
+          this._log(`L6: Reasserting macOS visibility after ${reason}`);
+          this._applyDarwinOSVisibility();
+        },
+      };
+    }
+
+    if (process.platform === 'win32') {
+      return {
+        name: 'win32',
+        applyOSVisibility: () => this._applyWindowsOSVisibility(),
+        revertOSVisibility: () => this._revertWindowsOSVisibility(),
+        applyOSVisibilityToWindow: (win: BrowserWindow) => this._applyWindowsOSVisibilityToWindow(win),
+        reassertAfterLifecycle: (reason: string) => {
+          this._log(`L6: Reasserting Windows visibility after ${reason}`);
+          this._applyWindowsOSVisibility();
+        },
+      };
+    }
+
+    return {
+      name: 'linux',
+      applyOSVisibility: () => this._log('L6: Linux OS visibility best-effort no-op'),
+      revertOSVisibility: () => this._log('L6: Linux OS visibility restore no-op'),
+      applyOSVisibilityToWindow: (_win: BrowserWindow) => {},
+      reassertAfterLifecycle: (reason: string) => this._log(`L6: Linux lifecycle reassert no-op after ${reason}`),
+    };
+  }
+
   // ─── Public API ───────────────────────────────────────────────────────────
 
   /**
@@ -128,7 +185,7 @@ export class StealthManager {
     if (this._engaged || this._transitioning) return;
     this._transitioning = true;
 
-    console.log('[StealthManager] ▶ Engaging advanced stealth mode');
+    this._log('▶ Engaging advanced stealth mode');
 
     // Set flag BEFORE applying layers so protectWindow() works for
     // windows created during the engage sequence.
@@ -162,13 +219,17 @@ export class StealthManager {
         this._suppressCrashReporter();
       }
 
+      // L5: Resilience / recovery
+      this._registerLifecycleRecoveryListeners();
+      this._markRuntimeEngaged();
+
       // Persist
       this._persistToSettings();
 
-      console.log('[StealthManager] ✅ Advanced stealth engaged');
+      this._log('✅ Advanced stealth engaged');
     } catch (e) {
       // If any layer throws, roll back to prevent half-engaged state
-      console.error('[StealthManager] ⚠ Engage failed, rolling back:', e);
+      this._error('⚠ Engage failed, rolling back:', e);
       this._transitioning = false; // Allow disengage to proceed
       try { this.disengage(); } catch { /* best-effort */ }
     } finally {
@@ -185,14 +246,16 @@ export class StealthManager {
       // Re-entry during rollback — just flip flag and return
       this._engaged = false;
       this.config.level = 'off';
+      this._clearRuntimeMarker();
       return;
     }
     this._transitioning = true;
 
-    console.log('[StealthManager] ◀ Disengaging stealth mode');
+    this._log('◀ Disengaging stealth mode');
 
     // Stop watchdog first to prevent re-application during revert
     this._stopWatchdog();
+    this._removeLifecycleRecoveryListeners();
 
     // Remove dynamic window listener
     this._removeWindowCreatedListener();
@@ -200,30 +263,31 @@ export class StealthManager {
     // Each revert is independently try-caught so a failure in one layer
     // does not prevent the remaining layers from being reverted.
     try { this._revertProcessDisguise(); } catch (e) {
-      console.warn('[StealthManager] L0 revert error:', e);
+      this._warn('L0 revert error:', e);
     }
     try { this._restoreEnvironment(); } catch (e) {
-      console.warn('[StealthManager] L0.5 revert error:', e);
+      this._warn('L0.5 revert error:', e);
     }
     try { this._revertWindowProtection(); } catch (e) {
-      console.warn('[StealthManager] L1 revert error:', e);
+      this._warn('L1 revert error:', e);
     }
     try { this._revertOSHiding(); } catch (e) {
-      console.warn('[StealthManager] L2 revert error:', e);
+      this._warn('L2 revert error:', e);
     }
     try { this._unblockAppleEvents(); } catch (e) {
-      console.warn('[StealthManager] L3 revert error:', e);
+      this._warn('L3 revert error:', e);
     }
     try { this._restoreCrashReporter(); } catch (e) {
-      console.warn('[StealthManager] L4 revert error:', e);
+      this._warn('L4 revert error:', e);
     }
 
     this._engaged = false;
     this.config.level = 'off';
     this._transitioning = false;
+    this._clearRuntimeMarker();
     this._persistToSettings();
 
-    console.log('[StealthManager] ✅ Stealth disengaged — normal mode restored');
+    this._log('✅ Stealth disengaged — normal mode restored');
   }
 
   /**
@@ -302,6 +366,72 @@ export class StealthManager {
     this._applyProcessDisguise();
   }
 
+  /**
+   * L5 startup recovery: called once after boot windows exist.
+   * If stealth is still enabled in user settings, re-engage from a clean runtime.
+   * If not, clear any stale runtime marker left by a crash/force-quit.
+   */
+  public recoverStartupState(shouldEngage: boolean): void {
+    const hadStaleRuntime = this._consumeRuntimeMarker();
+
+    if (shouldEngage) {
+      if (hadStaleRuntime) {
+        this._log('L5: Stale stealth runtime detected; re-engaging from fresh process state');
+      }
+      this.engage();
+      return;
+    }
+
+    if (hadStaleRuntime) {
+      this._log('L5: Stale stealth runtime detected; forcing visible baseline');
+      this.forceRestore();
+    }
+  }
+
+  /**
+   * Best-effort visible baseline restore. Safe to call even if engage() was not
+   * reached in this process, which is important after a bad previous shutdown.
+   */
+  public forceRestore(): void {
+    this._stopWatchdog();
+    this._removeLifecycleRecoveryListeners();
+    this._removeWindowCreatedListener();
+    try { this._revertProcessDisguise(); } catch (e) { this._warn('L0 force restore error:', e); }
+    try { this._restoreEnvironment(); } catch (e) { this._warn('L0.5 force restore error:', e); }
+    try { this._revertWindowProtection(); } catch (e) { this._warn('L1 force restore error:', e); }
+    try { this._revertOSHiding(); } catch (e) { this._warn('L2 force restore error:', e); }
+    try { this._unblockAppleEvents(); } catch (e) { this._warn('L3 force restore error:', e); }
+    try { this._restoreCrashReporter(); } catch (e) { this._warn('L4 force restore error:', e); }
+    this._engaged = false;
+    this._transitioning = false;
+    this.config.level = 'off';
+    this._clearRuntimeMarker();
+    this._persistToSettings();
+  }
+
+  private _isVerboseLoggingEnabled(): boolean {
+    if (process.env.NODE_ENV !== 'production') return true;
+    try {
+      return SettingsManager.getInstance().get('verboseLogging') === true;
+    } catch {
+      return false;
+    }
+  }
+
+  private _log(message: string, ...args: unknown[]): void {
+    if (this._isVerboseLoggingEnabled()) {
+      console.log(`[StealthManager] ${message}`, ...args);
+    }
+  }
+
+  private _warn(message: string, ...args: unknown[]): void {
+    console.warn(`[StealthManager] ${message}`, ...args);
+  }
+
+  private _error(message: string, ...args: unknown[]): void {
+    console.error(`[StealthManager] ${message}`, ...args);
+  }
+
   // ─── L0: Process Identity ─────────────────────────────────────────────────
 
   private _applyProcessDisguise(): void {
@@ -329,11 +459,11 @@ export class StealthManager {
       try {
         app.setAppUserModelId(this._getWindowsAumid(targetName));
       } catch (e) {
-        console.warn('[StealthManager] Failed to set AUMID:', e);
+        this._warn('Failed to set AUMID:', e);
       }
     }
 
-    console.log(`[StealthManager] L0: Process disguised as "${targetName}"`);
+    this._log(`L0: Process disguised as "${targetName}"`);
   }
 
   private _revertProcessDisguise(): void {
@@ -356,7 +486,7 @@ export class StealthManager {
       } catch { /* ignore */ }
     }
 
-    console.log('[StealthManager] L0: Process identity reverted');
+    this._log('L0: Process identity reverted');
   }
 
   /**
@@ -376,6 +506,12 @@ export class StealthManager {
       if (process.platform === 'darwin' && process.env.CFBundleName !== targetName.trim()) {
         process.env.CFBundleName = targetName.trim();
       }
+
+      if (process.platform === 'win32') {
+        try {
+          app.setAppUserModelId(this._getWindowsAumid(targetName));
+        } catch { /* best-effort */ }
+      }
     }, this.config.watchdogIntervalMs);
 
     // Prevent the timer from keeping the process alive during shutdown
@@ -383,7 +519,7 @@ export class StealthManager {
       this._watchdogTimer.unref();
     }
 
-    console.log(`[StealthManager] L0: Watchdog started (${this.config.watchdogIntervalMs}ms interval)`);
+    this._log(`L0: Watchdog started (${this.config.watchdogIntervalMs}ms interval)`);
   }
 
   private _stopWatchdog(): void {
@@ -420,7 +556,7 @@ export class StealthManager {
     }
 
     if (this._scrubbedEnvKeys.length > 0) {
-      console.log(`[StealthManager] L0.5: Scrubbed ${this._scrubbedEnvKeys.length} fingerprint env vars`);
+      this._log(`L0.5: Scrubbed ${this._scrubbedEnvKeys.length} fingerprint env vars`);
     }
   }
 
@@ -443,39 +579,36 @@ export class StealthManager {
     for (const win of allWindows) {
       if (win.isDestroyed()) continue;
 
-      try {
-        // Content protection — prevents screen capture from recording the window
-        win.setContentProtection(true);
-      } catch (e) {
-        console.warn('[StealthManager] L1: setContentProtection failed for window:', e);
-        continue;
-      }
-
-      if (process.platform === 'darwin') {
-        // Hide from Mission Control / Exposé
-        try {
-          if (typeof (win as any).setHiddenInMissionControl === 'function') {
-            win.setHiddenInMissionControl(true);
-          }
-        } catch { /* Older Electron — skip */ }
-
-        // Make window visible on all workspaces (consistent with stealth overlay)
-        try {
-          win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-        } catch { /* ignore */ }
-      }
-
-      if (process.platform === 'win32') {
-        // Set the window as a tool window (no taskbar entry)
-        try {
-          win.setSkipTaskbar(true);
-        } catch { /* ignore */ }
-      }
-
-      hardened++;
+      if (this._applyWindowProtectionToWindow(win)) hardened++;
     }
 
-    console.log(`[StealthManager] L1: ${hardened}/${allWindows.length} windows hardened`);
+    this._log(`L1: ${hardened}/${allWindows.length} windows hardened`);
+  }
+
+  private _applyWindowProtectionToWindow(win: BrowserWindow): boolean {
+    try {
+      // Content protection — prevents screen capture from recording the window.
+      win.setContentProtection(true);
+    } catch (e) {
+      this._warn('L1: setContentProtection failed for window:', e);
+      return false;
+    }
+
+    if (process.platform === 'darwin') {
+      // Hide from Mission Control / Exposé.
+      try {
+        if (typeof (win as any).setHiddenInMissionControl === 'function') {
+          win.setHiddenInMissionControl(true);
+        }
+      } catch { /* Older Electron — skip */ }
+
+      // Make window visible on all workspaces (consistent with stealth overlay).
+      try {
+        win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      } catch { /* ignore */ }
+    }
+
+    return true;
   }
 
   private _revertWindowProtection(): void {
@@ -493,17 +626,9 @@ export class StealthManager {
           }
         } catch { /* ignore */ }
       }
-
-      if (process.platform === 'win32') {
-        try {
-          // Only remove skipTaskbar for non-overlay windows
-          const isOverlay = win.isAlwaysOnTop();
-          if (!isOverlay) win.setSkipTaskbar(false);
-        } catch { /* ignore */ }
-      }
     }
 
-    console.log('[StealthManager] L1: Window protection reverted');
+    this._log('L1: Window protection reverted');
   }
 
   /**
@@ -514,25 +639,8 @@ export class StealthManager {
     if (!this._engaged) return;
     if (!win || win.isDestroyed()) return;
 
-    try {
-      win.setContentProtection(true);
-    } catch (e) {
-      console.warn('[StealthManager] protectWindow: setContentProtection failed:', e);
-      return;
-    }
-
-    if (process.platform === 'darwin') {
-      try {
-        if (typeof (win as any).setHiddenInMissionControl === 'function') {
-          win.setHiddenInMissionControl(true);
-        }
-      } catch { /* ignore */ }
-      try { win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch { /* ignore */ }
-    }
-
-    if (process.platform === 'win32') {
-      try { win.setSkipTaskbar(true); } catch { /* ignore */ }
-    }
+    if (!this._applyWindowProtectionToWindow(win)) return;
+    this._platformAdapter.applyOSVisibilityToWindow(win);
   }
 
   // ─── Dynamic Window Listener ─────────────────────────────────────────────
@@ -570,48 +678,99 @@ export class StealthManager {
   // ─── L2: OS Integration Hiding ───────────────────────────────────────────
 
   private _applyOSHiding(): void {
-    if (process.platform === 'darwin') {
-      // Hide from dock (Cmd+Tab app switcher)
-      try {
-        if (app.dock && typeof app.dock.hide === 'function') {
-          app.dock.hide();
-        }
-      } catch (e) {
-        console.warn('[StealthManager] L2: dock.hide() failed:', e);
-      }
-
-      // Suppress the application menu bar name
-      try {
-        app.setName(this.config.processName);
-      } catch (e) {
-        console.warn('[StealthManager] L2: setName() failed:', e);
-      }
-
-      console.log('[StealthManager] L2: OS integration hidden (darwin)');
-    } else if (process.platform === 'win32') {
-      console.log('[StealthManager] L2: OS integration hidden (win32 — no dock)');
-    }
-    // Linux: no-op — no dock API available
+    this._platformAdapter.applyOSVisibility();
   }
 
   private _revertOSHiding(): void {
-    if (process.platform === 'darwin') {
-      try {
-        if (app.dock && typeof app.dock.show === 'function') {
-          app.dock.show();
-        }
-      } catch (e) {
-        console.warn('[StealthManager] L2: dock.show() failed:', e);
-      }
+    this._platformAdapter.revertOSVisibility();
+    this._log('L2: OS integration restored');
+  }
 
+  private _applyDarwinOSVisibility(): void {
+    try {
+      if (app.dock && typeof app.dock.hide === 'function') {
+        app.dock.hide();
+      }
+    } catch (e) {
+      this._warn('L2: dock.hide() failed:', e);
+    }
+
+    try {
+      app.setName(this.config.processName);
+    } catch (e) {
+      this._warn('L2: setName() failed:', e);
+    }
+
+    this._log('L2: OS integration hidden (darwin)');
+  }
+
+  private _revertDarwinOSVisibility(): void {
+    try {
+      if (app.dock && typeof app.dock.show === 'function') {
+        void app.dock.show();
+      }
+    } catch (e) {
+      this._warn('L2: dock.show() failed:', e);
+    }
+
+    try {
+      app.setName(this._originalAppName);
+    } catch (e) {
+      this._warn('L2: Revert setName() failed:', e);
+    }
+  }
+
+  private _applyWindowsOSVisibility(): void {
+    const allWindows = BrowserWindow.getAllWindows();
+    let hidden = 0;
+
+    for (const win of allWindows) {
+      if (win.isDestroyed()) continue;
+      if (this._applyWindowsOSVisibilityToWindow(win)) hidden++;
+    }
+
+    this._log(`L2: ${hidden}/${allWindows.length} primary Windows taskbar surfaces hidden`);
+  }
+
+  private _applyWindowsOSVisibilityToWindow(win: BrowserWindow): boolean {
+    if (!this._isPrimaryTaskbarWindow(win)) return false;
+
+    try {
+      win.setSkipTaskbar(true);
+      this._windowsHiddenFromTaskbar.add(win.id);
+      return true;
+    } catch (e) {
+      this._warn('L2: setSkipTaskbar(true) failed for primary window:', e);
+      return false;
+    }
+  }
+
+  private _revertWindowsOSVisibility(): void {
+    const allWindows = BrowserWindow.getAllWindows();
+    let restored = 0;
+
+    for (const win of allWindows) {
+      if (win.isDestroyed()) continue;
+      if (!this._windowsHiddenFromTaskbar.has(win.id)) continue;
       try {
-        app.setName(this._originalAppName);
+        win.setSkipTaskbar(false);
+        restored++;
       } catch (e) {
-        console.warn('[StealthManager] L2: Revert setName() failed:', e);
+        this._warn('L2: setSkipTaskbar(false) failed for primary window:', e);
       }
     }
 
-    console.log('[StealthManager] L2: OS integration restored');
+    this._windowsHiddenFromTaskbar.clear();
+    this._log(`L2: ${restored} Windows taskbar entries restored`);
+  }
+
+  private _isPrimaryTaskbarWindow(win: BrowserWindow): boolean {
+    if (win.isDestroyed()) return false;
+    if (win.isAlwaysOnTop()) return false;
+    try {
+      if (win.getParentWindow()) return false;
+    } catch { /* ignore */ }
+    return true;
   }
 
   // ─── L3: Event Blocking ──────────────────────────────────────────────────
@@ -645,16 +804,16 @@ export class StealthManager {
       app.on('activity-was-continued', h2);
       this._appleEventHandlers.push({ event: 'activity-was-continued', handler: h2 });
     } catch (e) {
-      console.warn('[StealthManager] L3: Apple Event blocking partial:', e);
+      this._warn('L3: Apple Event blocking partial:', e);
     }
 
-    console.log('[StealthManager] L3: Apple Events suppressed');
+    this._log('L3: Apple Events suppressed');
   }
 
   private _unblockAppleEvents(): void {
     if (process.platform !== 'darwin') return;
     this._removeAppleEventHandlers();
-    console.log('[StealthManager] L3: Apple Event handlers removed');
+    this._log('L3: Apple Event handlers removed');
   }
 
   /** Remove tracked Apple Event handlers from the app emitter */
@@ -675,16 +834,106 @@ export class StealthManager {
       // it doesn't contain the real app name or product info.
       app.setName(this.config.processName);
     } catch (e) {
-      console.warn('[StealthManager] L4: Crash reporter suppression partial:', e);
+      this._warn('L4: Crash reporter suppression partial:', e);
     }
 
-    console.log('[StealthManager] L4: Crash reporter metadata neutralised');
+    this._log('L4: Crash reporter metadata neutralised');
   }
 
   private _restoreCrashReporter(): void {
     try {
       app.setName(this._originalAppName);
     } catch { /* ignore */ }
+  }
+
+  // ─── L5: Resilience / Recovery ───────────────────────────────────────────
+
+  private _registerLifecycleRecoveryListeners(): void {
+    this._removeLifecycleRecoveryListeners();
+
+    const add = (target: EventEmitter, event: string, handler: (...args: any[]) => void) => {
+      target.on(event, handler);
+      this._lifecycleHandlers.push({ target, event, handler });
+    };
+
+    add(powerMonitor as unknown as EventEmitter, 'resume', () => this._scheduleLifecycleReassert('resume'));
+    add(powerMonitor as unknown as EventEmitter, 'unlock-screen', () => this._scheduleLifecycleReassert('unlock-screen'));
+    add(screen as unknown as EventEmitter, 'display-added', () => this._scheduleLifecycleReassert('display-added'));
+    add(screen as unknown as EventEmitter, 'display-removed', () => this._scheduleLifecycleReassert('display-removed'));
+    add(screen as unknown as EventEmitter, 'display-metrics-changed', () => this._scheduleLifecycleReassert('display-metrics-changed'));
+    add(app as unknown as EventEmitter, 'activate', () => this._scheduleLifecycleReassert('app-activate'));
+
+    this._log(`L5: Recovery listeners registered (${this._lifecycleHandlers.length})`);
+  }
+
+  private _removeLifecycleRecoveryListeners(): void {
+    if (this._reassertTimer) {
+      clearTimeout(this._reassertTimer);
+      this._reassertTimer = null;
+    }
+
+    for (const { target, event, handler } of this._lifecycleHandlers) {
+      try {
+        target.removeListener(event, handler);
+      } catch { /* ignore */ }
+    }
+    this._lifecycleHandlers = [];
+  }
+
+  private _scheduleLifecycleReassert(reason: string): void {
+    if (!this._engaged) return;
+    if (this._reassertTimer) clearTimeout(this._reassertTimer);
+
+    this._reassertTimer = setTimeout(() => {
+      this._reassertTimer = null;
+      if (!this._engaged) return;
+
+      try { this._applyProcessDisguise(); } catch (e) { this._warn(`L5: process reassert failed after ${reason}:`, e); }
+      try { this._applyWindowProtection(); } catch (e) { this._warn(`L5: window reassert failed after ${reason}:`, e); }
+      try { this._platformAdapter.reassertAfterLifecycle(reason); } catch (e) { this._warn(`L5: OS visibility reassert failed after ${reason}:`, e); }
+      this._markRuntimeEngaged();
+    }, 250);
+
+    if (this._reassertTimer.unref) {
+      this._reassertTimer.unref();
+    }
+  }
+
+  private _markRuntimeEngaged(): void {
+    try {
+      SettingsManager.getInstance().set('advancedStealthRuntime', {
+        engaged: true,
+        pid: process.pid,
+        platform: process.platform,
+        updatedAt: Date.now(),
+      });
+    } catch (e) {
+      this._warn('L5: Failed to mark runtime state:', e);
+    }
+  }
+
+  private _clearRuntimeMarker(): void {
+    try {
+      SettingsManager.getInstance().set('advancedStealthRuntime', {
+        engaged: false,
+        pid: process.pid,
+        platform: process.platform,
+        updatedAt: Date.now(),
+      });
+    } catch (e) {
+      this._warn('L5: Failed to clear runtime state:', e);
+    }
+  }
+
+  private _consumeRuntimeMarker(): boolean {
+    try {
+      const marker = SettingsManager.getInstance().get('advancedStealthRuntime');
+      const stale = marker?.engaged === true && marker.pid !== process.pid;
+      if (stale) this._clearRuntimeMarker();
+      return stale;
+    } catch {
+      return false;
+    }
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -760,7 +1009,7 @@ export class StealthManager {
         excludeFromMissionControl: this.config.excludeFromMissionControl,
       });
     } catch (e) {
-      console.warn('[StealthManager] Failed to persist config:', e);
+      this._warn('Failed to persist config:', e);
     }
   }
 
@@ -796,14 +1045,19 @@ export class StealthManager {
    */
   public destroy(): void {
     this._stopWatchdog();
+    this._removeLifecycleRecoveryListeners();
     this._removeWindowCreatedListener();
     if (this._engaged) {
       // Best-effort revert — process is shutting down
       try { this._revertProcessDisguise(); } catch { /* ignore */ }
       try { this._restoreEnvironment(); } catch { /* ignore */ }
+      try { this._revertWindowProtection(); } catch { /* ignore */ }
+      try { this._revertOSHiding(); } catch { /* ignore */ }
       try { this._removeAppleEventHandlers(); } catch { /* ignore */ }
+      try { this._restoreCrashReporter(); } catch { /* ignore */ }
       this._engaged = false;
     }
+    this._clearRuntimeMarker();
     this._transitioning = false;
     StealthManager.instance = null;
   }
@@ -844,13 +1098,13 @@ export class StealthManager {
 
     // Test 3: rapid toggle
     try {
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 50; i++) {
         this.engage();
         this.disengage();
       }
-      passed.push('rapid-toggle-x10');
+      passed.push('rapid-toggle-x50');
     } catch (e) {
-      failed.push(`rapid-toggle-x10: ${e}`);
+      failed.push(`rapid-toggle-x50: ${e}`);
     }
 
     // Test 4: destroyed window safety
@@ -891,7 +1145,7 @@ export class StealthManager {
       failed.push(`listener-leak-free: ${e}`);
     }
 
-    console.log(`[StealthManager] Fault injection: ${passed.length} passed, ${failed.length} failed`);
+    this._log(`Fault injection: ${passed.length} passed, ${failed.length} failed`);
     return { passed, failed };
   }
 }

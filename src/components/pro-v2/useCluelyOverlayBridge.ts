@@ -79,8 +79,8 @@ const LIVE_MEETING_RAG_ID = 'live-meeting-current';
 const ACTION_CONTEXT_OVERRIDE_TIMEOUT_MS = 12_000;
 const MANUAL_SESSION_MODE_KEY = 'teamsync_overlay_manual_session_mode';
 const MANUAL_SESSION_MODE_EXPLICIT_KEY = 'teamsync_overlay_manual_session_mode_explicit';
-const INTENT_TRANSCRIPT_SEGMENTS = 6;
-const INTENT_TRANSCRIPT_MAX_CHARS = 700;
+const INTENT_TRANSCRIPT_SEGMENTS = 8;
+const INTENT_TRANSCRIPT_MAX_CHARS = 1200;
 
 const ACTION_CONTEXT_MESSAGES: Record<string, string> = {
     Answer: 'Generating response guidance…',

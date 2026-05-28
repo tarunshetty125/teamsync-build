@@ -22,6 +22,12 @@ export interface AppSettings {
         hideFromScreenCapture?: boolean;
         excludeFromMissionControl?: boolean;
     };
+    advancedStealthRuntime?: {
+        engaged?: boolean;
+        pid?: number;
+        platform?: NodeJS.Platform;
+        updatedAt?: number;
+    };
 }
 
 export class SettingsManager {
