@@ -506,26 +506,71 @@ function renderStandardV2ResponseBody(text: string, allowOpenMermaid: boolean) {
     );
 }
 
+function sanitizeArchitectureMarkdown(text: string): string {
+    return text
+        .replace(/`{1,2}\s*(?=\n\s*#{1,6}\s*\d+\.)/g, '')
+        .replace(/`{1,2}\s*$/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function splitAtArchitectureSection(markdown: string): { before: string; architectureHeader: string; after: string } | null {
+    const cleaned = sanitizeArchitectureMarkdown(markdown);
+    const headerMatch = /(?:^|\n)\s*#{0,6}\s*4\.\s*Architecture Diagram[^\n]*(?:\n|$)/i.exec(cleaned);
+    if (!headerMatch) return null;
+
+    const headerStart = headerMatch.index + (headerMatch[0].startsWith('\n') ? 1 : 0);
+    const headerText = headerMatch[0].replace(/^\n/, '').trim();
+    const contentStart = headerStart + headerMatch[0].replace(/^\n/, '').length;
+    const rest = cleaned.slice(contentStart);
+    const nextSectionMatch = /\n\s*#{1,6}\s*(?:5|6|7|8|9|10)\.\s+/i.exec(rest);
+    const afterStart = nextSectionMatch ? contentStart + nextSectionMatch.index : cleaned.length;
+
+    return {
+        before: cleaned.slice(0, headerStart).trim(),
+        architectureHeader: headerText,
+        after: cleaned.slice(afterStart).trim(),
+    };
+}
+
 function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
     const normalizedText = normalizeV2MermaidMarkdown(text, { isStreaming: !allowOpenMermaid });
     const parsedArchitecture = parseArchitectureResponse(normalizedText, { isStreaming: !allowOpenMermaid });
     const shouldUseArchitectureRenderer =
         parsedArchitecture.state !== 'missing'
-        || looksLikeSystemDesignResponse(normalizedText);
+        || Boolean(parsedArchitecture.mermaidChart && looksLikeSystemDesignResponse(normalizedText));
 
     if (shouldUseArchitectureRenderer) {
+        const architectureDiagram = (
+            <ArchitectureRenderer
+                state={parsedArchitecture.state}
+                diagram={parsedArchitecture.diagram}
+                mermaidChart={parsedArchitecture.mermaidChart}
+                fallbackDiagram={parsedArchitecture.fallbackDiagram}
+                isStreaming={!allowOpenMermaid}
+            />
+        );
+        const architectureSplit = parsedArchitecture.markdown
+            ? splitAtArchitectureSection(parsedArchitecture.markdown)
+            : null;
+
+        if (architectureSplit) {
+            return (
+                <>
+                    {architectureSplit.before && renderStandardV2ResponseBody(architectureSplit.before, allowOpenMermaid)}
+                    {architectureSplit.architectureHeader && renderStandardV2ResponseBody(architectureSplit.architectureHeader, allowOpenMermaid)}
+                    {architectureDiagram}
+                    {architectureSplit.after && renderStandardV2ResponseBody(architectureSplit.after, allowOpenMermaid)}
+                </>
+            );
+        }
+
         return (
             <>
                 {parsedArchitecture.markdown && (
-                    <>{renderStandardV2ResponseBody(parsedArchitecture.markdown, allowOpenMermaid)}</>
+                    <>{renderStandardV2ResponseBody(sanitizeArchitectureMarkdown(parsedArchitecture.markdown), allowOpenMermaid)}</>
                 )}
-                <ArchitectureRenderer
-                    state={parsedArchitecture.state}
-                    diagram={parsedArchitecture.diagram}
-                    mermaidChart={parsedArchitecture.mermaidChart}
-                    fallbackDiagram={parsedArchitecture.fallbackDiagram}
-                    isStreaming={!allowOpenMermaid}
-                />
+                {architectureDiagram}
             </>
         );
     }

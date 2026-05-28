@@ -122,6 +122,14 @@ test('system design catches big-tech backend design prompts', () => {
     assert.equal(detectQuestionType('Design Uber backend', 'general', 'general').nextType, 'system_design');
 });
 
+test('system design catches HLD and LLD product prompts', () => {
+    assert.equal(detectQuestionType('design lld for whatsapp', 'general', 'general').nextType, 'system_design');
+    assert.equal(detectQuestionType('design HLD for Uber', 'general', 'general').nextType, 'system_design');
+    assert.equal(detectQuestionType('design an llf for flipkrat', 'general', 'general').nextType, 'system_design');
+    assert.equal(detectQuestionType('design low level design for ecommerce checkout', 'general', 'general').nextType, 'system_design');
+    assert.equal(detectQuestionType('how would you design a real time chat app', 'general', 'general').nextType, 'system_design');
+});
+
 test('system design suppresses OOP, DSA, traversal, and normalization false positives', () => {
     assert.notEqual(detectQuestionType('Explain singleton pattern', 'general', 'general').nextType, 'system_design');
     assert.notEqual(detectQuestionType('Difference between BFS and DFS', 'general', 'general').nextType, 'system_design');

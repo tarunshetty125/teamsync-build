@@ -463,7 +463,8 @@ function buildSystemDesignInterviewOutputContract(): string {
         '### 10. Interview-Ready Final Answer (spoken summary)',
         '',
         'CRITICAL: Applies to EVERY system design question (any product, scale, or platform).',
-        'Description-only answers without architecture_json and components are invalid.',
+        'Every system design answer MUST include exactly one fenced ```architecture_json``` block.',
+        'Description-only answers, loose component lists, Mermaid diagrams, or generic ```json``` fences are invalid.',
         'Use real component names (API Gateway, Redis, Kafka, DB, etc.) — no placeholders.',
         'The architecture_json must be valid JSON only inside the fence. No comments, no trailing commas.',
         'Use this exact shape:',
@@ -473,7 +474,7 @@ function buildSystemDesignInterviewOutputContract(): string {
         'Allowed node kinds only: client, gateway, service, database, cache, queue, storage, external.',
         'Allowed edge fields only: source, target, label.',
         'Keep node IDs lowercase, stable, and reused exactly in edges.',
-        'Do not include Mermaid unless architecture_json is impossible; Mermaid is fallback only.',
+        'Do not include Mermaid in system_design answers. Mermaid is UI fallback only, not model output.',
     ].join('\n');
 }
 

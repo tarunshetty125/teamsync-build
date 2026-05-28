@@ -2,7 +2,7 @@
  * Generic detection for system design interview questions (any product, not a name whitelist).
  */
 
-const SD_EXPLICIT_RE = /\b(system design|systems design|high[\s-]?level design|\bhld\b|low[\s-]?level design|\blld\b|architecture (?:review|design)|architect(?:ure)?\s+(?:a |an |the )?)\b/i;
+const SD_EXPLICIT_RE = /\b(system design|systems design|high[\s-]?level design|\bhld\b|low[\s-]?level design|\blld\b|\bllf\b|architecture (?:review|design)|architect(?:ure)?\s+(?:a |an |the )?)\b/i;
 
 const SD_DESIGN_VERB_RE = /\b(?:how\s+(?:would|do|can)\s+(?:you\s+)?)?design\s+(?:a |an |the |how\s+)?/i;
 
@@ -10,7 +10,7 @@ const SD_SCALE_RE = /\b(scalable|scalability|scale\s+(?:to|for|out)|million(?:s)
 
 const SD_INFRA_RE = /\b(microservices?|monolith|load\s*balanc|api\s+gateway|message\s+queue|pub[\s/]?sub|event[\s-]?(?:driven|streaming)|\bkafka\b|\brabbitmq\b|\bredis\b(?:\s+cache)?|\bcdn\b|database\s+(?:shard|replic)|sharding|replication|partition(?:ing)?|cap\s+theorem|consistency\s+vs|eventual\s+consistency|rate\s+limit|circuit\s+breaker|service\s+mesh)\b/i;
 
-const SD_PRODUCT_RE = /\b(url\s+shortener|paste\s*bin|dropbox|drive|instagram|twitter|facebook|messenger|whatsapp|youtube|netflix|uber|lyft|airbnb|spotify|reddit|tiktok|news\s*feed|newsfeed|timeline|web\s*crawler|crawler|search\s+engine|recommendation|ride[\s-]?share|rideshare|chat\s+system|messaging\s+system|notification\s+system|payment\s+system|checkout|inventory|warehouse|delivery|video\s+stream|streaming\s+platform|file\s+shar|collaborative\s+doc|google\s+doc|ticketmaster|yelp|proximity|match(?:ing)?\s+system|hotel\s+booking|food\s+delivery|swiggy|doordash)\b/i;
+const SD_PRODUCT_RE = /\b(url\s+shortener|paste\s*bin|dropbox|drive|google\s+drive|instagram|instgram|twitter|facebook|messenger|whatsapp|watsapp|youtube|netflix|netflx|uber|lyft|airbnb|spotify|reddit|tiktok|flipkart|flipkrat|flipcart|amazon|shopify|e-?commerce|marketplace|news\s*feed|newsfeed|timeline|web\s*crawler|crawler|search\s+engine|recommendation|ride[\s-]?share|rideshare|chat\s+system|messaging\s+system|real[\s-]?time\s+chat|notification\s+system|payment\s+system|payment\s+gateway|checkout|inventory|warehouse|delivery|video\s+stream|streaming\s+platform|file\s+shar|collaborative\s+doc|google\s+doc|ticketmaster|yelp|proximity|match(?:ing)?\s+system|hotel\s+booking|food\s+delivery|swiggy|zomato|doordash)\b/i;
 
 const SD_REQUIREMENTS_RE = [
     /\bfunctional\s+requirements?\b/i,

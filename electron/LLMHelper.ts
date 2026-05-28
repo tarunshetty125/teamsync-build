@@ -39,9 +39,42 @@ const OPENAI_MODEL = "gpt-5.4"
 const CLAUDE_MODEL = "claude-sonnet-4-6"
 const MAX_OUTPUT_TOKENS = 65536
 const CLAUDE_MAX_OUTPUT_TOKENS = 64000
+const GROQ_TEXT_REQUEST_CHAR_CAP = 24_000
 
 // Simple prompt for image analysis (not interview copilot - kept separate)
 const IMAGE_ANALYSIS_PROMPT = `Analyze concisely. Be direct. No markdown formatting. Return plain text only.`
+
+function compactMiddle(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  const headChars = Math.floor(maxChars * 0.58);
+  const tailChars = Math.floor(maxChars * 0.32);
+  return `${text.slice(0, headChars)}\n\n[...payload truncated for provider size...]\n\n${text.slice(-tailChars)}`;
+}
+
+function compactGroqTextPayload(systemPrompt: string, userContent: string): { systemPrompt: string; userContent: string; changed: boolean } {
+  const totalChars = systemPrompt.length + userContent.length;
+  if (totalChars <= GROQ_TEXT_REQUEST_CHAR_CAP) {
+    return { systemPrompt, userContent, changed: false };
+  }
+
+  let nextSystemPrompt = systemPrompt;
+  let nextUserContent = userContent;
+  const contextMarker = '\n\nCONTEXT:\n';
+  const contextIndex = nextUserContent.indexOf(contextMarker);
+  if (contextIndex > 0) {
+    nextUserContent = `${nextUserContent.slice(0, contextIndex)}\n\n[context omitted for Groq request size]`;
+  }
+
+  const remainingBudget = Math.max(4_000, GROQ_TEXT_REQUEST_CHAR_CAP - nextSystemPrompt.length);
+  nextUserContent = compactMiddle(nextUserContent, remainingBudget);
+
+  if (nextSystemPrompt.length + nextUserContent.length > GROQ_TEXT_REQUEST_CHAR_CAP) {
+    const systemBudget = Math.max(5_500, GROQ_TEXT_REQUEST_CHAR_CAP - nextUserContent.length);
+    nextSystemPrompt = compactMiddle(nextSystemPrompt, systemBudget);
+  }
+
+  return { systemPrompt: nextSystemPrompt, userContent: nextUserContent, changed: true };
+}
 
 export class LLMHelper {
   private client: GoogleGenAI | null = null
@@ -2644,7 +2677,7 @@ Return only the final answer. No meta commentary.
       ? `\n\n<user_context>\n${this.customNotes.trim().slice(0, 1500)}\n</user_context>\nUse this context naturally if relevant. Never quote it verbatim.`
       : '';
     const shouldOmitSystemPrompt = hasExplicitSystemPromptOverride && !baseSystemPrompt.trim() && !customNotesBlock.trim();
-    const finalSystemPrompt = shouldOmitSystemPrompt
+    let finalSystemPrompt = shouldOmitSystemPrompt
       ? ''
       : this.injectLanguageInstruction(baseSystemPrompt + customNotesBlock);
 
@@ -2660,6 +2693,13 @@ Return only the final answer. No meta commentary.
     // Never allow overflow. No fallback bypass.
     // ============================================================
     userContent = enforceTokenCap(finalSystemPrompt, userContent, TOKEN_CAP);
+    if (!isMultimodal && (this.groqFastTextMode || this.isGroqModel(this.currentModelId) || this.currentModelId === 'teamsync')) {
+      const compacted = compactGroqTextPayload(finalSystemPrompt, userContent);
+      if (compacted.changed) {
+        finalSystemPrompt = compacted.systemPrompt;
+        userContent = compacted.userContent;
+      }
+    }
     console.log(`[TokenBudget] Pre-flight: system=${estimateTokens(finalSystemPrompt)} + user=${estimateTokens(userContent)} = ${estimateTokens(finalSystemPrompt) + estimateTokens(userContent)} tok (cap=${TOKEN_CAP})`);
 
     // GROQ FAST TEXT OVERRIDE (Text-Only)

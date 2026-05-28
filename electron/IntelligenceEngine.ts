@@ -1271,6 +1271,7 @@ export class IntelligenceEngine extends EventEmitter {
             }
         }
 
+        const invalidDraftForRepair = this.compactRepairDraft(content);
         const repairPrompt: PromptObject = {
             ...prompt,
             instructions: [
@@ -1278,7 +1279,7 @@ export class IntelligenceEngine extends EventEmitter {
                 {
                     key: 'output_repair',
                     title: 'OUTPUT REPAIR',
-                    content: `${buildRepairInstruction(prompt.intent, validation.issues)}\n\nINVALID DRAFT:\n${content}`,
+                    content: `${buildRepairInstruction(prompt.intent, validation.issues)}\n\nINVALID DRAFT EXCERPT:\n${invalidDraftForRepair}`,
                 },
             ],
         };
@@ -1312,6 +1313,15 @@ export class IntelligenceEngine extends EventEmitter {
             }
         }
         return buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question);
+    }
+
+    private compactRepairDraft(content: string, maxChars = 2800): string {
+        const trimmed = content.trim();
+        if (trimmed.length <= maxChars) return trimmed;
+
+        const head = trimmed.slice(0, Math.floor(maxChars * 0.58));
+        const tail = trimmed.slice(-Math.floor(maxChars * 0.32));
+        return `${head}\n\n[...invalid draft truncated for repair...]\n\n${tail}`;
     }
 
     private persistActionResult(intent: UnifiedActionIntent, question: string, answer: string): void {
@@ -1891,14 +1901,32 @@ export class IntelligenceEngine extends EventEmitter {
             }
 
             if (fullAnswer && !_signalSDT?.aborted) {
-                this.session.addAssistantMessage(fullAnswer);
+                let finalAnswer = fullAnswer;
+                const validation = validateActionOutput('system_design_tradeoffs', 'system_design', finalAnswer, 'System Design Trade-offs');
+                if (!validation.valid) {
+                    const repaired = await this.systemDesignTradeoffsLLM.repairWithStrictArchitectureJson(
+                        context,
+                        finalAnswer,
+                        buildRepairInstruction('system_design_tradeoffs', validation.issues),
+                    );
+                    const repairedValidation = validateActionOutput('system_design_tradeoffs', 'system_design', repaired, 'System Design Trade-offs');
+                    if (repairedValidation.valid) {
+                        finalAnswer = repairedValidation.correctedContent.trim();
+                    } else if (validation.correctedContent.trim()) {
+                        finalAnswer = validation.correctedContent.trim();
+                    }
+                } else {
+                    finalAnswer = validation.correctedContent.trim();
+                }
+
+                this.session.addAssistantMessage(finalAnswer);
                 this.session.pushUsage({
                     type: 'assist',
                     timestamp: Date.now(),
                     question: 'System Design Trade-offs',
-                    answer: fullAnswer
+                    answer: finalAnswer
                 });
-                this.safeEmit(_signalSDT, activeRequestId, 'system_design_tradeoffs', fullAnswer);
+                this.safeEmit(_signalSDT, activeRequestId, 'system_design_tradeoffs', finalAnswer);
             }
 
             this.setMode('idle');

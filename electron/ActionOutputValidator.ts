@@ -95,6 +95,71 @@ function hasArchitectureJson(content: string): boolean {
     return /architecture_json\s*:?\s*\{[\s\S]*"diagram"\s*:[\s\S]*"nodes"\s*:[\s\S]*"edges"\s*:/i.test(content);
 }
 
+function validateArchitectureJsonContract(content: string): { valid: true } | { valid: false; issues: string[] } {
+    const fenced = content.match(/```[ \t]*architecture_json[ \t]*\n([\s\S]*?)\n```/i);
+    if (!fenced?.[1]?.trim()) {
+        return { valid: false, issues: ['system_design_missing_fenced_architecture_json'] };
+    }
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(fenced[1].trim());
+    } catch {
+        return { valid: false, issues: ['system_design_invalid_architecture_json'] };
+    }
+
+    const root = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+    const diagram = root?.diagram && typeof root.diagram === 'object'
+        ? root.diagram as Record<string, unknown>
+        : null;
+    if (!diagram) return { valid: false, issues: ['system_design_architecture_json_missing_diagram'] };
+    if (diagram.type !== 'architecture') return { valid: false, issues: ['system_design_architecture_json_bad_type'] };
+    if (!['TB', 'BT', 'LR', 'RL'].includes(String(diagram.direction || 'TB'))) {
+        return { valid: false, issues: ['system_design_architecture_json_bad_direction'] };
+    }
+
+    const nodes = Array.isArray(diagram.nodes) ? diagram.nodes : [];
+    const edges = Array.isArray(diagram.edges) ? diagram.edges : [];
+    if (nodes.length < 2) return { valid: false, issues: ['system_design_architecture_json_needs_nodes'] };
+    if (edges.length < 1) return { valid: false, issues: ['system_design_architecture_json_needs_edges'] };
+
+    const allowedKinds = new Set(['client', 'gateway', 'service', 'database', 'cache', 'queue', 'storage', 'external']);
+    const nodeIds = new Set<string>();
+    for (const rawNode of nodes) {
+        if (!rawNode || typeof rawNode !== 'object') return { valid: false, issues: ['system_design_architecture_json_bad_node'] };
+        const node = rawNode as Record<string, unknown>;
+        const keys = Object.keys(node);
+        if (keys.some((key) => !['id', 'label', 'kind'].includes(key))) {
+            return { valid: false, issues: ['system_design_architecture_json_extra_node_fields'] };
+        }
+        if (typeof node.id !== 'string' || typeof node.label !== 'string' || typeof node.kind !== 'string') {
+            return { valid: false, issues: ['system_design_architecture_json_bad_node'] };
+        }
+        if (!allowedKinds.has(node.kind)) return { valid: false, issues: ['system_design_architecture_json_bad_node_kind'] };
+        nodeIds.add(node.id);
+    }
+
+    for (const rawEdge of edges) {
+        if (!rawEdge || typeof rawEdge !== 'object') return { valid: false, issues: ['system_design_architecture_json_bad_edge'] };
+        const edge = rawEdge as Record<string, unknown>;
+        const keys = Object.keys(edge);
+        if (keys.some((key) => !['source', 'target', 'label'].includes(key))) {
+            return { valid: false, issues: ['system_design_architecture_json_extra_edge_fields'] };
+        }
+        if (typeof edge.source !== 'string' || typeof edge.target !== 'string') {
+            return { valid: false, issues: ['system_design_architecture_json_bad_edge'] };
+        }
+        if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target) || edge.source === edge.target) {
+            return { valid: false, issues: ['system_design_architecture_json_bad_edge_endpoint'] };
+        }
+        if (edge.label !== undefined && typeof edge.label !== 'string') {
+            return { valid: false, issues: ['system_design_architecture_json_bad_edge_label'] };
+        }
+    }
+
+    return { valid: true };
+}
+
 function validateClarify(content: string): ActionOutputValidationResult {
     const trimmed = content.trim();
     // Accept any substantive response — a real LLM answer is always better
@@ -237,35 +302,34 @@ function validateCodingInterviewAnswer(content: string): ActionOutputValidationR
 function validateSystemDesignInterviewAnswer(content: string): ActionOutputValidationResult {
     const normalized = normalizeSystemDesignMermaid(content);
     const trimmed = normalized.text.trim();
-    const hasMermaid = /```mermaid[\s\S]+?```/i.test(trimmed);
-    const hasArchitectureDiagramJson = hasArchitectureJson(trimmed);
+    const architectureJson = validateArchitectureJsonContract(trimmed);
     const sectionHeaders = (trimmed.match(/^#{2,3}\s+\d+\./gm) || []).length;
     const hasComponents = /\b(component|api gateway|database|cache|queue|kafka|redis)\b/i.test(trimmed);
 
-    if ((hasArchitectureDiagramJson || hasMermaid) && (sectionHeaders >= 3 || hasComponents)) {
-        return {
-            valid: true,
-            correctedContent: trimmed,
-            autoCorrected: normalized.changed,
-            issues: normalized.changed ? ['normalized_mermaid_fences'] : [],
-        };
-    }
-
-    if ((hasArchitectureDiagramJson || hasMermaid) && trimmed.length > 250) {
-        return {
-            valid: true,
-            correctedContent: trimmed,
-            autoCorrected: normalized.changed,
-            issues: normalized.changed ? ['normalized_mermaid_fences'] : [],
-        };
-    }
-
-    if (trimmed.length > 200 && !hasMermaid && !hasArchitectureDiagramJson) {
+    if (!architectureJson.valid) {
         return {
             valid: false,
             correctedContent: trimmed,
             autoCorrected: false,
-            issues: ['system_design_missing_architecture_diagram'],
+            issues: architectureJson.issues,
+        };
+    }
+
+    if (hasArchitectureJson(trimmed) && (sectionHeaders >= 3 || hasComponents)) {
+        return {
+            valid: true,
+            correctedContent: trimmed,
+            autoCorrected: normalized.changed,
+            issues: normalized.changed ? ['normalized_mermaid_fences'] : [],
+        };
+    }
+
+    if (hasArchitectureJson(trimmed) && trimmed.length > 250) {
+        return {
+            valid: true,
+            correctedContent: trimmed,
+            autoCorrected: normalized.changed,
+            issues: normalized.changed ? ['normalized_mermaid_fences'] : [],
         };
     }
 
@@ -323,7 +387,12 @@ export function validateActionOutput(
                 ? 'system_design'
                 : 'general';
 
-    if (profile === 'system_design' && (intent === 'manual_chat' || intent === 'what_to_answer' || intent === 'answer_now')) {
+    if (profile === 'system_design' && (
+        intent === 'manual_chat'
+        || intent === 'what_to_answer'
+        || intent === 'answer_now'
+        || intent === 'system_design_tradeoffs'
+    )) {
         return validateSystemDesignInterviewAnswer(trimmed);
     }
 
@@ -364,12 +433,16 @@ export function validateActionOutput(
 }
 
 export function buildRepairInstruction(intent: UnifiedActionIntent, issues: string[]): string {
+    const architectureJsonRepair = issues.some((issue) => issue.startsWith('system_design_architecture_json') || issue === 'system_design_missing_fenced_architecture_json');
     return [
         `The previous draft violated the output contract for intent "${intent}".`,
         `Fix these issues: ${issues.join(', ')}.`,
+        architectureJsonRepair
+            ? 'For system design answers, include one fenced ```architecture_json``` block with valid JSON only, using {"diagram":{"type":"architecture","direction":"TB","nodes":[{"id":"gateway","label":"API Gateway","kind":"gateway"},{"id":"service","label":"Core Service","kind":"service"}],"edges":[{"source":"gateway","target":"service","label":"routes"}]}}. Do not use Mermaid.'
+            : '',
         'Return only the corrected final answer.',
         'Do not explain the correction.',
-    ].join(' ');
+    ].filter(Boolean).join(' ');
 }
 
 export function buildSafeActionFallback(

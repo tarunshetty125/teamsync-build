@@ -1,6 +1,8 @@
 import {
     createLinearFallbackDiagram,
     type ArchitectureDiagram,
+    type ArchitectureEdgeModel,
+    type ArchitectureNodeModel,
     type ArchitectureNodeKind,
     validateArchitecturePayload,
 } from './architectureSchema';
@@ -12,7 +14,7 @@ export interface ParsedArchitectureResponse {
     state: ArchitectureParseState;
     diagram: ArchitectureDiagram | null;
     mermaidChart: string | null;
-    fallbackDiagram: ArchitectureDiagram;
+    fallbackDiagram: ArchitectureDiagram | null;
     issues: string[];
 }
 
@@ -185,14 +187,189 @@ function findBalancedJson(text: string, startIndex: number): { raw: string; end:
     return { raw: text.slice(firstBrace), end: text.length, complete: false };
 }
 
-function fallbackFromText(text: string, mermaidChart: string | null): ArchitectureDiagram {
+type InferredComponent = ArchitectureNodeModel & {
+    rank: number;
+    patterns: RegExp[];
+};
+
+const INFERRED_COMPONENTS: InferredComponent[] = [
+    {
+        id: 'client',
+        label: 'Client',
+        kind: 'client',
+        rank: 0,
+        patterns: [/\b(?:client|clients|client app|user app|mobile app|web app|browser|end users?)\b/i],
+    },
+    {
+        id: 'load-balancer',
+        label: 'Load Balancer',
+        kind: 'gateway',
+        rank: 10,
+        patterns: [/\b(?:load balancer|load-balancer|lb)\b/i],
+    },
+    {
+        id: 'api-gateway',
+        label: 'API Gateway',
+        kind: 'gateway',
+        rank: 20,
+        patterns: [/\b(?:api gateway|gateway|edge gateway|ingress)\b/i],
+    },
+    {
+        id: 'app-servers',
+        label: 'Application Servers',
+        kind: 'service',
+        rank: 30,
+        patterns: [/\b(?:(?:application|app)\s+servers?|backend servers?|api servers?|core service|service layer|microservices?)\b/i],
+    },
+    {
+        id: 'user-service',
+        label: 'User Service',
+        kind: 'service',
+        rank: 31,
+        patterns: [/\b(?:user management|user service|auth service|identity service|profile service)\b/i],
+    },
+    {
+        id: 'catalog-service',
+        label: 'Catalog Service',
+        kind: 'service',
+        rank: 32,
+        patterns: [/\b(?:product catalog|catalog service|inventory service|listing service)\b/i],
+    },
+    {
+        id: 'payment-service',
+        label: 'Payment Service',
+        kind: 'service',
+        rank: 33,
+        patterns: [/\b(?:payment processing|payment service|payments service|billing service|checkout service)\b/i],
+    },
+    {
+        id: 'messaging-service',
+        label: 'Messaging Service',
+        kind: 'service',
+        rank: 34,
+        patterns: [/\b(?:messaging service|message service|chat service|delivery service)\b/i],
+    },
+    {
+        id: 'cache',
+        label: 'Cache Layer',
+        kind: 'cache',
+        rank: 40,
+        patterns: [/\b(?:cache layer|cache|redis|memcache|memcached)\b/i],
+    },
+    {
+        id: 'database',
+        label: 'Database',
+        kind: 'database',
+        rank: 50,
+        patterns: [/\b(?:database|databases|db|postgres|postgresql|mysql|mongodb|mongo|dynamo|cassandra)\b/i],
+    },
+    {
+        id: 'message-queue',
+        label: 'Message Queue',
+        kind: 'queue',
+        rank: 60,
+        patterns: [/\b(?:message queue|message que|queue|kafka|pubsub|pub\/sub|sqs|rabbitmq|asynchronous tasks?)\b/i],
+    },
+    {
+        id: 'storage',
+        label: 'Object Storage',
+        kind: 'storage',
+        rank: 70,
+        patterns: [/\b(?:object storage|file storage|blob storage|s3|cdn|uploads?|media storage)\b/i],
+    },
+    {
+        id: 'external-api',
+        label: 'External API',
+        kind: 'external',
+        rank: 80,
+        patterns: [/\b(?:external api|third party|third-party|payment provider|maps api|email service|sms service)\b/i],
+    },
+];
+
+function normalizeArchitectureText(text: string): string {
+    return text
+        .replace(/\baplication\b/gi, 'application')
+        .replace(/\baplications\b/gi, 'applications')
+        .replace(/\bque\b/gi, 'queue')
+        .replace(/\bapigateway\b/gi, 'api gateway');
+}
+
+function hasArchitectureContext(text: string, matchedCount: number): boolean {
+    if (matchedCount < 2) return false;
+    return /\b(?:architecture diagram|proposed architecture|system design|high-level design|low-level design|hld|lld|scalable|load balancer|api gateway|cache layer|message queue)\b/i.test(text)
+        || matchedCount >= 3;
+}
+
+function connect(edges: ArchitectureEdgeModel[], source: string | undefined, target: string | undefined, label?: string) {
+    if (!source || !target || source === target) return;
+    if (edges.some((edge) => edge.source === source && edge.target === target)) return;
+    edges.push(label ? { source, target, label } : { source, target });
+}
+
+function inferEdges(nodes: ArchitectureNodeModel[]): ArchitectureEdgeModel[] {
+    const ids = new Set(nodes.map((node) => node.id));
+    const has = (id: string) => ids.has(id);
+    const edges: ArchitectureEdgeModel[] = [];
+    const serviceIds = nodes.filter((node) => node.kind === 'service').map((node) => node.id);
+    const primaryServiceId = has('app-servers') ? 'app-servers' : serviceIds[0];
+
+    connect(edges, has('client') ? 'client' : undefined, has('load-balancer') ? 'load-balancer' : has('api-gateway') ? 'api-gateway' : primaryServiceId, 'requests');
+    connect(edges, has('load-balancer') ? 'load-balancer' : undefined, has('api-gateway') ? 'api-gateway' : primaryServiceId, 'routes');
+
+    if (has('api-gateway') && serviceIds.length > 0) {
+        serviceIds.forEach((serviceId) => connect(edges, 'api-gateway', serviceId, 'routes'));
+    } else {
+        connect(edges, has('api-gateway') ? 'api-gateway' : undefined, primaryServiceId, 'routes');
+    }
+
+    if (primaryServiceId) {
+        connect(edges, primaryServiceId, has('cache') ? 'cache' : undefined, 'reads');
+        connect(edges, primaryServiceId, has('database') ? 'database' : undefined, 'persists');
+        connect(edges, primaryServiceId, has('message-queue') ? 'message-queue' : undefined, 'publishes');
+        connect(edges, primaryServiceId, has('storage') ? 'storage' : undefined, 'stores');
+        connect(edges, primaryServiceId, has('external-api') ? 'external-api' : undefined, 'calls');
+    }
+
+    if (edges.length > 0) return edges;
+
+    return nodes.slice(0, -1).map((node, index) => ({
+        source: node.id,
+        target: nodes[index + 1]?.id ?? node.id,
+    })).filter((edge) => edge.source !== edge.target);
+}
+
+function inferArchitectureDiagramFromText(text: string): ArchitectureDiagram | null {
+    const normalized = normalizeArchitectureText(text);
+    const matched = INFERRED_COMPONENTS
+        .filter((component) => component.patterns.some((pattern) => pattern.test(normalized)))
+        .sort((a, b) => a.rank - b.rank);
+
+    if (!hasArchitectureContext(normalized, matched.length)) return null;
+
+    const nodes = matched.map(({ id, label, kind }) => ({ id, label, kind }));
+    if (nodes.length < 2) return null;
+
+    return {
+        type: 'architecture',
+        direction: 'TB',
+        nodes,
+        edges: inferEdges(nodes),
+    };
+}
+
+function fallbackFromText(text: string, mermaidChart: string | null): ArchitectureDiagram | null {
     const mermaidDiagram = mermaidToArchitectureDiagram(mermaidChart);
     if (mermaidDiagram) return mermaidDiagram;
+
+    const inferredDiagram = inferArchitectureDiagramFromText(text);
+    if (inferredDiagram) return inferredDiagram;
 
     const candidates = Array.from(text.matchAll(/\b(Client|Web App|Mobile App|API Gateway|Gateway|Load Balancer|Service|Redis|Cache|Kafka|Queue|Database|Postgres|MongoDB|Object Storage|Storage|CDN|External API)\b/gi))
         .map((match) => match[0]);
 
-    return createLinearFallbackDiagram(Array.from(new Set(candidates)));
+    const uniqueCandidates = Array.from(new Set(candidates));
+    if (uniqueCandidates.length < 2) return null;
+    return createLinearFallbackDiagram(uniqueCandidates);
 }
 
 export function parseArchitectureResponse(text: string, options: { isStreaming: boolean }): ParsedArchitectureResponse {
@@ -212,13 +389,14 @@ export function parseArchitectureResponse(text: string, options: { isStreaming: 
         const parsed = safeJsonParse(raw);
         if (!parsed.ok) {
             const state = options.isStreaming && (!closed || looksLikeIncompleteJson(raw)) ? 'loading' : 'invalid';
+            const inferredDiagram = state === 'loading' ? null : inferArchitectureDiagramFromText(markdown);
             return {
                 markdown,
-                state,
-                diagram: null,
+                state: inferredDiagram ? 'ready' : state,
+                diagram: inferredDiagram,
                 mermaidChart,
                 fallbackDiagram: fallbackFromText(markdown, mermaidChart),
-                issues: [parsed.error],
+                issues: inferredDiagram ? [parsed.error, 'architecture_inferred_from_prose'] : [parsed.error],
             };
         }
 
@@ -236,63 +414,70 @@ export function parseArchitectureResponse(text: string, options: { isStreaming: 
     const labelMatch = /architecture_json\s*:?\s*/i.exec(text);
     if (labelMatch) {
         const balanced = findBalancedJson(text, labelMatch.index + labelMatch[0].length);
-        const markdown = text.slice(0, labelMatch.index).replace(/\n{3,}/g, '\n\n').trim();
+        const markdownBefore = text.slice(0, labelMatch.index).replace(/\n{3,}/g, '\n\n').trim();
         if (!balanced) {
             return {
-                markdown,
-                state: options.isStreaming ? 'loading' : 'invalid',
+                markdown: options.isStreaming ? markdownBefore : text.replace(/architecture_json\s*:?\s*$/i, '').trim(),
+                state: options.isStreaming ? 'loading' : 'missing',
                 diagram: null,
                 mermaidChart,
-                fallbackDiagram: fallbackFromText(markdown, mermaidChart),
+                fallbackDiagram: mermaidChart ? fallbackFromText(text, mermaidChart) : null,
                 issues: ['architecture_json_missing_body'],
             };
         }
 
         if (!balanced.complete && options.isStreaming) {
             return {
-                markdown,
+                markdown: markdownBefore,
                 state: 'loading',
                 diagram: null,
                 mermaidChart,
-                fallbackDiagram: fallbackFromText(markdown, mermaidChart),
+                fallbackDiagram: fallbackFromText(markdownBefore, mermaidChart),
                 issues: ['architecture_json_streaming'],
             };
         }
 
+        const markdownAfter = text.slice(balanced.end).replace(/\n{3,}/g, '\n\n').trim();
+        const preservedMarkdown = [markdownBefore, markdownAfter].filter(Boolean).join('\n\n').trim();
         const parsed = safeJsonParse(balanced.raw);
         if (!parsed.ok) {
+            const inferredDiagram = inferArchitectureDiagramFromText(preservedMarkdown || text);
             return {
-                markdown,
-                state: 'invalid',
-                diagram: null,
+                markdown: preservedMarkdown || text,
+                state: inferredDiagram ? 'ready' : 'invalid',
+                diagram: inferredDiagram,
                 mermaidChart,
-                fallbackDiagram: fallbackFromText(markdown, mermaidChart),
-                issues: [parsed.error],
+                fallbackDiagram: fallbackFromText(preservedMarkdown || text, mermaidChart),
+                issues: inferredDiagram ? [parsed.error, 'architecture_inferred_from_prose'] : [parsed.error],
             };
         }
 
         const validation = validateArchitecturePayload(parsed.value);
         return {
-            markdown: `${markdown}\n\n${text.slice(balanced.end)}`.replace(/\n{3,}/g, '\n\n').trim(),
+            markdown: preservedMarkdown,
             state: validation.valid ? 'ready' : 'invalid',
             diagram: validation.diagram,
             mermaidChart,
-            fallbackDiagram: fallbackFromText(markdown, mermaidChart),
+            fallbackDiagram: fallbackFromText(preservedMarkdown, mermaidChart),
             issues: validation.issues,
         };
     }
 
+    const markdown = stripMermaidBlocks(text);
+    const inferredDiagram = inferArchitectureDiagramFromText(markdown);
+
     return {
-        markdown: stripMermaidBlocks(text),
-        state: 'missing',
-        diagram: null,
+        markdown,
+        state: inferredDiagram ? 'ready' : 'missing',
+        diagram: inferredDiagram,
         mermaidChart,
         fallbackDiagram: fallbackFromText(text, mermaidChart),
-        issues,
+        issues: inferredDiagram ? ['architecture_inferred_from_prose'] : issues,
     };
 }
 
 export function looksLikeSystemDesignResponse(text: string): boolean {
     return /architecture_json/i.test(text)
-        || (/```[ \t]*mermaid/i.test(text) && /\b(Architecture Diagram|Component Breakdown|Scaling Strategy|Database Design|High-Level Design|system design)\b/i.test(text));
+        || Boolean(inferArchitectureDiagramFromText(text))
+        || (/```[ \t]*mermaid/i.test(text) && /\b(Architecture Diagram|Component Breakdown|Scaling Strategy|Database Design|High-Level Design|Low-Level Design|system design)\b/i.test(text));
 }

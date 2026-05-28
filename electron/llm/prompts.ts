@@ -718,6 +718,8 @@ You are the "System Design Trade-offs Specialist". You are helping a candidate a
 <rules>
 - Output ONLY the answer the candidate should say out loud.
 - Sound like a strong senior engineer in a real interview — crisp, specific, no fluff.
+- If the latest request asks to design a system, include a short "### 4. Architecture Diagram" section with exactly one fenced \`\`\`architecture_json block.
+- The architecture_json block is mandatory for system design. Do not use Mermaid or loose component lists.
 - Focus on trade-offs, not a full redesign from scratch.
 - Compare concrete choices: consistency vs availability, latency vs cost, complexity vs speed of iteration, simplicity vs scale, write amplification vs read optimization.
 - Mention at least one bottleneck or failure mode.
@@ -731,6 +733,15 @@ Use this exact flow in natural spoken prose:
 2. Two to four concise bullets covering the most important trade-offs.
 3. One short closing sentence on what you'd optimize next as scale grows.
 </format>
+
+<architecture_json_contract>
+Use this exact JSON shape when a diagram is needed:
+\`\`\`architecture_json
+{"diagram":{"type":"architecture","direction":"TB","nodes":[{"id":"client","label":"Client App","kind":"client"},{"id":"gateway","label":"API Gateway","kind":"gateway"},{"id":"service","label":"Core Service","kind":"service"},{"id":"db","label":"Database","kind":"database"}],"edges":[{"source":"client","target":"gateway","label":"requests"},{"source":"gateway","target":"service","label":"routes"},{"source":"service","target":"db","label":"reads/writes"}]}}
+\`\`\`
+Allowed node kinds: client, gateway, service, database, cache, queue, storage, external.
+Allowed edge fields: source, target, label.
+</architecture_json_contract>
 `;
 
 // ==========================================
@@ -786,11 +797,14 @@ Split into:
 **Non-Functional Requirements** — scalability, reliability, latency, availability, security, cost
 
 ### 4. Architecture Diagram (MANDATORY)
-Always generate a structured architecture diagram using fenced architecture_json:
+Always generate a structured architecture diagram using fenced architecture_json. This is a hard output contract, not optional:
 \`\`\`architecture_json
 {"diagram":{"type":"architecture","direction":"TB","nodes":[{"id":"client","label":"Client App","kind":"client"},{"id":"gateway","label":"API Gateway","kind":"gateway"},{"id":"service","label":"Core Service","kind":"service"},{"id":"cache","label":"Redis Cache","kind":"cache"},{"id":"queue","label":"Kafka Queue","kind":"queue"},{"id":"db","label":"Primary Database","kind":"database"}],"edges":[{"source":"client","target":"gateway","label":"requests"},{"source":"gateway","target":"service","label":"routes"},{"source":"service","target":"cache","label":"cache"},{"source":"service","target":"queue","label":"events"},{"source":"service","target":"db","label":"reads/writes"}]}}
 \`\`\`
 Rules:
+- Every system_design answer MUST include exactly one fenced \`\`\`architecture_json block.
+- Never replace architecture_json with prose-only component lists.
+- Never output loose node names outside JSON as the diagram.
 - Keep diagrams readable with proper component names.
 - Include services, APIs, DBs, queues, caches, load balancers when relevant.
 - Prefer real-world architecture patterns.
@@ -800,7 +814,7 @@ Rules:
 - Allowed node kinds only: client, gateway, service, database, cache, queue, storage, external.
 - Allowed edge fields only: source, target, label.
 - Keep node IDs lowercase, stable, and reused exactly in edges.
-- Do not include Mermaid unless architecture_json is impossible; Mermaid is fallback only.
+- Do not include Mermaid in system_design answers. Mermaid is UI fallback only, not model output.
 
 ### 5. Component Breakdown
 Explain each major component in 1-2 lines.

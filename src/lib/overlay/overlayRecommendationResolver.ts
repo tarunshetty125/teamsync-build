@@ -21,8 +21,10 @@ const UNIVERSAL_TRANSCRIPT_SIGNALS: Array<{
   {
     patterns: [
       /system design/i,
+      /\b(?:hld|lld|llf|high[\s-]?level design|low[\s-]?level design)\b/i,
       /design (?:a |the |this )?(?:system|backend|architecture|platform|service|api)/i,
-      /(?:design|build|scale|architect)\s+(?:uber|instagram|netflix|youtube|whatsapp|twitter|discord|slack|flipkart|swiggy|zomato|amazon|paytm|upi|google drive|dropbox|stripe)/i,
+      /(?:design|build|scale|architect)\s+(?:uber|instagram|instgram|netflix|netflx|youtube|whatsapp|watsapp|twitter|discord|slack|flipkart|flipkrat|flipcart|swiggy|zomato|amazon|shopify|paytm|upi|google drive|dropbox|stripe|e-?commerce|marketplace|payment gateway|chat|messaging|notification|news feed|url shortener|rate limiter|search engine|recommendation|file storage)/i,
+      /(?:design|build|architect)\s+(?:a |an |the )?(?:hld|lld|llf|high[\s-]?level design|low[\s-]?level design)\s+(?:for|of)\s+(?:uber|instagram|instgram|netflix|netflx|youtube|whatsapp|watsapp|twitter|discord|slack|flipkart|flipkrat|flipcart|swiggy|zomato|amazon|shopify|paytm|upi|google drive|dropbox|stripe|e-?commerce|marketplace|system|backend|platform|service|app)/i,
       /how would (?:you|we|this|the system).*(?:scale|backend|service|database|cache|redis|shard|traffic|latency|throughput|recover|fail|retry)/i,
       /(?:redis|cache|database|backend|service|api|queue|kafka).*(?:fail|recover|retry|scale|traffic|shard)/i,
       /(?:million|millions|100m|10m|qps|rps|traffic spike|high traffic|throughput|latency).*(?:backend|service|api|database|cache|queue|handle|scale)/i,
@@ -75,7 +77,7 @@ const UNIVERSAL_TRANSCRIPT_SIGNALS: Array<{
     candidates: ['tech_edge_case'],
   },
   {
-    patterns: [/system design/i, /design (?:a |the |this )?system/i, /architect/i, /scale/i, /scalability/i, /microservice/i, /api design/i, /database design/i],
+    patterns: [/system design/i, /\b(?:hld|lld|llf|high[\s-]?level design|low[\s-]?level design)\b/i, /design (?:a |the |this )?system/i, /architect/i, /scale/i, /scalability/i, /microservice/i, /api design/i, /database design/i],
     candidates: ['system_tradeoffs', 'system_approaches', 'system_deep_dive'],
   },
   {

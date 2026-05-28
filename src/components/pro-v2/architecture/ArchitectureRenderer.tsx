@@ -199,7 +199,7 @@ const ArchitectureRenderer = memo<ArchitectureRendererProps>(function Architectu
     isStreaming = false,
 }) {
     const [stage, setStage] = useState<'flow' | 'mermaid' | 'cards'>('flow');
-    const cardsDiagram = fallbackDiagram ?? diagram ?? createLinearFallbackDiagram([]);
+    const cardsDiagram = fallbackDiagram ?? diagram ?? null;
 
     useEffect(() => {
         setStage('flow');
@@ -222,9 +222,10 @@ const ArchitectureRenderer = memo<ArchitectureRendererProps>(function Architectu
     }
 
     if ((stage === 'mermaid' || state === 'missing' || state === 'invalid') && mermaidChart) {
-        return <MermaidGuard chart={mermaidChart} fallbackDiagram={cardsDiagram} />;
+        return <MermaidGuard chart={mermaidChart} fallbackDiagram={cardsDiagram ?? createLinearFallbackDiagram([])} />;
     }
 
+    if (!cardsDiagram) return null;
     return <ArchitectureCards diagram={cardsDiagram} />;
 });
 

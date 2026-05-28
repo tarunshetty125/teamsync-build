@@ -16,7 +16,8 @@ const REGEX_NORMALIZE_FILLER = /\b(yeah|um|uh|uh+m|like|so|okay|ok|well|you know
 const REGEX_NORMALIZE_SPACE = /\s+/;
 
 const REGEX_CODING_CORE = /(write code|write a? ?(?:function|program|method|class|script)|implement|how to code)/;
-const REGEX_SYSTEM_DIRECT = /\b(system design|design (?:a|an|the)\s+(?:system|backend|architecture|platform|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network|streaming|video|marketplace|e ?commerce|storage|distributed system)|(?:design|build|scale|architect)\s+(?:twitter|instagram|uber|netflix|youtube|whatsapp|slack|discord|flipkart|swiggy|zomato|amazon|paytm|upi|google drive|dropbox|stripe)(?:\s+(?:backend|system|architecture|platform|service|app))?|redesign (?:the )?(?:backend|system|architecture|platform|service|app)|architecture of (?:the )?(?:system|backend|platform|service|app|database)|build(?:ing)? (?:a|an|the)\s+(?:platform|system|backend|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network))\b/;
+const REGEX_SYSTEM_DIRECT = /\b(system design|systems design|high[\s-]?level design|\bhld\b|low[\s-]?level design|\blld\b|design (?:a|an|the)\s+(?:system|backend|architecture|platform|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network|streaming|video|marketplace|e ?commerce|storage|distributed system)|(?:design|build|scale|architect)\s+(?:twitter|instagram|uber|netflix|youtube|whatsapp|slack|discord|flipkart|swiggy|zomato|amazon|paytm|upi|google drive|dropbox|stripe)(?:\s+(?:backend|system|architecture|platform|service|app))?|(?:design|build|architect)\s+(?:a |an |the )?(?:hld|lld|high[\s-]?level design|low[\s-]?level design)\s+(?:for|of)\s+(?:twitter|instagram|uber|netflix|youtube|whatsapp|slack|discord|flipkart|swiggy|zomato|amazon|paytm|upi|google drive|dropbox|stripe|system|backend|platform|service|app)|redesign (?:the )?(?:backend|system|architecture|platform|service|app)|architecture of (?:the )?(?:system|backend|platform|service|app|database)|build(?:ing)? (?:a|an|the)\s+(?:platform|system|backend|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network))\b/;
+const REGEX_SYSTEM_REAL_WORLD_DIRECT = /\b(?:design|build|architect|scale|create)\s+(?:a |an |the )?(?:(?:hld|lld|llf|high[\s-]?level design|low[\s-]?level design)\s+(?:for|of)\s+)?(?:flipkart|shopify|amazon|ecommerce|e-commerce|marketplace|cart|checkout|payment gateway|payments?|wallet|upi|paytm|stripe|whatsapp|chat|messaging|real[\s-]?time chat|live chat|notification(?: system| service)?|news feed|feed system|timeline|instagram|twitter|x app|youtube|netflix|video streaming|streaming platform|uber|lyft|ride booking|ride sharing|rideshare|food delivery|swiggy|zomato|doordash|booking|ticket booking|ticketmaster|airbnb|hotel booking|search engine|recommendation(?: system)?|url shortener|rate limiter|web crawler|file storage|dropbox|google drive|google docs|collaborative editor|slack|discord)(?:\s+(?:backend|system|architecture|platform|service|app|hld|lld))?\b/;
 const REGEX_SYSTEM_ARCH = /\b(backend|front ?end|service|services|distributed|microservice|api gateway|gateway|queue|message queue|event[-\s]?driven|cache|caching|redis|kafka|database|db|storage|partition|replication|shard(?:ing)?|load balanc(?:er|ing)|cdn|edge|availability|consistency|latency|throughput|qps|rps|slo|sla|index(?:es)?|read write|read\/write|pipeline|worker|job queue|cron|batch|stream(?:ing)?|pub ?sub|pubsub)\b/;
 const REGEX_SYSTEM_SCALE = /\b(scale|scaling|scalable|millions?(?: of)? users?|billions?(?: of)? users?|100m users?|10m users?|users? at scale|traffic|spike|spikes|burst|high traffic|peak traffic|performance|bottleneck|concurren|throughput|latency|qps|rps|requests per second|low latency|high throughput|capacity|growth|high load|load spike|load test|sudden(?:ly)? (?:spike|traffic|load)|traffic surge|surge|fault toleran|redundan|high availability|\bha\b|\d+\s*(?:k|m|b|thousand|million|billion))\b/;
 const REGEX_SYSTEM_FRAMING = /\b(suppose|imagine|let s say|lets say|what if|consider|assume|scenario|in production|real[-\s]?world|in the real world|if suddenly|suddenly|at scale|in practice|what would happen|what happens|how would(?: you| we| this| the system)?|walk me through (?:the )?(?:architecture|system|backend|design)|talk through (?:the )?(?:architecture|system|backend|design))\b/;
@@ -65,6 +66,16 @@ type SystemSignalScore = {
 export function normalizeTranscript(text: string): string {
     let t = text.toLowerCase();
     t = t.replace(new RegExp(REGEX_NORMALIZE_BROKEN.source, 'g'), '$1$2');
+    t = t
+        .replace(/\bllf\b/g, 'lld')
+        .replace(/\bflip\s*krat\b|\bflipcart\b|\bfilpkart\b|\bflipkartt\b/g, 'flipkart')
+        .replace(/\bwhat\s*s?app\b|\bwatsapp\b|\bwhatsap\b/g, 'whatsapp')
+        .replace(/\binsta\s*gram\b|\binstgram\b/g, 'instagram')
+        .replace(/\bnetflx\b|\bnetflex\b/g, 'netflix')
+        .replace(/\byoutub\b/g, 'youtube')
+        .replace(/\bswigy\b/g, 'swiggy')
+        .replace(/\bzomatto\b/g, 'zomato')
+        .replace(/\breal time\b/g, 'real-time');
     t = t.replace(/[\u201C\u201D\u2018\u2019]/g, '"');
     t = t.replace(/[\u2013\u2014]/g, '-');
     t = t.replace(/[^a-z0-9\s\-?:/]/g, ' ');
@@ -74,7 +85,7 @@ export function normalizeTranscript(text: string): string {
 }
 
 function scoreSystemDesignSignals(cap: (regex: RegExp) => number): SystemSignalScore {
-    const directHits = cap(REGEX_SYSTEM_DIRECT);
+    const directHits = cap(REGEX_SYSTEM_DIRECT) + cap(REGEX_SYSTEM_REAL_WORLD_DIRECT);
     const archHits = cap(REGEX_SYSTEM_ARCH);
     const scaleHits = cap(REGEX_SYSTEM_SCALE);
     const framingHits = cap(REGEX_SYSTEM_FRAMING);
