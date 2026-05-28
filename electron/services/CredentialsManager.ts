@@ -28,6 +28,15 @@ export interface CurlProvider {
     responsePath: string; // e.g. "choices[0].message.content"
 }
 
+/** Persistent vault entry for a Groq API key. Runtime health is NOT persisted. */
+export interface GroqVaultKey {
+    id: string;           // crypto.randomUUID()
+    key: string;          // raw API key (encrypted at rest by safeStorage)
+    enabled: boolean;     // user toggle
+    addedAt: number;      // Date.now() when added
+    label?: string;       // optional user label
+}
+
 export interface StoredCredentials {
     geminiApiKey?: string;
     groqApiKey?: string;
@@ -59,6 +68,8 @@ export interface StoredCredentials {
     groqPreferredModel?: string;
     openaiPreferredModel?: string;
     claudePreferredModel?: string;
+    // Groq Provider Vault — multi-key management
+    groqKeyVault?: GroqVaultKey[];
     // Free trial state
     trialToken?:     string;   // server-issued signed token (teamsync_trial_…)
     trialExpiresAt?: string;   // ISO timestamp — local copy for startup check
@@ -445,6 +456,63 @@ export class CredentialsManager {
         this.credentials.curlProviders = this.credentials.curlProviders.filter(p => p.id !== id);
         this.saveCredentials();
         console.log(`[CredentialsManager] Curl Provider '${id}' deleted`);
+    }
+
+    // ── Groq Provider Vault ────────────────────────────────────
+
+    public getGroqKeyVault(): GroqVaultKey[] {
+        return this.credentials.groqKeyVault || [];
+    }
+
+    /**
+     * Add a new key to the Groq vault. Deduplicates by raw key value.
+     * Returns the created entry, or the existing entry if key already exists.
+     */
+    public addGroqVaultKey(key: string, label?: string): GroqVaultKey {
+        if (!this.credentials.groqKeyVault) {
+            this.credentials.groqKeyVault = [];
+        }
+
+        const trimmed = key.trim();
+        // Deduplicate — don't add the same raw key twice
+        const existing = this.credentials.groqKeyVault.find(k => k.key === trimmed);
+        if (existing) return existing;
+
+        const entry: GroqVaultKey = {
+            id: crypto.randomUUID(),
+            key: trimmed,
+            enabled: true,
+            addedAt: Date.now(),
+            label,
+        };
+        this.credentials.groqKeyVault.push(entry);
+        this.saveCredentials();
+        console.log(`[CredentialsManager] Groq vault key added (vault size: ${this.credentials.groqKeyVault.length})`);
+        return entry;
+    }
+
+    public removeGroqVaultKey(id: string): void {
+        if (!this.credentials.groqKeyVault) return;
+        this.credentials.groqKeyVault = this.credentials.groqKeyVault.filter(k => k.id !== id);
+        this.saveCredentials();
+        console.log(`[CredentialsManager] Groq vault key removed: ${id}`);
+    }
+
+    public toggleGroqVaultKey(id: string, enabled: boolean): void {
+        if (!this.credentials.groqKeyVault) return;
+        const entry = this.credentials.groqKeyVault.find(k => k.id === id);
+        if (entry) {
+            entry.enabled = enabled;
+            this.saveCredentials();
+            console.log(`[CredentialsManager] Groq vault key ${id} ${enabled ? 'enabled' : 'disabled'}`);
+        }
+    }
+
+    /** Bulk replace the entire vault (used during migration). */
+    public setGroqKeyVault(keys: GroqVaultKey[]): void {
+        this.credentials.groqKeyVault = keys;
+        this.saveCredentials();
+        console.log(`[CredentialsManager] Groq vault replaced (${keys.length} key(s))`);
     }
 
     // ── Free Trial ─────────────────────────────────────────────

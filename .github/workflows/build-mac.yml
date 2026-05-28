@@ -30,7 +30,7 @@ jobs:
       # Rebuild native modules for Electron ABI
       - name: Rebuild native modules
         run: |
-          npx electron-rebuild -f -w
+          npx electron-rebuild -f
 
       # Build frontend
       - name: Build frontend

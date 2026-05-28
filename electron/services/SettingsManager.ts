@@ -12,6 +12,8 @@ export interface AppSettings {
     actionButtonMode?: 'recap' | 'brainstorm';
     groqFastTextMode?: boolean;
     knowledgeMode?: boolean;
+    /** One-shot flag: true after .env keys have been imported into the Groq vault */
+    groqVaultMigrated?: boolean;
     advancedStealth?: {
         level?: 'off' | 'basic' | 'advanced';
         processName?: string;

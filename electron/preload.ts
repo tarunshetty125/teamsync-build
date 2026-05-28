@@ -106,6 +106,14 @@ interface ElectronAPI {
   setTeamSyncApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   getTeamSyncUsage: () => Promise<{ ok: boolean; plan?: string; quota?: { transcription: { used: number; limit: number; remaining: number }; ai: { used: number; limit: number; remaining: number }; search: { used: number; limit: number; remaining: number }; resets_at: string }; member_since?: string; error?: string; status?: number }>
   getStoredCredentials: () => Promise<{ hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; hasTeamSyncKey: boolean; googleServiceAccountPath: string | null; sttProvider: string; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; hasSonioxKey: boolean }>
+
+  // Groq Provider Vault — Multi-Key Management
+  groqVaultGetKeys: () => Promise<{ success: boolean; keys: Array<{ id: string; maskedKey: string; enabled: boolean; addedAt: number; label?: string; exhausted: boolean; cooldownUntil: number | null; requestCount: number; lastUsed: number; invalid: boolean; isAvailable: boolean }>; error?: string }>
+  groqVaultAddKey: (apiKey: string, label?: string) => Promise<{ success: boolean; key?: { id: string; maskedKey: string; enabled: boolean; addedAt: number; label?: string }; validationStatus?: string; validationError?: string; error?: string }>
+  groqVaultRemoveKey: (id: string) => Promise<{ success: boolean; error?: string }>
+  groqVaultToggleKey: (id: string, enabled: boolean) => Promise<{ success: boolean; error?: string }>
+  groqVaultGetHealth: () => Promise<{ success: boolean; error?: string; [key: string]: any }>
+
   permissions: PermissionsBridge
   checkPermissions: () => Promise<{ microphone: 'granted' | 'denied' | 'not-determined' | 'restricted'; screen: 'granted' | 'denied' | 'not-determined' | 'restricted'; platform: string }>
   requestMicPermission: () => Promise<boolean>
@@ -733,6 +741,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setTeamSyncApiKey: (apiKey: string) => ipcRenderer.invoke("set-teamsync-api-key", apiKey),
   getTeamSyncUsage: () => ipcRenderer.invoke("get-teamsync-usage"),
   getStoredCredentials: () => ipcRenderer.invoke("get-stored-credentials"),
+
+  // Groq Provider Vault — Multi-Key Management
+  groqVaultGetKeys: () => ipcRenderer.invoke('groq-vault:get-keys'),
+  groqVaultAddKey: (apiKey: string, label?: string) => ipcRenderer.invoke('groq-vault:add-key', apiKey, label),
+  groqVaultRemoveKey: (id: string) => ipcRenderer.invoke('groq-vault:remove-key', id),
+  groqVaultToggleKey: (id: string, enabled: boolean) => ipcRenderer.invoke('groq-vault:toggle-key', id, enabled),
+  groqVaultGetHealth: () => ipcRenderer.invoke('groq-vault:get-health'),
 
   // Permissions
   permissions: {

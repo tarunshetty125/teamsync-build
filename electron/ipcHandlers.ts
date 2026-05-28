@@ -1222,6 +1222,145 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  // ── Groq Provider Vault ───────────────────────────────────────────────────
+  // Multi-key management: CRUD + health. All mutations sync the in-memory pool.
+
+  safeHandle("groq-vault:get-keys", async () => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const cm = CredentialsManager.getInstance();
+      const vault = cm.getGroqKeyVault();
+      const llmHelper = appState.processingHelper.getLLMHelper();
+      const keyManager = llmHelper.getGroqKeyManager();
+      const runtimeStates = keyManager.getKeyStates();
+
+      // Merge vault metadata with runtime health. Never return raw keys.
+      const keys = vault.map((entry: any) => {
+        const runtime = runtimeStates.find((s: any) => s.apiKey === entry.key);
+        return {
+          id: entry.id,
+          maskedKey: keyManager.maskKey(entry.key),
+          enabled: entry.enabled,
+          addedAt: entry.addedAt,
+          label: entry.label,
+          // Runtime health (defaults for keys not yet loaded into pool)
+          exhausted: runtime?.exhausted ?? false,
+          cooldownUntil: runtime?.cooldownUntil ?? null,
+          requestCount: runtime?.requestCount ?? 0,
+          lastUsed: runtime?.lastUsed ?? 0,
+          invalid: runtime?.invalid ?? false,
+          isAvailable: runtime?.isAvailable ?? entry.enabled,
+        };
+      });
+
+      return { success: true, keys };
+    } catch (error: any) {
+      console.error('[IPC] groq-vault:get-keys error:', error);
+      return { success: false, error: error.message, keys: [] };
+    }
+  });
+
+  safeHandle("groq-vault:add-key", async (_, apiKey: string, label?: string) => {
+    try {
+      const trimmed = (apiKey || '').trim();
+      if (!trimmed) return { success: false, error: 'API key is required' };
+
+      // Validate the key against Groq API before adding
+      let validationStatus: 'healthy' | 'invalid' = 'healthy';
+      let validationError: string | undefined;
+      try {
+        const Groq = require('groq-sdk').default || require('groq-sdk');
+        const testClient = new Groq({ apiKey: trimmed });
+        await testClient.models.list();
+      } catch (e: any) {
+        const status = e?.status ?? e?.statusCode ?? 0;
+        if (status === 401 || status === 403) {
+          validationStatus = 'invalid';
+          validationError = 'Invalid API key — authentication failed';
+        } else if (status === 429) {
+          // Rate limited but key is valid
+          validationStatus = 'healthy';
+        } else {
+          // Network or transient error — accept the key but warn
+          validationStatus = 'healthy';
+          validationError = `Key accepted (could not verify: ${e.message?.slice(0, 60)})`;
+        }
+      }
+
+      if (validationStatus === 'invalid') {
+        return { success: false, error: validationError, validationStatus };
+      }
+
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const entry = CredentialsManager.getInstance().addGroqVaultKey(trimmed, label);
+
+      // Sync pool
+      const llmHelper = appState.processingHelper.getLLMHelper();
+      llmHelper.reloadGroqVault();
+
+      const keyManager = llmHelper.getGroqKeyManager();
+      return {
+        success: true,
+        key: {
+          id: entry.id,
+          maskedKey: keyManager.maskKey(entry.key),
+          enabled: entry.enabled,
+          addedAt: entry.addedAt,
+          label: entry.label,
+        },
+        validationStatus,
+        validationError,
+      };
+    } catch (error: any) {
+      console.error('[IPC] groq-vault:add-key error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  safeHandle("groq-vault:remove-key", async (_, id: string) => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      CredentialsManager.getInstance().removeGroqVaultKey(id);
+
+      // Sync pool
+      const llmHelper = appState.processingHelper.getLLMHelper();
+      llmHelper.reloadGroqVault();
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC] groq-vault:remove-key error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  safeHandle("groq-vault:toggle-key", async (_, id: string, enabled: boolean) => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      CredentialsManager.getInstance().toggleGroqVaultKey(id, enabled);
+
+      // Sync pool
+      const llmHelper = appState.processingHelper.getLLMHelper();
+      llmHelper.reloadGroqVault();
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC] groq-vault:toggle-key error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  safeHandle("groq-vault:get-health", async () => {
+    try {
+      const llmHelper = appState.processingHelper.getLLMHelper();
+      const keyManager = llmHelper.getGroqKeyManager();
+      const report = keyManager.getHealthReport();
+      return { success: true, ...report };
+    } catch (error: any) {
+      console.error('[IPC] groq-vault:get-health error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   safeHandle("set-openai-api-key", async (_, apiKey: string) => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');

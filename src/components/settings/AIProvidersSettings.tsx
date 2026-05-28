@@ -3,6 +3,7 @@ import { Plus, Trash2, Edit2, AlertCircle, CheckCircle, Save, ChevronDown, Check
 import { STANDARD_CLOUD_MODELS, prettifyModelId } from '../../utils/modelUtils';
 import { validateCurl } from '../../lib/curl-validator';
 import { ProviderCard } from './ProviderCard';
+import { GroqKeyVault } from './GroqKeyVault';
 
 interface CustomProvider {
     id: string;
@@ -582,25 +583,8 @@ export const AIProvidersSettings: React.FC = () => {
                         onPreferredModelChange={(model) => setPreferredModels(prev => ({ ...prev, gemini: model }))}
                     />
 
-                    {/* Groq */}
-                    <ProviderCard
-                        providerId="groq"
-                        providerName="Groq"
-                        apiKey={groqApiKey}
-                        preferredModel={preferredModels.groq}
-                        hasStoredKey={!!hasStoredKey.groq}
-                        onKeyChange={setGroqApiKey}
-                        onSaveKey={async () => { await handleSaveKey('groq', groqApiKey, setGroqApiKey); }}
-                        onRemoveKey={() => handleRemoveKey('groq', setGroqApiKey)}
-                        onTestConnection={() => handleTestConnection('groq', groqApiKey)}
-                        testStatus={testStatus.groq || 'idle'}
-                        testError={testError.groq}
-                        savingStatus={!!savingStatus.groq}
-                        savedStatus={!!savedStatus.groq}
-                        keyPlaceholder="gsk_..."
-                        keyUrl="https://console.groq.com/keys"
-                        onPreferredModelChange={(model) => setPreferredModels(prev => ({ ...prev, groq: model }))}
-                    />
+                    {/* Groq — Multi-Key Vault */}
+                    <GroqKeyVault />
 
                     {/* OpenAI */}
                     <ProviderCard

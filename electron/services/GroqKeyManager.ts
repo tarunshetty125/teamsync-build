@@ -171,11 +171,92 @@ export class GroqKeyManager {
     console.log(`[Groq] Single key set: ${this.maskKey(trimmed)}`);
   }
 
+  /**
+   * Load keys from a persistent vault (CredentialsManager).
+   * Called AFTER loadFromEnv() — vault keys merge into the pool.
+   * Only loads keys that are marked as enabled.
+   * Preserves existing runtime state for keys already in the pool.
+   */
+  public loadFromVault(vaultKeys: Array<{ key: string; enabled: boolean }>): void {
+    const existingMap = new Map(this.keys.map(k => [k.apiKey, k]));
+    const seen = new Set(this.keys.map(k => k.apiKey));
+
+    let added = 0;
+    for (const vk of vaultKeys) {
+      const trimmed = vk.key.trim();
+      if (!trimmed || !vk.enabled) continue;
+      if (seen.has(trimmed)) continue;
+
+      seen.add(trimmed);
+      this.keys.push(this.createKeyState(trimmed));
+      added++;
+    }
+
+    // Also remove pool entries whose keys are no longer in the vault (disabled or deleted)
+    const vaultKeySet = new Set(vaultKeys.filter(v => v.enabled).map(v => v.key.trim()));
+    const envKeySet = new Set<string>();
+    const legacyKey = process.env.GROQ_API_KEY?.trim();
+    if (legacyKey) envKeySet.add(legacyKey);
+    for (let i = 1; i <= 10; i++) {
+      const raw = process.env[`GROQ_API_KEY_${i}`]?.trim();
+      if (raw) envKeySet.add(raw);
+    }
+
+    // Keep keys that are in either vault or env
+    this.keys = this.keys.filter(k => vaultKeySet.has(k.apiKey) || envKeySet.has(k.apiKey));
+
+    if (added > 0) {
+      console.log(`[Groq] KeyManager loaded ${added} additional key(s) from vault (pool size: ${this.keys.length})`);
+    }
+  }
+
+  /**
+   * Remove a specific key from the pool by raw API key value.
+   * Used when a key is deleted from the vault.
+   */
+  public removeKey(apiKey: string): void {
+    const trimmed = apiKey.trim();
+    const before = this.keys.length;
+    this.keys = this.keys.filter(k => k.apiKey !== trimmed);
+    if (this.keys.length < before) {
+      // Reset round-robin index to avoid out-of-bounds
+      this.roundRobinIndex = 0;
+      console.log(`[Groq] Key removed from pool: ${this.maskKey(trimmed)} (pool size: ${this.keys.length})`);
+    }
+  }
+
+  /**
+   * Return key states for UI display. Keys are masked — never exposes raw values.
+   * Includes runtime health (exhausted, cooldown, invalid, request count, lastUsed).
+   */
+  public getKeyStates(): Array<{
+    apiKey: string;     // masked
+    exhausted: boolean;
+    cooldownUntil: number | null;
+    requestCount: number;
+    lastUsed: number;
+    invalid: boolean;
+    isAvailable: boolean;
+  }> {
+    this.recoverKeys();
+    return this.keys.map(k => ({
+      apiKey: k.apiKey,  // caller uses maskKey() or we return raw for matching
+      exhausted: k.exhausted,
+      cooldownUntil: k.cooldownUntil,
+      requestCount: k.requestCount,
+      lastUsed: k.lastUsed,
+      invalid: k.invalid,
+      isAvailable: this.isKeyAvailable(k),
+    }));
+  }
+
   // ── Key Selection ──────────────────────────────────────────
 
   /**
-   * Get the next available Groq SDK client + key index via round-robin.
+   * Get the next available Groq SDK client via LRU (least recently used).
    * Skips exhausted, cooling-down, or permanently invalid keys.
+   * Selects the available key with the oldest `lastUsed` timestamp
+   * to ensure balanced usage across the pool.
    *
    * @returns `{ client, keyIndex }` or `null` if all keys are unavailable.
    */
@@ -185,22 +266,28 @@ export class GroqKeyManager {
     // First pass: try to recover any cooled-down keys
     this.recoverKeys();
 
-    const total = this.keys.length;
-    for (let attempt = 0; attempt < total; attempt++) {
-      const idx = this.roundRobinIndex % total;
-      this.roundRobinIndex = (this.roundRobinIndex + 1) % total;
+    // LRU selection: find the available key with the oldest lastUsed
+    let bestIdx = -1;
+    let bestLastUsed = Infinity;
 
-      const key = this.keys[idx];
-      if (this.isKeyAvailable(key)) {
-        key.lastUsed = Date.now();
-        key.requestCount++;
-        console.log(`[Groq] Using key ${idx + 1} (${this.maskKey(key.apiKey)})`);
-        return { client: key.client, keyIndex: idx };
+    for (let i = 0; i < this.keys.length; i++) {
+      const key = this.keys[i];
+      if (this.isKeyAvailable(key) && key.lastUsed < bestLastUsed) {
+        bestIdx = i;
+        bestLastUsed = key.lastUsed;
       }
     }
 
-    console.error('[Groq] All keys exhausted, cooling down, or invalid');
-    return null;
+    if (bestIdx === -1) {
+      console.error('[Groq] All keys exhausted, cooling down, or invalid');
+      return null;
+    }
+
+    const key = this.keys[bestIdx];
+    key.lastUsed = Date.now();
+    key.requestCount++;
+    console.log(`[Groq] Using key ${bestIdx + 1} (${this.maskKey(key.apiKey)}) [LRU]`);
+    return { client: key.client, keyIndex: bestIdx };
   }
 
   /**

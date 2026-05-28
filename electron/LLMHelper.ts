@@ -133,6 +133,49 @@ export class LLMHelper {
     this.groqKeyManager.loadFromEnv();
     this.groqRotatingClient = new GroqClient(this.groqKeyManager);
 
+    // ── Groq Vault: one-time .env migration + vault loading ──
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const { SettingsManager } = require('./services/SettingsManager');
+      const cm = CredentialsManager.getInstance();
+      const sm = SettingsManager.getInstance();
+
+      // One-time migration: .env + saved UI key → vault
+      if (!sm.get('groqVaultMigrated')) {
+        const vault = cm.getGroqKeyVault();
+        if (vault.length === 0) {
+          const envKeys: string[] = [];
+          for (let i = 1; i <= 10; i++) {
+            const raw = process.env[`GROQ_API_KEY_${i}`]?.trim();
+            if (raw) envKeys.push(raw);
+          }
+          const legacy = process.env.GROQ_API_KEY?.trim();
+          if (legacy) envKeys.push(legacy);
+          const credKey = cm.getGroqApiKey()?.trim();
+          if (credKey) envKeys.push(credKey);
+
+          const unique = [...new Set(envKeys)];
+          unique.forEach((key: string) => cm.addGroqVaultKey(key));
+          if (unique.length > 0) {
+            console.log(`[GroqVault] Migrated ${unique.length} key(s) from .env to vault`);
+          }
+        }
+        sm.set('groqVaultMigrated', true);
+      }
+
+      // Load vault keys into the rotation pool (additive to env keys)
+      const vault = cm.getGroqKeyVault();
+      if (vault.length > 0) {
+        this.groqKeyManager.loadFromVault(
+          vault.map((k: any) => ({ key: k.key, enabled: k.enabled }))
+        );
+      }
+    } catch (e) {
+      // CredentialsManager or SettingsManager not ready yet — vault keys will
+      // be loaded on first reloadGroqVault() call from IPC.
+      console.warn('[LLMHelper] Groq vault loading deferred:', (e as Error).message);
+    }
+
     // Initialize Groq client if API key provided
     if (groqApiKey) {
       this.groqApiKey = groqApiKey
@@ -141,7 +184,7 @@ export class LLMHelper {
       this.groqKeyManager.addKey(groqApiKey);
       console.log(`[LLMHelper] Groq client initialized with model: ${GROQ_MODEL}`)
     } else if (this.groqKeyManager.hasAvailableKey()) {
-      // Keys loaded from env — mark groqClient as available for null-checks
+      // Keys loaded from env/vault — mark groqClient as available for null-checks
       this.groqClient = this.groqKeyManager.getNextClient()?.client ?? null;
       if (this.groqClient) {
         console.log(`[LLMHelper] Groq client initialized from key rotation pool (${this.groqKeyManager.getPoolSize()} keys)`);
@@ -197,6 +240,33 @@ export class LLMHelper {
     // Feed the key into the rotation pool
     this.groqKeyManager.setSingleKey(apiKey);
     console.log("[LLMHelper] Groq API Key updated (also registered in rotation pool).");
+  }
+
+  /**
+   * Reload the Groq key pool from the persistent vault.
+   * Called from IPC after vault mutations (add/remove/toggle).
+   * Re-reads vault state and syncs the in-memory pool.
+   */
+  public reloadGroqVault(): void {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const vault = CredentialsManager.getInstance().getGroqKeyVault();
+      this.groqKeyManager.loadFromVault(
+        vault.map((k: any) => ({ key: k.key, enabled: k.enabled }))
+      );
+
+      // Ensure groqClient ref is set if we have available keys
+      if (!this.groqClient && this.groqKeyManager.hasAvailableKey()) {
+        this.groqClient = this.groqKeyManager.getNextClient()?.client ?? null;
+      }
+    } catch (e) {
+      console.error('[LLMHelper] Failed to reload Groq vault:', (e as Error).message);
+    }
+  }
+
+  /** Expose the GroqKeyManager for IPC health/state queries. */
+  public getGroqKeyManager(): GroqKeyManager {
+    return this.groqKeyManager;
   }
 
   public setOpenaiApiKey(apiKey: string) {
