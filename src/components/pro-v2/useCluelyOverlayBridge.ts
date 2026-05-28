@@ -79,6 +79,8 @@ const LIVE_MEETING_RAG_ID = 'live-meeting-current';
 const ACTION_CONTEXT_OVERRIDE_TIMEOUT_MS = 12_000;
 const MANUAL_SESSION_MODE_KEY = 'teamsync_overlay_manual_session_mode';
 const MANUAL_SESSION_MODE_EXPLICIT_KEY = 'teamsync_overlay_manual_session_mode_explicit';
+const INTENT_TRANSCRIPT_SEGMENTS = 6;
+const INTENT_TRANSCRIPT_MAX_CHARS = 700;
 
 const ACTION_CONTEXT_MESSAGES: Record<string, string> = {
     Answer: 'Generating response guidance…',
@@ -94,6 +96,18 @@ const ACTION_CONTEXT_MESSAGES: Record<string, string> = {
     'Deep Dive': 'Exploring implementation details…',
     Salary: 'Preparing negotiation guidance…',
 };
+
+function buildIntentTranscriptWindow(transcript: string, fallback: string): string {
+    if (!transcript && !fallback) return '';
+    const segments = transcript.split('  ·  ').filter(Boolean);
+    const recent = segments.slice(-INTENT_TRANSCRIPT_SEGMENTS);
+    let combined = recent.join(' ').trim();
+    if (!combined && fallback) combined = fallback.trim();
+    if (combined.length > INTENT_TRANSCRIPT_MAX_CHARS) {
+        combined = combined.slice(-INTENT_TRANSCRIPT_MAX_CHARS).trim();
+    }
+    return combined;
+}
 
 export interface CluelyOverlayBridgeProps {
     onEndMeeting?: () => void;
@@ -527,8 +541,11 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
     const recomputeIntentFromFinalTranscript = useCallback(
         (questionTurnId: string) => {
-            const finalOnly = lastFinalSentenceRef.current?.trim() || '';
-            if (finalOnly.length < 3) return;
+            const combined = buildIntentTranscriptWindow(
+                finalizedTranscriptRef.current,
+                lastFinalSentenceRef.current,
+            );
+            if (combined.length < 3) return;
 
             unlockRecommendationForTurn();
             currentQuestionTurnIdRef.current = questionTurnId;
@@ -536,7 +553,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             const seq = ++seqRef.current;
             dispatchIntent({
                 type: 'EVALUATE',
-                combinedText: finalOnly,
+                combinedText: combined,
                 now: performance.now(),
                 seq,
             });

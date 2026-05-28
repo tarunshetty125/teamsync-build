@@ -322,17 +322,35 @@ const REGEX_NORMALIZE_FILLER = /\b(yeah|um|uh|uh+m|like|so|okay|ok|well|you know
 const REGEX_NORMALIZE_SPACE = /\s+/;
 
 const REGEX_CODING_CORE = /(write code|write a? ?(?:function|program|method|class|script)|implement|how to code)/;
-const REGEX_SYSTEM_CORE = /(system design|design a|architecture|database schema|api design)/;
+const REGEX_SYSTEM_DIRECT = /\b(system design|design (?:a|an|the)\s+(?:system|backend|architecture|platform|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network|streaming|video|marketplace|e ?commerce|storage|distributed system)|design (?:twitter|instagram|uber|netflix|youtube|whatsapp|slack|discord)|redesign (?:the )?(?:backend|system|architecture|platform|service|app)|architecture of (?:the )?(?:system|backend|platform|service|app|database)|build(?:ing)? (?:a|an|the)\s+(?:platform|system|backend|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network))\b/;
+const REGEX_SYSTEM_ARCH = /\b(backend|front ?end|service|services|distributed|microservice|api gateway|gateway|queue|message queue|event[-\s]?driven|cache|caching|redis|kafka|database|db|storage|partition|replication|shard(?:ing)?|load balanc(?:er|ing)|cdn|edge|availability|consistency|latency|throughput|qps|rps|slo|sla|index(?:es)?|read write|read\/write|pipeline|worker|job queue|cron|batch|stream(?:ing)?|pub ?sub|pubsub)\b/;
+const REGEX_SYSTEM_SCALE = /\b(scale|scaling|scalable|million|billion|users?|traffic|spike|spikes|burst|high traffic|peak traffic|performance|bottleneck|concurren|throughput|latency|qps|rps|requests per second|low latency|high throughput|capacity|growth|high load|load spike|load test|sudden(?:ly)? (?:spike|traffic|load)|surge|\d+\s*(?:k|m|b|thousand|million|billion))\b/;
+const REGEX_SYSTEM_FRAMING = /\b(suppose|imagine|let s say|lets say|what if|consider|assume|scenario|in production|real[-\s]?world|in the real world|if suddenly|suddenly|at scale|in practice)\b/;
+const REGEX_SYSTEM_REASONING = /\b(tradeoff|trade-?off|pros? and cons|optimiz|handle|redesign|architecture|improv|fail(?:ed|ure|s)?|failure|fallback|retry|recover|recovery|failover|consistency|availability|durability|reliability|fault toleran|resilien|degrad|graceful|circuit breaker|rate limit|idempotent|backoff|queueing|bottleneck)\b/;
+const REGEX_NON_SYSTEM_DESIGN = /\b(singleton|factory|observer|strategy|decorator|adapter|prototype|builder|solid|oop|object oriented|design pattern|class diagram|uml|inheritance|polymorphism|encapsulation)\b/;
 const REGEX_BEHAVIORAL_CORE = /(tell me about a time|describe a situation|give me an example|share an experience|tell me about yourself|introduce yourself|walk me through (?:your )?(?:background|resume)|background|resume|personal experience|worked on|built|developed|impact|result|outcome)/;
 
 const REGEX_CODING_STRONG = /(algorithm|debug this|snippet|boilerplate|optimize|refactor|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|time complexity|space complexity)/;
-const REGEX_SYSTEM_STRONG = /(scalab|microservice|load balanc|distributed|high availability|caching strategy|caching|cache|cdn|message queue|rate limit|sharding|replication|partition|cap theorem|event driven|monolith|horizontal scal|fault toleran|throughput|latency|handle more users|high traffic|load)/;
 const REGEX_BEHAVIORAL_STRONG = /(when have you|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|tell me about yourself|experience|challenge|conflict|pressure|strength|strengths|weakness|weaknesses|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment|introduce yourself|background|resume|project|projects|worked on|built|developed|owned|ownership|impact|result|results|outcome|outcomes|personal)/;
 const REGEX_FOLLOW_UP_CORE = /(what happened next|then what|and after that|what.s next|how did that go|can you elaborate|tell me more|go deeper|expand on)/;
 const REGEX_FOLLOW_UP_STRONG = /(follow.?up|continuation|building on|going back to|earlier you said|you mentioned)/;
 
 const REGEX_CODING_BOOST = /(faster|efficient)/;
-const REGEX_SYSTEM_BOOST = /(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/;
+const SYSTEM_SIGNAL_MIN_BUCKETS = 2;
+const SYSTEM_SIGNAL_MIN_SCORE = 3;
+const INTENT_TRANSCRIPT_SEGMENTS = 6;
+const INTENT_TRANSCRIPT_MAX_CHARS = 700;
+
+type SystemSignalScore = {
+    score: number;
+    bucketHits: number;
+    strong: boolean;
+    directHits: number;
+    archHits: number;
+    scaleHits: number;
+    framingHits: number;
+    reasoningHits: number;
+};
 
 function normalizeTranscript(text: string) {
     let t = text.toLowerCase();
@@ -343,6 +361,46 @@ function normalizeTranscript(text: string) {
     t = t.replace(new RegExp(REGEX_NORMALIZE_FILLER.source, 'gi'), ' ');
     t = t.replace(new RegExp(REGEX_NORMALIZE_SPACE.source, 'g'), ' ').trim();
     return t;
+}
+
+function scoreSystemDesignSignals(t: string, cap: (regex: RegExp) => number): SystemSignalScore {
+    const directHits = cap(REGEX_SYSTEM_DIRECT);
+    const archHits = cap(REGEX_SYSTEM_ARCH);
+    const scaleHits = cap(REGEX_SYSTEM_SCALE);
+    const framingHits = cap(REGEX_SYSTEM_FRAMING);
+    const reasoningHits = cap(REGEX_SYSTEM_REASONING);
+
+    const bucketHits = [directHits, archHits, scaleHits, framingHits, reasoningHits].filter((v) => v > 0).length;
+    const score =
+        directHits * 4
+        + archHits * 2
+        + scaleHits * 2
+        + reasoningHits * 1.5
+        + framingHits;
+    const strong = directHits > 0 || (archHits > 0 && scaleHits > 0 && reasoningHits > 0);
+
+    return {
+        score,
+        bucketHits,
+        strong,
+        directHits,
+        archHits,
+        scaleHits,
+        framingHits,
+        reasoningHits,
+    };
+}
+
+function buildIntentTranscriptWindow(transcript: string, fallback: string): string {
+    if (!transcript && !fallback) return '';
+    const segments = transcript.split('  ·  ').filter(Boolean);
+    const recent = segments.slice(-INTENT_TRANSCRIPT_SEGMENTS);
+    let combined = recent.join(' ').trim();
+    if (!combined && fallback) combined = fallback.trim();
+    if (combined.length > INTENT_TRANSCRIPT_MAX_CHARS) {
+        combined = combined.slice(-INTENT_TRANSCRIPT_MAX_CHARS).trim();
+    }
+    return combined;
 }
 
 function detectQuestionType(
@@ -377,21 +435,39 @@ function detectQuestionType(
     // --- PRIORITY WEIGHTING ---
     // Core Signals (+3)
     scores.coding += cap(REGEX_CODING_CORE) * 3;
-    scores.system_design += cap(REGEX_SYSTEM_CORE) * 3;
     scores.behavioral += cap(REGEX_BEHAVIORAL_CORE) * 3;
 
     // Strong Signals (+2)
     scores.coding += cap(REGEX_CODING_STRONG) * 2;
-    scores.system_design += cap(REGEX_SYSTEM_STRONG) * 2;
     scores.behavioral += cap(REGEX_BEHAVIORAL_STRONG) * 2;
 
     // Cross-pollination boosts for mixed queries (+1)
     scores.coding += cap(REGEX_CODING_BOOST);
-    scores.system_design += cap(REGEX_SYSTEM_BOOST);
 
     // Follow-up signals
     scores.follow_up += cap(REGEX_FOLLOW_UP_CORE) * 3;
     scores.follow_up += cap(REGEX_FOLLOW_UP_STRONG) * 2;
+
+    const systemSignals = scoreSystemDesignSignals(t, cap);
+    const systemSignalDensity =
+        systemSignals.directHits
+        + systemSignals.archHits
+        + systemSignals.scaleHits
+        + systemSignals.framingHits
+        + systemSignals.reasoningHits;
+    const meetsSystemGate =
+        systemSignals.strong
+        || systemSignals.bucketHits >= SYSTEM_SIGNAL_MIN_BUCKETS
+        || (systemSignalDensity >= 3 && (systemSignals.archHits > 0 || systemSignals.scaleHits > 0));
+    if (meetsSystemGate && systemSignals.score >= SYSTEM_SIGNAL_MIN_SCORE) {
+        scores.system_design += systemSignals.score;
+    } else {
+        scores.system_design += Math.min(systemSignals.score, 0.5);
+    }
+
+    if (REGEX_NON_SYSTEM_DESIGN.test(t) && !systemSignals.strong && systemSignals.bucketHits < SYSTEM_SIGNAL_MIN_BUCKETS) {
+        scores.system_design = Math.max(0, scores.system_design - 2);
+    }
 
     // FOLLOW-UP FALLBACK: if general + short question + previous answer exists
     // This catches "what about X?" / "and Y?" style follow-ups
@@ -1130,18 +1206,20 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const seqRef = useRef(0);
 
     const recomputeIntentFromFinalTranscript = useCallback((questionTurnId: string) => {
-        // STRICT: use ONLY the last finalized sentence, not rolling transcript
-        const finalOnly = lastFinalSentenceRef.current?.trim() || '';
-        if (finalOnly.length < 3) return;
+        const combined = buildIntentTranscriptWindow(
+            finalizedTranscriptRef.current,
+            lastFinalSentenceRef.current,
+        );
+        if (combined.length < 3) return;
 
         recommendationLockTurnIdRef.current = null;
-        latestCombinedRef.current = finalOnly;
+        latestCombinedRef.current = combined;
         currentQuestionTurnIdRef.current = questionTurnId;
         setCurrentQuestionTurnId(questionTurnId);
         const seq = ++seqRef.current;
         dispatchIntent({
             type: 'EVALUATE',
-            combinedText: finalOnly,
+            combinedText: combined,
             now: performance.now(),
             seq
         });

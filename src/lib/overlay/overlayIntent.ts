@@ -16,15 +16,18 @@ const REGEX_NORMALIZE_FILLER = /\b(yeah|um|uh|uh+m|like|so|okay|ok|well|you know
 const REGEX_NORMALIZE_SPACE = /\s+/;
 
 const REGEX_CODING_CORE = /(write code|write a? ?(?:function|program|method|class|script)|implement|how to code)/;
-const REGEX_SYSTEM_CORE = /(system design|design a|design an|design the|architecture|database schema|api design|\bdesign\s+(?:an?\s+|the\s+)?(?:twitter|instagram|uber|netflix|youtube|whatsapp|slack|discord|chat|messaging|notification|feed|timeline|search|payments?|booking|rideshare|news feed|url shortener|api gateway|database|backend|cache|queue|service|system|platform|app)\b)/;
+const REGEX_SYSTEM_DIRECT = /\b(system design|design (?:a|an|the)\s+(?:system|backend|architecture|platform|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network|streaming|video|marketplace|e ?commerce|storage|distributed system)|design (?:twitter|instagram|uber|netflix|youtube|whatsapp|slack|discord)|redesign (?:the )?(?:backend|system|architecture|platform|service|app)|architecture of (?:the )?(?:system|backend|platform|service|app|database)|build(?:ing)? (?:a|an|the)\s+(?:platform|system|backend|service|app|api|database|cache|queue|notification|feed|timeline|search|payments?|booking|ride(?:-|\s)?sharing(?: platform)?|rideshare|url shortener|chat|messaging|social network))\b/;
+const REGEX_SYSTEM_ARCH = /\b(backend|front ?end|service|services|distributed|microservice|api gateway|gateway|queue|message queue|event[-\s]?driven|cache|caching|redis|kafka|database|db|storage|partition|replication|shard(?:ing)?|load balanc(?:er|ing)|cdn|edge|availability|consistency|latency|throughput|qps|rps|slo|sla|index(?:es)?|read write|read\/write|pipeline|worker|job queue|cron|batch|stream(?:ing)?|pub ?sub|pubsub)\b/;
+const REGEX_SYSTEM_SCALE = /\b(scale|scaling|scalable|million|billion|users?|traffic|spike|spikes|burst|high traffic|peak traffic|performance|bottleneck|concurren|throughput|latency|qps|rps|requests per second|low latency|high throughput|capacity|growth|high load|load spike|load test|sudden(?:ly)? (?:spike|traffic|load)|surge|\d+\s*(?:k|m|b|thousand|million|billion))\b/;
+const REGEX_SYSTEM_FRAMING = /\b(suppose|imagine|let s say|lets say|what if|consider|assume|scenario|in production|real[-\s]?world|in the real world|if suddenly|suddenly|at scale|in practice)\b/;
+const REGEX_SYSTEM_REASONING = /\b(tradeoff|trade-?off|pros? and cons|optimiz|handle|redesign|architecture|improv|fail(?:ed|ure|s)?|failure|fallback|retry|recover|recovery|failover|consistency|availability|durability|reliability|fault toleran|resilien|degrad|graceful|circuit breaker|rate limit|idempotent|backoff|queueing|bottleneck)\b/;
+const REGEX_NON_SYSTEM_DESIGN = /\b(singleton|factory|observer|strategy|decorator|adapter|prototype|builder|solid|oop|object oriented|design pattern|class diagram|uml|inheritance|polymorphism|encapsulation)\b/;
 const REGEX_BEHAVIORAL_CORE = /(tell me about a time|describe a situation|give me an example|share an experience|tell me about yourself|introduce yourself|walk me through (?:your )?(?:background|resume)|background|resume|personal experience|worked on|built|developed|impact|result|outcome)/;
 const REGEX_CODING_STRONG = /(algorithm|debug this|snippet|boilerplate|optimize|refactor|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|time complexity|space complexity)/;
-const REGEX_SYSTEM_STRONG = /(scalab|microservice|load balanc|distributed|high availability|caching strategy|caching|cache|cdn|message queue|rate limit|sharding|replication|partition|cap theorem|event driven|monolith|horizontal scal|fault toleran|throughput|latency|handle more users|high traffic|load|\bnews feed\b|\btimeline\b)/;
 const REGEX_BEHAVIORAL_STRONG = /(when have you|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|tell me about yourself|experience|challenge|conflict|pressure|strength|strengths|weakness|weaknesses|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment|introduce yourself|background|resume|project|projects|worked on|built|developed|owned|ownership|impact|result|results|outcome|outcomes|personal)/;
 const REGEX_FOLLOW_UP_CORE = /(what happened next|then what|and after that|what.s next|how did that go|can you elaborate|tell me more|go deeper|expand on)/;
 const REGEX_FOLLOW_UP_STRONG = /(follow.?up|continuation|building on|going back to|earlier you said|you mentioned)/;
 const REGEX_CODING_BOOST = /(faster|efficient)/;
-const REGEX_SYSTEM_BOOST = /(tradeoff|trade-off|pros? and cons|downsides|advantages|disadvantages)/;
 const REGEX_GENERAL_CORE = /(\bweather\b|\bforecast\b|\btime\b|\bdate\b|\bnews\b|\bcompany\b|\bproduct\b|\broadmap\b|\bstrategy\b|\bbusiness\b|\bmarket\b|\bindustry\b|\bcustomer\b|\bfeature\b|\bpolicy\b|\bprocess\b|\bmission\b|\bvision\b|\bgoal\b|\boverview\b|\bsummary\b)/;
 const REGEX_GENERAL_STRONG = /(\bwhat(?:'s| is) the weather\b|\bcurrent time\b|\bwhat(?:'s| is) the date\b|\bproduct roadmap\b|\bcompany strategy\b|\bbusiness model\b|\bmarket size\b)/;
 
@@ -35,7 +38,6 @@ const REGEX_SALARY_BOOST = /(money|paying|afford|expensive|budget|worth|value|de
 
 /** Loose STT-friendly signals — one hit is enough to nudge classification. */
 const REGEX_CODING_LOOSE = /(write code|coding question|data struct|hash ?map|binary|recursion|iterate|loop|array|string|sort|search|tree|graph|stack|queue|leetcode|big o|runtime|implement|algorithm|solve)/;
-const REGEX_SYSTEM_LOOSE = /(system design|design (?:this|a|an|the)|\bdesign\s+(?:twitter|instagram|uber|netflix|youtube|whatsapp|slack|discord|chat|messaging|notification|feed|timeline|search|payments?|booking|rideshare|news feed|url shortener|api gateway|database|backend|cache|queue|service|system|platform|app)\b|architect|scal(e|ing|ability)|microservice|database|api|backend|frontend|storage|traffic|users|requests|shard|replicat|cache|cdn|queue|load|latency|throughput|high availability|distributed|monolith)/;
 const REGEX_BEHAVIORAL_LOOSE = /(tell me about|your experience|a time when|situation|on your team|leadership|conflict|challenge|project|worked on|background|resume|impact|outcome|failure|mistake|collaborat|deadline|priorit|why should we|why do you want|where do you see|what motivates|what drives|strengths?|weakness|hobbies|interests|culture|values|team|manager|supervisor|company|organization|role|position|opportunity|growth|career|passion|personality|work.?life|balance|remote|hybrid|flexible|environment)/;
 const REGEX_FOLLOW_UP_LOOSE = /(follow up|go deeper|more detail|elaborate|expand on|what about|you mentioned|earlier you|continue from|clarify that|repeat that)/;
 const REGEX_GENERAL_LOOSE = /(weather|forecast|today|tomorrow|time|date|news|company|product|roadmap|strategy|business|market|industry|customer|feature|policy|process|overview|summary)/;
@@ -45,6 +47,19 @@ const REGEX_GENERAL_LOOSE = /(weather|forecast|today|tomorrow|time|date|news|com
 const MIN_PRIMARY_SCORE = 2;
 const SWITCH_THRESHOLD = 2;
 const STRONG_SIGNAL_SCORE = 3;
+const SYSTEM_SIGNAL_MIN_BUCKETS = 2;
+const SYSTEM_SIGNAL_MIN_SCORE = 3;
+
+type SystemSignalScore = {
+    score: number;
+    bucketHits: number;
+    strong: boolean;
+    directHits: number;
+    archHits: number;
+    scaleHits: number;
+    framingHits: number;
+    reasoningHits: number;
+};
 
 export function normalizeTranscript(text: string): string {
     let t = text.toLowerCase();
@@ -55,6 +70,34 @@ export function normalizeTranscript(text: string): string {
     t = t.replace(new RegExp(REGEX_NORMALIZE_FILLER.source, 'gi'), ' ');
     t = t.replace(new RegExp(REGEX_NORMALIZE_SPACE.source, 'g'), ' ').trim();
     return t;
+}
+
+function scoreSystemDesignSignals(t: string, cap: (regex: RegExp) => number): SystemSignalScore {
+    const directHits = cap(REGEX_SYSTEM_DIRECT);
+    const archHits = cap(REGEX_SYSTEM_ARCH);
+    const scaleHits = cap(REGEX_SYSTEM_SCALE);
+    const framingHits = cap(REGEX_SYSTEM_FRAMING);
+    const reasoningHits = cap(REGEX_SYSTEM_REASONING);
+
+    const bucketHits = [directHits, archHits, scaleHits, framingHits, reasoningHits].filter((v) => v > 0).length;
+    const score =
+        directHits * 4
+        + archHits * 2
+        + scaleHits * 2
+        + reasoningHits * 1.5
+        + framingHits;
+    const strong = directHits > 0 || (archHits > 0 && scaleHits > 0 && reasoningHits > 0);
+
+    return {
+        score,
+        bucketHits,
+        strong,
+        directHits,
+        archHits,
+        scaleHits,
+        framingHits,
+        reasoningHits,
+    };
 }
 
 export function isSalaryRelatedText(text: string): boolean {
@@ -95,13 +138,10 @@ export function detectQuestionType(
     };
 
     scores.coding += cap(REGEX_CODING_CORE) * 3;
-    scores.system_design += cap(REGEX_SYSTEM_CORE) * 3;
     scores.behavioral += cap(REGEX_BEHAVIORAL_CORE) * 3;
     scores.coding += cap(REGEX_CODING_STRONG) * 2;
-    scores.system_design += cap(REGEX_SYSTEM_STRONG) * 2;
     scores.behavioral += cap(REGEX_BEHAVIORAL_STRONG) * 2;
     scores.coding += cap(REGEX_CODING_BOOST);
-    scores.system_design += cap(REGEX_SYSTEM_BOOST);
     scores.general += cap(REGEX_GENERAL_CORE) * 2;
     scores.general += cap(REGEX_GENERAL_STRONG) * 3;
     scores.follow_up += cap(REGEX_FOLLOW_UP_CORE) * 3;
@@ -111,11 +151,31 @@ export function detectQuestionType(
     scores.salary += cap(REGEX_SALARY_BOOST);
 
     if (REGEX_CODING_LOOSE.test(t)) scores.coding += 2;
-    if (REGEX_SYSTEM_LOOSE.test(t)) scores.system_design += 2;
     if (REGEX_BEHAVIORAL_LOOSE.test(t)) scores.behavioral += 2;
     if (REGEX_FOLLOW_UP_LOOSE.test(t)) scores.follow_up += 2;
     if (REGEX_SALARY_LOOSE.test(t)) scores.salary += 2;
     if (REGEX_GENERAL_LOOSE.test(t)) scores.general += 2;
+
+    const systemSignals = scoreSystemDesignSignals(t, cap);
+    const systemSignalDensity =
+        systemSignals.directHits
+        + systemSignals.archHits
+        + systemSignals.scaleHits
+        + systemSignals.framingHits
+        + systemSignals.reasoningHits;
+    const meetsSystemGate =
+        systemSignals.strong
+        || systemSignals.bucketHits >= SYSTEM_SIGNAL_MIN_BUCKETS
+        || (systemSignalDensity >= 3 && (systemSignals.archHits > 0 || systemSignals.scaleHits > 0));
+    if (meetsSystemGate && systemSignals.score >= SYSTEM_SIGNAL_MIN_SCORE) {
+        scores.system_design += systemSignals.score;
+    } else {
+        scores.system_design += Math.min(systemSignals.score, 0.5);
+    }
+
+    if (REGEX_NON_SYSTEM_DESIGN.test(t) && !systemSignals.strong && systemSignals.bucketHits < SYSTEM_SIGNAL_MIN_BUCKETS) {
+        scores.system_design = Math.max(0, scores.system_design - 2);
+    }
 
     const wordCount = t.split(/\s+/).filter((w: string) => w.length > 0).length;
     if (scores.general >= scores.follow_up && wordCount <= 8 && wordCount >= 2) {
