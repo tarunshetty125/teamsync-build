@@ -50,6 +50,16 @@ jobs:
           echo Building macOS native module...
           npm run build:native
 
+      # Prepare bundled Python runtime for OCR (both architectures)
+      - name: Prepare Python OCR Runtime (arm64)
+        run: |
+          chmod +x python-runtime/prepare-mac.sh
+          cd python-runtime && bash prepare-mac.sh arm64
+
+      - name: Prepare Python OCR Runtime (x64)
+        run: |
+          cd python-runtime && bash prepare-mac.sh x64
+
       # Build macOS app — all architectures + both targets
       - name: Build macOS App
         run: |

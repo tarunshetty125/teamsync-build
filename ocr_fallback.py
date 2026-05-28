@@ -13,14 +13,22 @@ def main() -> int:
         return 0
 
     try:
-        ocr = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
+        # New API: use_textline_orientation replaces use_angle_cls; show_log removed
+        try:
+            ocr = PaddleOCR(use_textline_orientation=True, lang='en')
+        except (TypeError, ValueError):
+            ocr = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
     except Exception:
         return 0
 
     chunks = []
     for image_path in image_paths:
         try:
-            result = ocr.ocr(image_path, cls=True)
+            # New PaddleOCR: cls= kwarg removed
+            try:
+                result = ocr.ocr(image_path)
+            except TypeError:
+                result = ocr.ocr(image_path, cls=True)
         except Exception:
             continue
 

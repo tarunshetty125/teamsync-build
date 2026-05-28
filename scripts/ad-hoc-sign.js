@@ -112,4 +112,31 @@ exports.default = async function (context) {
             }
         }
     }
+
+    // ── Step 3: Sign bundled Python binary and native libs ──
+    // The Python runtime in extraResources contains unsigned Mach-O binaries.
+    // Without ad-hoc signing, macOS Gatekeeper will block execution.
+    const pythonDir = path.join(appPath, 'Contents', 'Resources', 'python');
+    if (fs.existsSync(pythonDir)) {
+        // Sign the main Python binary
+        const pythonBin = path.join(pythonDir, 'bin', 'python3');
+        if (fs.existsSync(pythonBin)) {
+            console.log('[Ad-Hoc Signing] Signing bundled Python binary...');
+            try {
+                execSync(`codesign --force --sign - "${pythonBin}"`, { stdio: 'inherit' });
+            } catch (error) {
+                console.error('[Ad-Hoc Signing] Failed to sign Python binary:', error);
+            }
+        }
+
+        // Sign all .so and .dylib files in the Python runtime
+        // (paddlepaddle, numpy, opencv, etc. ship native shared libraries)
+        console.log('[Ad-Hoc Signing] Signing Python native libraries (.so, .dylib)...');
+        try {
+            execSync(`find "${pythonDir}" \\( -name "*.so" -o -name "*.dylib" \\) -exec codesign --force --sign - {} \\;`, { stdio: 'inherit' });
+            console.log('[Ad-Hoc Signing] Python native libraries signed successfully.');
+        } catch (error) {
+            console.warn('[Ad-Hoc Signing] Warning signing Python libs:', error.message);
+        }
+    }
 };

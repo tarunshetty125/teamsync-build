@@ -75,6 +75,14 @@
 {
 "from": "native-module/",
 "to": "native-module/"
+},
+{
+"from": "python-runtime/ocr/",
+"to": "python/ocr/"
+},
+{
+"from": "python-runtime/models/",
+"to": "python/ocr/models/"
 }
 ],
 
@@ -87,6 +95,13 @@
 "identity": null,
 
 "hardenedRuntime": false,
+
+"extraResources": [
+  {
+    "from": "python-runtime/mac-${arch}/",
+    "to": "python/"
+  }
+],
 
 "target": [
   {
@@ -112,11 +127,19 @@
 
 },
 
+
 "win": {
 "icon": "assets/icons/win/icon.ico",
 
 
 "requestedExecutionLevel": "asInvoker",
+
+"extraResources": [
+  {
+    "from": "python-runtime/windows-x64/",
+    "to": "python/"
+  }
+],
 
 "target": [
   {

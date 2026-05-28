@@ -20,6 +20,7 @@ import { deepVariableReplacer, getByPath, injectImageIntoMessages } from './util
 import curl2Json from "@bany/curl-to-json";
 import { CustomProvider, CurlProvider } from './services/CredentialsManager';
 import { exec, spawn } from 'child_process';
+import { getPythonPath, getOCRScriptPath, getPythonEnv } from './utils/pythonRuntime';
 import { promisify } from 'util';
 import axios from 'axios';
 import path from 'path';
@@ -877,9 +878,15 @@ CRITICAL RULES:
   private initOCRWorker() {
     if (this.ocrWorker) return;
 
-    const scriptPath = path.join(__dirname, '..', 'ocr_worker.py');
-    this.ocrWorker = spawn('python3', [scriptPath]);
-    this.ocrWorker.stderr.on('data', () => { });
+    const pythonPath = getPythonPath();
+    const scriptPath = getOCRScriptPath();
+    this.ocrWorker = spawn(pythonPath, [scriptPath], {
+      env: getPythonEnv(),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    this.ocrWorker.stderr.on('data', (data: Buffer) => {
+      console.warn('[OCR Worker stderr]', data.toString().trim());
+    });
     this.ocrWorker.stdout.on('data', (data: Buffer) => {
       this.ocrWorkerBuffer += data.toString();
 

@@ -218,3 +218,10 @@ templog*.txt
 dodollm.txt
 temp_code_expansion/
 cluelyprompts/
+
+# Python OCR runtimes — built by prepare-mac.sh / prepare-win.ps1
+# These are large platform-specific binaries; rebuild in CI.
+# python-runtime/ocr/, python-runtime/models/, and scripts ARE tracked.
+python-runtime/mac-arm64/
+python-runtime/mac-x64/
+python-runtime/windows-x64/

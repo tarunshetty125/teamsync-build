@@ -13,6 +13,7 @@ import fs from 'fs';
 import sharp from 'sharp';
 import path from 'path';
 import { spawn } from 'child_process';
+import { getPythonPath, getOCRScriptPath, getPythonEnv } from '../utils/pythonRuntime';
 
 // ---------------------------------------------------------------------------
 // VisionPipeline
@@ -227,9 +228,15 @@ export class VisionPipeline {
     private initOCRWorker(): void {
         if (this.ocrWorker) return;
 
-        const scriptPath = path.join(__dirname, '..', 'ocr_worker.py');
-        this.ocrWorker = spawn('python3', [scriptPath]);
-        this.ocrWorker.stderr.on('data', () => { });
+        const pythonPath = getPythonPath();
+        const scriptPath = getOCRScriptPath();
+        this.ocrWorker = spawn(pythonPath, [scriptPath], {
+            env: getPythonEnv(),
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        this.ocrWorker.stderr.on('data', (data: Buffer) => {
+            console.warn('[OCR Worker stderr]', data.toString().trim());
+        });
         this.ocrWorker.stdout.on('data', (data: Buffer) => {
             this.ocrWorkerBuffer += data.toString();
 

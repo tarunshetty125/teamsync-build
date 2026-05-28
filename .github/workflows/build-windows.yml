@@ -54,6 +54,12 @@ jobs:
           echo Building Windows native module...
           npm run build:native
 
+      # Prepare bundled Python runtime for OCR
+      - name: Prepare Python OCR Runtime
+        run: |
+          cd python-runtime
+          powershell -ExecutionPolicy Bypass -File prepare-win.ps1
+
       # Build Windows app — let package.json targets (nsis + portable) drive output
       - name: Build Windows App
         run: |
