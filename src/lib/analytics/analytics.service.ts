@@ -240,7 +240,7 @@ class AnalyticsService {
 
     private trackEvent(eventName: AnalyticsEventName, payload?: Record<string, any>): void {
         if (import.meta.env.DEV) {
-            console.log(`[Analytics] ${eventName}`, payload);
+            console.log(`[Analytics] ${eventName}`, payload ?? '');
         }
 
         try {

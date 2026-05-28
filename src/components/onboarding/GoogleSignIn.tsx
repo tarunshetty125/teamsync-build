@@ -356,7 +356,6 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
               variants={itemVariants}
               className="text-3xl font-celeb-light font-medium text-[#e5e7eb] tracking-wide drop-shadow-sm mb-2 text-center"
             >
-              Cheat on Everything
             </motion.h1>
 
             <motion.p
