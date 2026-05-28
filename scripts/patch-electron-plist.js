@@ -41,7 +41,7 @@ let modified = false;
 if (!content.includes('NSScreenCaptureUsageDescription')) {
   content = content.replace(
     '<key>NSMicrophoneUsageDescription</key>',
-    '<key>NSScreenCaptureUsageDescription</key>\n\t<string>Natively needs Screen Recording permission to capture system audio for meeting transcription.</string>\n\t<key>NSMicrophoneUsageDescription</key>'
+    '<key>NSScreenCaptureUsageDescription</key>\n\t<string>TeamSync needs Screen Recording permission to capture system audio for meeting transcription.</string>\n\t<key>NSMicrophoneUsageDescription</key>'
   );
   modified = true;
   console.log('[patch-electron-plist] Added NSScreenCaptureUsageDescription.');
@@ -53,7 +53,7 @@ if (!content.includes('NSScreenCaptureUsageDescription')) {
 if (content.includes('This app needs access to the microphone')) {
   content = content.replace(
     '<string>This app needs access to the microphone</string>',
-    '<string>Natively needs microphone access to transcribe your voice during meetings.</string>'
+    '<string>TeamSync needs microphone access to transcribe your voice during meetings.</string>'
   );
   modified = true;
   console.log('[patch-electron-plist] Updated NSMicrophoneUsageDescription text.');

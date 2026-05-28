@@ -241,12 +241,12 @@ export class WindowHelper {
         const isWin = process.platform === "win32";
         const mode = this.appState.getDisguise();
 
+        if (isMac) {
+          return undefined;
+        }
+
         if (mode === 'none') {
-          if (isMac) {
-            return app.isPackaged
-              ? path.join(process.resourcesPath, "teamsync.icns")
-              : path.resolve(__dirname, "../../assets/teamsync.icns");
-          } else if (isWin) {
+          if (isWin) {
             return app.isPackaged
               ? path.join(process.resourcesPath, "assets/icons/win/icon.ico")
               : path.resolve(__dirname, "../../assets/icons/win/icon.ico");
@@ -269,7 +269,11 @@ export class WindowHelper {
       })()
     }
 
-    console.log(`[WindowHelper] Icon Path: ${launcherSettings.icon}`);
+    if (isMac) {
+      delete launcherSettings.icon;
+    }
+
+    console.log(`[WindowHelper] Icon Path: ${launcherSettings.icon ?? "macOS app bundle icon"}`);
     console.log(`[WindowHelper] Start URL: ${startUrl}`);
 
     try {

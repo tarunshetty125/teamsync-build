@@ -139,4 +139,13 @@ exports.default = async function (context) {
             console.warn('[Ad-Hoc Signing] Warning signing Python libs:', error.message);
         }
     }
+
+    console.log('[Ad-Hoc Signing] Re-sealing application bundle...');
+    try {
+        execSync(`codesign --force --entitlements "${entitlementsPath}" --sign - "${appPath}"`, { stdio: 'inherit' });
+        console.log('[Ad-Hoc Signing] Application bundle re-sealed successfully.');
+    } catch (error) {
+        console.error('[Ad-Hoc Signing] Failed to re-seal application bundle:', error);
+        throw error;
+    }
 };

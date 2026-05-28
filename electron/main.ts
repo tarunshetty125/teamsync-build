@@ -911,10 +911,14 @@ export class AppState {
       this.broadcast("update-downloaded", info)
     })
 
-    // Start checking for updates with a 10-second delay
+    const autoUpdatesEnabled = process.env.TEAMSYNC_ENABLE_AUTO_UPDATES === "true";
+
+    // Start checking for updates with a 10-second delay when explicitly enabled.
     setTimeout(() => {
       if (process.env.NODE_ENV === "development") {
         console.log("[AutoUpdater] Development mode: Skipping auto check (use manual button)");
+      } else if (!autoUpdatesEnabled) {
+        console.log("[AutoUpdater] Automatic update checks disabled for this build");
       } else {
         autoUpdater.checkForUpdatesAndNotify().catch(err => {
           console.error("[AutoUpdater] Failed to check for updates:", err);
@@ -3311,8 +3315,8 @@ export class AppState {
         appName = "TeamSync";
         if (isMac) {
           iconPath = app.isPackaged
-            ? path.join(process.resourcesPath, "teamsync.icns")
-            : path.join(app.getAppPath(), "assets/teamsync.icns");
+            ? path.join(process.resourcesPath, "assets/icon.icns")
+            : path.join(app.getAppPath(), "assets/icon.icns");
         } else if (isWin) {
           iconPath = app.isPackaged
             ? path.join(process.resourcesPath, "assets/icons/win/icon.ico")
@@ -3469,9 +3473,13 @@ async function initializeApp() {
   for (const warning of sttValidation.warnings) {
     console.warn(`[STT Config] ${warning}`);
   }
-  const strictSttConfig = app.isPackaged || process.env.STT_STRICT_CONFIG === "true";
+  const strictSttConfig = process.env.STT_STRICT_CONFIG === "true";
   if (strictSttConfig) {
     assertValidSttRuntimeConfig(sttConfig);
+  } else {
+    for (const error of sttValidation.errors) {
+      console.warn(`[STT Config] ${error}`);
+    }
   }
 
   // 4. Initialize State

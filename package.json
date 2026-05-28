@@ -90,7 +90,7 @@
 "category": "public.app-category.productivity",
 
 
-"icon": "assets/natively.icns",
+"icon": "assets/icon.icns",
 
 "identity": null,
 
@@ -125,6 +125,10 @@
   "NSMicrophoneUsageDescription": "TeamSync needs microphone access for live transcription and interview assistance."
 }
 
+},
+
+"dmg": {
+"size": "4g"
 },
 
 
