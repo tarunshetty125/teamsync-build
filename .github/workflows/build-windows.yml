@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Windows App
 
 on:
   workflow_dispatch:
@@ -22,6 +22,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+
+      # Cache Rust build artifacts for faster CI
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
 
       # MSVC build tools
       - name: Setup MSBuild
@@ -50,10 +54,10 @@ jobs:
           echo Building Windows native module...
           npm run build:native
 
-      # Build Windows installer
-      - name: Build Windows EXE
+      # Build Windows app — let package.json targets (nsis + portable) drive output
+      - name: Build Windows App
         run: |
-          npx electron-builder --win nsis --publish=never
+          npx electron-builder --win --publish=never
 
       # Upload artifacts
       - name: Upload Windows Artifact
@@ -62,6 +66,5 @@ jobs:
           name: windows-installer
           path: |
             release/*.exe
-            release/*.msi
             release/*.blockmap
-
+            release/*.yml

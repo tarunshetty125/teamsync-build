@@ -23,6 +23,10 @@ jobs:
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
+      # Cache Rust build artifacts for faster CI
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
       # Install deps
       - name: Install dependencies
         run: npm ci
@@ -46,10 +50,15 @@ jobs:
           echo Building macOS native module...
           npm run build:native
 
-      # Build DMG
+      # Build macOS app — all architectures + both targets
       - name: Build macOS App
         run: |
-          npx electron-builder --mac dmg --publish=never
+          npx electron-builder \
+            --mac dmg zip \
+            --x64 \
+            --arm64 \
+            --universal \
+            --publish=never
 
       # Upload artifacts
       - name: Upload macOS Artifact
@@ -59,4 +68,5 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
-
+            release/*.blockmap
+            release/*.yml
