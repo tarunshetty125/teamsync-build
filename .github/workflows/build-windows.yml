@@ -1,0 +1,68 @@
+name: Build Windows EXE
+
+on:
+workflow_dispatch:
+
+jobs:
+build-windows:
+runs-on: windows-latest
+
+steps:
+  - name: Checkout repo
+    uses: actions/checkout@v4
+
+  # Node
+  - name: Setup Node
+    uses: actions/setup-node@v4
+    with:
+      node-version: "22"
+      cache: "npm"
+
+  # Rust
+  - name: Setup Rust
+    uses: dtolnay/rust-toolchain@stable
+    with:
+      targets: x86_64-pc-windows-msvc
+
+  # MSVC build tools
+  - name: Setup MSBuild
+    uses: microsoft/setup-msbuild@v2
+
+  # Install deps
+  - name: Install dependencies
+    run: npm ci
+
+  # Rebuild native modules for Electron ABI
+  - name: Rebuild native modules
+    run: |
+      npx electron-rebuild -f -w
+
+  # Build frontend
+  - name: Build frontend
+    run: npm run build
+
+  # Build electron
+  - name: Build electron
+    run: npm run build:electron
+
+  # Build Rust native module
+  - name: Build native module
+    run: |
+      echo Building Windows native module...
+      npm run build:native
+
+  # Build Windows installer
+  - name: Build Windows EXE
+    run: |
+      npx electron-builder --win nsis --publish=never
+
+  # Upload artifacts
+  - name: Upload Windows Artifact
+    uses: actions/upload-artifact@v4
+    with:
+      name: windows-installer
+      path: |
+        release/*.exe
+        release/*.msi
+        release/*.blockmap
+

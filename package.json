@@ -2,7 +2,7 @@
   "name": "teamsync",
   "version": "2.5.0",
   "main": "dist-electron/electron/main.js",
-  "description": "Natively is a meeting notes app that uses AI to generate notes from your meetings.",
+  "description": "TeamSync is a meeting notes app that uses AI to generate notes from your meetings.",
   "scripts": {
     "clean": "rimraf dist dist-electron",
     "dev": "vite",
@@ -15,128 +15,178 @@
     "electron:dev": "npm run build:electron && cross-env NODE_ENV=development electron .",
     "electron:build": "npm run build:electron && cross-env NODE_ENV=production electron .",
     "app:dev": "concurrently \"npm run dev -- --port 5180 --strictPort\" \"wait-on http://localhost:5180 && npm run electron:dev\"",
-    "app:build": "npm run build && npm run build:electron && cross-env NATIVELY_BUILD_ALL_MAC_ARCHES=1 npm run build:native && electron-builder",
+    "app:build": "npm run build && npm run build:electron && cross-env TEAMSYNC_BUILD_ALL_MAC_ARCHES=1 npm run build:native && electron-builder",
     "watch": "tsc -p electron/tsconfig.json --watch",
     "start": "npm run app:dev",
     "dist": "npm run app:build",
     "build:native": "node scripts/build-native.js"
   },
-  "build": {
-    "generateUpdatesFilesForAllChannels": true,
-    "appId": "com.electron.meeting-notes",
-    "afterPack": "./scripts/ad-hoc-sign.js",
-    "productName": "TeamSync",
-    "files": [
-      "dist",
-      "dist-electron",
-      "native-module",
-      "package.json",
-      "node_modules",
-      "!**/native-module/target",
-      "!**/native-module/src",
-      "!**/native-module/.cargo"
-    ],
-    "asarUnpack": [
-      "**/*.node",
-      "**/*.dylib"
-    ],
-    "directories": {
-      "output": "release",
-      "buildResources": "assets"
-    },
-    "extraResources": [
-      {
-        "from": "assets/",
-        "to": "assets/"
-      },
-      {
-        "from": "assets/natively.icns",
-        "to": "natively.icns"
-      },
-      {
-        "from": "resources/models/",
-        "to": "models/"
-      }
-    ],
-    "mac": {
-      "category": "public.app-category.productivity",
-      "target": [
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
-      "icon": "assets/natively.icns",
-      "identity": null,
-      "hardenedRuntime": false,
-      "extendInfo": {
-        "NSScreenCaptureUsageDescription": "Natively needs Screen Recording permission to capture system audio for meeting transcription.",
-        "NSMicrophoneUsageDescription": "Natively needs microphone access to transcribe your voice during meetings."
-      }
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "assets/icons/win/icon.ico",
-      "requestedExecutionLevel": "asInvoker"
-    },
-    "linux": {
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "deb",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "assets/icons/png/",
-      "category": "Office"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false,
-      "artifactName": "${productName}-Setup-${version}.${ext}"
-    },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "TarunShetty256",
-        "repo": "natively-cluely-ai-assistant",
-        "releaseType": "release"
-      }
+  
+ "build": {
+"generateUpdatesFilesForAllChannels": true,
+
+"appId": "com.electron.meeting-notes",
+
+"productName": "TeamSync",
+
+"afterPack": "./scripts/ad-hoc-sign.js",
+
+"compression": "normal",
+
+"asar": true,
+
+"asarUnpack": [
+"**/*.node",
+"**/*.dll",
+"**/*.dylib",
+"native-module/**"
+],
+
+"files": [
+"dist/**",
+"dist-electron/**",
+"native-module/**",
+"package.json",
+"node_modules/**",
+
+
+"!**/native-module/target/**",
+"!**/native-module/src/**",
+"!**/native-module/.cargo/**",
+"!**/*.map"
+
+
+],
+
+"directories": {
+"output": "release",
+"buildResources": "assets"
+},
+
+"extraResources": [
+{
+"from": "assets/",
+"to": "assets/"
+},
+{
+"from": "resources/models/",
+"to": "models/"
+},
+{
+"from": "native-module/",
+"to": "native-module/"
+}
+],
+
+"mac": {
+"category": "public.app-category.productivity",
+
+
+"icon": "assets/natively.icns",
+
+"identity": null,
+
+"hardenedRuntime": false,
+
+"target": [
+  {
+    "target": "zip",
+    "arch": [
+      "x64",
+      "arm64"
     ]
   },
+  {
+    "target": "dmg",
+    "arch": [
+      "x64",
+      "arm64"
+    ]
+  }
+],
+
+"extendInfo": {
+  "NSScreenCaptureUsageDescription": "TeamSync needs Screen Recording permission to analyze screens and provide interview assistance.",
+  "NSMicrophoneUsageDescription": "TeamSync needs microphone access for live transcription and interview assistance."
+}
+
+},
+
+"win": {
+"icon": "assets/icons/win/icon.ico",
+
+
+"requestedExecutionLevel": "asInvoker",
+
+"target": [
+  {
+    "target": "nsis",
+    "arch": [
+      "x64"
+    ]
+  },
+  {
+    "target": "portable",
+    "arch": [
+      "x64"
+    ]
+  }
+]
+
+
+},
+
+"portable": {
+"artifactName": "${productName}-Portable-${version}.${ext}"
+},
+
+"nsis": {
+"oneClick": false,
+
+
+"perMachine": false,
+
+"allowToChangeInstallationDirectory": true,
+
+"deleteAppDataOnUninstall": false,
+
+"artifactName": "${productName}-Setup-${version}.${ext}"
+
+
+},
+
+"linux": {
+"category": "Office",
+
+
+"icon": "assets/icons/png/",
+
+"target": [
+  {
+    "target": "AppImage",
+    "arch": [
+      "x64"
+    ]
+  },
+  {
+    "target": "deb",
+    "arch": [
+      "x64"
+    ]
+  }
+]
+},
+
+"publish": [
+{
+"provider": "github",
+"owner": "tarunshetty125",
+"repo": "teamsync-build",
+"releaseType": "release"
+}
+]
+}
+,
   "keywords": [],
   "author": "",
   "license": "ISC",
