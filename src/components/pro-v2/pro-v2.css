@@ -718,7 +718,7 @@
 
 .v2-architecture-shell {
   width: 100%;
-  height: clamp(300px, 48vh, 420px);
+  height: clamp(420px, 58vh, 680px);
   margin: 12px 0 16px;
   overflow: hidden;
   position: relative;
@@ -761,13 +761,13 @@
 }
 
 .v2-architecture-node {
-  width: 178px;
-  min-height: 74px;
+  width: 212px;
+  min-height: 112px;
   display: grid;
-  grid-template-columns: 34px 1fr;
-  align-items: center;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
   gap: 10px;
-  padding: 13px 14px;
+  padding: 13px 14px 12px;
   border: 1px solid;
   border-radius: 14px;
   color: rgba(245, 245, 247, 0.94);
@@ -811,8 +811,45 @@
   letter-spacing: 0;
 }
 
-.v2-architecture-node-kind {
+.v2-architecture-node-technology {
   margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(245, 245, 247, 0.78);
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+.v2-architecture-node-purpose {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: rgba(245, 245, 247, 0.58);
+  font-size: 10px;
+  line-height: 1.28;
+  font-weight: 500;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.v2-architecture-node-meta {
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(245, 245, 247, 0.46);
+  font-size: 9px;
+  line-height: 1.15;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.v2-architecture-node-kind {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 9px;
   line-height: 1;
   font-weight: 700;

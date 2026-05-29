@@ -6,12 +6,19 @@ import { ARCHITECTURE_NODE_HEIGHT, ARCHITECTURE_NODE_WIDTH } from './architectur
 export interface ArchitectureNodeData extends Record<string, unknown> {
     label: string;
     kind: ArchitectureDiagram['nodes'][number]['kind'];
+    technology?: string;
+    purpose?: string;
+    layer?: string;
+    latency?: string;
+    failureMode?: string;
     direction: ArchitectureDirection;
     emphasized: boolean;
 }
 
 export interface ArchitectureEdgeData extends Record<string, unknown> {
     label?: string;
+    protocol?: string;
+    latency?: string;
 }
 
 export type ArchitectureFlowNode = Node<ArchitectureNodeData, 'architecture'>;
@@ -23,6 +30,28 @@ export interface ArchitectureLayoutResult {
 }
 
 const elk = new ELK();
+
+function getLayoutDensity(nodeCount: number) {
+    if (nodeCount >= 35) {
+        return {
+            nodeSpacing: '54',
+            layerSpacing: '112',
+            padding: '[top=52,left=64,bottom=52,right=64]',
+        };
+    }
+    if (nodeCount >= 20) {
+        return {
+            nodeSpacing: '46',
+            layerSpacing: '92',
+            padding: '[top=44,left=52,bottom=44,right=52]',
+        };
+    }
+    return {
+        nodeSpacing: '38',
+        layerSpacing: '72',
+        padding: '[top=36,left=40,bottom=36,right=40]',
+    };
+}
 
 function elkDirection(direction: ArchitectureDirection): string {
     switch (direction) {
@@ -47,18 +76,21 @@ export function architectureDiagramFingerprint(diagram: ArchitectureDiagram): st
 }
 
 export async function layoutArchitectureDiagram(diagram: ArchitectureDiagram): Promise<ArchitectureLayoutResult> {
+    const density = getLayoutDensity(diagram.nodes.length);
     const graph: ElkNode = {
         id: 'root',
         layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': elkDirection(diagram.direction),
-            'elk.spacing.nodeNode': '34',
-            'elk.layered.spacing.nodeNodeBetweenLayers': '56',
+            'elk.spacing.nodeNode': density.nodeSpacing,
+            'elk.layered.spacing.nodeNodeBetweenLayers': density.layerSpacing,
+            'elk.layered.spacing.edgeNodeBetweenLayers': '28',
+            'elk.layered.spacing.edgeEdgeBetweenLayers': '18',
             'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
             'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
             'elk.layered.edgeRouting': 'ORTHOGONAL',
             'elk.edgeRouting': 'ORTHOGONAL',
-            'elk.padding': '[top=28,left=28,bottom=28,right=28]',
+            'elk.padding': density.padding,
         },
         children: diagram.nodes.map((node) => ({
             id: node.id,
@@ -93,6 +125,11 @@ export async function layoutArchitectureDiagram(diagram: ArchitectureDiagram): P
             data: {
                 label: node.label,
                 kind: node.kind,
+                technology: node.technology,
+                purpose: node.purpose,
+                layer: node.layer,
+                latency: node.latency,
+                failureMode: node.failureMode,
                 direction: diagram.direction,
                 emphasized: node.kind === 'gateway' || index === 0,
             },
@@ -106,7 +143,11 @@ export async function layoutArchitectureDiagram(diagram: ArchitectureDiagram): P
         type: 'architecture',
         source: edge.source,
         target: edge.target,
-        data: edge.label ? { label: edge.label } : {},
+        data: {
+            ...(edge.label ? { label: edge.label } : {}),
+            ...(edge.protocol ? { protocol: edge.protocol } : {}),
+            ...(edge.latency ? { latency: edge.latency } : {}),
+        },
         animated: false,
         selectable: false,
         focusable: false,

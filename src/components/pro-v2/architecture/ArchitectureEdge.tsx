@@ -28,7 +28,7 @@ const ArchitectureEdge = memo<EdgeProps>(function ArchitectureEdge({
         curvature: 0.24,
     });
     const edgeData = data as ArchitectureEdgeData | undefined;
-    const label = edgeData?.label;
+    const label = [edgeData?.label, edgeData?.protocol, edgeData?.latency].filter(Boolean).join(' · ');
 
     return (
         <>

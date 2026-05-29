@@ -36,6 +36,7 @@ const ArchitectureNode = memo<NodeProps<ArchitectureFlowNode>>(function Architec
     const style = ARCHITECTURE_KIND_STYLES[data.kind];
     const Icon = ICONS[data.kind] ?? Cable;
     const positions = handlePositions(data.direction);
+    const metadata = [data.layer, data.latency].filter(Boolean).join(' · ');
 
     return (
         <div
@@ -51,6 +52,15 @@ const ArchitectureNode = memo<NodeProps<ArchitectureFlowNode>>(function Architec
             </div>
             <div className="v2-architecture-node-copy">
                 <div className="v2-architecture-node-label">{data.label}</div>
+                {data.technology && (
+                    <div className="v2-architecture-node-technology">{data.technology}</div>
+                )}
+                {data.purpose && (
+                    <div className="v2-architecture-node-purpose">{data.purpose}</div>
+                )}
+                {metadata && (
+                    <div className="v2-architecture-node-meta">{metadata}</div>
+                )}
                 <div className="v2-architecture-node-kind" style={{ color: style.accent }}>
                     {style.label}
                 </div>

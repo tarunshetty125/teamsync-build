@@ -120,7 +120,7 @@ function validateArchitectureJsonContract(content: string): { valid: true } | { 
 
     const nodes = Array.isArray(diagram.nodes) ? diagram.nodes : [];
     const edges = Array.isArray(diagram.edges) ? diagram.edges : [];
-    if (nodes.length < 2) return { valid: false, issues: ['system_design_architecture_json_needs_nodes'] };
+    if (nodes.length < 12) return { valid: false, issues: ['system_design_architecture_json_too_few_nodes'] };
     if (edges.length < 1) return { valid: false, issues: ['system_design_architecture_json_needs_edges'] };
 
     const allowedKinds = new Set(['client', 'gateway', 'service', 'database', 'cache', 'queue', 'storage', 'external']);
@@ -128,24 +128,21 @@ function validateArchitectureJsonContract(content: string): { valid: true } | { 
     for (const rawNode of nodes) {
         if (!rawNode || typeof rawNode !== 'object') return { valid: false, issues: ['system_design_architecture_json_bad_node'] };
         const node = rawNode as Record<string, unknown>;
-        const keys = Object.keys(node);
-        if (keys.some((key) => !['id', 'label', 'kind'].includes(key))) {
-            return { valid: false, issues: ['system_design_architecture_json_extra_node_fields'] };
-        }
         if (typeof node.id !== 'string' || typeof node.label !== 'string' || typeof node.kind !== 'string') {
             return { valid: false, issues: ['system_design_architecture_json_bad_node'] };
         }
         if (!allowedKinds.has(node.kind)) return { valid: false, issues: ['system_design_architecture_json_bad_node_kind'] };
+        for (const optionalTextField of ['technology', 'purpose', 'layer', 'latency', 'failureMode']) {
+            if (node[optionalTextField] !== undefined && typeof node[optionalTextField] !== 'string') {
+                return { valid: false, issues: ['system_design_architecture_json_bad_node_metadata'] };
+            }
+        }
         nodeIds.add(node.id);
     }
 
     for (const rawEdge of edges) {
         if (!rawEdge || typeof rawEdge !== 'object') return { valid: false, issues: ['system_design_architecture_json_bad_edge'] };
         const edge = rawEdge as Record<string, unknown>;
-        const keys = Object.keys(edge);
-        if (keys.some((key) => !['source', 'target', 'label'].includes(key))) {
-            return { valid: false, issues: ['system_design_architecture_json_extra_edge_fields'] };
-        }
         if (typeof edge.source !== 'string' || typeof edge.target !== 'string') {
             return { valid: false, issues: ['system_design_architecture_json_bad_edge'] };
         }
@@ -154,6 +151,11 @@ function validateArchitectureJsonContract(content: string): { valid: true } | { 
         }
         if (edge.label !== undefined && typeof edge.label !== 'string') {
             return { valid: false, issues: ['system_design_architecture_json_bad_edge_label'] };
+        }
+        for (const optionalTextField of ['protocol', 'latency']) {
+            if (edge[optionalTextField] !== undefined && typeof edge[optionalTextField] !== 'string') {
+                return { valid: false, issues: ['system_design_architecture_json_bad_edge_metadata'] };
+            }
         }
     }
 
@@ -306,7 +308,7 @@ function validateSystemDesignInterviewAnswer(content: string): ActionOutputValid
     const sectionHeaders = (trimmed.match(/^#{2,3}\s+\d+\./gm) || []).length;
     const hasComponents = /\b(component|api gateway|database|cache|queue|kafka|redis)\b/i.test(trimmed);
 
-    if (!architectureJson.valid) {
+    if ('issues' in architectureJson) {
         return {
             valid: false,
             correctedContent: trimmed,
@@ -438,7 +440,7 @@ export function buildRepairInstruction(intent: UnifiedActionIntent, issues: stri
         `The previous draft violated the output contract for intent "${intent}".`,
         `Fix these issues: ${issues.join(', ')}.`,
         architectureJsonRepair
-            ? 'For system design answers, include one fenced ```architecture_json``` block with valid JSON only, using {"diagram":{"type":"architecture","direction":"TB","nodes":[{"id":"gateway","label":"API Gateway","kind":"gateway"},{"id":"service","label":"Core Service","kind":"service"}],"edges":[{"source":"gateway","target":"service","label":"routes"}]}}. Do not use Mermaid.'
+            ? 'For system design answers, include one fenced ```architecture_json``` block with valid JSON only. MINIMUM 12 nodes required. Simple systems need 12+ nodes, medium production systems need 20+ nodes, FAANG-scale systems need 35-60+ nodes. Each node requires id, label, kind and should include technology, purpose, layer, latency, failureMode. Each edge requires source, target and should include label, protocol, latency. Kinds: client, gateway, service, database, cache, queue, storage, external. Include client, edge/gateway, core services, async, data, cache, security, and observability layers. Do not use Mermaid.'
             : '',
         'Return only the corrected final answer.',
         'Do not explain the correction.',

@@ -1120,6 +1120,7 @@ export class IntelligenceEngine extends EventEmitter {
         const { prompt, imagePaths, modelOverride, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
         const originalModel = this.llmHelper.getCurrentModel();
         const serialized = serializePromptObject(prompt);
+        const isSystemDesignOutput = getQuestionResponseProfile(prompt.question, prompt.mode, prompt.intent) === 'system_design';
 
         try {
             if (!this.isOwnedActionRequest(requestId, generationId, signal, sessionIdSnapshot)) {
@@ -1142,6 +1143,7 @@ export class IntelligenceEngine extends EventEmitter {
                     skipKnowledgeInjection: true,
                     skipModeInjection: true,
                     skipCustomNotesInjection,
+                    maxOutputTokens: isSystemDesignOutput ? 8192 : undefined,
                 }
             );
 

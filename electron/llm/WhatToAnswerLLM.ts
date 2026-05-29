@@ -81,25 +81,31 @@ Never send a response without code.`;
 
 const SYSTEM_DESIGN_ENFORCEMENT = `
 STRICT SYSTEM DESIGN FORMAT (MANDATORY):
-Answer exactly like a strong senior engineer in a real system design interview.
+Answer exactly like a Principal Engineer designing a production system at scale.
 
 FORMAT:
 1. Start with 1 short sentence clarifying the most important scale or constraint assumption if it is not already explicit.
 2. Then give a clear architecture answer in natural spoken prose.
 3. Cover these dimensions in order:
-   - high-level design
-   - core components and data flow
-   - trade-offs
-   - scale, reliability, and bottlenecks
+   - high-level design with REAL technology choices
+   - core components and data flow with latency estimates
+   - trade-offs (consistency vs availability, latency vs cost)
+   - scale, reliability, bottlenecks, and failure modes
 4. End with 1 short sentence on what you would optimize next at larger scale.
 
 RULES:
 * Sound spoken, direct, and interview-ready
 * Use concrete system design language: cache, queue, read/write path, partitioning, replicas, consistency, latency, failure handling
-* Include exactly one valid fenced \`\`\`architecture_json\`\`\` block for every full system design answer
-* architecture_json shape: {"diagram":{"type":"architecture","direction":"TB","nodes":[{"id":"gateway","label":"API Gateway","kind":"gateway"},{"id":"service","label":"Core Service","kind":"service"}],"edges":[{"source":"gateway","target":"service","label":"routes"}]}}
+* Include exactly one valid fenced \`\`\`architecture_json\`\`\` block for every system design answer
+* MINIMUM 12 nodes required. Fewer than 12 is INVALID.
+* Simple systems require 12+ nodes, medium production requires 20+ nodes, FAANG-scale requires 35-60+ nodes
+* NEVER produce generic diagrams like Frontend → Backend → Database. This is BANNED.
+* architecture_json node schema: {"id":"service-name","label":"Display Name","kind":"service","technology":"Go + gRPC","purpose":"What this component does","layer":"core_services","latency":"~15ms","failureMode":"Circuit breaker to queue"}
+* architecture_json edge schema: {"source":"from-id","target":"to-id","label":"action","protocol":"gRPC","latency":"~5ms"}
+* Required fields per node: id, label, kind. Strongly encouraged: technology, purpose, layer, latency, failureMode.
 * Allowed node kinds: client, gateway, service, database, cache, queue, storage, external
-* Allowed edge fields: source, target, label
+* Include layers: clients, load balancers, API gateways, core services, caches, queues, databases, object storage, search, monitoring, security
+* Name REAL technologies: Redis, Kafka, PostgreSQL, Cassandra, Elasticsearch, S3, CloudFront, Kong, Envoy, OpenTelemetry
 * Do NOT use Mermaid or loose component lists as the architecture diagram
 * Do NOT answer like a textbook definition
 * Do NOT write code

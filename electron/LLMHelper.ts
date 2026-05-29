@@ -1679,7 +1679,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
   /**
    * Routes AI generation through the TeamSync API backend (Gemini-powered).
    */
-  private async generateWithTeamSync(userMessage: string, systemPrompt?: string, imagePaths?: string[]): Promise<string> {
+  private async generateWithTeamSync(userMessage: string, systemPrompt?: string, imagePaths?: string[], maxOutputTokens?: number): Promise<string> {
     // Prefer the in-memory field; fall back to CredentialsManager for the direct-routing path
     // where currentModelId === 'teamsync' but setTeamSyncKey() wasn't called yet.
     let teamsyncKey = this.teamsyncKey;
@@ -1703,6 +1703,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     }
 
     const body: any = { messages: [{ role: 'user', content: userMessage }] };
+    if (maxOutputTokens) body.max_tokens = maxOutputTokens;
 
     // Signal fast mode so the server routes to Groq Llama 3.3 (text-only, key-rotated).
     // Only sent for text-only requests — server ignores it when images are present.
@@ -2537,6 +2538,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       skipKnowledgeInjection?: boolean;
       skipModeInjection?: boolean;
       skipCustomNotesInjection?: boolean;
+      maxOutputTokens?: number;
     }
   ): AsyncGenerator<string, void, unknown> {
 
@@ -2547,6 +2549,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     const skipKnowledgeInjection = ignoreKnowledgeMode || runtimeOptions?.skipKnowledgeInjection === true;
     const skipModeInjection = runtimeOptions?.skipModeInjection === true;
     const skipCustomNotesInjection = runtimeOptions?.skipCustomNotesInjection === true;
+    const maxOutputTokens = runtimeOptions?.maxOutputTokens;
 
     // ============================================================
     // KNOWLEDGE MODE INTERCEPT (Streaming)
@@ -2789,7 +2792,7 @@ Return only the final answer. No meta commentary.
           const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : universalBase;
           const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
           const groqFullMessage = `${finalGroqSystem}\n\n${userContent}`;
-          yield* this.streamWithGroq(groqFullMessage, this.currentModelId);
+          yield* this.streamWithGroq(groqFullMessage, this.currentModelId, maxOutputTokens);
           return;
         } catch (e: any) {
           console.warn("[LLMHelper] Groq Fast Text streaming failed, falling back:", e.message);
@@ -2800,7 +2803,7 @@ Return only the final answer. No meta commentary.
         // streamWithTeamSync → generateWithTeamSync → sends fast_mode:true → server Groq pool
         console.log(`[LLMHelper] ⚡️ Groq Fast Text Mode Active (Streaming). Routing to TeamSync server Groq pool...`);
         try {
-          yield* this.streamWithTeamSync(userContent, finalSystemPrompt);
+          yield* this.streamWithTeamSync(userContent, finalSystemPrompt, undefined, maxOutputTokens);
           return;
         } catch (e: any) {
           console.warn("[LLMHelper] TeamSync fast-mode failed, falling back:", e.message);
@@ -2841,9 +2844,9 @@ Return only the final answer. No meta commentary.
       const openAiSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
       const finalOpenAiSystem = this.injectLanguageInstruction(openAiSystem);
       if (isMultimodal && imagePaths) {
-        yield* this.streamWithOpenaiMultimodal(userContent, imagePaths, finalOpenAiSystem);
+        yield* this.streamWithOpenaiMultimodal(userContent, imagePaths, finalOpenAiSystem, undefined, maxOutputTokens);
       } else {
-        yield* this.streamWithOpenai(userContent, finalOpenAiSystem);
+        yield* this.streamWithOpenai(userContent, finalOpenAiSystem, undefined, maxOutputTokens);
       }
       return;
     }
@@ -2853,9 +2856,9 @@ Return only the final answer. No meta commentary.
       const claudeSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : CLAUDE_SYSTEM_PROMPT;
       const finalClaudeSystem = this.injectLanguageInstruction(claudeSystem);
       if (isMultimodal && imagePaths) {
-        yield* this.streamWithClaudeMultimodal(userContent, imagePaths, finalClaudeSystem);
+        yield* this.streamWithClaudeMultimodal(userContent, imagePaths, finalClaudeSystem, undefined, maxOutputTokens);
       } else {
-        yield* this.streamWithClaude(userContent, finalClaudeSystem);
+        yield* this.streamWithClaude(userContent, finalClaudeSystem, undefined, maxOutputTokens);
       }
       return;
     }
@@ -2866,7 +2869,7 @@ Return only the final answer. No meta commentary.
         // Route multimodal to Groq Llama 4 Scout (vision-capable)
         const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
         const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
-        yield* this.streamWithGroqMultimodal(userContent, imagePaths, finalGroqSystem);
+        yield* this.streamWithGroqMultimodal(userContent, imagePaths, finalGroqSystem, maxOutputTokens);
         return;
       }
       // Text-only Groq
@@ -2874,7 +2877,7 @@ Return only the final answer. No meta commentary.
       const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
       const groqFullMessage = `${finalGroqSystem}\n\n${userContent}`;
       try {
-        yield* this.streamWithGroq(groqFullMessage, this.currentModelId);
+        yield* this.streamWithGroq(groqFullMessage, this.currentModelId, maxOutputTokens);
         return;
       } catch (groqTextErr: any) {
         console.warn(`[LLMHelper] ⚠️ Groq text-only failed (${groqTextErr.message}), falling through to Gemini...`);
@@ -2888,7 +2891,7 @@ Return only the final answer. No meta commentary.
       const teamsyncKey = CredentialsManager.getInstance().getTeamSyncApiKey();
       if (teamsyncKey) {
         try {
-          const response = await this.generateWithTeamSync(userContent, finalSystemPrompt, imagePaths);
+          const response = await this.generateWithTeamSync(userContent, finalSystemPrompt, imagePaths, maxOutputTokens);
           yield response;
           return;
         } catch (err: any) {
@@ -2899,11 +2902,11 @@ Return only the final answer. No meta commentary.
               if (isMultimodal && imagePaths) {
                 const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
                 const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
-                yield* this.streamWithGroqMultimodal(userContent, imagePaths, finalGroqSystem);
+                yield* this.streamWithGroqMultimodal(userContent, imagePaths, finalGroqSystem, maxOutputTokens);
               } else {
                 const groqSystem = hasExplicitSystemPromptOverride ? baseSystemPrompt : universalBase;
                 const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
-                yield* this.streamWithGroq(`${finalGroqSystem}\n\n${userContent}`); // intentional: emergency fallback waterfall — use stable GROQ_MODEL baseline, not currentModelId
+                yield* this.streamWithGroq(`${finalGroqSystem}\n\n${userContent}`, GROQ_MODEL, maxOutputTokens); // intentional: emergency fallback waterfall — use stable GROQ_MODEL baseline, not currentModelId
               }
               return;
             } catch (groqErr: any) {
@@ -2921,7 +2924,7 @@ Return only the final answer. No meta commentary.
       // Direct model use if specified
       if (this.isGeminiModel(this.currentModelId)) {
         const fullMsg = `${finalSystemPrompt}\n\n${userContent}`;
-        yield* this.streamWithGeminiModel(fullMsg, this.currentModelId, imagePaths);
+        yield* this.streamWithGeminiModel(fullMsg, this.currentModelId, imagePaths, maxOutputTokens);
         return;
       }
 
@@ -2934,7 +2937,7 @@ Return only the final answer. No meta commentary.
     // 5. Last-resort: TeamSync API (if user has a key but no cloud provider configured)
     if (this.hasTeamSync()) {
       try {
-        yield* this.streamWithTeamSync(userContent, finalSystemPrompt, imagePaths);
+        yield* this.streamWithTeamSync(userContent, finalSystemPrompt, imagePaths, maxOutputTokens);
         return;
       } catch (e: any) {
         console.warn('[LLMHelper] TeamSync last-resort fallback failed:', e.message);
@@ -2952,6 +2955,7 @@ Return only the final answer. No meta commentary.
       skipKnowledgeInjection?: boolean;
       skipModeInjection?: boolean;
       skipCustomNotesInjection?: boolean;
+      maxOutputTokens?: number;
     }
   ): AsyncGenerator<string, void, unknown> {
     return this.streamChat(
@@ -2964,6 +2968,7 @@ Return only the final answer. No meta commentary.
         skipKnowledgeInjection: runtimeOptions?.skipKnowledgeInjection,
         skipModeInjection: runtimeOptions?.skipModeInjection,
         skipCustomNotesInjection: runtimeOptions?.skipCustomNotesInjection,
+        maxOutputTokens: runtimeOptions?.maxOutputTokens,
       }
     );
   }
@@ -2973,7 +2978,7 @@ Return only the final answer. No meta commentary.
    * Yields the full response in small word-batches so the UI typing effect still plays.
    * Throws on empty response so the fallback chain tries the next provider.
    */
-  private async * streamWithTeamSync(userContent: string, systemPrompt?: string, imagePaths?: string[]): AsyncGenerator<string, void, unknown> {
+  private async * streamWithTeamSync(userContent: string, systemPrompt?: string, imagePaths?: string[], maxOutputTokens?: number): AsyncGenerator<string, void, unknown> {
     // ── REAL SSE STREAM (replaces the fake word-by-word simulation) ──────────
     // Previous implementation called generateWithTeamSync() (blocking, waited for
     // the full response), then drip-fed words with setTimeout delays — pure theater.
@@ -2990,6 +2995,7 @@ Return only the final answer. No meta commentary.
       messages: [{ role: 'user', content: userContent }],
       stream: true,
     };
+    if (maxOutputTokens) body.max_tokens = maxOutputTokens;
     if (this.groqFastTextMode && (!imagePaths || imagePaths.length === 0)) body.fast_mode = true;
     if (systemPrompt) body.system = systemPrompt;
     if (this.aiResponseLanguage && this.aiResponseLanguage !== 'English') {
@@ -3073,7 +3079,7 @@ Return only the final answer. No meta commentary.
   /**
    * Stream response from Groq
    */
-  private async * streamWithGroq(fullMessage: string, modelId: string = GROQ_MODEL): AsyncGenerator<string, void, unknown> {
+  private async * streamWithGroq(fullMessage: string, modelId: string = GROQ_MODEL, maxOutputTokens: number = 8192): AsyncGenerator<string, void, unknown> {
     if (!this.groqClient && !this.groqKeyManager.hasAvailableKey()) throw new Error("Groq client not initialized");
 
     // Streaming Groq call with automatic key rotation
@@ -3082,14 +3088,14 @@ Return only the final answer. No meta commentary.
       messages: [{ role: "user", content: fullMessage }],
       stream: true,
       temperature: 0.4,
-      max_tokens: 8192,
+      max_tokens: maxOutputTokens,
     });
   }
 
   /**
    * Stream multimodal (image + text) response from Groq using Llama 4 Scout as a last resort
    */
-  private async * streamWithGroqMultimodal(userMessage: string, imagePaths: string[], systemPrompt?: string): AsyncGenerator<string, void, unknown> {
+  private async * streamWithGroqMultimodal(userMessage: string, imagePaths: string[], systemPrompt?: string, maxOutputTokens: number = 8192): AsyncGenerator<string, void, unknown> {
     if (!this.groqClient && !this.groqKeyManager.hasAvailableKey()) throw new Error("Groq client not initialized");
 
     const messages: any[] = [];
@@ -3112,7 +3118,7 @@ Return only the final answer. No meta commentary.
       model: "meta-llama/llama-4-scout-17b-16e-instruct",
       messages,
       stream: true,
-      max_tokens: 8192,
+      max_tokens: maxOutputTokens,
       temperature: 1,
       top_p: 1,
       stop: null
@@ -3122,7 +3128,7 @@ Return only the final answer. No meta commentary.
   /**
    * Stream response from OpenAI with proper system/user message separation
    */
-  private async * streamWithOpenai(userMessage: string, systemPrompt?: string, modelId?: string): AsyncGenerator<string, void, unknown> {
+  private async * streamWithOpenai(userMessage: string, systemPrompt?: string, modelId?: string, maxOutputTokens: number = MAX_OUTPUT_TOKENS): AsyncGenerator<string, void, unknown> {
     if (!this.openaiClient) throw new Error("OpenAI client not initialized");
 
     // Use explicit override, then currentModelId if it's an OpenAI model, else baseline constant
@@ -3138,7 +3144,7 @@ Return only the final answer. No meta commentary.
       model,
       messages,
       stream: true,
-      max_completion_tokens: model.toLowerCase().includes('claude') ? CLAUDE_MAX_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS,
+      max_completion_tokens: model.toLowerCase().includes('claude') ? Math.min(maxOutputTokens, CLAUDE_MAX_OUTPUT_TOKENS) : maxOutputTokens,
     });
 
     for await (const chunk of stream) {
@@ -3152,7 +3158,7 @@ Return only the final answer. No meta commentary.
   /**
    * Stream response from Claude with proper system/user message separation
    */
-  private async * streamWithClaude(userMessage: string, systemPrompt?: string, modelId?: string): AsyncGenerator<string, void, unknown> {
+  private async * streamWithClaude(userMessage: string, systemPrompt?: string, modelId?: string, maxOutputTokens: number = CLAUDE_MAX_OUTPUT_TOKENS): AsyncGenerator<string, void, unknown> {
     if (!this.claudeClient) throw new Error("Claude client not initialized");
 
     // Use explicit override, then currentModelId if it's a Claude model, else baseline constant
@@ -3160,7 +3166,7 @@ Return only the final answer. No meta commentary.
 
     const stream = await this.claudeClient.messages.stream({
       model,
-      max_tokens: CLAUDE_MAX_OUTPUT_TOKENS,
+      max_tokens: Math.min(maxOutputTokens, CLAUDE_MAX_OUTPUT_TOKENS),
       ...(systemPrompt ? { system: systemPrompt } : {}),
       messages: [{ role: "user", content: userMessage }],
     });
@@ -3175,7 +3181,7 @@ Return only the final answer. No meta commentary.
   /**
    * Stream multimodal (image + text) response from OpenAI with system/user separation
    */
-  private async * streamWithOpenaiMultimodal(userMessage: string, imagePaths: string[], systemPrompt?: string, modelId?: string): AsyncGenerator<string, void, unknown> {
+  private async * streamWithOpenaiMultimodal(userMessage: string, imagePaths: string[], systemPrompt?: string, modelId?: string, maxOutputTokens: number = MAX_OUTPUT_TOKENS): AsyncGenerator<string, void, unknown> {
     if (!this.openaiClient) throw new Error("OpenAI client not initialized");
 
     // Use explicit override, then currentModelId if it's an OpenAI model, else baseline constant
@@ -3199,7 +3205,7 @@ Return only the final answer. No meta commentary.
       model,
       messages,
       stream: true,
-      max_completion_tokens: model.toLowerCase().includes('claude') ? CLAUDE_MAX_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS,
+      max_completion_tokens: model.toLowerCase().includes('claude') ? Math.min(maxOutputTokens, CLAUDE_MAX_OUTPUT_TOKENS) : maxOutputTokens,
     });
 
     for await (const chunk of stream) {
@@ -3213,7 +3219,7 @@ Return only the final answer. No meta commentary.
   /**
    * Stream multimodal (image + text) response from Claude with system/user separation
    */
-  private async * streamWithClaudeMultimodal(userMessage: string, imagePaths: string[], systemPrompt?: string, modelId?: string): AsyncGenerator<string, void, unknown> {
+  private async * streamWithClaudeMultimodal(userMessage: string, imagePaths: string[], systemPrompt?: string, modelId?: string, maxOutputTokens: number = CLAUDE_MAX_OUTPUT_TOKENS): AsyncGenerator<string, void, unknown> {
     if (!this.claudeClient) throw new Error("Claude client not initialized");
 
     // Use explicit override, then currentModelId if it's a Claude model, else baseline constant
@@ -3236,7 +3242,7 @@ Return only the final answer. No meta commentary.
 
     const stream = await this.claudeClient.messages.stream({
       model,
-      max_tokens: CLAUDE_MAX_OUTPUT_TOKENS,
+      max_tokens: Math.min(maxOutputTokens, CLAUDE_MAX_OUTPUT_TOKENS),
       ...(systemPrompt ? { system: systemPrompt } : {}),
       messages: [{
         role: "user",
@@ -3257,7 +3263,7 @@ Return only the final answer. No meta commentary.
   /**
    * Stream response from a specific Gemini model
    */
-  private async * streamWithGeminiModel(fullMessage: string, model: string, imagePaths?: string[]): AsyncGenerator<string, void, unknown> {
+  private async * streamWithGeminiModel(fullMessage: string, model: string, imagePaths?: string[], maxOutputTokens: number = MAX_OUTPUT_TOKENS): AsyncGenerator<string, void, unknown> {
     if (!this.client) throw new Error("Gemini client not initialized");
 
     const contents: any[] = [{ text: fullMessage }];
@@ -3279,7 +3285,7 @@ Return only the final answer. No meta commentary.
       model: model,
       contents: contents,
       config: {
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        maxOutputTokens,
         temperature: 0.4,
       }
     });

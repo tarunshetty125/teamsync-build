@@ -16,12 +16,19 @@ export interface ArchitectureNodeModel {
     id: string;
     label: string;
     kind: ArchitectureNodeKind;
+    technology?: string;
+    purpose?: string;
+    layer?: string;
+    latency?: string;
+    failureMode?: string;
 }
 
 export interface ArchitectureEdgeModel {
     source: string;
     target: string;
     label?: string;
+    protocol?: string;
+    latency?: string;
 }
 
 export interface ArchitectureDiagram {
@@ -108,11 +115,24 @@ export function validateArchitecturePayload(value: unknown): ArchitectureValidat
         if (seen.has(id)) id = `${id}-${index + 1}`;
         seen.add(id);
 
-        nodes.push({
+        const nodeModel: ArchitectureNodeModel = {
             id,
             label,
             kind: coerceKind(node.kind, label),
-        });
+        };
+
+        const technology = cleanText(node.technology);
+        if (technology) nodeModel.technology = technology.slice(0, 80);
+        const purpose = cleanText(node.purpose);
+        if (purpose) nodeModel.purpose = purpose.slice(0, 120);
+        const layer = cleanText(node.layer);
+        if (layer) nodeModel.layer = layer.slice(0, 40);
+        const latency = cleanText(node.latency);
+        if (latency) nodeModel.latency = latency.slice(0, 24);
+        const failureMode = cleanText(node.failureMode);
+        if (failureMode) nodeModel.failureMode = failureMode.slice(0, 120);
+
+        nodes.push(nodeModel);
     });
 
     const nodeIds = new Set(nodes.map((node) => node.id));
@@ -137,7 +157,13 @@ export function validateArchitecturePayload(value: unknown): ArchitectureValidat
         }
 
         const label = cleanText(edge.label).slice(0, 36);
-        edges.push(label ? { source, target, label } : { source, target });
+        const edgeModel: ArchitectureEdgeModel = { source, target };
+        if (label) edgeModel.label = label;
+        const protocol = cleanText(edge.protocol);
+        if (protocol) edgeModel.protocol = protocol.slice(0, 32);
+        const latency = cleanText(edge.latency);
+        if (latency) edgeModel.latency = latency.slice(0, 24);
+        edges.push(edgeModel);
     });
 
     if (nodes.length >= 2 && edges.length === 0) {

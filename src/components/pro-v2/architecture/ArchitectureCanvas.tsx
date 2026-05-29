@@ -23,6 +23,16 @@ import ArchitectureEdge from './ArchitectureEdge';
 const nodeTypes: NodeTypes = { architecture: ArchitectureNode };
 const edgeTypes: EdgeTypes = { architecture: ArchitectureEdge };
 
+function getViewportSettings(nodeCount: number) {
+    if (nodeCount >= 35) {
+        return { padding: 0.18, minZoom: 0.12, maxZoom: 1.05, defaultZoom: 0.36 };
+    }
+    if (nodeCount >= 20) {
+        return { padding: 0.15, minZoom: 0.18, maxZoom: 1.15, defaultZoom: 0.48 };
+    }
+    return { padding: 0.12, minZoom: 0.28, maxZoom: 1.25, defaultZoom: 0.72 };
+}
+
 interface ArchitectureCanvasProps {
     diagram: ArchitectureDiagram;
     onRenderError: (error: unknown) => void;
@@ -52,6 +62,7 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
     const [isLayoutReady, setIsLayoutReady] = useState(false);
     const requestSeqRef = useRef(0);
     const { fitView } = useReactFlow();
+    const viewportSettings = useMemo(() => getViewportSettings(diagram.nodes.length), [diagram.nodes.length]);
 
     useEffect(() => {
         let cancelled = false;
@@ -74,10 +85,10 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
                 setIsLayoutReady(true);
                 window.requestAnimationFrame(() => {
                     fitView({
-                        padding: 0.10,
+                        padding: viewportSettings.padding,
                         duration: 420,
-                        minZoom: 0.42,
-                        maxZoom: 1.1,
+                        minZoom: viewportSettings.minZoom,
+                        maxZoom: viewportSettings.maxZoom,
                     });
                 });
             })
@@ -91,7 +102,7 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
         };
         // diagramKey intentionally owns layout invalidation; diagram is the matching value for that fingerprint.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [diagramKey, fitView, onRenderError]);
+    }, [diagramKey, fitView, onRenderError, viewportSettings.maxZoom, viewportSettings.minZoom, viewportSettings.padding]);
 
     if (!isLayoutReady) return <ArchitectureSkeleton />;
 
@@ -108,9 +119,9 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 fitView
-                minZoom={0.34}
-                maxZoom={1.35}
-                defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+                minZoom={viewportSettings.minZoom}
+                maxZoom={viewportSettings.maxZoom}
+                defaultViewport={{ x: 0, y: 0, zoom: viewportSettings.defaultZoom }}
                 nodesDraggable={false}
                 nodesConnectable={false}
                 elementsSelectable={false}
