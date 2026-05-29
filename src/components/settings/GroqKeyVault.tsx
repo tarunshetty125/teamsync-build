@@ -305,7 +305,7 @@ export const GroqKeyVault: React.FC<GroqKeyVaultProps> = ({
     // ── Render ───────────────────────────────────────────────────
 
     return (
-        <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden">
+        <div className="bg-bg-item-surface rounded-xl border border-border-subtle">
             {/* Header */}
             <div className="px-5 pt-5 pb-3">
                 <div className="flex items-center justify-between mb-1">
@@ -574,7 +574,7 @@ export const GroqKeyVault: React.FC<GroqKeyVaultProps> = ({
 
             {/* Pool Health Footer */}
             {totalKeys > 0 && (
-                <div className="px-5 py-3 border-t border-border-subtle bg-bg-input/20">
+                <div className="px-5 py-3 border-t border-border-subtle bg-bg-input/20 rounded-b-xl">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 flex-wrap">
                             {healthyKeys > 0 && (
