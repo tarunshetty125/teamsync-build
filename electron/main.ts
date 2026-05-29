@@ -3533,6 +3533,28 @@ async function initializeApp() {
 
   console.log("App is ready")
 
+  // ── Production Backend Auto-Start ──────────────────────────
+  // In packaged builds, the backend server is mandatory.
+  // It must be healthy before any window is created.
+  // In dev mode (app.isPackaged === false), this block is skipped entirely.
+  if (app.isPackaged) {
+    const { BackendManager } = require('./services/BackendManager');
+    try {
+      await BackendManager.getInstance().start();
+      console.log('[Main] Backend server started successfully');
+    } catch (error) {
+      console.error('[Main] Backend failed to start:', error);
+      const { dialog } = require('electron');
+      dialog.showErrorBox(
+        'TeamSync — Backend Error',
+        'The backend server failed to start. TeamSync cannot continue.\n\n' +
+        (error instanceof Error ? error.message : String(error))
+      );
+      app.quit();
+      return; // Prevent createWindow()
+    }
+  }
+
   PermissionManager.getInstance().startMonitoring()
   appState.createWindow()
 
@@ -3634,6 +3656,17 @@ async function initializeApp() {
 
     // Kill Ollama if we started it
     OllamaManager.getInstance().stop();
+
+    // Stop backend server if we started it (production only)
+    if (app.isPackaged) {
+      try {
+        const { BackendManager } = require('./services/BackendManager');
+        BackendManager.getInstance().stop();
+        console.log('[Main] Backend server stopped');
+      } catch (e) {
+        console.warn('[Main] BackendManager cleanup failed:', e);
+      }
+    }
 
     // Destroy StealthManager — stops watchdog timer, reverts process identity
     try {

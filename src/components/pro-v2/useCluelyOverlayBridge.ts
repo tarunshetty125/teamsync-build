@@ -668,9 +668,19 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         const unsub = window.electronAPI?.onModeChanged?.((data: any) => {
             setActiveModeLabel(data.name);
             setActiveModeTemplateId((data.templateId as ModeTemplateId | null | undefined) ?? null);
+            // Reset stale sub-mode state for templates that support sub-mode detection.
+            // For template-locked modes (general, sales, etc.) this is defensive —
+            // resolveOverlayCopilotMode ignores sessionMode for those templates anyway.
+            dispatchIntent({ type: 'RESET' });
+            manualSessionModeRef.current = null;
+            persistManualSessionMode(null);
+            // Clear accumulated transcript so sub-mode detection starts fresh
+            finalizedTranscriptRef.current = '';
+            currentTurnTextRef.current = '';
+            lastFinalSentenceRef.current = '';
         });
         return () => unsub?.();
-    }, []);
+    }, [persistManualSessionMode]);
 
     useEffect(() => {
         window.electronAPI?.getSessionMode?.()

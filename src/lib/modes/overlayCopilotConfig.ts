@@ -546,19 +546,16 @@ export function resolveOverlayCopilotMode(
   activeTemplateType: ModeTemplateId | null | undefined,
   sessionMode: SessionOverlayMode,
 ): OverlayCopilotModeId {
-  // Salary can surface in ANY interview context — always passthrough to salary buttons
-  if (sessionMode === 'salary') return 'salary';
-
-  // Non-interview templates always lock to their own button set
+  // Non-interview templates always lock to their own button set.
+  // Transcript intent (including salary) influences highlight only, never buttons.
   if (activeTemplateType === 'sales' || activeTemplateType === 'lecture' || activeTemplateType === 'recruiting' || activeTemplateType === 'team-meet') {
     return activeTemplateType;
   }
 
-  // Technical-interview: respect transcript-detected question types so
-  // buttons auto-map to coding / behavioral / system_design as detected.
-  // Ambiguous or follow-up turns should use the detector-driven generic sets
-  // instead of the technical default actions.
+  // Technical-interview: dynamic sub-mode — transcript selects button set.
+  // Salary passthrough allowed here because this is an adaptive template.
   if (activeTemplateType === 'technical-interview') {
+    if (sessionMode === 'salary') return 'salary';
     if (sessionMode === 'coding') return 'coding';
     if (sessionMode === 'system_design') return 'system_design';
     if (sessionMode === 'behavioral') return 'behavioral';
@@ -567,14 +564,17 @@ export function resolveOverlayCopilotMode(
     return 'technical-interview';
   }
 
-  // Looking-for-work: allow coding / system_design passthrough when detected
+  // Looking-for-work: dynamic sub-mode for coding / system_design / salary.
   if (activeTemplateType === 'looking-for-work') {
+    if (sessionMode === 'salary') return 'salary';
     if (sessionMode === 'coding') return 'coding';
     if (sessionMode === 'system_design') return 'system_design';
     return 'looking-for-work';
   }
 
-  return sessionMode;
+  // All other templates (general, etc.): template is authoritative.
+  // Transcript intent influences button highlight, never button set.
+  return activeTemplateType || 'general';
 }
 
 export function getOverlayQuickActions(

@@ -6,7 +6,7 @@ import {
     Camera, RotateCcw, Eye, Layout, MessageSquare, Crop,
     ChevronDown, ChevronUp, Check, BadgeCheck, Power, Palette, Calendar, Ghost, Sun, Moon, RefreshCw, Info, Globe, FlaskConical, Terminal, Settings, Activity, ExternalLink, Trash2,
     Sparkles, Pencil, Briefcase, Building2, Search, MapPin, CheckCircle, HelpCircle, Zap, SlidersHorizontal, PointerOff,
-    AlertCircle
+    AlertCircle, Lock
 } from 'lucide-react';
 import { analytics } from '../lib/analytics/analytics.service';
 import { AboutSection } from './AboutSection';
@@ -440,6 +440,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [showVerboseToast, setShowVerboseToast] = useState(false);
     const verboseToastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const [useProUI, setUseProUI] = useState(() => localStorage.getItem('teamsync_overlay_v2') === 'true');
+
+    // Auto-disable Pro UI if premium/trial access is lost
+    const hasProAccess = isPremium || isTrialActive;
+    useEffect(() => {
+        if (!hasProAccess && useProUI) {
+            setUseProUI(false);
+            localStorage.setItem('teamsync_overlay_v2', 'false');
+        }
+    }, [hasProAccess, useProUI]);
 
     const updateProfileViewStatus = React.useCallback((nextStatus: 'idle' | 'processing' | 'ready' | 'empty' | 'error') => {
         profileViewStatusRef.current = nextStatus;
@@ -1961,28 +1970,41 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                 </div>
                                             </div>
 
-                                            {/* Pro UI Toggle */}
-                                            <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between transition-all ${useProUI ? 'shadow-lg shadow-purple-500/10' : ''}`}>
+                                            {/* Pro UI Toggle — Premium/Trial only */}
+                                            <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between transition-all ${hasProAccess && useProUI ? 'shadow-lg shadow-purple-500/10' : ''} ${!hasProAccess ? 'opacity-80' : ''}`}>
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center gap-2">
-                                                        <Sparkles size={18} className={useProUI ? 'text-purple-400' : 'text-text-primary'} />
+                                                        <Sparkles size={18} className={hasProAccess && useProUI ? 'text-purple-400' : 'text-text-primary'} />
                                                         <h3 className="text-lg font-bold text-text-primary">Pro UI</h3>
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20">Beta</span>
+                                                        {!hasProAccess && <Lock size={14} className="text-text-tertiary" />}
                                                     </div>
                                                     <p className="text-xs text-text-secondary">
-                                                        Switch to the new floating panels layout with split insights and response surfaces.
+                                                        {hasProAccess
+                                                            ? 'Switch to the new floating panels layout with split insights and response surfaces.'
+                                                            : 'Upgrade to Pro to unlock the new floating panels layout.'
+                                                        }
                                                     </p>
                                                 </div>
-                                                <div
-                                                    onClick={() => {
-                                                        const newState = !useProUI;
-                                                        setUseProUI(newState);
-                                                        localStorage.setItem('teamsync_overlay_v2', String(newState));
-                                                    }}
-                                                    className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${useProUI ? 'bg-purple-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                >
-                                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${useProUI ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                </div>
+                                                {hasProAccess ? (
+                                                    <div
+                                                        onClick={() => {
+                                                            const newState = !useProUI;
+                                                            setUseProUI(newState);
+                                                            localStorage.setItem('teamsync_overlay_v2', String(newState));
+                                                        }}
+                                                        className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${useProUI ? 'bg-purple-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                                                    >
+                                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${useProUI ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => setIsPremiumModalOpen(true)}
+                                                        className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 transition-colors whitespace-nowrap"
+                                                    >
+                                                        Upgrade
+                                                    </button>
+                                                )}
                                             </div>
 
                                             <div>

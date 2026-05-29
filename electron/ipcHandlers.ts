@@ -1913,9 +1913,13 @@ export function initializeIpcHandlers(appState: AppState): void {
       // Return masked versions for security (just indicate if set)
       const hasKey = (key?: string) => !!(key && key.trim().length > 0);
 
+      // Groq vault check: user may have keys only in the vault (multi-key rotation)
+      const cm = CredentialsManager.getInstance();
+      const hasGroqVaultKey = (cm.getGroqKeyVault?.() || []).some((k: any) => k.enabled);
+
       return {
         hasGeminiKey: hasKey(creds.geminiApiKey),
-        hasGroqKey: hasKey(creds.groqApiKey),
+        hasGroqKey: hasKey(creds.groqApiKey) || hasGroqVaultKey,
         hasOpenaiKey: hasKey(creds.openaiApiKey),
         hasClaudeKey: hasKey(creds.claudeApiKey),
         hasTeamSyncKey: hasKey(creds.teamsyncApiKey),
@@ -1965,7 +1969,15 @@ export function initializeIpcHandlers(appState: AppState): void {
         const { CredentialsManager } = require('./services/CredentialsManager');
         const cm = CredentialsManager.getInstance();
         if (provider === 'gemini') key = cm.getGeminiApiKey();
-        else if (provider === 'groq') key = cm.getGroqApiKey();
+        else if (provider === 'groq') {
+          key = cm.getGroqApiKey();
+          // Fallback: if no single key, use the first enabled vault key
+          if (!key) {
+            const vault = cm.getGroqKeyVault?.() || [];
+            const firstEnabled = vault.find((k: any) => k.enabled);
+            if (firstEnabled) key = firstEnabled.key;
+          }
+        }
         else if (provider === 'openai') key = cm.getOpenaiApiKey();
         else if (provider === 'claude') key = cm.getClaudeApiKey();
       }
