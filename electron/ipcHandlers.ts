@@ -1951,6 +1951,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         groqPreferredModel: creds.groqPreferredModel || undefined,
         openaiPreferredModel: creds.openaiPreferredModel || undefined,
         claudePreferredModel: creds.claudePreferredModel || undefined,
+        groqFetchedModels: cm.getGroqFetchedModels(),
       };
     } catch (error: any) {
       return { hasGeminiKey: false, hasGroqKey: false, hasOpenaiKey: false, hasClaudeKey: false, hasTeamSyncKey: false, googleServiceAccountPath: null, sttProvider: 'deepgram', groqSttModel: 'whisper-large-v3-turbo', hasSttGroqKey: false, hasSttOpenaiKey: false, hasDeepgramKey: false, hasElevenLabsKey: false, hasAzureKey: false, azureRegion: 'eastus', hasIbmWatsonKey: false, ibmWatsonRegion: 'us-south', hasSonioxKey: false, hasTavilyKey: false, sttGroqKey: '', sttOpenaiKey: '', sttDeepgramKey: '', sttElevenLabsKey: '', sttAzureKey: '', sttIbmKey: '', sttSonioxKey: '' };
@@ -1988,6 +1989,11 @@ export function initializeIpcHandlers(appState: AppState): void {
 
       const { fetchProviderModels } = require('./utils/modelFetcher');
       const models = await fetchProviderModels(provider, key);
+      // Persist Groq catalog so overlay/window components can read without re-fetching
+      if (provider === 'groq') {
+        const { CredentialsManager: CM } = require('./services/CredentialsManager');
+        CM.getInstance().setGroqFetchedModels(models);
+      }
       return { success: true, models };
     } catch (error: any) {
       console.error(`[IPC] Failed to fetch ${provider} models:`, error);
@@ -2002,6 +2008,16 @@ export function initializeIpcHandlers(appState: AppState): void {
       CredentialsManager.getInstance().setPreferredModel(provider, modelId);
     } catch (error: any) {
       console.error(`[IPC] Failed to set preferred model for ${provider}:`, error);
+    }
+  });
+
+  safeHandle("clear-groq-fetched-models", async () => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      CredentialsManager.getInstance().clearGroqFetchedModels();
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
     }
   });
 

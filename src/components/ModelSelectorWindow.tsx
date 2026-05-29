@@ -79,10 +79,9 @@ const ModelSelectorWindow = () => {
 
                 // Fetch dynamic models
                 const dynamicModels: Record<string, any[]> = {};
-                const providers: ('gemini' | 'groq' | 'openai' | 'claude')[] = ['gemini', 'groq', 'openai', 'claude'];
+                const providers: ('gemini' | 'openai' | 'claude')[] = ['gemini', 'openai', 'claude'];
                 for (const prov of providers) {
                     const hasKey = prov === 'gemini' ? creds?.hasGeminiKey :
-                                   prov === 'groq' ? creds?.hasGroqKey :
                                    prov === 'openai' ? creds?.hasOpenaiKey :
                                    prov === 'claude' ? creds?.hasClaudeKey : false;
                                    
@@ -96,6 +95,12 @@ const ModelSelectorWindow = () => {
                             console.error(`Failed to fetch models for ${prov}:`, e);
                         }
                     }
+                }
+
+                // Read persisted Groq models (fetched via Settings → Fetch Models button)
+                const groqModels = creds?.groqFetchedModels;
+                if (groqModels && groqModels.length > 0) {
+                    dynamicModels['groq'] = groqModels;
                 }
 
                 // Cloud Models — standard models + unique preferred models + dynamic models

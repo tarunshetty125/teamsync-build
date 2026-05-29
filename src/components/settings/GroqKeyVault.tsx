@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, ExternalLink, Loader2, Shield, ShieldAlert, ShieldOff, Clock, Zap, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Loader2, Shield, ShieldAlert, ShieldOff, Clock, Zap, AlertCircle, RefreshCw, ChevronDown, Check } from 'lucide-react';
+import { prettifyModelId } from '../../utils/modelUtils';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -65,9 +66,27 @@ function formatCooldownRemaining(cooldownUntil: number): string {
     return `${Math.floor(secs / 60)}m ${secs % 60}s`;
 }
 
+// ── Props ──────────────────────────────────────────────────────────
+
+interface GroqKeyVaultProps {
+    onModelsFetched?: (models: { id: string; name: string }[]) => void;
+    onModelsCleared?: () => void;
+    preferredModel?: string;
+    onPreferredModelChange?: (modelId: string) => void;
+    hasExistingModels?: boolean;
+    onVaultKeyCountChanged?: (hasEnabledKeys: boolean) => void;
+}
+
 // ── Component ──────────────────────────────────────────────────────
 
-export const GroqKeyVault: React.FC = () => {
+export const GroqKeyVault: React.FC<GroqKeyVaultProps> = ({
+    onModelsFetched,
+    onModelsCleared,
+    preferredModel,
+    onPreferredModelChange,
+    hasExistingModels,
+    onVaultKeyCountChanged,
+}) => {
     const [keys, setKeys] = useState<VaultKeyEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [newKeyInput, setNewKeyInput] = useState('');
@@ -80,20 +99,30 @@ export const GroqKeyVault: React.FC = () => {
     const inputRef = useRef<HTMLInputElement>(null);
     const tickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    // ── Model Discovery State ────────────────────────────────────
+    const [fetchedModels, setFetchedModels] = useState<{ id: string; label: string }[]>([]);
+    const [isFetchingModels, setIsFetchingModels] = useState(false);
+    const [fetchModelError, setFetchModelError] = useState<string | null>(null);
+    const [selectedModel, setSelectedModel] = useState<string>(preferredModel || '');
+    const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+    const modelDropdownRef = useRef<HTMLDivElement>(null);
+
     // ── Data Loading ─────────────────────────────────────────────
 
-    const loadKeys = useCallback(async () => {
+    const loadKeys = useCallback(async (): Promise<VaultKeyEntry[]> => {
         try {
             // @ts-ignore
             const result = await window.electronAPI?.groqVaultGetKeys?.();
             if (result?.success && result.keys) {
                 setKeys(result.keys);
+                return result.keys;
             }
         } catch (e) {
             console.error('[GroqKeyVault] Failed to load keys:', e);
         } finally {
             setLoading(false);
         }
+        return [];
     }, []);
 
     // Initial load
@@ -121,6 +150,70 @@ export const GroqKeyVault: React.FC = () => {
         };
     }, [keys]);
 
+    // ── Model Discovery ─────────────────────────────────────────
+
+    useEffect(() => {
+        if (preferredModel) setSelectedModel(preferredModel);
+    }, [preferredModel]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
+                setIsModelDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleFetchModels = useCallback(async () => {
+        setIsFetchingModels(true);
+        setFetchModelError(null);
+
+        try {
+            // @ts-ignore
+            const result = await window.electronAPI?.fetchProviderModels('groq', '');
+            if (result?.success && result.models) {
+                setFetchedModels(result.models);
+                // Auto-select first model if current selection not in list
+                if (result.models.length > 0) {
+                    const existsInList = result.models.some((m: any) => m.id === selectedModel);
+                    if (!existsInList) {
+                        const firstModel = result.models[0].id;
+                        setSelectedModel(firstModel);
+                        // @ts-ignore
+                        await window.electronAPI?.setProviderPreferredModel('groq', firstModel);
+                        onPreferredModelChange?.(firstModel);
+                    }
+                }
+                // Notify parent — updates global Active Model selector
+                const providerModels = result.models.map((m: any) => ({
+                    id: m.id,
+                    name: `Groq ${prettifyModelId(m.label || m.id)}`
+                }));
+                onModelsFetched?.(providerModels);
+            } else {
+                setFetchModelError(result?.error || 'Failed to fetch models');
+            }
+        } catch (e: any) {
+            setFetchModelError(e.message || 'Failed to fetch models');
+        } finally {
+            setIsFetchingModels(false);
+        }
+    }, [selectedModel, onModelsFetched, onPreferredModelChange]);
+
+    const handleSelectModel = useCallback(async (modelId: string) => {
+        setSelectedModel(modelId);
+        setIsModelDropdownOpen(false);
+        try {
+            // @ts-ignore
+            await window.electronAPI?.setProviderPreferredModel('groq', modelId);
+            onPreferredModelChange?.(modelId);
+        } catch (e) {
+            console.error('[GroqKeyVault] Failed to save preferred model:', e);
+        }
+    }, [onPreferredModelChange]);
+
     // ── Actions ──────────────────────────────────────────────────
 
     const handleAddKey = async () => {
@@ -135,10 +228,16 @@ export const GroqKeyVault: React.FC = () => {
             // @ts-ignore
             const result = await window.electronAPI?.groqVaultAddKey?.(trimmed);
             if (result?.success) {
+                const wasFirstKey = keys.length === 0;
                 setNewKeyInput('');
                 setAddSuccess(true);
                 setTimeout(() => setAddSuccess(false), 2000);
                 await loadKeys();
+                onVaultKeyCountChanged?.(true);
+                // Smart auto-fetch: first key added and no models exist yet
+                if (wasFirstKey && !hasExistingModels) {
+                    handleFetchModels();
+                }
             } else {
                 setAddError(result?.error || 'Failed to add key');
             }
@@ -154,7 +253,14 @@ export const GroqKeyVault: React.FC = () => {
         try {
             // @ts-ignore
             await window.electronAPI?.groqVaultRemoveKey?.(id);
-            await loadKeys();
+            const updatedKeys = await loadKeys();
+            const hasEnabled = updatedKeys.some(k => k.enabled);
+            onVaultKeyCountChanged?.(hasEnabled);
+            if (!hasEnabled) {
+                setFetchedModels([]);
+                setSelectedModel('');
+                onModelsCleared?.();
+            }
         } catch (e) {
             console.error('[GroqKeyVault] Failed to remove key:', e);
         } finally {
@@ -168,7 +274,14 @@ export const GroqKeyVault: React.FC = () => {
         try {
             // @ts-ignore
             await window.electronAPI?.groqVaultToggleKey?.(id, enabled);
-            await loadKeys();
+            const updatedKeys = await loadKeys();
+            const hasEnabled = updatedKeys.some(k => k.enabled);
+            onVaultKeyCountChanged?.(hasEnabled);
+            if (!hasEnabled) {
+                setFetchedModels([]);
+                setSelectedModel('');
+                onModelsCleared?.();
+            }
         } catch (e) {
             console.error('[GroqKeyVault] Failed to toggle key:', e);
             await loadKeys(); // Revert on error
@@ -342,6 +455,70 @@ export const GroqKeyVault: React.FC = () => {
                     </div>
                 </div>
             ) : null}
+
+            {/* Model Discovery */}
+            {totalKeys > 0 && (
+                <div className="px-5 pb-3">
+                    <div className="flex items-center justify-between gap-3">
+                        {fetchedModels.length > 0 || preferredModel ? (
+                            <div className="relative flex-1 max-w-[200px]" ref={modelDropdownRef}>
+                                <button
+                                    onClick={() => fetchedModels.length > 0 && setIsModelDropdownOpen(!isModelDropdownOpen)}
+                                    className={`w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary flex items-center justify-between transition-colors ${fetchedModels.length > 0 ? 'hover:bg-bg-elevated' : 'opacity-80 cursor-default'}`}
+                                    type="button"
+                                >
+                                    <span className="truncate pr-2">
+                                        {fetchedModels.find(m => m.id === selectedModel)?.label || (preferredModel ? prettifyModelId(preferredModel) : 'Select model')}
+                                    </span>
+                                    <ChevronDown size={14} className={`text-text-secondary transition-transform ${isModelDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {isModelDropdownOpen && fetchedModels.length > 0 && (
+                                    <div className="absolute top-full left-0 mt-1 w-full min-w-[200px] bg-bg-elevated border border-border-subtle rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto animated fadeIn">
+                                        <div className="p-1 space-y-0.5">
+                                            {fetchedModels.map((model) => (
+                                                <button
+                                                    key={model.id}
+                                                    onClick={() => handleSelectModel(model.id)}
+                                                    className={`w-full text-left px-3 py-2 text-xs rounded-md flex items-center justify-between group transition-colors ${selectedModel === model.id ? 'bg-bg-input hover:bg-bg-elevated text-text-primary' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
+                                                    type="button"
+                                                >
+                                                    <span className="truncate">{model.label}</span>
+                                                    {selectedModel === model.id && <Check size={14} className="text-accent-primary shrink-0 ml-2" />}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <span className="text-[10px] text-text-tertiary flex-1">Click Fetch Models to discover available models</span>
+                        )}
+
+                        <button
+                            onClick={handleFetchModels}
+                            disabled={isFetchingModels || healthyKeys === 0}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border border-border-subtle flex items-center gap-2 shrink-0 ${
+                                isFetchingModels
+                                    ? 'bg-bg-input text-text-secondary'
+                                    : 'bg-accent-primary/10 text-accent-primary border-accent-primary/20 hover:bg-accent-primary/20 disabled:opacity-40 disabled:cursor-not-allowed'
+                            }`}
+                        >
+                            {isFetchingModels ? (
+                                <><Loader2 size={12} className="animate-spin" /> Fetching...</>
+                            ) : (
+                                <><RefreshCw size={12} /> Fetch Models</>
+                            )}
+                        </button>
+                    </div>
+                    {fetchModelError && (
+                        <div className="flex items-center gap-1.5 mt-2">
+                            <AlertCircle size={11} className="text-red-400 shrink-0" />
+                            <p className="text-[10px] text-red-400">{fetchModelError}</p>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Add Key Input */}
             <div className="px-5 pb-4 pt-1">

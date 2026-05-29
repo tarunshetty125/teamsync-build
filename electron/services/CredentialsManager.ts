@@ -70,6 +70,8 @@ export interface StoredCredentials {
     claudePreferredModel?: string;
     // Groq Provider Vault — multi-key management
     groqKeyVault?: GroqVaultKey[];
+    // Groq fetched model catalog — persisted so overlay windows can read without re-fetching
+    groqFetchedModels?: { id: string; label: string }[];
     // Free trial state
     trialToken?:     string;   // server-issued signed token (teamsync_trial_…)
     trialExpiresAt?: string;   // ISO timestamp — local copy for startup check
@@ -520,6 +522,22 @@ export class CredentialsManager {
         this.credentials.groqKeyVault = keys;
         this.saveCredentials();
         console.log(`[CredentialsManager] Groq vault replaced (${keys.length} key(s))`);
+    }
+
+    // ── Groq Fetched Models (persisted discovery) ─────────────
+
+    public getGroqFetchedModels(): { id: string; label: string }[] {
+        return this.credentials.groqFetchedModels || [];
+    }
+
+    public setGroqFetchedModels(models: { id: string; label: string }[]): void {
+        this.credentials.groqFetchedModels = models;
+        this.saveCredentials();
+    }
+
+    public clearGroqFetchedModels(): void {
+        delete this.credentials.groqFetchedModels;
+        this.saveCredentials();
     }
 
     // ── Free Trial ─────────────────────────────────────────────

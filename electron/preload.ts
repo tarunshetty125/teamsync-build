@@ -1543,6 +1543,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Dynamic Model Discovery
   fetchProviderModels: (provider: 'gemini' | 'groq' | 'openai' | 'claude', apiKey: string) => ipcRenderer.invoke('fetch-provider-models', provider, apiKey),
   setProviderPreferredModel: (provider: 'gemini' | 'groq' | 'openai' | 'claude', modelId: string) => ipcRenderer.invoke('set-provider-preferred-model', provider, modelId),
+  clearGroqFetchedModels: () => ipcRenderer.invoke('clear-groq-fetched-models'),
 
   // License Management
   licenseActivate: (key: string) => ipcRenderer.invoke('license:activate', key),

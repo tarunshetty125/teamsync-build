@@ -143,6 +143,16 @@ export const AIProvidersSettings: React.FC = () => {
                     if (creds.openaiPreferredModel) pm.openai = creds.openaiPreferredModel;
                     if (creds.claudePreferredModel) pm.claude = creds.claudePreferredModel;
                     setPreferredModels(pm);
+
+                    // Pre-populate Groq dynamic models from persisted catalog (no API call needed)
+                    const groqModels = creds.groqFetchedModels;
+                    if (groqModels && groqModels.length > 0) {
+                        const providerModels = groqModels.map((m: any) => ({
+                            id: m.id,
+                            name: `Groq ${prettifyModelId(m.label || m.id)}`
+                        }));
+                        setDynamicModels(prev => ({ ...prev, groq: providerModels }));
+                    }
                 }
 
                 // Now it's safe to read fast mode — hasStoredKey is already set so
@@ -205,7 +215,7 @@ export const AIProvidersSettings: React.FC = () => {
     useEffect(() => {
         if (!credentialsLoaded) return;
         
-        const providers: ('gemini' | 'groq' | 'openai' | 'claude')[] = ['gemini', 'groq', 'openai', 'claude'];
+        const providers: ('gemini' | 'openai' | 'claude')[] = ['gemini', 'openai', 'claude'];
         
         providers.forEach(async (prov) => {
             if (hasStoredKey[prov] && !dynamicModels[prov]) {
@@ -213,7 +223,7 @@ export const AIProvidersSettings: React.FC = () => {
                     // @ts-ignore
                     const result = await window.electronAPI?.fetchProviderModels(prov, '');
                     if (result?.success && result.models) {
-                        const providerName = prov === 'openai' ? 'OpenAI' : prov === 'claude' ? 'Claude' : prov === 'groq' ? 'Groq' : 'Gemini';
+                        const providerName = prov === 'openai' ? 'OpenAI' : prov === 'claude' ? 'Claude' : 'Gemini';
                         setDynamicModels(prev => ({
                             ...prev,
                             [prov]: result.models!.map((m: any) => ({
@@ -371,6 +381,49 @@ export const AIProvidersSettings: React.FC = () => {
         } catch (e: any) {
             setTestStatus(prev => ({ ...prev, [provider]: 'error' }));
             setTestError(prev => ({ ...prev, [provider]: e.message || 'Connection failed' }));
+        }
+    };
+
+    // ── Groq Vault Callbacks ────────────────────────────────────
+
+    const handleGroqModelsFetched = (models: { id: string; name: string }[]) => {
+        setDynamicModels(prev => ({
+            ...prev,
+            groq: models
+        }));
+    };
+
+    const handleGroqModelsCleared = () => {
+        setDynamicModels(prev => {
+            const next = { ...prev };
+            delete next.groq;
+            return next;
+        });
+        // Clear persisted catalog so overlay/window no longer show stale Groq models
+        // @ts-ignore
+        window.electronAPI?.clearGroqFetchedModels?.();
+    };
+
+    const handleGroqPreferredModelChange = (modelId: string) => {
+        setPreferredModels(prev => ({ ...prev, groq: modelId }));
+    };
+
+    const handleGroqVaultKeyCountChanged = (hasEnabledKeys: boolean) => {
+        setHasStoredKey(prev => ({ ...prev, groq: hasEnabledKeys }));
+        // If all Groq keys removed/disabled, reset active model if it was a Groq model
+        if (!hasEnabledKeys) {
+            // Use model-list lookup instead of fragile string prefixes —
+            // avoids accidentally resetting OpenRouter/Bedrock llama models
+            const groqModelIds = new Set([
+                ...(dynamicModels.groq || []).map((m: any) => m.id),
+                ...(STANDARD_CLOUD_MODELS.groq?.ids || [])
+            ]);
+            if (groqModelIds.has(defaultModel)) {
+                const fallback = 'gemini-3.1-flash-lite-preview';
+                setDefaultModel(fallback);
+                // @ts-ignore
+                window.electronAPI?.setDefaultModel(fallback).catch(console.error);
+            }
         }
     };
 
@@ -584,7 +637,14 @@ export const AIProvidersSettings: React.FC = () => {
                     />
 
                     {/* Groq — Multi-Key Vault */}
-                    <GroqKeyVault />
+                    <GroqKeyVault
+                        onModelsFetched={handleGroqModelsFetched}
+                        onModelsCleared={handleGroqModelsCleared}
+                        preferredModel={preferredModels.groq}
+                        onPreferredModelChange={handleGroqPreferredModelChange}
+                        hasExistingModels={!!(dynamicModels.groq && dynamicModels.groq.length > 0)}
+                        onVaultKeyCountChanged={handleGroqVaultKeyCountChanged}
+                    />
 
                     {/* OpenAI */}
                     <ProviderCard
