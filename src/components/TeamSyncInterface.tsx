@@ -3051,7 +3051,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             const streamContext = [
                 conversationContext.trim(),
                 finalizedTranscriptRef.current.slice(-transcriptWindow),
-                'RESPONSE RULES:\n- Coding / DSA: Problem, Approach, Complexity, Solution with fenced code.\n- System design: concise 10-section architecture answer with exactly one ```architecture_json``` block; never Mermaid.\n- Other: under 120 words; 3-5 bullets when listing.\n- No preamble.'
+                'RESPONSE RULES:\n- Coding / DSA: Problem, Approach, Complexity, Solution with one fenced code block.\n- Coding fence rules: opening line ```c or detected language, code on following lines, closing line ```; never two backticks or inline solution code.\n- System design: concise 10-section architecture answer with exactly one ```architecture_json``` block; never Mermaid.\n- Other: under 120 words; 3-5 bullets when listing.\n- No preamble.'
             ].filter(Boolean).join('\n') || undefined;
             await window.electronAPI.streamGeminiChat(
                 userText || 'Analyze this screenshot',

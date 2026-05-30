@@ -30,6 +30,7 @@ export class CodingBrain implements Brain {
                 'Mention time and space complexity when algorithmic.',
                 'If the question involves debugging, identify the root cause first, then fix.',
                 'Use the programming language visible in context, or Python if unclear.',
+                'For implementation answers, the final solution must be in one fenced markdown code block using exactly three backticks.',
             ].join('\n'),
         });
 
@@ -46,6 +47,7 @@ export class CodingBrain implements Brain {
                     'Start with one direct answer sentence.',
                     `Add ${minBullets} to ${maxBullets} short bullets for the key steps only.`,
                     'Include one concise "Complexity:" line when algorithmic.',
+                    'If code is requested, put the complete solution in one fenced markdown code block with exactly three backticks.',
                     'Prefer the quickest correct fix over a long walkthrough.',
                     `Keep the response under ${strategy.maxWords} words.`,
                 ].join('\n'),
@@ -63,6 +65,8 @@ export class CodingBrain implements Brain {
                     '5. "Complexity:" line with time and space analysis.',
                     '',
                     'The code must be COMPLETE — not pseudocode, not placeholders.',
+                    'Use exactly this fence shape: opening line ```c (or detected language), code on following lines, closing line ```.',
+                    'Never use two backticks, inline code, or code on the same line as the opening fence.',
                     'Add inline comments on non-obvious lines.',
                     'Mention one alternative only if it clarifies a major tradeoff.',
                     `Target ${strategy.maxWords} words total (excluding code).`,
@@ -80,6 +84,8 @@ export class CodingBrain implements Brain {
                     '4. **Solution:** — FULL working code in a fenced markdown block (required).',
                     '',
                     'The code must be complete and runnable — not pseudocode.',
+                    'Use exactly this fence shape: opening line ```c (or detected language), code on following lines, closing line ```.',
+                    'Never use two backticks, inline code, or code on the same line as the opening fence.',
                     `Keep prose under ${strategy.maxWords} words (code block excluded).`,
                 ].join('\n'),
             });

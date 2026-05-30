@@ -243,13 +243,19 @@ function validateBrainstorm(content: string): ActionOutputValidationResult {
 }
 
 function validateStructuredAnswer(content: string): ActionOutputValidationResult {
-    const trimmed = content.trim();
+    const normalized = normalizeCodingMarkdown(content);
+    const trimmed = normalized.text.trim();
     // Lenient validation: accept any substantive response from the LLM.
     // The old strict validation (requiring 3+ lines with 2+ bullets) was rejecting
     // real LLM answers and replacing them with hardcoded template placeholder text
     // — which is worse than any imperfect answer.
     if (trimmed.length > 50) {
-        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+        return {
+            valid: true,
+            correctedContent: trimmed,
+            autoCorrected: normalized.changed,
+            issues: normalized.changed ? ['normalized_coding_markdown_fences'] : [],
+        };
     }
 
     // Only reject truly empty or trivially short responses
@@ -266,30 +272,67 @@ function validateStructuredAnswer(content: string): ActionOutputValidationResult
 }
 
 function validateDirectAnswer(content: string): ActionOutputValidationResult {
-    const trimmed = content.trim();
+    const normalized = normalizeCodingMarkdown(content);
+    const trimmed = normalized.text.trim();
     return {
         valid: Boolean(trimmed),
         correctedContent: trimmed,
-        autoCorrected: false,
-        issues: trimmed ? [] : ['empty_output'],
+        autoCorrected: normalized.changed,
+        issues: trimmed ? (normalized.changed ? ['normalized_coding_markdown_fences'] : []) : ['empty_output'],
     };
 }
 
+function normalizeCodingMarkdown(content: string): { text: string; changed: boolean } {
+    let text = content.replace(/\r\n?/g, '\n').trim();
+    const original = text;
+    const languageTag = '(?:c|cpp|c\\+\\+|c#|csharp|c\\s*sharp|python|py|javascript|java\\s*script|js|typescript|type\\s*script|ts|node(?:\\.js)?|node\\s*js|nodejs|java|go|golang|rust|ruby|kotlin|swift|scala|php|dart|r|matlab|sql|mysql|postgres|bash|shell|sh|powershell)';
+    const inlineTwoTickOpen = new RegExp(`(^|[\\s:])\`\`[ \\t]*(${languageTag})[ \\t]+(?=\\S)`, 'gi');
+    const inlineTripleOpen = new RegExp(`(^|[\\s:])\`\`\`[ \\t]*(${languageTag})[ \\t]+(?=\\S)`, 'gi');
+
+    text = text
+        .replace(/(^|\n)([ \t]*)\*{0,2}(Problem|Approach|Complexity|Solution):\*{0,2}[ \t]*/gi, (_match, lineStart, indent, title) => {
+            return `${lineStart}${indent}**${title}:**\n`;
+        })
+        .replace(/(^|\n)([ \t]*)```([A-Za-z][A-Za-z0-9_#+.-]*)[ \t]+(?=\S)/g, '$1$2```$3\n')
+        .replace(/(^|\n)([ \t]*)``([A-Za-z][A-Za-z0-9_#+.-]*)[ \t]*/g, '$1$2```$3\n')
+        .replace(inlineTripleOpen, (_match, prefix, lang) => `${prefix}\`\`\`${lang}\n`)
+        .replace(inlineTwoTickOpen, (_match, prefix, lang) => `${prefix}\`\`\`${lang}\n`)
+        .replace(/\n[ \t]*``[ \t]*(?=\n|$)/g, '\n```');
+
+    const fenceCount = (text.match(/```/g) || []).length;
+    if (fenceCount % 2 === 1) {
+        text = `${text.replace(/[ \t]*`{1,2}[ \t]*$/, '').trimEnd()}\n\`\`\``;
+    }
+
+    return { text: text.trim(), changed: text.trim() !== original };
+}
+
 function validateCodingInterviewAnswer(content: string): ActionOutputValidationResult {
-    const trimmed = content.trim();
+    const normalized = normalizeCodingMarkdown(content);
+    const trimmed = normalized.text.trim();
     const hasCodeBlock = /```[\s\S]+?```/.test(trimmed);
-    const hasApproach = /\*\*approach\*\*|^approach:/im.test(trimmed);
-    const hasComplexity = /\*\*complexity\*\*|^complexity:/im.test(trimmed);
+    const hasApproach = /\*\*approach:?\*\*|^approach:/im.test(trimmed);
+    const hasComplexity = /\*\*complexity:?\*\*|^complexity:/im.test(trimmed);
 
     if (hasCodeBlock && (hasApproach || hasComplexity || trimmed.length > 200)) {
-        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+        return {
+            valid: true,
+            correctedContent: trimmed,
+            autoCorrected: normalized.changed,
+            issues: normalized.changed ? ['normalized_coding_markdown_fences'] : [],
+        };
     }
 
     if (hasCodeBlock) {
-        return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+        return {
+            valid: true,
+            correctedContent: trimmed,
+            autoCorrected: normalized.changed,
+            issues: normalized.changed ? ['normalized_coding_markdown_fences'] : [],
+        };
     }
 
-    if (trimmed.length > 120 && !hasCodeBlock) {
+    if (trimmed.length > 40 && !hasCodeBlock) {
         return {
             valid: false,
             correctedContent: trimmed,
@@ -339,7 +382,8 @@ function validateSystemDesignInterviewAnswer(content: string): ActionOutputValid
 }
 
 function validateCodingScreenScan(content: string): ActionOutputValidationResult {
-    const trimmed = content.trim();
+    const normalized = normalizeCodingMarkdown(content);
+    const trimmed = normalized.text.trim();
     // Lenient validation: accept the response if it has meaningful content.
     // The old strict validation was rejecting real LLM answers and replacing
     // them with template placeholder text — which is worse than any imperfect answer.
@@ -351,8 +395,8 @@ function validateCodingScreenScan(content: string): ActionOutputValidationResult
         return {
             valid: true,
             correctedContent: trimmed,
-            autoCorrected: false,
-            issues: [],
+            autoCorrected: normalized.changed,
+            issues: normalized.changed ? ['normalized_coding_markdown_fences'] : [],
         };
     }
 
@@ -436,11 +480,15 @@ export function validateActionOutput(
 
 export function buildRepairInstruction(intent: UnifiedActionIntent, issues: string[]): string {
     const architectureJsonRepair = issues.some((issue) => issue.startsWith('system_design_architecture_json') || issue === 'system_design_missing_fenced_architecture_json');
+    const codingRepair = issues.some((issue) => issue === 'coding_missing_code_block');
     return [
         `The previous draft violated the output contract for intent "${intent}".`,
         `Fix these issues: ${issues.join(', ')}.`,
         architectureJsonRepair
             ? 'For system design answers, include one fenced ```architecture_json``` block with valid JSON only. MINIMUM 12 nodes required. Simple systems need 12+ nodes, medium production systems need 20+ nodes, FAANG-scale systems need 35-60+ nodes. Each node requires id, label, kind and should include technology, purpose, layer, latency, failureMode. Each edge requires source, target and should include label, protocol, latency. Kinds: client, gateway, service, database, cache, queue, storage, external. Include client, edge/gateway, core services, async, data, cache, security, and observability layers. Do not use Mermaid.'
+            : '',
+        codingRepair
+            ? 'For coding answers, include the complete runnable solution inside one fenced markdown code block. Use exactly three backticks: opening fence like ```c on its own line, code on following lines, closing fence ``` on its own line. Never use two backticks or inline code for the solution.'
             : '',
         'Return only the corrected final answer.',
         'Do not explain the correction.',

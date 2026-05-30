@@ -1104,7 +1104,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     finalizedTranscriptRef.current.slice(-transcriptWindow),
                     [
                         'RESPONSE RULES:',
-                        '- Coding / DSA: Problem, Approach, Complexity, Solution with fenced code.',
+                        '- Coding / DSA: Problem, Approach, Complexity, Solution with one fenced code block.',
+                        '- Coding fence rules: opening line ```c or detected language, code on following lines, closing line ```; never two backticks or inline solution code.',
                         '- System design: concise 10-section architecture answer with exactly one ```architecture_json``` block; never Mermaid.',
                         '- architecture_json rules: valid JSON only, no comments, no trailing commas, exact opening fence ```architecture_json and exact closing fence ```.',
                         '- architecture_json node schema: {"id":"","label":"","kind":"","technology":"","purpose":"","layer":"","latency":"","failureMode":""}. Edge schema: {"source":"","target":"","label":"","protocol":"","latency":""}.',

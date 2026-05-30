@@ -14,6 +14,7 @@ import {
     type DetectedQuestionType,
     type IntentState,
 } from '../../src/lib/overlay/overlayIntent.ts';
+import { looksLikeCodingInterviewQuestion } from '../intelligence/codingQuestionHeuristics.ts';
 
 function classifyRolling(segments: string[], initial: DetectedQuestionType = 'general'): DetectedQuestionType {
     let current = initial;
@@ -80,6 +81,122 @@ test('loose intent catches casual coding phrasing', () => {
     const text = 'how would you solve this with an array';
     const { nextType } = detectQuestionType(text, 'general', 'general');
     assert.equal(nextType, 'coding');
+});
+
+test('casual write-me DSA prompts switch to coding', () => {
+    for (const text of [
+        'dsa write me merge sort in c',
+        'write me a solution for two sum',
+        'give me code for reverse linked list in c',
+        'create a program for quick sort',
+        'solve this in js for leetcode',
+        'codeforces style solution in c++',
+        'write accepted answer in kotlin for hacker rank',
+        'give me node.js solution for valid parentheses',
+        'gfg solution using java',
+        'atcoder answer in rust',
+    ]) {
+        assert.equal(detectQuestionType(text, 'general', 'general').nextType, 'coding', text);
+        assert.equal(looksLikeCodingInterviewQuestion(text), true, text);
+    }
+});
+
+test('interviewer STT coding prompts switch to coding without exact coding keyword', () => {
+    for (const text of [
+        'can you write a program to check palindrome',
+        'could you implement the logic for longest substring',
+        'please complete the function and return the array',
+        'given an array of integers return the maximum sum',
+        'take input from stdin and print output for all test cases',
+        'start with the function signature and then dry run it',
+        'now solve valid parentheses using stack',
+        'find duplicate number in the list',
+    ]) {
+        assert.equal(detectQuestionType(text, 'general', 'general').nextType, 'coding', text);
+        assert.equal(looksLikeCodingInterviewQuestion(text), true, text);
+    }
+});
+
+test('named DSA problem titles switch buttons to coding', () => {
+    for (const text of [
+        'n queen',
+        'n queens in c',
+        'lru cache',
+        'word ladder',
+        'coin change',
+        'trapping rain water',
+        'rotting oranges',
+        'clone graph',
+        'sudoku solver',
+        'house robber',
+        'koko eating bananas',
+        'merge k sorted lists',
+        'topological sort',
+    ]) {
+        assert.equal(detectQuestionType(text, 'general', 'general').nextType, 'coding', text);
+        assert.equal(looksLikeCodingInterviewQuestion(text), true, text);
+    }
+});
+
+test('DSA topic categories switch buttons to coding', () => {
+    const topics = [
+        'arrays',
+        'strings',
+        'hashing hashmap hashset',
+        'two pointers',
+        'sliding window',
+        'prefix sum',
+        'sorting',
+        'greedy algorithms',
+        'recursion',
+        'backtracking',
+        'linked list',
+        'stack',
+        'queue',
+        'monotonic stack',
+        'binary search',
+        'trees',
+        'binary trees',
+        'binary search trees bst',
+        'heap priority queue',
+        'trie',
+        'graphs',
+        'bfs breadth first search',
+        'dfs depth first search',
+        'topological sort',
+        'union find disjoint set dsu',
+        'shortest path algorithms',
+        'minimum spanning tree mst',
+        'dynamic programming dp',
+        '1d dynamic programming',
+        '2d dynamic programming',
+        'knapsack dp',
+        'interval dp',
+        'bit manipulation',
+        'bitmasking',
+        'math number theory',
+        'matrix grid problems',
+        'geometry',
+        'segment tree',
+        'fenwick tree binary indexed tree',
+        'memoization',
+        'monotonic queue',
+        'divide and conquer',
+        'simulation',
+        'coding design problems',
+        'string matching algorithms',
+        'game theory',
+        'reservoir sampling',
+        'randomized algorithms',
+        'line sweep',
+        'computational geometry',
+    ];
+
+    for (const topic of topics) {
+        const text = `solve ${topic} problem`;
+        assert.equal(detectQuestionType(text, 'general', 'general').nextType, 'coding', topic);
+        assert.equal(looksLikeCodingInterviewQuestion(text), true, topic);
+    }
 });
 
 test('loose intent catches partial system design phrasing', () => {
