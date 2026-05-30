@@ -1175,3 +1175,114 @@ html[data-platform="linux"] body {
     box-shadow: 0 0 10px rgba(37, 99, 235, 0.16);
   }
 }
+
+/* ── Launcher hero ambient studio light ─────────────────────────────────── */
+@keyframes launcher-studio-glow {
+  0%, 100% {
+    opacity: 0.86;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.075);
+  }
+}
+
+@keyframes launcher-studio-sweep {
+  0%, 100% {
+    opacity: 0.58;
+    transform: translateX(-58%) scaleX(0.88);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-42%) scaleX(1.18);
+  }
+}
+
+@keyframes launcher-glow-rim {
+  0% {
+    opacity: 0.18;
+    transform: translateX(-62%) scaleX(0.74);
+  }
+  45% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0.18;
+    transform: translateX(-38%) scaleX(1.02);
+  }
+}
+
+@keyframes launcher-left-cosmic {
+  0%, 100% {
+    opacity: 0.58;
+    transform: translate3d(-8px, 2px, 0) scale(0.96);
+  }
+  50% {
+    opacity: 0.96;
+    transform: translate3d(18px, -4px, 0) scale(1.06);
+  }
+}
+
+@keyframes launcher-top-cosmic {
+  0%, 100% {
+    opacity: 0.42;
+    transform: translate3d(-22px, 0, 0) scaleX(0.94);
+  }
+  50% {
+    opacity: 0.82;
+    transform: translate3d(22px, 8px, 0) scaleX(1.08);
+  }
+}
+
+@keyframes launcher-top-right-cosmic {
+  0%, 100% {
+    opacity: 0.48;
+    transform: translate3d(20px, -4px, 0) scale(0.96);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate3d(-14px, 10px, 0) scale(1.07);
+  }
+}
+
+.launcher-hero-studio-glow {
+  animation: launcher-studio-glow 5.8s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+.launcher-hero-studio-sweep {
+  animation: launcher-studio-sweep 5.6s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+.launcher-hero-glow-rim {
+  animation: launcher-glow-rim 4.8s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+.launcher-hero-left-cosmic {
+  animation: launcher-left-cosmic 6.4s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+.launcher-hero-top-cosmic {
+  animation: launcher-top-cosmic 8s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+.launcher-hero-top-right-cosmic {
+  animation: launcher-top-right-cosmic 6.8s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-hero-studio-glow,
+  .launcher-hero-studio-sweep,
+  .launcher-hero-glow-rim,
+  .launcher-hero-left-cosmic,
+  .launcher-hero-top-cosmic,
+  .launcher-hero-top-right-cosmic {
+    animation: none;
+  }
+}

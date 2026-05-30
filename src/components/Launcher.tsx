@@ -868,16 +868,70 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                     aria-hidden="true"
                                     className="pointer-events-none absolute inset-0 overflow-hidden"
                                 >
+                                    <div
+                                        aria-hidden="true"
+                                        className="launcher-hero-studio-glow pointer-events-none absolute left-1/2 top-[86px] h-[330px] w-[min(1120px,94vw)] -translate-x-1/2 rounded-[60px] blur-[28px]"
+                                        style={{
+                                            background: isLight
+                                                ? 'radial-gradient(ellipse at 50% 54%, rgba(255,255,255,0.62) 0%, rgba(186,230,253,0.34) 30%, rgba(216,180,254,0.26) 52%, rgba(253,186,116,0.16) 70%, transparent 84%)'
+                                                : 'radial-gradient(ellipse at 50% 54%, rgba(255,255,255,0.22) 0%, rgba(125,211,252,0.24) 28%, rgba(168,85,247,0.22) 54%, rgba(251,146,60,0.16) 72%, transparent 86%)',
+                                        }}
+                                    />
+                                    <div
+                                        aria-hidden="true"
+                                        className="launcher-hero-studio-sweep pointer-events-none absolute left-1/2 top-[170px] h-[170px] w-[min(980px,82vw)] -translate-x-1/2 rounded-full blur-[54px]"
+                                        style={{
+                                            background: isLight
+                                                ? 'linear-gradient(90deg, transparent 0%, rgba(125,211,252,0.34) 18%, rgba(255,255,255,0.62) 44%, rgba(216,180,254,0.34) 66%, rgba(253,186,116,0.24) 84%, transparent 100%)'
+                                                : 'linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.26) 18%, rgba(255,255,255,0.30) 44%, rgba(168,85,247,0.28) 66%, rgba(251,146,60,0.20) 84%, transparent 100%)',
+                                        }}
+                                    />
+                                    <div
+                                        aria-hidden="true"
+                                        className="launcher-hero-glow-rim pointer-events-none absolute left-1/2 top-[122px] h-[210px] w-[min(1040px,90vw)] -translate-x-1/2 rounded-[44px] blur-[18px]"
+                                        style={{
+                                            background: isLight
+                                                ? 'linear-gradient(110deg, transparent 0%, rgba(125,211,252,0.16) 22%, rgba(255,255,255,0.46) 46%, rgba(216,180,254,0.22) 66%, rgba(253,186,116,0.14) 82%, transparent 100%)'
+                                                : 'linear-gradient(110deg, transparent 0%, rgba(34,211,238,0.14) 22%, rgba(255,255,255,0.28) 46%, rgba(192,132,252,0.22) 66%, rgba(251,146,60,0.13) 82%, transparent 100%)',
+                                        }}
+                                    />
+                                    <div
+                                        aria-hidden="true"
+                                        className="launcher-hero-left-cosmic pointer-events-none absolute left-[-8%] top-[38px] h-[270px] w-[460px] rounded-full blur-[46px]"
+                                        style={{
+                                            background: isLight
+                                                ? 'radial-gradient(circle at 36% 42%, rgba(255,255,255,0.46) 0%, rgba(125,211,252,0.34) 32%, rgba(216,180,254,0.22) 58%, transparent 78%)'
+                                                : 'radial-gradient(circle at 36% 42%, rgba(255,255,255,0.16) 0%, rgba(34,211,238,0.20) 32%, rgba(168,85,247,0.18) 58%, transparent 78%)',
+                                        }}
+                                    />
+                                    <div
+                                        aria-hidden="true"
+                                        className="launcher-hero-top-cosmic pointer-events-none absolute left-[22%] top-[-96px] h-[230px] w-[620px] rounded-full blur-[52px]"
+                                        style={{
+                                            background: isLight
+                                                ? 'linear-gradient(90deg, transparent 0%, rgba(186,230,253,0.34) 24%, rgba(255,255,255,0.44) 50%, rgba(216,180,254,0.26) 78%, transparent 100%)'
+                                                : 'linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.18) 24%, rgba(255,255,255,0.16) 50%, rgba(192,132,252,0.18) 78%, transparent 100%)',
+                                        }}
+                                    />
+                                    <div
+                                        aria-hidden="true"
+                                        className="launcher-hero-top-right-cosmic pointer-events-none absolute right-[-10%] top-[-84px] h-[285px] w-[520px] rounded-full blur-[48px]"
+                                        style={{
+                                            background: isLight
+                                                ? 'radial-gradient(circle at 42% 54%, rgba(255,255,255,0.42) 0%, rgba(216,180,254,0.30) 30%, rgba(253,186,116,0.24) 54%, rgba(125,211,252,0.18) 72%, transparent 84%)'
+                                                : 'radial-gradient(circle at 42% 54%, rgba(255,255,255,0.14) 0%, rgba(168,85,247,0.24) 30%, rgba(251,146,60,0.20) 54%, rgba(34,211,238,0.12) 72%, transparent 84%)',
+                                        }}
+                                    />
                                     <div className={`absolute left-1/2 top-[90px] h-[360px] w-[min(1080px,92vw)] -translate-x-1/2 rounded-[56px] blur-[34px] ${
                                         isLight
-                                            ? 'bg-[radial-gradient(ellipse_at_center,rgba(148,163,184,0.44),rgba(203,213,225,0.28)_44%,transparent_74%)]'
-                                            : 'bg-[radial-gradient(ellipse_at_center,rgba(203,213,225,0.30),rgba(100,116,139,0.24)_46%,transparent_76%)]'
+                                            ? 'bg-[radial-gradient(ellipse_at_center,rgba(186,230,253,0.34),rgba(216,180,254,0.20)_42%,transparent_74%)]'
+                                            : 'bg-[radial-gradient(ellipse_at_center,rgba(56,189,248,0.20),rgba(168,85,247,0.18)_46%,transparent_76%)]'
                                     }`} />
                                     <div className={`absolute left-[13%] top-[132px] h-[210px] w-[420px] rounded-full blur-[42px] ${
-                                        isLight ? 'bg-slate-300/36' : 'bg-slate-300/20'
+                                        isLight ? 'bg-cyan-200/28' : 'bg-cyan-300/16'
                                     }`} />
                                     <div className={`absolute right-[7%] top-[118px] h-[240px] w-[470px] rounded-full blur-[44px] ${
-                                        isLight ? 'bg-slate-400/34' : 'bg-slate-200/18'
+                                        isLight ? 'bg-orange-200/24' : 'bg-orange-300/16'
                                     }`} />
                                 </div>
                                 <div className="relative z-10 max-w-4xl mx-auto space-y-6">
@@ -1074,7 +1128,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                     </div>
 
                                     {/* 2. Hero Section Cards */}
-                                    <div className="relative grid grid-cols-1 md:grid-cols-3 gap-3 h-[228px]">
+                                    <div className="relative isolate grid grid-cols-1 md:grid-cols-3 gap-3 h-[228px]">
                                         <div className="md:col-span-2 h-full">
                                             <div className="relative h-full overflow-hidden">
                                                 <AnimatePresence mode="wait">
@@ -1113,37 +1167,37 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
 
                                         {/* Right Secondary Card */}
-                                        <div className="md:col-span-1 rounded-xl overflow-hidden bg-bg-elevated relative group flex flex-col items-center pt-6 text-center">
-                                            {/* Backdrop Image */}
-                                            <div className="absolute inset-0">
-                                                <img src={calender} alt="" className="w-full h-full object-cover opacity-100 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] translate-x--1 translate-y-[1px] scale-105 group-hover:scale-[1.07]" />
-                                                <div className={`absolute inset-0 ${isLight ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.02))]' : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.24),rgba(2,6,23,0.08))]'}`} />
-                                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(129,140,248,0.28),transparent_34%),radial-gradient(circle_at_50%_70%,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.12),transparent_36%)] opacity-95" />
-                                                <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16),rgba(255,255,255,0))] opacity-40" />
-                                            </div>
+                                        <div className="md:col-span-1 h-full rounded-xl overflow-hidden bg-bg-elevated relative group flex flex-col items-center pt-6 text-center">
+                                                {/* Backdrop Image */}
+                                                <div className="absolute inset-0">
+                                                    <img src={calender} alt="" className="w-full h-full object-cover opacity-100 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] translate-x--1 translate-y-[1px] scale-105 group-hover:scale-[1.07]" />
+                                                    <div className={`absolute inset-0 ${isLight ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.02))]' : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.24),rgba(2,6,23,0.08))]'}`} />
+                                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(129,140,248,0.28),transparent_34%),radial-gradient(circle_at_50%_70%,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.12),transparent_36%)] opacity-95" />
+                                                    <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16),rgba(255,255,255,0))] opacity-40" />
+                                                </div>
 
-                                            {/* Content Layer */}
-                                            <div className="relative z-10 w-full flex flex-col items-center h-full">
-                                                <h3 className="text-[19px] leading-tight mb-4 tracking-[-0.02em]">
-                                                    {isCalendarConnected ? (
-                                                        <>
-                                                            <span className="block font-semibold text-white">Calendar linked</span>
-                                                            <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">Events synced</span>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <span className="block font-semibold text-white">Link your calendar to</span>
-                                                            <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">see upcoming events</span>
-                                                        </>
-                                                    )}
-                                                </h3>
+                                                {/* Content Layer */}
+                                                <div className="relative z-10 w-full flex flex-col items-center h-full">
+                                                    <h3 className="text-[19px] leading-tight mb-4 tracking-[-0.02em]">
+                                                        {isCalendarConnected ? (
+                                                            <>
+                                                                <span className="block font-semibold text-white">Calendar linked</span>
+                                                                <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">Events synced</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span className="block font-semibold text-white">Link your calendar to</span>
+                                                                <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">see upcoming events</span>
+                                                            </>
+                                                        )}
+                                                    </h3>
 
-                                                <ConnectCalendarButton
-                                                    className="-translate-x-0.5"
-                                                    onConnect={() => setIsCalendarConnected(true)}
-                                                />
+                                                    <ConnectCalendarButton
+                                                        className="-translate-x-0.5"
+                                                        onConnect={() => setIsCalendarConnected(true)}
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
                                     </div>
                                 </div>
                             </section>
