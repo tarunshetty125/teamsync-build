@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { categorizeSttError, type SttErrorCategory } from '../../lib/sttErrorMapper';
 import ChannelCard from './ChannelCard';
@@ -78,6 +78,23 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
     const displayText = text?.trim() ?? '';
     const quoted = displayText ? `"${displayText}"` : '';
     const trimmedSpeakerLabel = speakerLabel?.trim() ?? '';
+    const proV2Shape = useMemo(() => {
+        const shouldUseWide =
+            isProV2 &&
+            (
+                anyFailed ||
+                anyReconnecting ||
+                displayText.length > 74 ||
+                /\s{2,}·\s{2,}/.test(displayText)
+            );
+
+        return {
+            tone: shouldUseWide ? 'wide' : 'normal',
+            maxWidth: shouldUseWide ? 'min(100%, 940px)' : 'min(100%, 620px)',
+            paddingClass: shouldUseWide ? 'w-full px-5 py-2.5' : 'w-full px-4 py-2',
+            radius: shouldUseWide ? 26 : 999,
+        };
+    }, [anyFailed, anyReconnecting, displayText, isProV2]);
     const speakerToneClass = (() => {
         const lower = trimmedSpeakerLabel.toLowerCase();
         if (lower === 'interviewer') {
@@ -94,15 +111,14 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
             display: 'flex',
             justifyContent: 'center',
             width: '100%',
+            margin: '0 auto',
         }
         : {};
 
     const shellStyle: React.CSSProperties = isProV2
         ? {
             width: '100%',
-            maxWidth: '100%',
             padding: 0,
-            borderRadius: 999,
             border: '1px solid rgba(255,255,255,0.14)',
             background: 'linear-gradient(180deg, rgba(22,22,26,0.72) 0%, rgba(15,15,18,0.62) 100%)',
             boxShadow: '0 14px 28px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 rgba(255,255,255,0.03)',
@@ -111,17 +127,45 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
             overflow: 'hidden',
         }
         : {};
+    const proV2Spring = {
+        type: 'spring' as const,
+        stiffness: 420,
+        damping: 34,
+        mass: 0.82,
+    };
 
     return (
-        <div className="relative w-full" style={rootStyle}>
-            <div
+        <motion.div
+            className="relative w-full"
+            style={rootStyle}
+            layout={isProV2 ? 'position' : false}
+        >
+            <motion.div
+                layout={isProV2}
+                data-transcript-shape={isProV2 ? proV2Shape.tone : undefined}
                 className="relative w-full overflow-hidden"
                 style={{ ...shellStyle, ...stateSurface }}
+                animate={isProV2 ? {
+                    maxWidth: proV2Shape.maxWidth,
+                    borderRadius: proV2Shape.radius,
+                    scaleX: proV2Shape.tone === 'wide' ? [1, 1.018, 0.996, 1] : [1, 0.992, 1.006, 1],
+                    scaleY: proV2Shape.tone === 'wide' ? [1, 0.992, 1.006, 1] : [1, 1.006, 0.998, 1],
+                } : undefined}
+                transition={isProV2 ? {
+                    maxWidth: proV2Spring,
+                    borderRadius: proV2Spring,
+                    scaleX: { duration: 0.52, ease: [0.16, 1, 0.3, 1] },
+                    scaleY: { duration: 0.52, ease: [0.16, 1, 0.3, 1] },
+                } : undefined}
             >
                 {anyFailed && <div className="absolute inset-0 bg-red-500/10 stt-pulse-red" />}
                 {anyReconnecting && !anyFailed && <div className="absolute inset-0 bg-amber-500/10 stt-pulse-amber" />}
 
-                <div className={isCompactStrip ? 'w-fit mx-auto pt-1 pb-1 px-3' : isProV2 ? 'w-full px-4 py-2' : 'w-[90%] mx-auto pt-2 pb-1'}>
+                <motion.div
+                    layout={isProV2}
+                    className={isCompactStrip ? 'w-fit mx-auto pt-1 pb-1 px-3' : isProV2 ? proV2Shape.paddingClass : 'w-[90%] mx-auto pt-2 pb-1'}
+                    transition={isProV2 ? proV2Spring : undefined}
+                >
 
                     {/* ── Normal transcript pill ── */}
                     {isNormal && (
@@ -131,7 +175,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                 initial={{ opacity: 0, y: 4 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -4 }}
-                                transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
+                                transition={isProV2 ? { type: 'spring', stiffness: 460, damping: 32, mass: 0.7 } : { duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
                                 className={`flex items-center gap-2 min-h-[28px] ${isProV2 ? 'w-full' : ''}`}
                             >
                                 {/* Status dot: green+pulse when waiting, grey when AI responded */}
@@ -196,7 +240,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                             </span>
                         </span>
                     )}
-                </div>
+                </motion.div>
 
                 {/* Error chips row */}
                 {(anyFailed || anyReconnecting) && (
@@ -254,7 +298,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                         </span>
                     </div>
                 )}
-            </div>
+            </motion.div>
 
             {/* Expanded diagnostics panel */}
             {expanded && (
@@ -378,7 +422,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                     </div>
                 </motion.div>
             )}
-        </div>
+        </motion.div>
     );
 };
 

@@ -116,7 +116,6 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
                 window.requestAnimationFrame(() => {
                     fitView({
                         padding: viewportSettings.padding,
-                        duration: 420,
                         minZoom: viewportSettings.minZoom,
                         maxZoom: viewportSettings.maxZoom,
                     });
@@ -157,6 +156,7 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
                     fitView
+                    onlyRenderVisibleElements
                     minZoom={viewportSettings.minZoom}
                     maxZoom={viewportSettings.maxZoom}
                     defaultViewport={{ x: 0, y: 0, zoom: viewportSettings.defaultZoom }}

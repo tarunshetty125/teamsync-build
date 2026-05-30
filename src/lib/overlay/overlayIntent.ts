@@ -3,6 +3,8 @@
  * Regex-only — no LLM calls.
  */
 
+import { normalizeSystemDesignEntityTypos } from './systemDesignEntityNormalizer.ts';
+
 export type DetectedQuestionType =
     | 'coding'
     | 'system_design'
@@ -78,14 +80,8 @@ export function normalizeTranscript(text: string): string {
     t = t.replace(new RegExp(REGEX_NORMALIZE_BROKEN.source, 'g'), '$1$2');
     t = t
         .replace(/\bllf\b/g, 'lld')
-        .replace(/\bflip\s*krat\b|\bflipcart\b|\bfilpkart\b|\bflipkartt\b/g, 'flipkart')
-        .replace(/\bwhat\s*s?app\b|\bwatsapp\b|\bwhatsap\b/g, 'whatsapp')
-        .replace(/\binsta\s*gram\b|\binstgram\b/g, 'instagram')
-        .replace(/\bnetflx\b|\bnetflex\b/g, 'netflix')
-        .replace(/\byoutub\b/g, 'youtube')
-        .replace(/\bswigy\b/g, 'swiggy')
-        .replace(/\bzomatto\b/g, 'zomato')
         .replace(/\breal time\b/g, 'real-time');
+    t = normalizeSystemDesignEntityTypos(t, { casing: 'lower' });
     t = t.replace(/[\u201C\u201D\u2018\u2019]/g, '"');
     t = t.replace(/[\u2013\u2014]/g, '-');
     t = t.replace(/[^a-z0-9\s\-?:/]/g, ' ');

@@ -1228,12 +1228,6 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             const scanMode = getScreenScanModeForSessionMode(
                 session.currentMode as OverlaySessionMode,
             );
-            console.debug('[V2][ScreenScan] handleScreenScan', {
-                requestId,
-                scanMode,
-                screenshotPath: data.path,
-                hasPreview: Boolean(data.preview),
-            });
             window.electronAPI.runScreenAnalysis({
                 requestId,
                 image: data.path,
@@ -1315,34 +1309,6 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             canGoNext: safeIndex >= 0 && safeIndex < total - 1,
         };
     }, [activeResponseIndex, responseHistory.length]);
-
-    useEffect(() => {
-        console.debug('[V2][Bridge] responseHistory recomputed', {
-            totalMessages: messages.length,
-            historySize: responseHistory.length,
-            activeResponseIndex: responseNavigation.activeIndex,
-            activeResponseId: activeResponse?.id ?? null,
-            activeResponseRequestId: activeResponse?.requestId ?? null,
-            activeResponseIntent: activeResponse?.intent ?? null,
-            activeResponseSource: activeResponse?.source ?? null,
-            activeResponseIsStreaming: activeResponse?.isStreaming ?? null,
-            activeResponseTextLength: activeResponse?.text.length ?? 0,
-            latestResponseId: latestResponse?.id ?? null,
-            isProcessing,
-        });
-    }, [
-        activeResponse?.id,
-        activeResponse?.intent,
-        activeResponse?.isStreaming,
-        activeResponse?.requestId,
-        activeResponse?.source,
-        activeResponse?.text.length,
-        isProcessing,
-        latestResponse?.id,
-        messages.length,
-        responseHistory.length,
-        responseNavigation.activeIndex,
-    ]);
 
     const frozenTranscriptUiSnapshot = frozenTranscriptUiSnapshotRef.current;
     const visibleRollingTranscript = isTranscriptPaused

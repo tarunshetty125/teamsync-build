@@ -4,16 +4,20 @@
 // Extracted from QuestionUnderstandingV2, ResponseDepthEstimator, and
 // ContextPriorityEngine to eliminate code duplication (audit finding H4).
 
+import { normalizeSystemDesignEntityTypos } from '../../src/lib/overlay/systemDesignEntityNormalizer.ts';
+
 /**
  * Normalize a question string for pattern matching.
  * Lowercases, collapses abbreviation periods, strips special chars,
  * and normalizes whitespace.
  */
 export function normalizeQuestion(text: string): string {
-    return text
+    const normalized = text
         .toLowerCase()
         .replace(/(\w)\.\s+(\w)/g, '$1$2')
-        .replace(/[^\w\s+./?-]/g, ' ')
+        .replace(/[^\w\s+./?-]/g, ' ');
+
+    return normalizeSystemDesignEntityTypos(normalized, { casing: 'lower' })
         .replace(/\s+/g, ' ')
         .trim();
 }

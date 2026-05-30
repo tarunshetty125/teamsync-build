@@ -77,6 +77,10 @@ test('Pro V2 model selector has enough width for long dynamic model names', () =
 test('Pro V2 architecture diagrams expose working pan, zoom, and inner controls', () => {
     const canvas = read('src/components/pro-v2/architecture/ArchitectureCanvas.tsx');
     const css = read('src/components/pro-v2/pro-v2.css');
+    const architectureCss = css.slice(
+        css.indexOf('/* ── V2 Architecture Renderer'),
+        css.indexOf('.v2-architecture-parse-error'),
+    );
 
     assert.match(canvas, /function ArchitectureSkeletonContent/);
     assert.match(canvas, /!isLayoutReady \? \(/);
@@ -86,11 +90,40 @@ test('Pro V2 architecture diagrams expose working pan, zoom, and inner controls'
     assert.match(canvas, /position="top-right"/);
     assert.match(canvas, /panOnDrag=\{\[0, 1, 2\]\}/);
     assert.match(canvas, /zoomOnScroll/);
+    assert.match(canvas, /onlyRenderVisibleElements/);
+    assert.doesNotMatch(canvas, /duration: 420/);
     assert.match(canvas, /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
     assert.doesNotMatch(canvas, /onPointerDownCapture=\{\(event\) => event\.stopPropagation\(\)\}/);
     assert.doesNotMatch(canvas, /onWheelCapture=\{\(event\) => event\.stopPropagation\(\)\}/);
     assert.match(css, /\.v2-architecture-controls/);
     assert.match(css, /\.v2-architecture-shell \.react-flow__controls/);
+    assert.doesNotMatch(architectureCss, /drop-shadow/);
+    assert.doesNotMatch(architectureCss, /will-change: transform/);
+    assert.doesNotMatch(architectureCss, /backdrop-filter/);
+});
+
+test('Pro V2 streaming responses do not trigger resize bursts for every token', () => {
+    const shell = read('src/components/pro-v2/TeamSyncCluelyOverlay.tsx');
+    const contentRevisionBlock = shell.slice(
+        shell.indexOf('contentRevision: ['),
+        shell.indexOf('].join', shell.indexOf('contentRevision: [')),
+    );
+
+    assert.match(shell, /const activeResponseContentRevision = bridge\.activeResponse\?\.isStreaming/);
+    assert.match(shell, /\? 'streaming'/);
+    assert.match(contentRevisionBlock, /activeResponseContentRevision/);
+    assert.doesNotMatch(contentRevisionBlock, /activeResponse\?\.text\.length/);
+});
+
+test('Pro V2 rolling transcript supports smooth normal and wide pill shapes', () => {
+    const rollingTranscript = read('src/components/ui/RollingTranscript.tsx');
+
+    assert.match(rollingTranscript, /const proV2Shape = useMemo/);
+    assert.match(rollingTranscript, /tone: shouldUseWide \? 'wide' : 'normal'/);
+    assert.match(rollingTranscript, /data-transcript-shape=\{isProV2 \? proV2Shape\.tone : undefined\}/);
+    assert.match(rollingTranscript, /maxWidth: proV2Shape\.maxWidth/);
+    assert.match(rollingTranscript, /type: 'spring' as const/);
+    assert.match(rollingTranscript, /scaleX: proV2Shape\.tone === 'wide'/);
 });
 
 test('Streaming updates mutate the existing request entry rather than creating duplicate history rows', () => {

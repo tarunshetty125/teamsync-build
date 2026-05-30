@@ -17,6 +17,7 @@ import {
 import type { ScreenContentMode } from './llm';
 import { looksLikeCodingInterviewQuestion } from './intelligence/codingQuestionHeuristics';
 import { looksLikeSystemDesignInterviewQuestion } from './intelligence/systemDesignQuestionHeuristics';
+import { normalizeSystemDesignEntityTypos } from '../src/lib/overlay/systemDesignEntityNormalizer.ts';
 
 export type UnifiedActionIntent =
     | 'what_to_answer'
@@ -293,6 +294,20 @@ function buildDefaultQuestion(baseContext: BaseContextLayer, intent: UnifiedActi
             if (mode === 'coding') return 'Answer the latest coding question.';
             return 'Answer the latest interviewer question directly.';
     }
+}
+
+function shouldNormalizeSystemDesignQuestion(
+    question: string,
+    mode: SessionActionMode,
+    intent: UnifiedActionIntent
+): boolean {
+    if (mode === 'system_design' || intent === 'system_design_tradeoffs') return true;
+    return looksLikeSystemDesignInterviewQuestion(question);
+}
+
+function normalizeActionQuestion(question: string, mode: SessionActionMode, intent: UnifiedActionIntent): string {
+    if (!shouldNormalizeSystemDesignQuestion(question, mode, intent)) return question;
+    return normalizeSystemDesignEntityTypos(question);
 }
 
 function buildSessionModeDirective(mode: SessionActionMode): string {
@@ -1221,7 +1236,7 @@ export async function buildContextLayers({
     });
     const baseLayer = buildBaseContext(session);
     const defaultQuestion = buildDefaultQuestion(baseLayer, intent, mode);
-    const question = (() => {
+    const rawQuestion = (() => {
         if (intent === 'code_hint') {
             const sessionQuestion = session.getDetectedCodingQuestion();
             return buildCodeHintMessage(
@@ -1235,6 +1250,7 @@ export async function buildContextLayers({
         }
         return (message || defaultQuestion).trim();
     })();
+    const question = normalizeActionQuestion(rawQuestion, mode, intent);
     const transcript = buildTranscriptContext(session, intent, question, mode);
     const modeInstructions = buildModeContext(mode, { includeModeCustomContext: resolvedPolicy.includeModeCustomContext });
     const profileResult = await buildProfileContext(intent, profile, question, resolvedPolicy.resolvedProfilePreference);

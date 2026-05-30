@@ -77,6 +77,9 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         bridge.showTranscript ||
         bridge.sttInterviewerStatus !== 'connected' ||
         bridge.sttUserStatus !== 'connected';
+    const activeResponseContentRevision = bridge.activeResponse?.isStreaming
+        ? 'streaming'
+        : bridge.activeResponse?.text.length ?? 0;
 
     useV2OverlayResize({
         containerRef,
@@ -90,7 +93,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
             showTranscriptStrip,
             bridge.activeQuickActions.length,
             bridge.activeResponse?.id ?? 'none',
-            bridge.activeResponse?.text.length ?? 0,
+            activeResponseContentRevision,
             bridge.activeResponseIndex,
         ].join(':'),
     });

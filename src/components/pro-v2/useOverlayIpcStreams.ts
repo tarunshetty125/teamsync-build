@@ -70,14 +70,7 @@ function appendToken(
 
     ctx.setMessages((prev) => {
         const idx = prev.findIndex((msg) => msg.requestId === requestId);
-        if (idx < 0) {
-            console.warn('[V2][ScreenScan] appendToken missed message', {
-                requestId,
-                tokenLength: token.length,
-                knownRequestIds: prev.map((msg) => msg.requestId).filter(Boolean),
-            });
-            return prev;
-        }
+        if (idx < 0) return prev;
         const u = [...prev];
         const nextText = mergeStreamChunk(u[idx].text, token);
         u[idx] = { ...u[idx], text: nextText, isCode: nextText.includes('```') };
@@ -254,13 +247,6 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
                 window.electronAPI.onIntelligenceScreenScanResult((data: any) => {
                     if (ctx.isStalePayload(data._sessionId)) return;
                     const requestId = ctx.resolveIntentRequestId('screen_scan', data.requestId);
-                    console.debug('[V2][ScreenScan] result event', {
-                        incomingRequestId: data.requestId,
-                        resolvedRequestId: requestId,
-                        activeScreenScanRequestId: ctx.activeScreenScanRequestIdRef.current,
-                        answerLength: typeof data.answer === 'string' ? data.answer.length : 0,
-                        mode: data.mode,
-                    });
                     if (!requestId) return;
                     if (
                         ctx.activeScreenScanRequestIdRef.current &&
