@@ -863,8 +863,24 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                             {/* Top Section is now effectively static due to parent flex col */}
 
                             {/* TOP SECTION: Grey Background (Scrolls with content) */}
-                            <section className={`${isLight ? 'bg-bg-primary' : 'bg-bg-elevated'} px-8 pt-6 pb-8 border-b border-border-subtle shrink-0`}>
-                                <div className="max-w-4xl mx-auto space-y-6">
+                            <section className={`relative overflow-hidden ${isLight ? 'bg-bg-primary' : 'bg-bg-elevated'} px-8 pt-6 pb-8 border-b border-border-subtle shrink-0`}>
+                                <div
+                                    aria-hidden="true"
+                                    className="pointer-events-none absolute inset-0 overflow-hidden"
+                                >
+                                    <div className={`absolute left-1/2 top-[90px] h-[360px] w-[min(1080px,92vw)] -translate-x-1/2 rounded-[56px] blur-[34px] ${
+                                        isLight
+                                            ? 'bg-[radial-gradient(ellipse_at_center,rgba(148,163,184,0.44),rgba(203,213,225,0.28)_44%,transparent_74%)]'
+                                            : 'bg-[radial-gradient(ellipse_at_center,rgba(203,213,225,0.30),rgba(100,116,139,0.24)_46%,transparent_76%)]'
+                                    }`} />
+                                    <div className={`absolute left-[13%] top-[132px] h-[210px] w-[420px] rounded-full blur-[42px] ${
+                                        isLight ? 'bg-slate-300/36' : 'bg-slate-300/20'
+                                    }`} />
+                                    <div className={`absolute right-[7%] top-[118px] h-[240px] w-[470px] rounded-full blur-[44px] ${
+                                        isLight ? 'bg-slate-400/34' : 'bg-slate-200/18'
+                                    }`} />
+                                </div>
+                                <div className="relative z-10 max-w-4xl mx-auto space-y-6">
                                     {/* 1.5. Hero Header (Title + Controls + CTA) */}
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-4">
@@ -1058,7 +1074,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                     </div>
 
                                     {/* 2. Hero Section Cards */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 h-[228px]">
+                                    <div className="relative grid grid-cols-1 md:grid-cols-3 gap-3 h-[228px]">
                                         <div className="md:col-span-2 h-full">
                                             <div className="relative h-full overflow-hidden">
                                                 <AnimatePresence mode="wait">
