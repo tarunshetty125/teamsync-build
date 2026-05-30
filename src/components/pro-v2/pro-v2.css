@@ -775,7 +775,7 @@
 
 .v2-architecture-shell {
   width: 100%;
-  height: clamp(340px, 48vh, 500px);
+  height: clamp(350px, 50vh, 510px);
   margin: 12px 0 16px;
   overflow: hidden;
   position: relative;
@@ -1281,6 +1281,11 @@
   overflow-y: auto;
   overflow-x: auto;
   overscroll-behavior: contain;
+}
+
+.v2-response-scroll--system-design {
+  max-height: min(64vh, 540px);
+  padding: 10px 16px 24px 30px;
 }
 
 /* ── Response Source Pill ──────────────────────────────────── */

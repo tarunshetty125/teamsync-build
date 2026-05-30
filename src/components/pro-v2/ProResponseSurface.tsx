@@ -91,7 +91,15 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         [renderedResponse?.text],
     );
 
-  
+    const isSystemDesignResponse = useMemo(() => {
+        const text = renderedResponse?.text ?? '';
+        if (!text.trim()) return false;
+
+        return looksLikeSystemDesignResponse(text)
+            || /```[ \t]*(?:architecture_json|mermaid)\b/i.test(text)
+            || /\b(?:architecture diagram|system design)\b/i.test(text);
+    }, [renderedResponse?.text]);
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -158,7 +166,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
             {/* ── Response Body — dynamic height ── */}
             <div
                 ref={scrollContainerRef as React.RefObject<HTMLDivElement>}
-                className="v2-scroll-area v2-response-scroll"
+                className={`v2-scroll-area v2-response-scroll${isSystemDesignResponse ? ' v2-response-scroll--system-design' : ''}`}
             >
                 <AnimatePresence mode="wait">
                     {isProcessing && !renderedResponse?.text ? (

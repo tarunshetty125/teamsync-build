@@ -61,7 +61,7 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
     const [isLayoutReady, setIsLayoutReady] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
     const requestSeqRef = useRef(0);
-    const { fitView } = useReactFlow();
+    const { fitView, getViewport, setViewport } = useReactFlow();
     const viewportSettings = useMemo(() => getViewportSettings(diagram.nodes.length), [diagram.nodes.length]);
 
     const setDiagramInteraction = useCallback((active: boolean) => {
@@ -114,10 +114,18 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
                 })));
                 setIsLayoutReady(true);
                 window.requestAnimationFrame(() => {
-                    fitView({
+                    void fitView({
                         padding: viewportSettings.padding,
                         minZoom: viewportSettings.minZoom,
                         maxZoom: viewportSettings.maxZoom,
+                    });
+                    window.requestAnimationFrame(() => {
+                        const viewport = getViewport();
+                        void setViewport({
+                            ...viewport,
+                            x: viewport.x + 18,
+                            y: viewport.y + 16,
+                        }, { duration: 160 });
                     });
                 });
             })
@@ -131,7 +139,7 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
         };
         // diagramKey intentionally owns layout invalidation; diagram is the matching value for that fingerprint.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [diagramKey, fitView, onRenderError, viewportSettings.maxZoom, viewportSettings.minZoom, viewportSettings.padding]);
+    }, [diagramKey, fitView, getViewport, onRenderError, setViewport, viewportSettings.maxZoom, viewportSettings.minZoom, viewportSettings.padding]);
 
     return (
         <motion.div

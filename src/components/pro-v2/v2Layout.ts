@@ -6,10 +6,17 @@ export const V2_CONTAINER_PADDING = 24;
 export const V2_BAR_ONLY_WIDTH = 600;
 
 export const V2_RESPONSE_MIN_WIDTH = 480;
-export const V2_RESPONSE_MAX_WIDTH = 720;
+export const V2_RESPONSE_MAX_WIDTH = 760;
+
+function looksLikeWideSystemDesignResponse(text: string): boolean {
+    return /architecture_json/i.test(text)
+        || /```[ \t]*(?:architecture_json|mermaid)\b/i.test(text)
+        || /\b(?:architecture diagram|system design)\b/i.test(text);
+}
 
 export function resolveV2ResponseWidthPx(text?: string): number {
     if (!text?.trim()) return V2_RESPONSE_MIN_WIDTH;
+    if (looksLikeWideSystemDesignResponse(text)) return V2_RESPONSE_MAX_WIDTH;
 
     const len = text.length;
     let width = V2_RESPONSE_MIN_WIDTH;
@@ -40,4 +47,4 @@ export const V2_OVERLAY_WINDOW_MIN_WIDTH = V2_PANELS_WIDTH_MAX;
 
 /** Sensible initial height before the renderer measures content. */
 export const V2_OVERLAY_WINDOW_DEFAULT_HEIGHT = 520;
-export const V2_OVERLAY_WINDOW_MAX_HEIGHT = 560;
+export const V2_OVERLAY_WINDOW_MAX_HEIGHT = 680;

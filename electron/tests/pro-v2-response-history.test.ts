@@ -36,14 +36,24 @@ test('Pro V2 auto-selects new responses and exposes previous/next navigation sta
 test('Pro V2 renderer follows the selected history entry, including system design diagrams', () => {
     const shell = read('src/components/pro-v2/TeamSyncCluelyOverlay.tsx');
     const surface = read('src/components/pro-v2/ProResponseSurface.tsx');
+    const css = read('src/components/pro-v2/pro-v2.css');
+    const layout = read('src/components/pro-v2/v2Layout.ts');
 
     assert.match(shell, /activeResponse=\{bridge\.activeResponse\}/);
     assert.match(shell, /activeResponseIndex=\{bridge\.activeResponseIndex\}/);
     assert.match(surface, /activeResponse: V2Message \| null/);
     assert.match(surface, /const renderedResponse = activeResponse/);
+    assert.match(surface, /const isSystemDesignResponse = useMemo/);
+    assert.match(surface, /v2-response-scroll--system-design/);
     assert.match(surface, /text=\{renderedResponse\.text\}/);
     assert.match(surface, /key=\{`response-\$\{renderedResponse\.id\}`\}/);
     assert.match(surface, /<ArchitectureRenderer/);
+    assert.match(css, /\.v2-response-scroll--system-design/);
+    assert.match(css, /max-height: min\(64vh, 540px\)/);
+    assert.match(css, /padding: 10px 16px 24px 30px/);
+    assert.match(layout, /V2_RESPONSE_MAX_WIDTH = 760/);
+    assert.match(layout, /looksLikeWideSystemDesignResponse/);
+    assert.match(layout, /V2_OVERLAY_WINDOW_MAX_HEIGHT = 680/);
     assert.doesNotMatch(surface, /latestResponse: V2Message \| null/);
 });
 
@@ -83,6 +93,10 @@ test('Pro V2 architecture diagrams expose working pan, zoom, and inner controls'
     );
 
     assert.match(canvas, /function ArchitectureSkeletonContent/);
+    assert.match(canvas, /getViewport/);
+    assert.match(canvas, /setViewport/);
+    assert.match(canvas, /x: viewport\.x \+ 18/);
+    assert.match(canvas, /y: viewport\.y \+ 16/);
     assert.match(canvas, /!isLayoutReady \? \(/);
     assert.doesNotMatch(canvas, /if \(!isLayoutReady\) return <ArchitectureSkeleton/);
     assert.match(canvas, /Controls,/);
@@ -123,7 +137,11 @@ test('Pro V2 rolling transcript supports smooth normal and wide pill shapes', ()
     assert.match(rollingTranscript, /data-transcript-shape=\{isProV2 \? proV2Shape\.tone : undefined\}/);
     assert.match(rollingTranscript, /maxWidth: proV2Shape\.maxWidth/);
     assert.match(rollingTranscript, /type: 'spring' as const/);
-    assert.match(rollingTranscript, /scaleX: proV2Shape\.tone === 'wide'/);
+    assert.match(rollingTranscript, /useReducedMotion/);
+    assert.match(rollingTranscript, /paddingTop: proV2Shape\.padding\.top/);
+    assert.match(rollingTranscript, /key=\{`transcript-\$\{quoted\}`\}/);
+    assert.match(rollingTranscript, /filter: 'blur\(3px\)'/);
+    assert.doesNotMatch(rollingTranscript, /scaleX: proV2Shape\.tone === 'wide'/);
 });
 
 test('Streaming updates mutate the existing request entry rather than creating duplicate history rows', () => {

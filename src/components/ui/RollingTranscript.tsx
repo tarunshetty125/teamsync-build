@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion, type Transition } from 'framer-motion';
 import { categorizeSttError, type SttErrorCategory } from '../../lib/sttErrorMapper';
 import ChannelCard from './ChannelCard';
 
@@ -36,6 +36,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
 }) => {
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
+    const prefersReducedMotion = useReducedMotion();
 
     const intStatus = interviewerChannel?.status ?? 'connected';
     const micStatus = microphoneChannel?.status ?? 'connected';
@@ -90,9 +91,11 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
 
         return {
             tone: shouldUseWide ? 'wide' : 'normal',
-            maxWidth: shouldUseWide ? 'min(100%, 940px)' : 'min(100%, 620px)',
-            paddingClass: shouldUseWide ? 'w-full px-5 py-2.5' : 'w-full px-4 py-2',
-            radius: shouldUseWide ? 26 : 999,
+            maxWidth: shouldUseWide ? 940 : 620,
+            padding: shouldUseWide
+                ? { top: 10, right: 20, bottom: 10, left: 20 }
+                : { top: 8, right: 16, bottom: 8, left: 16 },
+            radius: shouldUseWide ? 24 : 999,
         };
     }, [anyFailed, anyReconnecting, displayText, isProV2]);
     const speakerToneClass = (() => {
@@ -125,14 +128,17 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
             backdropFilter: 'blur(8px) saturate(135%)',
             WebkitBackdropFilter: 'blur(8px) saturate(135%)',
             overflow: 'hidden',
+            transform: 'translateZ(0)',
         }
         : {};
     const proV2Spring = {
         type: 'spring' as const,
-        stiffness: 420,
-        damping: 34,
-        mass: 0.82,
+        duration: 0.34,
+        bounce: 0.08,
     };
+    const proV2TextTransition: Transition = prefersReducedMotion
+        ? { duration: 0.01 }
+        : { duration: 0.18, ease: [0.23, 1, 0.32, 1] };
 
     return (
         <motion.div
@@ -148,88 +154,110 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                 animate={isProV2 ? {
                     maxWidth: proV2Shape.maxWidth,
                     borderRadius: proV2Shape.radius,
-                    scaleX: proV2Shape.tone === 'wide' ? [1, 1.018, 0.996, 1] : [1, 0.992, 1.006, 1],
-                    scaleY: proV2Shape.tone === 'wide' ? [1, 0.992, 1.006, 1] : [1, 1.006, 0.998, 1],
+                    transform: 'translateZ(0)',
                 } : undefined}
-                transition={isProV2 ? {
-                    maxWidth: proV2Spring,
-                    borderRadius: proV2Spring,
-                    scaleX: { duration: 0.52, ease: [0.16, 1, 0.3, 1] },
-                    scaleY: { duration: 0.52, ease: [0.16, 1, 0.3, 1] },
-                } : undefined}
+                transition={isProV2 ? proV2Spring : undefined}
             >
                 {anyFailed && <div className="absolute inset-0 bg-red-500/10 stt-pulse-red" />}
                 {anyReconnecting && !anyFailed && <div className="absolute inset-0 bg-amber-500/10 stt-pulse-amber" />}
 
                 <motion.div
                     layout={isProV2}
-                    className={isCompactStrip ? 'w-fit mx-auto pt-1 pb-1 px-3' : isProV2 ? proV2Shape.paddingClass : 'w-[90%] mx-auto pt-2 pb-1'}
+                    className={isCompactStrip ? 'w-fit mx-auto pt-1 pb-1 px-3' : isProV2 ? 'w-full' : 'w-[90%] mx-auto pt-2 pb-1'}
+                    animate={isProV2 && !isCompactStrip ? {
+                        paddingTop: proV2Shape.padding.top,
+                        paddingRight: proV2Shape.padding.right,
+                        paddingBottom: proV2Shape.padding.bottom,
+                        paddingLeft: proV2Shape.padding.left,
+                    } : undefined}
                     transition={isProV2 ? proV2Spring : undefined}
                 >
 
                     {/* ── Normal transcript pill ── */}
                     {isNormal && (
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={displayText || 'empty'}
-                                initial={{ opacity: 0, y: 4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -4 }}
-                                transition={isProV2 ? { type: 'spring', stiffness: 460, damping: 32, mass: 0.7 } : { duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
-                                className={`flex items-center gap-2 min-h-[28px] ${isProV2 ? 'w-full' : ''}`}
-                            >
-                                {/* Status dot: green+pulse when waiting, grey when AI responded */}
-                                <motion.span
-                                    animate={{
-                                        backgroundColor: aiHasResponded
-                                            ? 'rgba(148, 163, 184, 0.6)'   // slate-400/60 — answered
-                                            : 'rgba(52, 211, 153, 0.85)',   // emerald-400/85 — waiting
-                                        scale: aiHasResponded ? 1 : [1, 1.35, 1],
-                                        opacity: aiHasResponded ? 0.55 : 1,
-                                    }}
-                                    transition={
-                                        aiHasResponded
-                                            ? { duration: 0.6, ease: [0.4, 0, 0.2, 1] }
-                                            : { scale: { repeat: Infinity, duration: 1.1, ease: 'easeInOut' }, backgroundColor: { duration: 0.6 } }
-                                    }
-                                    style={{
-                                        display: 'inline-block',
-                                        width: 7,
-                                        height: 7,
-                                        borderRadius: '50%',
-                                        flexShrink: 0,
-                                    }}
-                                />
+                        <motion.div
+                            layout={isProV2}
+                            className={`flex items-center gap-2 min-h-[28px] ${isProV2 ? 'w-full' : ''}`}
+                            transition={isProV2 ? proV2Spring : undefined}
+                        >
+                            {/* Status dot: green+pulse when waiting, grey when AI responded */}
+                            <motion.span
+                                animate={{
+                                    backgroundColor: aiHasResponded
+                                        ? 'rgba(148, 163, 184, 0.6)'   // slate-400/60 — answered
+                                        : 'rgba(52, 211, 153, 0.85)',   // emerald-400/85 — waiting
+                                    scale: aiHasResponded ? 1 : [1, 1.28, 1],
+                                    opacity: aiHasResponded ? 0.55 : 1,
+                                }}
+                                transition={
+                                    aiHasResponded
+                                        ? { duration: 0.32, ease: [0.23, 1, 0.32, 1] }
+                                        : { scale: { repeat: Infinity, duration: 1.4, ease: [0.77, 0, 0.175, 1] }, backgroundColor: { duration: 0.24 } }
+                                }
+                                style={{
+                                    display: 'inline-block',
+                                    width: 7,
+                                    height: 7,
+                                    borderRadius: '50%',
+                                    flexShrink: 0,
+                                }}
+                            />
 
-                                {/* Sentence text */}
-                                <div className="flex min-w-0 flex-1 items-center gap-2">
-                                    {trimmedSpeakerLabel ? (
-                                        <span className={`inline-flex max-w-[40%] items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] ${speakerToneClass}`}>
-                                            {trimmedSpeakerLabel}
-                                        </span>
-                                    ) : null}
-                                    {quoted ? (
-                                        <span
-                                            className={`min-w-0 flex-1 overflow-hidden text-[13px] italic leading-snug ${isProV2 ? 'whitespace-nowrap text-ellipsis' : 'whitespace-nowrap text-ellipsis'}`}
-                                            style={{
-                                                color: aiHasResponded
-                                                    ? 'var(--overlay-text-muted)'
-                                                    : 'var(--overlay-text-primary)',
-                                                transition: 'color 0.5s ease',
-                                                maxWidth: '100%',
-                                            }}
-                                            title={displayText}
-                                        >
-                                            {quoted}
-                                        </span>
-                                    ) : (
-                                        <span className="text-[13px] italic leading-snug text-[var(--overlay-text-muted)] opacity-40">
-                                            Listening…
-                                        </span>
-                                    )}
-                                </div>
-                            </motion.div>
-                        </AnimatePresence>
+                            {/* Sentence text */}
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                                {trimmedSpeakerLabel ? (
+                                    <span className={`inline-flex max-w-[40%] items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] ${speakerToneClass}`}>
+                                        {trimmedSpeakerLabel}
+                                    </span>
+                                ) : null}
+                                <span className="relative flex min-w-0 flex-1 items-center overflow-hidden">
+                                    <AnimatePresence mode="wait" initial={false}>
+                                        {quoted ? (
+                                            <motion.span
+                                                key={`transcript-${quoted}`}
+                                                initial={isProV2 && !prefersReducedMotion
+                                                    ? { opacity: 0, filter: 'blur(3px)', transform: 'translateY(4px)' }
+                                                    : { opacity: 0 }}
+                                                animate={isProV2
+                                                    ? { opacity: 1, filter: 'blur(0px)', transform: 'translateY(0px)' }
+                                                    : { opacity: 1 }}
+                                                exit={isProV2 && !prefersReducedMotion
+                                                    ? { opacity: 0, filter: 'blur(2px)', transform: 'translateY(-3px)' }
+                                                    : { opacity: 0 }}
+                                                transition={isProV2 ? proV2TextTransition : { duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
+                                                className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-ellipsis text-[13px] italic leading-snug"
+                                                style={{
+                                                    color: aiHasResponded
+                                                        ? 'var(--overlay-text-muted)'
+                                                        : 'var(--overlay-text-primary)',
+                                                    transition: 'color 240ms cubic-bezier(0.23, 1, 0.32, 1)',
+                                                    maxWidth: '100%',
+                                                    willChange: isProV2 ? 'opacity, transform, filter' : undefined,
+                                                }}
+                                                title={displayText}
+                                            >
+                                                {quoted}
+                                            </motion.span>
+                                        ) : (
+                                            <motion.span
+                                                key="transcript-empty"
+                                                initial={isProV2 && !prefersReducedMotion
+                                                    ? { opacity: 0, filter: 'blur(2px)', transform: 'translateY(3px)' }
+                                                    : { opacity: 0 }}
+                                                animate={isProV2
+                                                    ? { opacity: 0.4, filter: 'blur(0px)', transform: 'translateY(0px)' }
+                                                    : { opacity: 0.4 }}
+                                                exit={{ opacity: 0 }}
+                                                transition={isProV2 ? proV2TextTransition : { duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
+                                                className="text-[13px] italic leading-snug text-[var(--overlay-text-muted)]"
+                                            >
+                                                Listening…
+                                            </motion.span>
+                                        )}
+                                    </AnimatePresence>
+                                </span>
+                            </div>
+                        </motion.div>
                     )}
 
                     {/* Reconnecting state */}
