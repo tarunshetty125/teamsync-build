@@ -915,12 +915,12 @@ export class AppState {
 
     // Start checking for updates with a 10-second delay when explicitly enabled.
     setTimeout(() => {
-      if (process.env.NODE_ENV === "development") {
+      if (!app.isPackaged) {
         console.log("[AutoUpdater] Development mode: Skipping auto check (use manual button)");
       } else if (!autoUpdatesEnabled) {
         console.log("[AutoUpdater] Automatic update checks disabled for this build");
       } else {
-        autoUpdater.checkForUpdatesAndNotify().catch(err => {
+        autoUpdater.checkForUpdates().catch(err => {
           console.error("[AutoUpdater] Failed to check for updates:", err);
         });
       }
@@ -934,39 +934,46 @@ export class AppState {
       // Fetch latest release
       const notes = await releaseManager.fetchReleaseNotes('latest');
 
-      if (notes) {
-        const currentVersion = app.getVersion();
-        const latestVersionTag = notes.version; // e.g., "v1.2.0" or "1.2.0"
-        const latestVersion = latestVersionTag.replace(/^v/, '');
+      if (!notes) {
+        const message = 'Unable to reach GitHub latest release endpoint. Check that the release repo is public and has a non-draft latest release.';
+        console.error(`[AutoUpdater] Manual Check: ${message}`);
+        this.broadcast("update-error", message);
+        return;
+      }
 
-        console.log(`[AutoUpdater] Manual Check: Current=${currentVersion}, Latest=${latestVersion}`);
+      const currentVersion = app.getVersion();
+      const latestVersionTag = notes.version; // e.g., "v1.2.0" or "1.2.0"
+      const latestVersion = latestVersionTag.replace(/^v/, '');
 
-        if (this.isVersionNewer(currentVersion, latestVersion)) {
-          console.log('[AutoUpdater] Manual Check: New version found!');
-          this.updateAvailable = true;
+      console.log(`[AutoUpdater] Manual Check: Current=${currentVersion}, Latest=${latestVersion}`);
 
-          // Mock an info object compatible with electron-updater
-          const info = {
-            version: latestVersion,
-            files: [] as any[],
-            path: '',
-            sha512: '',
-            releaseName: notes.summary,
-            releaseNotes: notes.fullBody
-          };
+      if (this.isVersionNewer(currentVersion, latestVersion)) {
+        console.log('[AutoUpdater] Manual Check: New version found!');
+        this.updateAvailable = true;
 
-          // Notify renderer
-          this.broadcast("update-available", {
-            ...info,
-            parsedNotes: notes
-          });
-        } else {
-          console.log('[AutoUpdater] Manual Check: App is up to date.');
-          this.broadcast("update-not-available", { version: currentVersion });
-        }
+        // Mock an info object compatible with electron-updater
+        const info = {
+          version: latestVersion,
+          files: [] as any[],
+          path: '',
+          sha512: '',
+          releaseName: notes.summary,
+          releaseNotes: notes.fullBody
+        };
+
+        // Notify renderer
+        this.broadcast("update-available", {
+          ...info,
+          parsedNotes: notes
+        });
+      } else {
+        console.log('[AutoUpdater] Manual Check: App is up to date.');
+        this.broadcast("update-not-available", { version: currentVersion });
       }
     } catch (err) {
       console.error('[AutoUpdater] Manual update check failed:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      this.broadcast("update-error", errorMessage || 'Manual update check failed');
     }
   }
 
@@ -1027,11 +1034,12 @@ export class AppState {
   public async checkForUpdates(): Promise<void> {
     console.log('[AutoUpdater] Manual check for updates requested')
     try {
-      // In development mode, use manual GitHub API check (electron-updater skips in dev)
-      if (process.env.NODE_ENV === "development") {
+      // In unpackaged development mode, electron-updater cannot use app-update.yml.
+      // Packaged apps must always use electron-updater, even if NODE_ENV leaks from a dev shell.
+      if (!app.isPackaged) {
         await this.checkForUpdatesManual()
       } else {
-        await autoUpdater.checkForUpdatesAndNotify()
+        await autoUpdater.checkForUpdates()
       }
     } catch (err: any) {
       console.error('[AutoUpdater] checkForUpdates failed:', err)

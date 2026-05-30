@@ -396,6 +396,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
     const [isAiLangDropdownOpen, setIsAiLangDropdownOpen] = useState(false);
     const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'uptodate' | 'error'>('idle');
+    const [updateErrorMessage, setUpdateErrorMessage] = useState<string | null>(null);
     const updateStatusTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const themeDropdownRef = React.useRef<HTMLDivElement>(null);
     const aiLangDropdownRef = React.useRef<HTMLDivElement>(null);
@@ -585,6 +586,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         const unsubs: Array<() => void> = [];
         if (window.electronAPI?.onUpdateAvailable) {
             unsubs.push(window.electronAPI.onUpdateAvailable(() => {
+                setUpdateErrorMessage(null);
                 setUpdateStatus('available');
                 if (updateStatusTimerRef.current) clearTimeout(updateStatusTimerRef.current);
                 updateStatusTimerRef.current = setTimeout(() => setUpdateStatus('idle'), 6000);
@@ -592,13 +594,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         }
         if (window.electronAPI?.onUpdateNotAvailable) {
             unsubs.push(window.electronAPI.onUpdateNotAvailable(() => {
+                setUpdateErrorMessage(null);
                 setUpdateStatus('uptodate');
                 if (updateStatusTimerRef.current) clearTimeout(updateStatusTimerRef.current);
                 updateStatusTimerRef.current = setTimeout(() => setUpdateStatus('idle'), 4000);
             }));
         }
         if (window.electronAPI?.onUpdateError) {
-            unsubs.push(window.electronAPI.onUpdateError(() => {
+            unsubs.push(window.electronAPI.onUpdateError((err) => {
+                setUpdateErrorMessage(err || 'Update check failed');
                 setUpdateStatus('error');
                 if (updateStatusTimerRef.current) clearTimeout(updateStatusTimerRef.current);
                 updateStatusTimerRef.current = setTimeout(() => setUpdateStatus('idle'), 4000);
@@ -1510,11 +1514,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
     const handleCheckForUpdates = async () => {
         if (updateStatus === 'checking') return;
+        setUpdateErrorMessage(null);
         setUpdateStatus('checking');
         try {
             await window.electronAPI.checkForUpdates();
         } catch (error) {
             console.error("Failed to check for updates:", error);
+            setUpdateErrorMessage(error instanceof Error ? error.message : 'Update check failed');
             setUpdateStatus('error');
             setTimeout(() => setUpdateStatus('idle'), 3000);
         }
@@ -1525,18 +1531,22 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
         const unsubs = [
             window.electronAPI.onUpdateChecking(() => {
+                setUpdateErrorMessage(null);
                 setUpdateStatus('checking');
             }),
             window.electronAPI.onUpdateAvailable(() => {
+                setUpdateErrorMessage(null);
                 setUpdateStatus('available');
                 // Don't close settings - let user see the button change to "Update Available"
             }),
             window.electronAPI.onUpdateNotAvailable(() => {
+                setUpdateErrorMessage(null);
                 setUpdateStatus('uptodate');
                 setTimeout(() => setUpdateStatus('idle'), 3000);
             }),
             window.electronAPI.onUpdateError((err) => {
                 console.error('[Settings] Update error:', err);
+                setUpdateErrorMessage(err || 'Update check failed');
                 setUpdateStatus('error');
                 setTimeout(() => setUpdateStatus('idle'), 3000);
             })
@@ -2253,7 +2263,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 <div>
                                                                     <h3 className="text-sm font-bold text-text-primary">Version</h3>
                                                                     <p className="text-xs text-text-secondary mt-0.5">
-                                                                        You are currently using TeamSync version {packageJson.version}
+                                                                        {updateStatus === 'checking' ? 'Checking for updates...' :
+                                                                            updateStatus === 'uptodate' ? `You're on the latest version (v${packageJson.version})` :
+                                                                                updateStatus === 'available' ? 'A new update is available!' :
+                                                                                    updateStatus === 'error' ? (updateErrorMessage || 'Could not check for updates') :
+                                                                                        `You are currently using TeamSync version ${packageJson.version}`}
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -2411,58 +2425,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 ))}
                                                     </div>
                                                         </div>
-
-                                        {/* Check for Updates */}
-                                        <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between`}>
-                                            <div className="flex flex-col gap-1">
-                                                <div className="flex items-center gap-2">
-                                                    <RefreshCw size={16} className="text-text-secondary" />
-                                                    <span className="text-sm font-semibold text-text-primary">Software Update</span>
-                                                </div>
-                                                <p className="text-xs text-text-secondary ml-6">
-                                                    {updateStatus === 'checking' ? 'Checking for updates...' :
-                                                     updateStatus === 'uptodate' ? `You're on the latest version (v${packageJson.version})` :
-                                                     updateStatus === 'available' ? 'A new update is available!' :
-                                                     updateStatus === 'error' ? 'Could not check for updates' :
-                                                     `Current version: v${packageJson.version}`}
-                                                </p>
-                                            </div>
-                                            <button
-                                                disabled={updateStatus === 'checking'}
-                                                onClick={async () => {
-                                                    setUpdateStatus('checking');
-                                                    try {
-                                                        await window.electronAPI.checkForUpdates();
-                                                        // The autoUpdater events will fire and UpdateBanner will handle the modal.
-                                                        // We use a short delay to show feedback, then the IPC events take over.
-                                                        setTimeout(() => {
-                                                            setUpdateStatus(prev => prev === 'checking' ? 'uptodate' : prev);
-                                                        }, 4000);
-                                                    } catch {
-                                                        setUpdateStatus('error');
-                                                        setTimeout(() => setUpdateStatus('idle'), 4000);
-                                                    }
-                                                }}
-                                                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                                                    updateStatus === 'checking'
-                                                        ? 'bg-bg-input border border-border-subtle text-text-tertiary cursor-wait'
-                                                        : updateStatus === 'uptodate'
-                                                        ? 'bg-green-500/10 border border-green-500/20 text-green-500'
-                                                        : updateStatus === 'available'
-                                                        ? 'bg-accent-primary text-white shadow-sm'
-                                                        : updateStatus === 'error'
-                                                        ? 'bg-red-500/10 border border-red-500/20 text-red-400'
-                                                        : 'bg-bg-input border border-border-subtle text-text-primary hover:bg-bg-elevated hover:border-border-muted'
-                                                }`}
-                                            >
-                                                <RefreshCw size={13} className={updateStatus === 'checking' ? 'animate-spin' : ''} />
-                                                {updateStatus === 'checking' ? 'Checking...' :
-                                                 updateStatus === 'uptodate' ? 'Up to Date' :
-                                                 updateStatus === 'available' ? 'Update Available' :
-                                                 updateStatus === 'error' ? 'Retry' :
-                                                 'Check for Updates'}
-                                            </button>
-                                        </div>
 
                                     </div>
                                 )}
