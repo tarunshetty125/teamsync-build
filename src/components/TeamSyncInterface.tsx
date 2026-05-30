@@ -3048,9 +3048,28 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             requestStartTimeRef.current = Date.now();
             const manualDetectedMode = detectRealtimeMode(userText, 'general', 'general').nextType;
             const transcriptWindow = manualDetectedMode === 'system_design' ? 250 : 700;
+            const normalizedManualInput = userText.trim().toLowerCase();
+            const manualWordCount = normalizedManualInput.split(/\s+/).filter(Boolean).length;
+            const referencesPriorContext = /\b(continue|elaborate|expand|go deeper|follow up|follow-up|what about|and what|and how|again|that|this|it|they|those|these|earlier|previous|above|last answer|conversation|transcript|meeting|call|based on|from the meeting|from this|using this|screenshot|screen)\b/i.test(normalizedManualInput);
+            const standaloneManualInput = currentAttachments.length === 0
+                && !referencesPriorContext
+                && manualWordCount > 0
+                && (
+                    ((manualDetectedMode === 'coding' || manualDetectedMode === 'system_design') && manualWordCount <= 18)
+                    || (manualDetectedMode === 'general' && manualWordCount <= 14)
+                );
             const streamContext = [
                 conversationContext.trim(),
-                finalizedTranscriptRef.current.slice(-transcriptWindow),
+                standaloneManualInput ? '' : finalizedTranscriptRef.current.slice(-transcriptWindow),
+                [
+                    'MANUAL INPUT CONTRACT:',
+                    '- The typed manual input is the authoritative latest user question.',
+                    '- Answer the USER QUESTION directly before considering any context.',
+                    '- If transcript/context conflicts with the typed question, ignore the transcript/context.',
+                    standaloneManualInput
+                        ? '- Treat this as a standalone typed request. Do not use transcript memory.'
+                        : '- Use transcript only when the typed question explicitly asks to continue or relate to prior discussion.',
+                ].join('\n'),
                 'RESPONSE RULES:\n- Coding / DSA: Problem, Approach, Complexity, Solution with one fenced code block.\n- Coding fence rules: opening line ```c or detected language, code on following lines, closing line ```; never two backticks or inline solution code.\n- System design: concise 10-section architecture answer with exactly one ```architecture_json``` block; never Mermaid.\n- Other: under 120 words; 3-5 bullets when listing.\n- No preamble.'
             ].filter(Boolean).join('\n') || undefined;
             await window.electronAPI.streamGeminiChat(

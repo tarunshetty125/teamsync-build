@@ -144,6 +144,33 @@ test('Pro V2 rolling transcript supports smooth normal and wide pill shapes', ()
     assert.doesNotMatch(rollingTranscript, /scaleX: proV2Shape\.tone === 'wide'/);
 });
 
+test('Manual typed questions are treated as authoritative standalone inputs', () => {
+    const bridge = read('src/components/pro-v2/useCluelyOverlayBridge.ts');
+    const v1 = read('src/components/TeamSyncInterface.tsx');
+    const contextBuilder = read('electron/ActionContextBuilder.ts');
+    const prompts = read('electron/llm/prompts.ts');
+
+    assert.match(bridge, /function isStandaloneManualInput/);
+    assert.match(bridge, /function buildManualStreamContext/);
+    assert.match(bridge, /MANUAL INPUT CONTRACT/);
+    assert.match(bridge, /standaloneManualInput \? '' : finalizedTranscript\.slice\(-transcriptWindow\)/);
+    assert.match(bridge, /The typed manual input is the authoritative latest user question/);
+    assert.match(bridge, /Do not use transcript memory/);
+
+    assert.match(v1, /const standaloneManualInput = currentAttachments\.length === 0/);
+    assert.match(v1, /standaloneManualInput \? '' : finalizedTranscriptRef\.current\.slice\(-transcriptWindow\)/);
+    assert.match(v1, /MANUAL INPUT CONTRACT/);
+
+    assert.match(contextBuilder, /profile === 'fresh_general' && wordCount <= 14/);
+    assert.match(contextBuilder, /profile === 'coding' \|\| profile === 'system_design'/);
+    assert.match(contextBuilder, /explicitContextPatterns/);
+    assert.match(contextBuilder, /\|build\|tell\)/);
+
+    assert.match(prompts, /Treat USER QUESTION as the primary task/);
+    assert.match(prompts, /Avoid textbook definition openers/);
+    assert.match(prompts, /Do not continue an older transcript topic/);
+});
+
 test('Streaming updates mutate the existing request entry rather than creating duplicate history rows', () => {
     const streams = read('src/components/pro-v2/useOverlayIpcStreams.ts');
 

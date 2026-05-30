@@ -535,18 +535,28 @@ function shouldUseTranscriptForManualChat(
         /\b(continue|elaborate|expand|go deeper|follow up|follow-up|what about|and what|and how|again)\b/i,
         /\b(that|this|it|they|those|these|earlier|previous|above)\b/i,
     ];
+    const explicitContextPatterns = [
+        /\b(based on|from the meeting|from this|using this|conversation|transcript|meeting|call|screen|screenshot)\b/i,
+    ];
 
-    if (explicitFollowUpPatterns.some((pattern) => pattern.test(normalized))) {
+    if (
+        explicitFollowUpPatterns.some((pattern) => pattern.test(normalized))
+        || explicitContextPatterns.some((pattern) => pattern.test(normalized))
+    ) {
         return true;
     }
 
-    if (profile === 'coding' && wordCount <= 18) {
+    if ((profile === 'coding' || profile === 'system_design') && wordCount <= 18) {
+        return false;
+    }
+
+    if (profile === 'fresh_general' && wordCount <= 14) {
         return false;
     }
 
     const standaloneQuestionPatterns = [
         /^(who|what|when|where|why|how|can|could|should|would|do|does|did|is|are|am|will)\b/i,
-        /^(help|explain|define|compare|summarize|rewrite|fix|debug|optimize|implement|write|solve|code|build)\b/i,
+        /^(help|explain|define|compare|summarize|rewrite|fix|debug|optimize|implement|write|solve|code|build|tell)\b/i,
     ];
 
     if (wordCount <= 14 && standaloneQuestionPatterns.some((pattern) => pattern.test(normalized))) {

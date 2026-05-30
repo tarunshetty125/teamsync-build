@@ -1034,7 +1034,13 @@ Response Guidelines:
 - Match the formality of the conversation
 - Use markdown formatting: **bold** for emphasis, \`backticks\` for code terms, \`\`\`language for code blocks
 - All math uses LaTeX: $...$ inline, $$...$$ block
-- Keep conceptual answers to 2-3 sentences (speakable aloud in under 30 seconds). If it exceeds 4 sentences, it is TOO LONG.`;
+- Keep conceptual answers to 2-3 sentences (speakable aloud in under 30 seconds). If it exceeds 4 sentences, it is TOO LONG.
+
+Question Handling:
+- Treat USER QUESTION as the primary task. Context is secondary and should only be used when directly relevant.
+- For simple general or conceptual questions, answer immediately in natural spoken language.
+- Avoid textbook definition openers, headers like "Definition:" or "Overview:", and bullet lists for simple questions.
+- Do not continue an older transcript topic unless the latest question explicitly asks for it.`;
 
 /**
  * OPENAI: What To Answer / Strategic Response

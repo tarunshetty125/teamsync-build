@@ -90,6 +90,58 @@ const INTENT_TRANSCRIPT_SEGMENTS = 8;
 const INTENT_TRANSCRIPT_MAX_CHARS = 1200;
 const MAX_RESPONSE_HISTORY = 30;
 
+function referencesPriorManualContext(text: string): boolean {
+    return /\b(continue|elaborate|expand|go deeper|follow up|follow-up|what about|and what|and how|again|that|this|it|they|those|these|earlier|previous|above|last answer|conversation|transcript|meeting|call|based on|from the meeting|from this|using this|screenshot|screen)\b/i.test(text);
+}
+
+function isStandaloneManualInput(text: string, detectedMode: SessionMode, hasAttachments: boolean = false): boolean {
+    const normalized = text.trim().toLowerCase();
+    if (!normalized || hasAttachments || referencesPriorManualContext(normalized)) return false;
+
+    const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+    if (detectedMode === 'coding' || detectedMode === 'system_design') {
+        return wordCount > 0 && wordCount <= 18;
+    }
+
+    if (detectedMode !== 'general') return false;
+    const startsLikeStandaloneRequest = /^(who|what|when|where|why|how|can|could|should|would|do|does|did|is|are|am|will|help|explain|define|compare|summarize|rewrite|fix|debug|optimize|implement|write|solve|code|build|tell)\b/i.test(normalized);
+    return wordCount > 0 && (wordCount <= 14 || startsLikeStandaloneRequest);
+}
+
+function buildManualStreamContext(text: string, detectedMode: SessionMode, finalizedTranscript: string, hasAttachments: boolean = false): string | undefined {
+    const standaloneManualInput = isStandaloneManualInput(text, detectedMode, hasAttachments);
+    const transcriptWindow = detectedMode === 'system_design' ? 250 : 700;
+    const transcriptContext = standaloneManualInput ? '' : finalizedTranscript.slice(-transcriptWindow);
+
+    return [
+        transcriptContext,
+        [
+            'MANUAL INPUT CONTRACT:',
+            '- The typed manual input is the authoritative latest user question.',
+            '- Answer the USER QUESTION directly before considering any context.',
+            '- If transcript/context conflicts with the typed question, ignore the transcript/context.',
+            standaloneManualInput
+                ? '- Treat this as a standalone typed request. Do not use transcript memory.'
+                : '- Use transcript only when the typed question explicitly asks to continue or relate to prior discussion.',
+        ].join('\n'),
+        [
+            'RESPONSE RULES:',
+            '- Coding / DSA: Problem, Approach, Complexity, Solution with one fenced code block.',
+            '- Coding fence rules: opening line ```c or detected language, code on following lines, closing line ```; never two backticks or inline solution code.',
+            '- System design: concise 10-section architecture answer with exactly one ```architecture_json``` block; never Mermaid.',
+            '- architecture_json rules: valid JSON only, no comments, no trailing commas, exact opening fence ```architecture_json and exact closing fence ```.',
+            '- architecture_json node schema: {"id":"","label":"","kind":"","technology":"","purpose":"","layer":"","latency":"","failureMode":""}. Edge schema: {"source":"","target":"","label":"","protocol":"","latency":""}.',
+            '- Minimum diagram quality: simple systems 12+ nodes, medium production 20+ nodes, FAANG-scale 35-60+ nodes. Include clients, edge/gateway, core services, async, data, cache, observability, and security layers.',
+            '- Allowed node kinds: client, gateway, service, database, cache, queue, storage, external.',
+            '- Reuse the exact same lowercase node ID every time. Do not rename the same component with different IDs later in the diagram.',
+            '- Other questions: concise answer under 120 words.',
+            '- No preamble.',
+        ].join('\n'),
+    ]
+        .filter(Boolean)
+        .join('\n\n') || undefined;
+}
+
 function capOverlayMessages(nextMessages: V2Message[]): V2Message[] {
     const systemIndexes: number[] = [];
     nextMessages.forEach((message, index) => {
@@ -1135,26 +1187,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             ]);
 
             const manualDetectedMode = detectRealtimeMode(userText, 'general', 'general').nextType;
-            const transcriptWindow = manualDetectedMode === 'system_design' ? 250 : 700;
-            const streamContext =
-                [
-                    finalizedTranscriptRef.current.slice(-transcriptWindow),
-                    [
-                        'RESPONSE RULES:',
-                        '- Coding / DSA: Problem, Approach, Complexity, Solution with one fenced code block.',
-                        '- Coding fence rules: opening line ```c or detected language, code on following lines, closing line ```; never two backticks or inline solution code.',
-                        '- System design: concise 10-section architecture answer with exactly one ```architecture_json``` block; never Mermaid.',
-                        '- architecture_json rules: valid JSON only, no comments, no trailing commas, exact opening fence ```architecture_json and exact closing fence ```.',
-                        '- architecture_json node schema: {"id":"","label":"","kind":"","technology":"","purpose":"","layer":"","latency":"","failureMode":""}. Edge schema: {"source":"","target":"","label":"","protocol":"","latency":""}.',
-                        '- Minimum diagram quality: simple systems 12+ nodes, medium production 20+ nodes, FAANG-scale 35-60+ nodes. Include clients, edge/gateway, core services, async, data, cache, observability, and security layers.',
-                        '- Allowed node kinds: client, gateway, service, database, cache, queue, storage, external.',
-                        '- Reuse the exact same lowercase node ID every time. Do not rename the same component with different IDs later in the diagram.',
-                        '- Other questions: concise answer under 120 words.',
-                        '- No preamble.',
-                    ].join('\n'),
-                ]
-                    .filter(Boolean)
-                    .join('\n\n') || undefined;
+            const streamContext = buildManualStreamContext(userText, manualDetectedMode, finalizedTranscriptRef.current);
 
             try {
                 activeRagRequestIdRef.current = null;
