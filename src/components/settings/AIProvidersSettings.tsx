@@ -30,6 +30,12 @@ interface BedrockCredentials {
     preferredModel?: string;
 }
 
+interface BedrockFetchedModel {
+    id: string;
+    label: string;
+    inputModalities?: string[];
+}
+
 interface ModelSelectProps {
     value: string;
     options: ModelOption[];
@@ -63,6 +69,16 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
         custom: 'Custom Providers',
         ollama: 'Ollama / Local',
     };
+    const providerAccents: Record<string, { dot: string; header: string; rule: string }> = {
+        teamsync: { dot: 'bg-cyan-400', header: 'text-cyan-300', rule: 'bg-cyan-400/30' },
+        gemini: { dot: 'bg-sky-400', header: 'text-sky-300', rule: 'bg-sky-400/30' },
+        groq: { dot: 'bg-amber-400', header: 'text-amber-300', rule: 'bg-amber-400/30' },
+        openai: { dot: 'bg-emerald-400', header: 'text-emerald-300', rule: 'bg-emerald-400/30' },
+        claude: { dot: 'bg-orange-300', header: 'text-orange-200', rule: 'bg-orange-300/30' },
+        bedrock: { dot: 'bg-rose-400', header: 'text-rose-300', rule: 'bg-rose-400/30' },
+        custom: { dot: 'bg-violet-400', header: 'text-violet-300', rule: 'bg-violet-400/30' },
+        ollama: { dot: 'bg-lime-400', header: 'text-lime-300', rule: 'bg-lime-400/30' },
+    };
     let lastProvider = '';
 
     return (
@@ -87,8 +103,11 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
                             return (
                                 <React.Fragment key={option.id}>
                                     {shouldRenderHeader && (
-                                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
-                                            {providerLabels[provider] || provider}
+                                        <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+                                            <span className={`h-px w-4 ${providerAccents[provider]?.rule || 'bg-border-subtle'}`} />
+                                            <span className={`text-[10px] font-semibold uppercase tracking-wide ${providerAccents[provider]?.header || 'text-text-tertiary'}`}>
+                                                {providerLabels[provider] || provider}
+                                            </span>
                                         </div>
                                     )}
                                     <button
@@ -100,7 +119,10 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
                                         type="button"
                                         title={option.name}
                                     >
-                                        <span className="whitespace-normal break-words leading-snug pr-2">{option.name}</span>
+                                        <span className="flex min-w-0 items-start gap-2 whitespace-normal break-words leading-snug pr-2">
+                                            {provider && <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${providerAccents[provider]?.dot || 'bg-text-tertiary'}`} />}
+                                            <span className="min-w-0 flex-1">{option.name}</span>
+                                        </span>
                                         {value === option.id && <Check size={14} className="text-accent-primary shrink-0 ml-2" />}
                                     </button>
                                 </React.Fragment>
@@ -115,6 +137,24 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
         </div>
     );
 };
+
+const BEDROCK_VISION_WARNING = 'Image analysis needs a Bedrock multimodal model. Enable Claude Sonnet or Amazon Nova Pro/Lite model access in AWS Bedrock for this region. Text-only Bedrock models will still work.';
+
+function isBedrockVisionCandidate(model: BedrockFetchedModel): boolean {
+    const normalized = model.id.toLowerCase().replace(/^bedrock:/, '').replace(/\//g, '.').replace(/^(us|eu|apac)\./, '');
+    const isPreferredVisionFamily =
+        (normalized.includes('anthropic.claude') && normalized.includes('sonnet')) ||
+        normalized.includes('amazon.nova-pro') ||
+        normalized.includes('amazon.nova-lite');
+    if (!isPreferredVisionFamily) return false;
+    if (!model.inputModalities?.length) return true;
+    return model.inputModalities.some(modality => modality.toUpperCase() === 'IMAGE');
+}
+
+function getBedrockVisionWarning(models?: BedrockFetchedModel[]): string {
+    if (!models?.length) return '';
+    return models.some(isBedrockVisionCandidate) ? '' : BEDROCK_VISION_WARNING;
+}
 
 export const AIProvidersSettings: React.FC = () => {
     // --- Standard Providers ---
@@ -131,6 +171,7 @@ export const AIProvidersSettings: React.FC = () => {
     const [savedStatus, setSavedStatus] = useState<Record<string, boolean>>({});
     const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({});
     const [hasStoredKey, setHasStoredKey] = useState<Record<string, boolean>>({});
+    const [bedrockVisionWarning, setBedrockVisionWarning] = useState('');
     // Fast mode is available with a local Groq key OR via the TeamSync API (server-side Groq pool)
     const canUseFastMode = !!(hasStoredKey.groq || hasStoredKey.teamsync);
     const [testStatus, setTestStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
@@ -212,6 +253,7 @@ export const AIProvidersSettings: React.FC = () => {
 
                     const bedrockModels = creds.bedrockFetchedModels;
                     if (bedrockModels && bedrockModels.length > 0) {
+                        setBedrockVisionWarning(getBedrockVisionWarning(bedrockModels));
                         setDynamicModels(prev => ({
                             ...prev,
                             bedrock: bedrockModels.map((m: any) => ({
@@ -309,6 +351,7 @@ export const AIProvidersSettings: React.FC = () => {
             window.electronAPI?.fetchBedrockModels?.()
                 .then((result) => {
                     if (result?.success && result.models) {
+                        setBedrockVisionWarning(getBedrockVisionWarning(result.models));
                         setDynamicModels(prev => ({
                             ...prev,
                             bedrock: result.models!.map((m: any) => ({
@@ -491,7 +534,7 @@ export const AIProvidersSettings: React.FC = () => {
         setPreferredModels(prev => ({ ...prev, groq: modelId }));
     };
 
-    const applyBedrockConnectionResult = async (result: { success: boolean; models?: { id: string; label: string }[]; credentials?: BedrockCredentials; error?: string }) => {
+    const applyBedrockConnectionResult = async (result: { success: boolean; models?: BedrockFetchedModel[]; credentials?: BedrockCredentials; error?: string }) => {
         if (!result.success) {
             setTestStatus(prev => ({ ...prev, bedrock: 'error' }));
             setTestError(prev => ({ ...prev, bedrock: result.error || 'Connection failed' }));
@@ -499,6 +542,7 @@ export const AIProvidersSettings: React.FC = () => {
         }
 
         const models = result.models || [];
+        setBedrockVisionWarning(getBedrockVisionWarning(models));
         const selectedModel = result.credentials?.preferredModel || bedrockCredentials.preferredModel || models[0]?.id || '';
         setBedrockCredentials(prev => ({
             ...prev,
@@ -560,6 +604,7 @@ export const AIProvidersSettings: React.FC = () => {
         try {
             const result = await window.electronAPI?.fetchBedrockModels?.();
             if (result?.success && result.models) {
+                setBedrockVisionWarning(getBedrockVisionWarning(result.models));
                 setDynamicModels(prev => ({
                     ...prev,
                     bedrock: result.models!.map((m: any) => ({
@@ -981,6 +1026,12 @@ export const AIProvidersSettings: React.FC = () => {
                             )}
                         </div>
                         {testError.bedrock && <p className="text-[10px] text-red-400 mt-2">{testError.bedrock}</p>}
+                        {bedrockVisionWarning && (
+                            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-[10px] leading-relaxed text-amber-200">
+                                <AlertCircle size={13} className="mt-0.5 shrink-0 text-amber-300" />
+                                <span>{bedrockVisionWarning}</span>
+                            </div>
+                        )}
                     </div>
 
                 </div>

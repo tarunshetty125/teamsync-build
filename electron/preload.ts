@@ -43,6 +43,12 @@ type CalendarModeRecommendation = {
   suggestedReferences: string[]
 }
 
+type BedrockFetchedModel = {
+  id: string
+  label: string
+  inputModalities?: string[]
+}
+
 type BedrockCredentials = {
   authMode: 'aws_cli' | 'access_keys';
   accessKeyId?: string;
@@ -106,7 +112,7 @@ interface ElectronAPI {
   switchToOllama: (model?: string, url?: string) => Promise<{ success: boolean; error?: string }>
   switchToGemini: (apiKey?: string, modelId?: string) => Promise<{ success: boolean; error?: string }>
   testLlmConnection: (provider: 'gemini' | 'groq' | 'openai' | 'claude', apiKey?: string) => Promise<{ success: boolean; error?: string }>
-  testBedrockConnection: (credentials: BedrockCredentials) => Promise<{ success: boolean; models?: { id: string; label: string }[]; credentials?: BedrockCredentials; error?: string }>
+  testBedrockConnection: (credentials: BedrockCredentials) => Promise<{ success: boolean; models?: BedrockFetchedModel[]; credentials?: BedrockCredentials; error?: string }>
   selectServiceAccount: () => Promise<{ success: boolean; path?: string; cancelled?: boolean; error?: string }>
 
   // API Key Management
@@ -114,10 +120,10 @@ interface ElectronAPI {
   setGroqApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   setOpenaiApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   setClaudeApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
-  setBedrockCredentials: (credentials: BedrockCredentials) => Promise<{ success: boolean; models?: { id: string; label: string }[]; credentials?: BedrockCredentials; error?: string }>
+  setBedrockCredentials: (credentials: BedrockCredentials) => Promise<{ success: boolean; models?: BedrockFetchedModel[]; credentials?: BedrockCredentials; error?: string }>
   setTeamSyncApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   getTeamSyncUsage: () => Promise<{ ok: boolean; plan?: string; quota?: { transcription: { used: number; limit: number; remaining: number }; ai: { used: number; limit: number; remaining: number }; search: { used: number; limit: number; remaining: number }; resets_at: string }; member_since?: string; error?: string; status?: number }>
-  getStoredCredentials: () => Promise<{ hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; hasTeamSyncKey: boolean; hasBedrockCredentials?: boolean; bedrockCredentials?: BedrockCredentials; bedrockPreferredModel?: string; bedrockFetchedModels?: { id: string; label: string }[]; googleServiceAccountPath: string | null; sttProvider: string; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; hasSonioxKey: boolean }>
+  getStoredCredentials: () => Promise<{ hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; hasTeamSyncKey: boolean; hasBedrockCredentials?: boolean; bedrockCredentials?: BedrockCredentials; bedrockPreferredModel?: string; bedrockFetchedModels?: BedrockFetchedModel[]; googleServiceAccountPath: string | null; sttProvider: string; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; hasSonioxKey: boolean }>
 
   // Groq Provider Vault — Multi-Key Management
   groqVaultGetKeys: () => Promise<{ success: boolean; keys: Array<{ id: string; maskedKey: string; enabled: boolean; addedAt: number; label?: string; exhausted: boolean; cooldownUntil: number | null; requestCount: number; lastUsed: number; invalid: boolean; isAvailable: boolean }>; error?: string }>
@@ -301,9 +307,9 @@ interface ElectronAPI {
   // Streaming listeners
   streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }) => Promise<void>
   cancelGeminiChatStream: () => Promise<{ success: boolean }>
-  onGeminiStreamToken: (callback: (token: string) => void) => () => void
-  onGeminiStreamDone: (callback: () => void) => () => void
-  onGeminiStreamError: (callback: (error: string) => void) => () => void
+  onGeminiStreamToken: (callback: (data: { token: string; requestId?: string } | string) => void) => () => void
+  onGeminiStreamDone: (callback: (data?: { requestId?: string }) => void) => () => void
+  onGeminiStreamError: (callback: (data: { error: string; requestId?: string } | string) => void) => () => void
 
 
   onUndetectableChanged: (callback: (state: boolean) => void) => () => void
@@ -345,7 +351,7 @@ interface ElectronAPI {
   // RAG (Retrieval-Augmented Generation) API
   ragQueryMeeting: (meetingId: string, query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
   ragQueryLive: (query: string, requestId?: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
-  ragQueryGlobal: (query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
+  ragQueryGlobal: (query: string, requestId?: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
   ragCancelQuery: (options: { meetingId?: string; global?: boolean }) => Promise<{ success: boolean }>
   ragIsMeetingProcessed: (meetingId: string) => Promise<boolean>
   ragGetQueueStatus: () => Promise<{ pending: number; processing: number; completed: number; failed: number }>
@@ -1387,7 +1393,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // RAG API
   ragQueryMeeting: (meetingId: string, query: string) => ipcRenderer.invoke('rag:query-meeting', { meetingId, query }),
   ragQueryLive: (query: string, requestId?: string) => ipcRenderer.invoke('rag:query-live', { query, requestId }),
-  ragQueryGlobal: (query: string) => ipcRenderer.invoke('rag:query-global', { query }),
+  ragQueryGlobal: (query: string, requestId?: string) => ipcRenderer.invoke('rag:query-global', { query, requestId }),
   ragCancelQuery: (options: { meetingId?: string; global?: boolean }) => ipcRenderer.invoke('rag:cancel-query', options),
   ragIsMeetingProcessed: (meetingId: string) => ipcRenderer.invoke('rag:is-meeting-processed', meetingId),
   ragGetQueueStatus: () => ipcRenderer.invoke('rag:get-queue-status'),

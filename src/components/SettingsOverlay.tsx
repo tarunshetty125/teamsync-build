@@ -356,9 +356,18 @@ interface SettingsOverlayProps {
     onClose: () => void;
     initialTab?: string;
     isTrialActive?: boolean;
+    isPremiumActive?: boolean;
+    isLicenseLoaded?: boolean;
 }
 
-const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, initialTab = 'general', isTrialActive = false }) => {
+const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
+    isOpen,
+    onClose,
+    initialTab = 'general',
+    isTrialActive = false,
+    isPremiumActive = false,
+    isLicenseLoaded = false,
+}) => {
     const isLight = useResolvedTheme() === 'light';
     const [activeTab, setActiveTab] = useState(initialTab);
     const refreshProfileStateRef = React.useRef<((expectedGenerationId?: number) => Promise<void>) | null>(null);
@@ -408,7 +417,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const [lastJdPath, setLastJdPath] = useState<string | null>(null);
     const [lastUploadKind, setLastUploadKind] = useState<'resume' | 'jd' | null>(null);
     const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
-    const [isPremium, setIsPremium] = useState(false);
+    const [isPremium, setIsPremium] = useState(isPremiumActive);
     const [premiumPlan, setPremiumPlan] = useState<string>('');
     // Trial users get the same profile access as premium users for the duration of the trial
     const hasProfileAccess = isPremium || isTrialActive;
@@ -441,14 +450,20 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
     const verboseToastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const [useProUI, setUseProUI] = useState(() => localStorage.getItem('teamsync_overlay_v2') === 'true');
 
+    useEffect(() => {
+        setIsPremium(isPremiumActive);
+    }, [isPremiumActive]);
+
     // Auto-disable Pro UI if premium/trial access is lost
     const hasProAccess = isPremium || isTrialActive;
     useEffect(() => {
+        if (!isLicenseLoaded) return;
         if (!hasProAccess && useProUI) {
             setUseProUI(false);
             localStorage.setItem('teamsync_overlay_v2', 'false');
+            window.dispatchEvent(new CustomEvent('teamsync-overlay-v2-changed', { detail: false }));
         }
-    }, [hasProAccess, useProUI]);
+    }, [hasProAccess, isLicenseLoaded, useProUI]);
 
     const updateProfileViewStatus = React.useCallback((nextStatus: 'idle' | 'processing' | 'ready' | 'empty' | 'error') => {
         profileViewStatusRef.current = nextStatus;
@@ -1992,6 +2007,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({ isOpen, onClose, init
                                                             const newState = !useProUI;
                                                             setUseProUI(newState);
                                                             localStorage.setItem('teamsync_overlay_v2', String(newState));
+                                                            window.dispatchEvent(new CustomEvent('teamsync-overlay-v2-changed', { detail: newState }));
                                                         }}
                                                         className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${useProUI ? 'bg-purple-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
                                                     >

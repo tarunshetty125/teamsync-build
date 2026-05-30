@@ -4,7 +4,7 @@ import {
     Command, Monitor, Mic, Settings, Zap, Key, User, Play, Image, ArrowUp, FileText, Sparkles, Search, ChevronUp, Copy,
     FileJson, MessageSquare, Briefcase, Eye, EyeOff, Ghost, ChevronDown, ChevronRight, HelpCircle, Upload, CheckCircle2,
     RefreshCw, Trash2, Check, ExternalLink, Volume2, Globe, Brain, Cpu, Calendar, Star, CreditCard, X, Pencil, Lightbulb,
-    SlidersHorizontal, PointerOff, ArrowRight, LayoutGrid
+    SlidersHorizontal, PointerOff, ArrowRight, LayoutGrid, AlertCircle
 } from 'lucide-react';
 import { SiOpenai, SiGoogle } from 'react-icons/si';
 import { useShortcuts } from '../../hooks/useShortcuts';
@@ -813,7 +813,11 @@ const SetupGuide = () => {
         },
         {
             title: 'Connect an AI Model',
-            desc: 'Open Settings → AI Providers and choose a built-in model, or add a Groq or OpenRouter key.',
+            desc: 'Open Settings → AI Providers and choose TeamSync, Groq, OpenAI, Claude, Gemini, Amazon Bedrock, or a local Ollama model.',
+        },
+        {
+            title: 'Enable image understanding',
+            desc: 'For screenshot and whiteboard analysis, Bedrock can auto-route images to Claude Sonnet or Amazon Nova when those models are enabled in AWS.',
         },
         {
             title: "You're all set.",
@@ -1141,6 +1145,22 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                                      <p className="text-[11px] opacity-80 mb-2">Immense contextual window. Default model: <strong>gemini-3.1-pro</strong>.</p>
                                      <span className={kbdClass}>AIzaSy...</span>
                                  </div>
+                                 <div className="p-3 rounded-xl border bg-bg-item-surface border-border-subtle hover:border-border-muted transition-colors md:col-span-2">
+                                     <h5 className="font-semibold text-sm text-text-primary flex justify-between items-center mb-1">
+                                         <span className="flex items-center gap-2">
+                                            <Cpu className="w-4 h-4 text-rose-400" /> Amazon Bedrock
+                                         </span>
+                                         <button onClick={() => { (window as any).electronAPI?.openExternal('https://console.aws.amazon.com/bedrock/home#/modelaccess') }} className="text-accent-primary hover:underline text-[10px] flex items-center gap-1"><ExternalLink size={10} /> Model Access</button>
+                                     </h5>
+                                     <p className="text-[11px] opacity-80 mb-2">
+                                         Uses your AWS account with either <strong>AWS CLI / Profile</strong> or <strong>Access Keys</strong>. Models are fetched dynamically by region and account permissions.
+                                     </p>
+                                     <div className="flex flex-wrap gap-1.5">
+                                        <span className={kbdClass}>aws configure</span>
+                                        <span className={kbdClass}>aws sso login</span>
+                                        <span className={kbdClass}>openai.gpt-oss-120b</span>
+                                     </div>
+                                 </div>
                              </div>
 
                              <div className="mt-2 bg-bg-item-surface p-4 rounded-xl border border-border-subtle shadow-sm flex gap-3">
@@ -1157,6 +1177,40 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                                  <p className="text-[11px] text-text-secondary leading-relaxed">
                                      Inside the Launcher UI (above the start button), you can hot-swap your <strong>Active Model</strong>. This dictation is extremely important—it determines the active core reasoning engine. If set to <strong>claude-3-5-sonnet</strong>, the intelligence agent uses Anthropic infrastructure exclusively for screen analysis. Switch to <strong>llama3:8b</strong> beneath it, and the architecture instantly reverts to generating responses via your offline GPU pipeline.
                                  </p>
+                             </div>
+
+                             <div className="p-4 mt-2 rounded-xl border border-rose-500/20 bg-rose-500/5">
+                                 <div className="flex items-start gap-3">
+                                     <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                                         <Image className="w-4 h-4 text-rose-400" />
+                                     </div>
+                                     <div className="min-w-0 flex-1">
+                                         <h5 className="font-semibold text-[13px] text-text-primary mb-1">Bedrock image and screenshot analysis</h5>
+                                         <p className="text-[11px] text-text-secondary leading-relaxed">
+                                             When Amazon Bedrock is selected and you attach a screenshot, selective capture, UI image, architecture diagram, whiteboard, or code screenshot, TeamSync automatically routes the request to a Bedrock multimodal model. Text-only requests continue using your selected Bedrock text model, including GPT-OSS.
+                                         </p>
+                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
+                                             <div className="rounded-lg border border-border-subtle bg-bg-item-surface p-2.5">
+                                                 <p className="text-[10px] font-bold uppercase tracking-wide text-text-tertiary mb-1">Preferred</p>
+                                                 <p className="text-[11px] text-text-secondary">Claude Sonnet vision-capable Bedrock model.</p>
+                                             </div>
+                                             <div className="rounded-lg border border-border-subtle bg-bg-item-surface p-2.5">
+                                                 <p className="text-[10px] font-bold uppercase tracking-wide text-text-tertiary mb-1">Fallback</p>
+                                                 <p className="text-[11px] text-text-secondary">Amazon Nova Pro, then Nova Lite.</p>
+                                             </div>
+                                             <div className="rounded-lg border border-border-subtle bg-bg-item-surface p-2.5">
+                                                 <p className="text-[10px] font-bold uppercase tracking-wide text-text-tertiary mb-1">Text path</p>
+                                                 <p className="text-[11px] text-text-secondary">GPT-OSS stays text-only and is never forced to read images.</p>
+                                             </div>
+                                         </div>
+                                         <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2">
+                                             <AlertCircle className="w-3.5 h-3.5 text-amber-300 mt-0.5 shrink-0" />
+                                             <p className="text-[11px] text-amber-200 leading-relaxed">
+                                                 If Fetch Models shows no vision model, enable Claude Sonnet or Amazon Nova model access in AWS Bedrock for the same region. TeamSync will still work normally for text-only Bedrock models.
+                                             </p>
+                                         </div>
+                                     </div>
+                                 </div>
                              </div>
                         </div>
 
@@ -1212,6 +1266,37 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                         <div className="relative w-full flex flex-col p-2 sm:p-5 bg-bg-main rounded-[26px] border border-border-subtle shadow-inner">
                             <MockAppInterface />
                             <MockPillControlsAnim />
+                        </div>
+
+                        <div className="p-4 rounded-xl border border-violet-500/20 bg-violet-500/5">
+                            <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
+                                    <LayoutGrid className="w-4 h-4 text-violet-400" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h4 className="font-bold text-[14px] text-text-primary">New V2 Pro Overlay</h4>
+                                        <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-[2px] rounded border border-violet-400/30 bg-violet-500/10 text-violet-300 leading-none">Pro Only</span>
+                                    </div>
+                                    <p className="text-[11px] text-text-secondary leading-relaxed">
+                                        New V2 Pro Overlay is the upgraded live workspace with the floating command bar, side intelligence panel, persistent answer history, previous/next response navigation, and richer system design rendering. Enable it from <strong>Settings → Interface → New V2 Pro Overlay</strong>; TeamSync preserves the selected overlay mode after restart unless you change it.
+                                    </p>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
+                                        <div className="rounded-lg border border-border-subtle bg-bg-item-surface p-2.5">
+                                            <p className="text-[10px] font-bold uppercase tracking-wide text-text-tertiary mb-1">History</p>
+                                            <p className="text-[11px] text-text-secondary">Navigate previous and next answers without losing prior responses.</p>
+                                        </div>
+                                        <div className="rounded-lg border border-border-subtle bg-bg-item-surface p-2.5">
+                                            <p className="text-[10px] font-bold uppercase tracking-wide text-text-tertiary mb-1">Diagrams</p>
+                                            <p className="text-[11px] text-text-secondary">System design diagrams remain tied to each saved answer.</p>
+                                        </div>
+                                        <div className="rounded-lg border border-border-subtle bg-bg-item-surface p-2.5">
+                                            <p className="text-[10px] font-bold uppercase tracking-wide text-text-tertiary mb-1">Panels</p>
+                                            <p className="text-[11px] text-text-secondary">Transcript, mode, actions, and response surfaces stay separated for faster scanning.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Quick Actions & Hotkeys */}

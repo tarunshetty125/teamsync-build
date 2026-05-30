@@ -124,6 +124,7 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
+    const activeRequestIdRef = useRef<string | null>(null);
 
     // Submit initial query when overlay opens
     useEffect(() => {
@@ -187,6 +188,10 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
         }, 50);
 
         const assistantMessageId = `assistant-${Date.now()}`;
+        const requestId = `global-chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const ragRequestId = `${requestId}-rag`;
+        const fallbackRequestId = `${requestId}-fallback`;
+        activeRequestIdRef.current = requestId;
 
         try {
             // Add typing indicator delay (200ms) - makes the AI feel "thoughtful"
@@ -202,7 +207,8 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
 
             // Set up RAG streaming listeners (RAF-batched)
             streamBuffer.reset();
-            const tokenCleanup = window.electronAPI?.onRAGStreamChunk((data: { chunk: string }) => {
+            const tokenCleanup = window.electronAPI?.onRAGStreamChunk((data: { chunk: string; requestId?: string }) => {
+                if (data.requestId !== ragRequestId || activeRequestIdRef.current !== requestId) return;
                 setChatState('streaming_response');
                 streamBuffer.appendToken(data.chunk, (content) => {
                     setMessages(prev => prev.map(msg =>
@@ -213,7 +219,8 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                 });
             });
 
-            const doneCleanup = window.electronAPI?.onRAGStreamComplete(() => {
+            const doneCleanup = window.electronAPI?.onRAGStreamComplete((data?: { requestId?: string }) => {
+                if (data?.requestId !== ragRequestId || activeRequestIdRef.current !== requestId) return;
                 const finalContent = streamBuffer.getBufferedContent();
                 setMessages(prev => prev.map(msg =>
                     msg.id === assistantMessageId
@@ -227,10 +234,11 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                 errorCleanup?.();
             });
 
-            const errorCleanup = window.electronAPI?.onRAGStreamError((data: { error: string }) => {
+            const errorCleanup = window.electronAPI?.onRAGStreamError((data: { error: string; requestId?: string }) => {
+                if (data.requestId !== ragRequestId || activeRequestIdRef.current !== requestId) return;
                 console.error('[GlobalChat] RAG stream error:', data.error);
                 setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
-                setErrorMessage("Couldn't get a response. Please try again.");
+                setErrorMessage(data.error || "Couldn't get a response. Please try again.");
                 setChatState('error');
                 streamBuffer.reset();
                 tokenCleanup?.();
@@ -239,7 +247,7 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
             });
 
             // Use global RAG query
-            const result = await window.electronAPI?.ragQueryGlobal(question);
+            const result = await window.electronAPI?.ragQueryGlobal(question, ragRequestId);
 
             if (result?.fallback) {
                 console.log("[GlobalChat] RAG unavailable, falling back to standard chat");
@@ -251,6 +259,8 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                 // Setup fallback listeners (Standard Gemini)
                 streamBuffer.reset();
                 const oldTokenCleanup = window.electronAPI?.onGeminiStreamToken((payload) => {
+                    if (typeof payload !== 'string' && payload?.requestId !== fallbackRequestId) return;
+                    if (activeRequestIdRef.current !== requestId) return;
                     const token = typeof payload === 'string' ? payload : payload.token;
                     setChatState('streaming_response');
                     streamBuffer.appendToken(token, (content) => {
@@ -262,7 +272,8 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                     });
                 });
 
-                const oldDoneCleanup = window.electronAPI?.onGeminiStreamDone(() => {
+                const oldDoneCleanup = window.electronAPI?.onGeminiStreamDone((payload) => {
+                    if (payload?.requestId !== fallbackRequestId || activeRequestIdRef.current !== requestId) return;
                     const finalContent = streamBuffer.getBufferedContent();
                     setMessages(prev => prev.map(msg =>
                         msg.id === assistantMessageId
@@ -277,10 +288,12 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                 });
 
                 const oldErrorCleanup = window.electronAPI?.onGeminiStreamError((payload) => {
+                    if (typeof payload !== 'string' && payload?.requestId !== fallbackRequestId) return;
+                    if (activeRequestIdRef.current !== requestId) return;
                     const error = typeof payload === 'string' ? payload : payload.error;
                     console.error('[GlobalChat] Gemini stream error:', error);
                     setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
-                    setErrorMessage("Couldn't get a response. Please check your settings.");
+                    setErrorMessage(error || "Couldn't get a response. Please check your settings.");
                     setChatState('error');
                     streamBuffer.reset();
                     oldTokenCleanup?.();
@@ -289,13 +302,19 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                 });
 
                 // Call standard chat
-                await window.electronAPI?.streamGeminiChat(question, undefined, undefined, { skipSystemPrompt: false, ignoreKnowledgeMode: true });
+                await window.electronAPI?.streamGeminiChat(question, undefined, undefined, {
+                    skipSystemPrompt: false,
+                    ignoreKnowledgeMode: true,
+                    requestId: fallbackRequestId,
+                });
+            } else if (result?.success === false) {
+                throw new Error(result.error || "Couldn't get a response. Please try again.");
             }
 
         } catch (error) {
             console.error('[GlobalChat] Error:', error);
             setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
-            setErrorMessage("Something went wrong. Please try again.");
+            setErrorMessage(error instanceof Error ? error.message : "Something went wrong. Please try again.");
             setChatState('error');
         }
     }, [chatState]);

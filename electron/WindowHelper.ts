@@ -150,7 +150,6 @@ export class WindowHelper {
   // Dedicated method for overlay window resizing - decoupled from launcher
   public setOverlayDimensions(width: number, height: number): void {
     if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return
-    console.log('[WindowHelper] setOverlayDimensions:', width, height);
 
     const currentBounds = this.overlayWindow.getBounds()
     const currentX = currentBounds.x
@@ -179,6 +178,7 @@ export class WindowHelper {
 
     // Apply both dimensions and coordinates atomically to prevent separate-frame resize flicker
     if (sizeChanged || positionChanged) {
+      console.log('[WindowHelper] setOverlayDimensions:', newWidth, newHeight);
       this.overlayWindow.setBounds({
         x: newX,
         y: newY,

@@ -50,6 +50,12 @@ export interface BedrockCredentials {
     preferredModel?: string;
 }
 
+export interface BedrockFetchedModel {
+    id: string;
+    label: string;
+    inputModalities?: string[];
+}
+
 export interface StoredCredentials {
     geminiApiKey?: string;
     groqApiKey?: string;
@@ -83,7 +89,7 @@ export interface StoredCredentials {
     claudePreferredModel?: string;
     bedrockPreferredModel?: string;
     bedrockCredentials?: BedrockCredentials;
-    bedrockFetchedModels?: { id: string; label: string }[];
+    bedrockFetchedModels?: BedrockFetchedModel[];
     // Groq Provider Vault — multi-key management
     groqKeyVault?: GroqVaultKey[];
     // Groq fetched model catalog — persisted so overlay windows can read without re-fetching
@@ -513,7 +519,7 @@ export class CredentialsManager {
         });
     }
 
-    public async fetchBedrockModels(credentials?: BedrockCredentials): Promise<{ id: string; label: string }[]> {
+    public async fetchBedrockModels(credentials?: BedrockCredentials): Promise<BedrockFetchedModel[]> {
         const resolved = credentials || this.getBedrockCredentials();
         if (!resolved) throw new Error('No Bedrock credentials configured.');
         const { BedrockClient } = require('./BedrockClient');
@@ -642,11 +648,11 @@ export class CredentialsManager {
         this.saveCredentials();
     }
 
-    public getBedrockFetchedModels(): { id: string; label: string }[] {
+    public getBedrockFetchedModels(): BedrockFetchedModel[] {
         return this.credentials.bedrockFetchedModels || [];
     }
 
-    public setBedrockFetchedModels(models: { id: string; label: string }[]): void {
+    public setBedrockFetchedModels(models: BedrockFetchedModel[]): void {
         this.credentials.bedrockFetchedModels = models;
         this.saveCredentials();
     }

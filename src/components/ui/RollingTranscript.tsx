@@ -106,8 +106,8 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
             border: '1px solid rgba(255,255,255,0.14)',
             background: 'linear-gradient(180deg, rgba(22,22,26,0.72) 0%, rgba(15,15,18,0.62) 100%)',
             boxShadow: '0 14px 28px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 rgba(255,255,255,0.03)',
-            backdropFilter: 'blur(24px) saturate(150%)',
-            WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+            backdropFilter: 'blur(8px) saturate(135%)',
+            WebkitBackdropFilter: 'blur(8px) saturate(135%)',
             overflow: 'hidden',
         }
         : {};

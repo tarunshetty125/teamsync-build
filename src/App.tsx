@@ -164,8 +164,16 @@ const App: React.FC = () => {
         setUseV2Layout(e.newValue === 'true');
       }
     };
+    const handleV2Changed = (e: Event) => {
+      const next = (e as CustomEvent<boolean>).detail;
+      setUseV2Layout(next === true);
+    };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener('teamsync-overlay-v2-changed', handleV2Changed);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('teamsync-overlay-v2-changed', handleV2Changed);
+    };
   }, []);
 
   const syncStartupState = useCallback(async () => {
@@ -650,6 +658,8 @@ const App: React.FC = () => {
                     }}
                     initialTab={settingsInitialTab}
                     isTrialActive={!!activeTrial}
+                    isPremiumActive={isPremiumActive}
+                    isLicenseLoaded={hasLoadedLicense}
                   />
                   <AnimatePresence>
                     {isModesOpen && (

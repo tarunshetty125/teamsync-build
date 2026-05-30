@@ -4,7 +4,7 @@
  * Thin presentation adapter — same IPC/brain as TeamSyncInterface, separate renderer only.
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo, useReducer } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useReducer, type Dispatch, type SetStateAction } from 'react';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import {
     getOverlayQuickActions,
@@ -36,6 +36,7 @@ export interface V2Message {
     id: string;
     role: 'user' | 'system' | 'interviewer';
     text: string;
+    timestamp?: number;
     requestId?: string;
     questionTurnId?: string;
     isStreaming?: boolean;
@@ -44,10 +45,15 @@ export interface V2Message {
     isCode?: boolean;
     intent?: string;
     source?: string;
+    provider?: string;
+    model?: string;
+    question?: string;
     chips?: Array<{ label: string; variant: string }>;
     isNegotiationCoaching?: boolean;
     negotiationCoachingData?: any;
     intelligenceMetadata?: any;
+    architectureJson?: unknown;
+    metadata?: unknown;
 }
 
 type SessionMode = DetectedQuestionType;
@@ -82,6 +88,18 @@ const MANUAL_SESSION_MODE_KEY = 'teamsync_overlay_manual_session_mode';
 const MANUAL_SESSION_MODE_EXPLICIT_KEY = 'teamsync_overlay_manual_session_mode_explicit';
 const INTENT_TRANSCRIPT_SEGMENTS = 8;
 const INTENT_TRANSCRIPT_MAX_CHARS = 1200;
+const MAX_RESPONSE_HISTORY = 30;
+
+function capOverlayMessages(nextMessages: V2Message[]): V2Message[] {
+    const systemIndexes: number[] = [];
+    nextMessages.forEach((message, index) => {
+        if (message.role === 'system') systemIndexes.push(index);
+    });
+    if (systemIndexes.length <= MAX_RESPONSE_HISTORY) return nextMessages;
+
+    const firstKeptSystemIndex = systemIndexes[systemIndexes.length - MAX_RESPONSE_HISTORY];
+    return nextMessages.slice(firstKeptSystemIndex);
+}
 
 const ACTION_CONTEXT_MESSAGES: Record<string, string> = {
     Answer: 'Generating response guidance…',
@@ -130,7 +148,16 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const { onEndMeeting, overlayOpacity = 0.65, hasProContextAccess = false } = props;
     const { isShortcutPressed } = useShortcuts();
 
-    const [messages, setMessages] = useState<V2Message[]>([]);
+    const [messages, setMessagesRaw] = useState<V2Message[]>([]);
+    const setMessages = useCallback<Dispatch<SetStateAction<V2Message[]>>>((updater) => {
+        setMessagesRaw((prev) => {
+            const next = typeof updater === 'function'
+                ? (updater as (value: V2Message[]) => V2Message[])(prev)
+                : updater;
+            return capOverlayMessages(next);
+        });
+    }, []);
+    const [activeResponseIndex, setActiveResponseIndex] = useState(-1);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isExpanded, setIsExpanded] = useState(true);
     const [lastFinalSentence, setLastFinalSentence] = useState('');
@@ -456,6 +483,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         void window.electronAPI.ragCancelQuery?.({ meetingId: LIVE_MEETING_RAG_ID }).catch(() => {});
 
         setMessages([]);
+        setActiveResponseIndex(-1);
         setInputValue('');
         setIsProcessing(false);
         setRollingTranscript('');
@@ -978,6 +1006,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     ...prev,
                     {
                         id: nextMsgId(),
+                        timestamp: Date.now(),
                         role: 'user',
                         text: options?.userBubbleText || options?.message || '',
                         hasScreenshot: Boolean(options?.screenshotPreview),
@@ -990,11 +1019,15 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 ...prev,
                 {
                     id: nextMsgId(),
+                    timestamp: Date.now(),
                     requestId,
                     role: 'system',
                     text: '',
                     intent,
                     source: options?.source,
+                    model: currentModelRef.current,
+                    provider: detectProviderType(currentModelRef.current),
+                    question: resolvedMessage || options?.userBubbleText || options?.additionalContext,
                     isStreaming: true,
                 },
             ]);
@@ -1085,14 +1118,18 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
             setMessages((prev) => [
                 ...prev,
-                { id: nextMsgId(), role: 'user', text: userText },
+                { id: nextMsgId(), timestamp: Date.now(), role: 'user', text: userText },
                 {
                     id: nextMsgId(),
+                    timestamp: Date.now(),
                     requestId,
                     role: 'system',
                     text: '',
                     intent: 'manual_chat',
                     source: 'Manual Input',
+                    model: currentModelRef.current,
+                    provider: detectProviderType(currentModelRef.current),
+                    question: userText,
                     isStreaming: true,
                 },
             ]);
@@ -1173,11 +1210,15 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 ...prev,
                 {
                     id: nextMsgId(),
+                    timestamp: Date.now(),
                     requestId,
                     role: 'system',
                     text: '',
                     intent: 'screen_scan',
                     source: 'Screen Analysis',
+                    model: currentModelRef.current,
+                    provider: detectProviderType(currentModelRef.current),
+                    question: 'Screen analysis',
                     isStreaming: true,
                     hasScreenshot: true,
                     screenshotPreview: data.preview,
@@ -1221,25 +1262,87 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         onSessionReset();
     }, [cancelInFlightOverlayRequests, isProcessing, onSessionReset]);
 
-    const latestResponse = useMemo(() => {
-        for (let i = messages.length - 1; i >= 0; i--) {
-            if (messages[i].role === 'system') return messages[i];
-        }
-        return null;
-    }, [messages]);
+    const responseHistory = useMemo(
+        () => messages.filter((message) => message.role === 'system'),
+        [messages],
+    );
+
+    const latestResponse = responseHistory[responseHistory.length - 1] ?? null;
+    const latestResponseIdRef = useRef<string | null>(null);
 
     useEffect(() => {
-        console.debug('[V2][Bridge] latestResponse recomputed', {
+        const latestId = latestResponse?.id ?? null;
+        if (!latestId) {
+            latestResponseIdRef.current = null;
+            setActiveResponseIndex(-1);
+            return;
+        }
+
+        if (latestResponseIdRef.current !== latestId) {
+            latestResponseIdRef.current = latestId;
+            setActiveResponseIndex(responseHistory.length - 1);
+            return;
+        }
+
+        setActiveResponseIndex((index) => {
+            if (responseHistory.length === 0) return -1;
+            if (index < 0) return responseHistory.length - 1;
+            return Math.min(index, responseHistory.length - 1);
+        });
+    }, [latestResponse?.id, responseHistory.length]);
+
+    const activeResponse = activeResponseIndex >= 0
+        ? responseHistory[activeResponseIndex] ?? latestResponse
+        : latestResponse;
+
+    const goToPreviousResponse = useCallback(() => {
+        setActiveResponseIndex((index) => Math.max(0, index - 1));
+    }, []);
+
+    const goToNextResponse = useCallback(() => {
+        setActiveResponseIndex((index) => Math.min(responseHistory.length - 1, index + 1));
+    }, [responseHistory.length]);
+
+    const responseNavigation = useMemo(() => {
+        const total = responseHistory.length;
+        const safeIndex = total > 0
+            ? Math.min(Math.max(activeResponseIndex, 0), total - 1)
+            : -1;
+        return {
+            activeIndex: safeIndex,
+            total,
+            canGoPrevious: safeIndex > 0,
+            canGoNext: safeIndex >= 0 && safeIndex < total - 1,
+        };
+    }, [activeResponseIndex, responseHistory.length]);
+
+    useEffect(() => {
+        console.debug('[V2][Bridge] responseHistory recomputed', {
             totalMessages: messages.length,
+            historySize: responseHistory.length,
+            activeResponseIndex: responseNavigation.activeIndex,
+            activeResponseId: activeResponse?.id ?? null,
+            activeResponseRequestId: activeResponse?.requestId ?? null,
+            activeResponseIntent: activeResponse?.intent ?? null,
+            activeResponseSource: activeResponse?.source ?? null,
+            activeResponseIsStreaming: activeResponse?.isStreaming ?? null,
+            activeResponseTextLength: activeResponse?.text.length ?? 0,
             latestResponseId: latestResponse?.id ?? null,
-            latestResponseRequestId: latestResponse?.requestId ?? null,
-            latestResponseIntent: latestResponse?.intent ?? null,
-            latestResponseSource: latestResponse?.source ?? null,
-            latestResponseIsStreaming: latestResponse?.isStreaming ?? null,
-            latestResponseTextLength: latestResponse?.text.length ?? 0,
             isProcessing,
         });
-    }, [isProcessing, latestResponse, messages.length]);
+    }, [
+        activeResponse?.id,
+        activeResponse?.intent,
+        activeResponse?.isStreaming,
+        activeResponse?.requestId,
+        activeResponse?.source,
+        activeResponse?.text.length,
+        isProcessing,
+        latestResponse?.id,
+        messages.length,
+        responseHistory.length,
+        responseNavigation.activeIndex,
+    ]);
 
     const frozenTranscriptUiSnapshot = frozenTranscriptUiSnapshotRef.current;
     const visibleRollingTranscript = isTranscriptPaused
@@ -1283,6 +1386,12 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         recommendedButton: visibleRecommendedButton,
         detectedQuestionType: visibleDetectedQuestionType,
         contextSummary: visibleContextSummary,
+        responseHistory,
+        activeResponse,
+        activeResponseIndex: responseNavigation.activeIndex,
+        responseHistoryTotal: responseNavigation.total,
+        canGoPreviousResponse: responseNavigation.canGoPrevious,
+        canGoNextResponse: responseNavigation.canGoNext,
         latestResponse,
         activeModeLabel,
         isMeetingActive,
@@ -1311,6 +1420,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         handleEndMeeting,
         handleScreenScan,
         handleReset,
+        goToPreviousResponse,
+        goToNextResponse,
         toggleExpanded,
         toggleTranscriptPause,
         toggleMousePassthrough,

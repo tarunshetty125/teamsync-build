@@ -3613,7 +3613,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // Query global (cross-meeting search)
-  safeHandle("rag:query-global", async (event, { query }: { query: string }) => {
+  safeHandle("rag:query-global", async (event, { query, requestId: providedRequestId }: { query: string; requestId?: string }) => {
     const ragManager = appState.getRAGManager();
     const intelligenceManager = appState.getIntelligenceManager();
 
@@ -3623,7 +3623,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
     const abortController = new AbortController();
     const queryKey = `global-${Date.now()}`;
-    const requestId = `rag-global-${Date.now()}`;
+    const requestId = providedRequestId || `rag-global-${Date.now()}`;
     activeRAGQueries.set(queryKey, abortController);
     activeRAGActionRequestIds.set(queryKey, requestId);
 
@@ -3632,17 +3632,17 @@ export function initializeIpcHandlers(appState: AppState): void {
       const onToken = (payload: any) => {
         if (payload?.intent !== 'manual_chat' || payload?.requestId !== requestId) return;
         if (abortController.signal.aborted) return;
-        event.sender.send("rag:stream-chunk", { global: true, chunk: payload.token });
+        event.sender.send("rag:stream-chunk", { global: true, chunk: payload.token, requestId });
       };
       const onResult = (payload: any) => {
         if (payload?.intent !== 'manual_chat' || payload?.requestId !== requestId) return;
         if (abortController.signal.aborted) return;
-        event.sender.send("rag:stream-complete", { global: true });
+        event.sender.send("rag:stream-complete", { global: true, requestId });
       };
       const onError = (error: any, _mode: string, failedRequestId?: string | null) => {
         if (failedRequestId !== requestId) return;
         if (abortController.signal.aborted) return;
-        event.sender.send("rag:stream-error", { global: true, error: error?.message || 'Unknown error' });
+        event.sender.send("rag:stream-error", { global: true, error: error?.message || 'Unknown error', requestId });
       };
 
       intelligenceManager.on('action_token', onToken);
@@ -3675,7 +3675,12 @@ export function initializeIpcHandlers(appState: AppState): void {
 
     } catch (error: any) {
       if (error.name !== 'AbortError') {
-        event.sender.send("rag:stream-error", { global: true, error: error.message });
+        const msg = error.message || "";
+        if (msg.includes('NO_RELEVANT_CONTEXT') || msg.includes('NO_MEETING_EMBEDDINGS')) {
+          console.log(`[RAG] Global query failed with '${msg}', falling back to regular chat`);
+          return { fallback: true };
+        }
+        event.sender.send("rag:stream-error", { global: true, error: msg, requestId });
       }
       return { success: false, error: error.message };
     } finally {

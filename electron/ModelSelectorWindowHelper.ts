@@ -9,6 +9,9 @@ const startUrl = isDev
 
 import type { WindowHelper } from "./WindowHelper"
 
+const MODEL_SELECTOR_WINDOW_WIDTH = 380
+const MODEL_SELECTOR_WINDOW_HEIGHT = 340
+
 type WindowActivationOptions = {
     activate?: boolean
 }
@@ -129,8 +132,8 @@ export class ModelSelectorWindowHelper {
 
     private createWindow(x?: number, y?: number, showWhenReady: boolean = true): void {
         const windowSettings: Electron.BrowserWindowConstructorOptions = {
-            width: 140,
-            height: 200,
+            width: MODEL_SELECTOR_WINDOW_WIDTH,
+            height: MODEL_SELECTOR_WINDOW_HEIGHT,
             frame: false,
             transparent: true,
             resizable: false,

@@ -58,19 +58,19 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
     const panelsRowRef = React.useRef<HTMLDivElement>(null);
 
     const settledResponseTextRef = useRef<string | undefined>();
-    if (!bridge.latestResponse?.isStreaming && bridge.latestResponse?.text) {
-        settledResponseTextRef.current = bridge.latestResponse.text;
+    if (!bridge.activeResponse?.isStreaming && bridge.activeResponse?.text) {
+        settledResponseTextRef.current = bridge.activeResponse.text;
     }
     const expandedPanelsWidth = useMemo(
         () =>
             getV2PanelsWidth(
                 resolveV2ResponseWidthPx(
-                    bridge.latestResponse?.isStreaming
+                    bridge.activeResponse?.isStreaming
                         ? settledResponseTextRef.current
-                        : bridge.latestResponse?.text,
+                        : bridge.activeResponse?.text,
                 ),
             ),
-        [bridge.latestResponse?.text, bridge.latestResponse?.isStreaming],
+        [bridge.activeResponse?.text, bridge.activeResponse?.isStreaming],
     );
 
     const showTranscriptStrip =
@@ -86,7 +86,13 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         isMeetingActive: bridge.isMeetingActive,
         showTranscriptStrip,
         isProcessing: bridge.isProcessing,
-        contentRevision: `${showTranscriptStrip}-${bridge.activeQuickActions.length}`,
+        contentRevision: [
+            showTranscriptStrip,
+            bridge.activeQuickActions.length,
+            bridge.activeResponse?.id ?? 'none',
+            bridge.activeResponse?.text.length ?? 0,
+            bridge.activeResponseIndex,
+        ].join(':'),
     });
 
     const handleToggleTranscript = useCallback(() => {
@@ -150,9 +156,9 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                                 width: '100%',
                                 maxWidth: getV2PanelsWidth(
                                     resolveV2ResponseWidthPx(
-                                        bridge.latestResponse?.isStreaming
+                                        bridge.activeResponse?.isStreaming
                                             ? settledResponseTextRef.current
-                                            : bridge.latestResponse?.text,
+                                            : bridge.activeResponse?.text,
                                     ),
                                 ),
                                 margin: '0 auto',
@@ -183,7 +189,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
             {/* ── Surfaces 2 & 3: Panels side-by-side ── */}
             <AnimatePresence>
                 {bridge.isExpanded && (
-                    <div
+                    <motion.div
                         ref={panelsRowRef}
                         className="v2-panels-row"
                     >
@@ -209,11 +215,17 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                         />
 
                         <ProResponseSurface
-                            latestResponse={bridge.latestResponse}
+                            activeResponse={bridge.activeResponse}
                             isProcessing={bridge.isProcessing}
+                            activeResponseIndex={bridge.activeResponseIndex}
+                            responseHistoryTotal={bridge.responseHistoryTotal}
+                            canGoPreviousResponse={bridge.canGoPreviousResponse}
+                            canGoNextResponse={bridge.canGoNextResponse}
+                            onPreviousResponse={bridge.goToPreviousResponse}
+                            onNextResponse={bridge.goToNextResponse}
                             scrollContainerRef={bridge.scrollContainerRef}
                         />
-                    </div>
+                    </motion.div>
                 )}
             </AnimatePresence>
         </div>

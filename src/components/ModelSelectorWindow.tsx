@@ -206,7 +206,7 @@ const ModelSelectorWindow = () => {
 
     return (
         <div className="w-fit h-fit bg-transparent flex flex-col">
-            <div className={`w-[320px] max-w-[calc(100vw-24px)] h-[280px] backdrop-blur-md border rounded-[16px] overflow-hidden shadow-2xl p-2 flex flex-col animate-scale-in origin-top-left ${panelClass}`}>
+            <div className={`w-[360px] max-w-[calc(100vw-24px)] h-[320px] backdrop-blur-md border rounded-[16px] overflow-hidden shadow-2xl p-2 flex flex-col animate-scale-in origin-top-left ${panelClass}`}>
 
                 {isLoading ? (
                     <div className={`flex items-center justify-center py-4 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -243,7 +243,7 @@ const ModelSelectorWindow = () => {
                                                 }
                                             `}
                                         >
-                                            <span className="text-[12px] font-medium whitespace-normal break-words leading-snug flex-1 min-w-0">{model.name}</span>
+                                            <span className="text-[12px] font-medium whitespace-normal break-words [overflow-wrap:anywhere] leading-snug flex-1 min-w-0">{model.name}</span>
                                             {isSelected && <Check className={`w-3.5 h-3.5 shrink-0 ml-2 ${isLight ? 'text-emerald-600' : 'text-[#FDE68A]'}`} />}
                                         </button>
                                     </React.Fragment>

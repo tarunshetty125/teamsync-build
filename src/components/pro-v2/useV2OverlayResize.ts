@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import {
     V2_BAR_ONLY_WIDTH,
     V2_OVERLAY_WINDOW_DEFAULT_HEIGHT,
+    V2_OVERLAY_WINDOW_MAX_HEIGHT,
     V2_OVERLAY_WINDOW_MIN_WIDTH,
     V2_PANELS_WIDTH_DEFAULT,
 } from './v2Layout';
@@ -19,7 +20,7 @@ type ResizeOpts = {
     showTranscriptStrip?: boolean;
 };
 
-const RESIZE_THROTTLE_MS = 250;
+const RESIZE_THROTTLE_MS = 300;
 const V2_COLLAPSE_HOLD_MS = 380;
 const V2_COLLAPSED_HEIGHT = 60;
 const V2_COLLAPSED_WITH_TRANSCRIPT_HEIGHT = 152;
@@ -37,7 +38,7 @@ function computeDimensions(
             const height = container
                 ? Math.max(Math.ceil(container.scrollHeight) + 16, V2_OVERLAY_WINDOW_DEFAULT_HEIGHT)
                 : V2_OVERLAY_WINDOW_DEFAULT_HEIGHT;
-            return { width: expandedPanelsWidth, height };
+            return { width: expandedPanelsWidth, height: Math.min(height, V2_OVERLAY_WINDOW_MAX_HEIGHT) };
         }
         // Keep collapsed sizing deterministic so AnimatePresence exit frames from the
         // panels cannot re-measure the old expanded stack and force a tall shell.
@@ -59,7 +60,7 @@ function computeDimensions(
         ? Math.max(Math.ceil(container.scrollHeight) + 16, V2_OVERLAY_WINDOW_DEFAULT_HEIGHT)
         : V2_OVERLAY_WINDOW_DEFAULT_HEIGHT;
 
-    return { width, height: measuredHeight };
+    return { width, height: Math.min(measuredHeight, V2_OVERLAY_WINDOW_MAX_HEIGHT) };
 }
 
 export function useV2OverlayResize({
@@ -79,6 +80,8 @@ export function useV2OverlayResize({
     const collapseHoldUntilRef = useRef(0);
     const wasProcessingRef = useRef(isProcessing);
     const burstGenerationRef = useRef(0);
+    const lastPushedDimsRef = useRef<{ width: number; height: number } | null>(null);
+    const diagramInteractingRef = useRef(false);
 
     const prevExpandedRef = useRef(isExpanded);
     const prevTranscriptRef = useRef(showTranscriptStrip);
@@ -95,6 +98,7 @@ export function useV2OverlayResize({
 
     const pushDimensions = useCallback((generation?: number) => {
         if (typeof generation === 'number' && generation !== burstGenerationRef.current) return;
+        if (diagramInteractingRef.current) return;
         const shouldHoldExpandedShell =
             !isExpanded && Date.now() < collapseHoldUntilRef.current;
         const dims = computeDimensions(
@@ -105,6 +109,11 @@ export function useV2OverlayResize({
             showTranscriptStrip,
             shouldHoldExpandedShell,
         );
+        const previous = lastPushedDimsRef.current;
+        if (previous && Math.abs(previous.width - dims.width) < 2 && Math.abs(previous.height - dims.height) < 2) {
+            return;
+        }
+        lastPushedDimsRef.current = dims;
         window.electronAPI?.updateContentDimensions?.(dims);
     }, [containerRef, panelsRowRef, isExpanded, expandedPanelsWidth, showTranscriptStrip]);
 
@@ -133,7 +142,7 @@ export function useV2OverlayResize({
         }
         const generation = ++burstGenerationRef.current;
         pushDimensions(generation);
-        for (const ms of [16, 50, 100, 200, 400, 800, 1200]) {
+        for (const ms of [32, 120, 280, 560]) {
             burstTimersRef.current.push(setTimeout(() => pushDimensions(generation), ms));
         }
     }, [pushDimensions]);
@@ -172,6 +181,18 @@ export function useV2OverlayResize({
     useEffect(() => {
         scheduleResizeBurst();
     }, [scheduleResizeBurst, isExpanded, expandedPanelsWidth, isMeetingActive, contentRevision, showTranscriptStrip]);
+
+    useEffect(() => {
+        const onDiagramInteraction = (event: Event) => {
+            const active = (event as CustomEvent<boolean>).detail === true;
+            diagramInteractingRef.current = active;
+            if (!active) {
+                scheduleResizeBurst();
+            }
+        };
+        window.addEventListener('teamsync-v2-diagram-interaction', onDiagramInteraction);
+        return () => window.removeEventListener('teamsync-v2-diagram-interaction', onDiagramInteraction);
+    }, [scheduleResizeBurst]);
 
     useEffect(() => {
         if (!window.electronAPI?.onSessionReset) return;

@@ -40,3 +40,4 @@ export const V2_OVERLAY_WINDOW_MIN_WIDTH = V2_PANELS_WIDTH_MAX;
 
 /** Sensible initial height before the renderer measures content. */
 export const V2_OVERLAY_WINDOW_DEFAULT_HEIGHT = 520;
+export const V2_OVERLAY_WINDOW_MAX_HEIGHT = 560;

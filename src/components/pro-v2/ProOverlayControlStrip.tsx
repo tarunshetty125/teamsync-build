@@ -59,16 +59,19 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
         }
     }, [isSettingsOpen, openPopupBelowPanel]);
 
+    const modelDisplayName = getOverlayModelDisplayName(currentModel);
+
     return (
         <div className="v2-overlay-controls v2-no-drag">
             <button
                 type="button"
                 className="v2-overlay-model-btn"
                 onClick={handleModelClick}
-                title="Change model"
+                title={modelDisplayName}
+                aria-label={`Change model, current model ${modelDisplayName}`}
             >
                 <span className="v2-overlay-model-label">
-                    {getOverlayModelDisplayName(currentModel)}
+                    {modelDisplayName}
                 </span>
                 <ChevronDown size={13} className="v2-overlay-model-chevron" />
             </button>

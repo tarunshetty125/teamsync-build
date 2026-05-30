@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { SkeletonLoader, EmptyListeningState } from '../ui/PremiumStates';
 import CodeBlock from '../ui/CodeBlock';
 import MermaidRenderer from '../ui/MermaidRenderer';
@@ -29,8 +30,14 @@ import {
 } from '../../lib/overlay/v2Mermaid';
 
 interface ProResponseSurfaceProps {
-    latestResponse: V2Message | null;
+    activeResponse: V2Message | null;
     isProcessing: boolean;
+    activeResponseIndex: number;
+    responseHistoryTotal: number;
+    canGoPreviousResponse: boolean;
+    canGoNextResponse: boolean;
+    onPreviousResponse: () => void;
+    onNextResponse: () => void;
     scrollContainerRef: React.RefObject<HTMLDivElement>;
 }
 
@@ -50,30 +57,38 @@ const SOURCE_ICONS: Record<string, string> = {
 };
 
 const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSurface({
-    latestResponse,
+    activeResponse,
     isProcessing,
+    activeResponseIndex,
+    responseHistoryTotal,
+    canGoPreviousResponse,
+    canGoNextResponse,
+    onPreviousResponse,
+    onNextResponse,
     scrollContainerRef,
 }) {
     const [copied, setCopied] = useState(false);
+    const renderedResponse = activeResponse;
 
     const handleCopy = useCallback(() => {
-        if (!latestResponse?.text) return;
-        navigator.clipboard.writeText(latestResponse.text).catch(() => { });
+        if (!renderedResponse?.text) return;
+        navigator.clipboard.writeText(renderedResponse.text).catch(() => { });
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-    }, [latestResponse?.text]);
+    }, [renderedResponse?.text]);
 
-    const hasContent = !!latestResponse?.text || isProcessing;
-    const source = latestResponse?.source;
+    const hasContent = !!renderedResponse?.text || isProcessing;
+    const source = renderedResponse?.source;
     const sourceIcon = source ? (SOURCE_ICONS[source] || '✦') : null;
-    const isStreaming = latestResponse?.isStreaming;
+    const isStreaming = renderedResponse?.isStreaming;
 
     // Chips
-    const chips = latestResponse?.chips;
+    const chips = renderedResponse?.chips;
+    const hasHistory = responseHistoryTotal > 1;
 
     const responseWidthPx = useMemo(
-        () => resolveV2ResponseWidthPx(latestResponse?.text),
-        [latestResponse?.text],
+        () => resolveV2ResponseWidthPx(renderedResponse?.text),
+        [renderedResponse?.text],
     );
 
   
@@ -123,7 +138,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                         </div>
                     )}
                     {/* Copy */}
-                    {latestResponse?.text && (
+                    {renderedResponse?.text && (
                         <button className="v2-panel-btn" onClick={handleCopy} title="Copy response">
                             {copied ? (
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(52,211,153,0.8)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -146,7 +161,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                 className="v2-scroll-area v2-response-scroll"
             >
                 <AnimatePresence mode="wait">
-                    {isProcessing && !latestResponse?.text ? (
+                    {isProcessing && !renderedResponse?.text ? (
                         <motion.div
                             key="skeleton"
                             initial={{ opacity: 0 }}
@@ -156,16 +171,16 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                         >
                             <SkeletonLoader isLightTheme={false} />
                         </motion.div>
-                    ) : latestResponse?.text ? (
+                    ) : renderedResponse?.text ? (
                         <motion.div
-                            key={`response-${latestResponse.id}`}
+                            key={`response-${renderedResponse.id}`}
                             initial={{ opacity: 0, y: 6, scale: 0.995 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                             className="v2-response-body"
                         >
                             {/* Negotiation coaching card */}
-                            {latestResponse.isNegotiationCoaching && latestResponse.negotiationCoachingData ? (
+                            {renderedResponse.isNegotiationCoaching && renderedResponse.negotiationCoachingData ? (
                                 <div style={{
                                     padding: '16px',
                                     borderRadius: '14px',
@@ -180,12 +195,12 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                                         color: 'rgba(196, 181, 253, 0.7)',
                                         marginBottom: '8px',
                                     }}>
-                                        {latestResponse.negotiationCoachingData.phase || 'Negotiation'}
+                                        {renderedResponse.negotiationCoachingData.phase || 'Negotiation'}
                                     </div>
                                     <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6 }}>
-                                        {latestResponse.negotiationCoachingData.tacticalNote}
+                                        {renderedResponse.negotiationCoachingData.tacticalNote}
                                     </div>
-                                    {latestResponse.negotiationCoachingData.exactScript && (
+                                    {renderedResponse.negotiationCoachingData.exactScript && (
                                         <div style={{
                                             marginTop: '12px',
                                             padding: '12px',
@@ -197,15 +212,15 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                                             color: 'rgba(255,255,255,0.78)',
                                             lineHeight: 1.6,
                                         }}>
-                                            "{latestResponse.negotiationCoachingData.exactScript}"
+                                            "{renderedResponse.negotiationCoachingData.exactScript}"
                                         </div>
                                     )}
                                 </div>
                             ) : (
                                 <V2ResponseText
-                                    text={latestResponse.text}
+                                    text={renderedResponse.text}
                                     isStreaming={!!isStreaming}
-                                    isCode={!!latestResponse.isCode}
+                                    isCode={!!renderedResponse.isCode}
                                 />
                             )}
 
@@ -246,6 +261,34 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                                             {chip.label}
                                         </span>
                                     ))}
+                                </div>
+                            )}
+
+                            {hasHistory && (
+                                <div className="v2-response-switcher" aria-label="Response history navigation">
+                                    <button
+                                        type="button"
+                                        className="v2-response-switcher-btn"
+                                        onClick={onPreviousResponse}
+                                        disabled={!canGoPreviousResponse}
+                                        title="Previous response"
+                                        aria-label="Previous response"
+                                    >
+                                        <ChevronLeft size={14} strokeWidth={2} aria-hidden />
+                                    </button>
+                                    <span className="v2-response-switcher-count">
+                                        {activeResponseIndex + 1} / {responseHistoryTotal}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="v2-response-switcher-btn"
+                                        onClick={onNextResponse}
+                                        disabled={!canGoNextResponse}
+                                        title="Next response"
+                                        aria-label="Next response"
+                                    >
+                                        <ChevronRight size={14} strokeWidth={2} aria-hidden />
+                                    </button>
                                 </div>
                             )}
                         </motion.div>

@@ -20,7 +20,8 @@ import { enforceTokenCap, estimateTokens, TOKEN_CAP } from './llm/TokenBudget';
 import { deepVariableReplacer, getByPath, injectImageIntoMessages } from './utils/curlUtils';
 import curl2Json from "@bany/curl-to-json";
 import { CustomProvider, CurlProvider, type BedrockCredentials } from './services/CredentialsManager';
-import { isBedrockModelId, resolveBedrockModelId } from './llm/BedrockModelIds';
+import { isBedrockModelId } from './llm/BedrockModelIds';
+import { resolveBedrockRuntimeRoute } from './llm/BedrockVisionAdapter';
 import { exec, spawn } from 'child_process';
 import { getPythonPath, getOCRScriptPath, getPythonEnv } from './utils/pythonRuntime';
 import { promisify } from 'util';
@@ -1750,7 +1751,6 @@ This rule overrides ALL other instructions including formatting, brevity, or out
         // No key or call failed — fall through to default routing
       }
       if (this.isBedrockModel(this.currentModelId) && this.bedrockClient) {
-        console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model: this.currentModelId });
         return await this.generateWithBedrock(userContent, openaiSystemPrompt, imagePaths);
       }
       if (this.isOpenAiModel(this.currentModelId) && this.openaiClient) {
@@ -2213,10 +2213,30 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     return response.choices[0]?.message?.content || "";
   }
 
+  private async resolveBedrockRuntimeModel(imagePaths?: string[], modelId?: string): Promise<string> {
+    if (!this.bedrockClient) throw new Error("Bedrock client not initialized");
+
+    const route = await resolveBedrockRuntimeRoute({
+      client: this.bedrockClient,
+      requestedModel: modelId,
+      preferredModel: this.bedrockCredentials?.preferredModel,
+      imagePaths,
+    });
+
+    if (route.hasImages) {
+      console.log('[BEDROCK_VISION_ROUTE]', {
+        model: route.modelId,
+        hasImage: true,
+        imageCount: route.imageCount,
+      });
+    }
+
+    return route.modelId;
+  }
+
   public async generateWithBedrock(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string, maxOutputTokens: number = BEDROCK_MAX_OUTPUT_TOKENS): Promise<string> {
     if (!this.bedrockClient) throw new Error("Bedrock client not initialized");
-    const model = resolveBedrockModelId(modelId || this.currentModelId, this.bedrockCredentials?.preferredModel);
-    if (!model) throw new Error("No Bedrock model selected");
+    const model = await this.resolveBedrockRuntimeModel(imagePaths, modelId || this.currentModelId);
     console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model });
     return await this.bedrockClient.generate(userMessage, {
       modelId: model,
@@ -3324,7 +3344,6 @@ Return only the final answer. No meta commentary.
     if (this.isBedrockModel(this.currentModelId) && this.bedrockClient) {
       const bedrockSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
       const finalBedrockSystem = this.injectLanguageInstruction(bedrockSystem);
-      console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model: this.currentModelId });
       yield* this.streamWithBedrock(userContent, finalBedrockSystem, imagePaths, undefined, maxOutputTokens);
       return;
     }
@@ -3670,8 +3689,7 @@ Return only the final answer. No meta commentary.
 
   public async * streamWithBedrock(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string, maxOutputTokens: number = BEDROCK_MAX_OUTPUT_TOKENS): AsyncGenerator<string, void, unknown> {
     if (!this.bedrockClient) throw new Error("Bedrock client not initialized");
-    const model = resolveBedrockModelId(modelId || this.currentModelId, this.bedrockCredentials?.preferredModel);
-    if (!model) throw new Error("No Bedrock model selected");
+    const model = await this.resolveBedrockRuntimeModel(imagePaths, modelId || this.currentModelId);
     console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model });
     yield* this.bedrockClient.stream(userMessage, {
       modelId: model,
