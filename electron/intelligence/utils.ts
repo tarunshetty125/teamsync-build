@@ -4,7 +4,7 @@
 // Extracted from QuestionUnderstandingV2, ResponseDepthEstimator, and
 // ContextPriorityEngine to eliminate code duplication (audit finding H4).
 
-import { normalizeSystemDesignEntityTypos } from '../../src/lib/overlay/systemDesignEntityNormalizer.ts';
+import { normalizeSystemDesignEntityTypos } from '../../src/lib/overlay/systemDesignEntityNormalizer';
 
 /**
  * Normalize a question string for pattern matching.

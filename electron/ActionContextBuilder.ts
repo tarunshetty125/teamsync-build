@@ -17,7 +17,7 @@ import {
 import type { ScreenContentMode } from './llm';
 import { looksLikeCodingInterviewQuestion } from './intelligence/codingQuestionHeuristics';
 import { looksLikeSystemDesignInterviewQuestion } from './intelligence/systemDesignQuestionHeuristics';
-import { normalizeSystemDesignEntityTypos } from '../src/lib/overlay/systemDesignEntityNormalizer.ts';
+import { normalizeSystemDesignEntityTypos } from '../src/lib/overlay/systemDesignEntityNormalizer';
 
 export type UnifiedActionIntent =
     | 'what_to_answer'

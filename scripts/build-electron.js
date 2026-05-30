@@ -52,6 +52,7 @@ for (const sharedDir of sharedRuntimeDirs) {
 
 const sharedRuntimeFiles = [
   path.resolve(rootDir, 'src/utils/transcriptSpeakers.ts'),
+  path.resolve(rootDir, 'src/lib/overlay/systemDesignEntityNormalizer.ts'),
 ];
 
 for (const sharedFile of sharedRuntimeFiles) {

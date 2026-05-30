@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { normalizeQuestion } from '../intelligence/utils.ts';
 import {
   detectQuestionType,
   normalizeTranscript,
@@ -24,16 +23,25 @@ test('system design entity typo normalizer fixes common product misspellings', (
 
 test('system design detection catches typo-normalized product prompts', () => {
   assert.equal(normalizeTranscript('design flikart'), 'design flipkart');
-  assert.equal(normalizeQuestion('design flikart'), 'design flipkart');
   assert.equal(detectQuestionType('design flikart', 'general', 'general').nextType, 'system_design');
 });
 
 test('manual system design prompts normalize entity typos before prompt serialization', () => {
   const builder = read('electron/ActionContextBuilder.ts');
+  const utils = read('electron/intelligence/utils.ts');
 
   assert.match(builder, /function normalizeActionQuestion/);
   assert.match(builder, /shouldNormalizeSystemDesignQuestion\(question, mode, intent\)/);
   assert.match(builder, /normalizeSystemDesignEntityTypos\(question\)/);
   assert.match(builder, /const rawQuestion = \(\(\) =>/);
   assert.match(builder, /const question = normalizeActionQuestion\(rawQuestion, mode, intent\)/);
+  assert.match(utils, /normalizeSystemDesignEntityTypos\(normalized, \{ casing: 'lower' \}\)/);
+  assert.doesNotMatch(builder, /systemDesignEntityNormalizer\.ts/);
+  assert.doesNotMatch(utils, /systemDesignEntityNormalizer\.ts/);
+});
+
+test('electron build emits shared system design normalizer for runtime imports', () => {
+  const buildScript = read('scripts/build-electron.js');
+
+  assert.match(buildScript, /src\/lib\/overlay\/systemDesignEntityNormalizer\.ts/);
 });
