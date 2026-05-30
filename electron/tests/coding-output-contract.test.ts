@@ -35,6 +35,21 @@ test('coding code_hint prompt still requires executable fenced code', () => {
     assert.match(contract!.content, /single most important hint or invariant/i);
 });
 
+test('manual coding prompt defaults to Python when no language is requested', () => {
+    const instructions = buildIntentPrompt(
+        'manual_chat',
+        'coding',
+        undefined,
+        'implement dijkstra algorithm',
+        false,
+    );
+
+    const contract = instructions.find((instruction) => instruction.key === 'output_contract');
+    assert.ok(contract, 'output contract should exist');
+    assert.match(contract!.content, /default to Python/i);
+    assert.match(contract!.content, /Do not infer the programming language from older transcript/i);
+});
+
 test('coding clarify output without fenced code is rejected for repair', () => {
     const result = outputValidator.validateActionOutput(
         'clarify',
@@ -148,4 +163,161 @@ test('general action output still repairs malformed code fences as a safety net'
     assert.equal(result.valid, true);
     assert.equal(result.autoCorrected, true);
     assert.match(result.correctedContent, /```c\nint main/);
+});
+
+test('coding output rejects malformed C# with unbalanced delimiters for repair', () => {
+    const result = outputValidator.validateActionOutput(
+        'manual_chat',
+        'coding',
+        [
+            'Solution:*',
+            '``csharp using System;',
+            'class Program { static void Main() {',
+            'int limit = Convert.ToInt32(Console.ReadLine();',
+            'var boundary = (int)Math.Floor(Math.Sqrt(limit);',
+            '} }',
+            '``',
+        ].join('\n'),
+        'print prime numbers in csharp',
+    );
+
+    assert.equal(result.valid, false);
+    assert.equal(result.autoCorrected, true);
+    assert.deepEqual(result.issues, ['coding_unbalanced_delimiters']);
+    assert.match(result.correctedContent, /```csharp\s+using System;/);
+});
+
+test('general output with malformed code fence rejects unbalanced code for repair', () => {
+    const result = outputValidator.validateActionOutput(
+        'what_to_answer',
+        'general',
+        'Solution: ``javascript function test() { if (true) { console.log("x"); }\n``',
+        'some coding title missed detection',
+    );
+
+    assert.equal(result.valid, false);
+    assert.deepEqual(result.issues, ['coding_unbalanced_delimiters']);
+});
+
+test('coding output rejects typo-filled C# that would not compile', () => {
+    const result = outputValidator.validateActionOutput(
+        'manual_chat',
+        'coding',
+        [
+            '**Solution:**',
+            '``csharp',
+            'using System;',
+            'using System.Colections.Generic;',
+            'public clas Dijkstra',
+            '{',
+            '  private static void PrintDistance(int[] distance)',
+            '  {',
+            '    for (int i = 0; i < distance.Length; i+)',
+            '    {',
+            '      Console.WriteLine(i + "\\t" + distance[i]);',
+            '    }',
+            '  }',
+            '}',
+            '``',
+        ].join('\n'),
+        'dijkstra in c sharp',
+    );
+
+    assert.equal(result.valid, false);
+    assert.equal(result.autoCorrected, true);
+    assert.deepEqual(result.issues, ['coding_likely_compile_error']);
+    assert.match(result.correctedContent, /```csharp\s+using System;/);
+});
+
+test('coding output rejects inconsistent C# rectangular array initializer', () => {
+    const result = outputValidator.validateActionOutput(
+        'manual_chat',
+        'coding',
+        [
+            '```csharp',
+            'class Program {',
+            '  static void Main() {',
+            '    int[,] graph = { { 0, 4, 0 }, { 4, 0, 8, 0 }, { 0, 8, 0 } };',
+            '  }',
+            '}',
+            '```',
+        ].join('\n'),
+        'dijkstra in c sharp',
+    );
+
+    assert.equal(result.valid, false);
+    assert.deepEqual(result.issues, ['coding_likely_compile_error']);
+});
+
+test('manual Dijkstra output without requested language rejects leaked broken C#', () => {
+    const result = outputValidator.validateActionOutput(
+        'manual_chat',
+        'general',
+        [
+            '**Problem:**',
+            "The problem requires implementing Dijkstra's algorithm.",
+            '**Approach:**',
+            '* Use a priority queue.',
+            '**Complexity:*',
+            '* Time complexity: O(V + E) log V).',
+            '**Solution:**',
+            '``csharp',
+            'using System;',
+            'using System.Collections.Generic;',
+            'public class Dijkstra',
+            '{',
+            '   public static void ShortestPath(int[,] graph, int source)',
+            '   {',
+            '      int rows = graph.GetLength(0);',
+            '      int[] distance = new int[rows];',
+            '      bool[] visited = new bool[rows];',
+            '      for (int i = 0; i < rows; i+)',
+            '      {',
+            '         distance[i] = int.MaxValue;',
+            '      }',
+            '   }',
+            '   private static int MinDistance(int[] distance, bol[] visited)',
+            '   {',
+            '      return -1;',
+            '   }',
+            '}',
+            '`` ',
+        ].join('\n'),
+        'implement dijkstra algorithm',
+    );
+
+    assert.equal(result.valid, false);
+    assert.equal(result.autoCorrected, true);
+    assert.deepEqual(result.issues, ['coding_likely_compile_error']);
+    assert.match(result.correctedContent, /```csharp\s+using System;/);
+});
+
+test('manual Dijkstra output rejects collapsed invalid Python solution', () => {
+    const result = outputValidator.validateActionOutput(
+        'manual_chat',
+        'coding',
+        [
+            'Solution: ``python import sys import heapq',
+            '',
+            'def dijkstra(graph, source): distances = {node: sys.maxsize for node in graph} distances[source] = 0 priority_queue = [(0, source)] while priority_queue: current_distance, current_node = heapq.heapop(priority_queue)',
+            '',
+            'if current_distance > distances[current_node]: continue',
+            '',
+            'for neighbor, weight in graph[current_node].items(): distance = current_distance + weight',
+            '',
+            'if distance < distances[neighbor]: distances[neighbor] = distance heapq.heappush(priority_queue, (distance, neighbor)) return distances',
+            '',
+            'Example usage:',
+            "graph = { 'A': {'B': 1, 'C': 4}, 'B': {'A': 1, 'C': 2, 'D': 5} }",
+            '',
+            "source_node = 'A' distances = dijkstra(graph, source_node) print(distances)",
+            '``',
+        ].join('\n'),
+        'implement dijkstra algorithm',
+    );
+
+    assert.equal(result.valid, false);
+    assert.equal(result.autoCorrected, true);
+    assert.deepEqual(result.issues, ['coding_likely_compile_error']);
+    assert.match(result.correctedContent, /```python\s+import sys import heapq/);
 });

@@ -438,9 +438,14 @@ function buildCodingInterviewOutputContract(): string {
         '',
         '**Solution:**',
         'FULL working code in one fenced markdown block with the correct language tag.',
-        'Use exactly this fence shape: opening line ```c (or the detected language), code on following lines, closing line ```.',
+        'Use the programming language explicitly requested in the latest question only.',
+        'If the latest question does not explicitly name a programming language, default to Python.',
+        'Do not infer the programming language from older transcript, profile, RAG, or previous assistant answers.',
+        'Use exactly this fence shape: opening line ```python by default (or the explicitly requested language), code on following lines, closing line ```.',
         'Never use two backticks. Never put the solution in inline code. Never put code on the same line as the opening fence.',
         'Code must compile and run — not pseudocode or placeholders.',
+        'For Python, preserve real indentation and put each import on its own line.',
+        'Do not put prose such as "Example usage:" inside the code block unless it is a comment.',
         '',
         'CRITICAL: You MUST include the **Solution:** code block for EVERY coding/DSA problem (any title, any platform). Description-only answers are invalid.',
         'Word limits do not apply to the code block.',
@@ -520,9 +525,13 @@ function shouldUseTranscriptForManualChat(
         return true;
     }
 
+    if (profile === 'coding' && wordCount <= 18) {
+        return false;
+    }
+
     const standaloneQuestionPatterns = [
         /^(who|what|when|where|why|how|can|could|should|would|do|does|did|is|are|am|will)\b/i,
-        /^(help|explain|define|compare|summarize|rewrite|fix|debug|optimize)\b/i,
+        /^(help|explain|define|compare|summarize|rewrite|fix|debug|optimize|implement|write|solve|code|build)\b/i,
     ];
 
     if (wordCount <= 14 && standaloneQuestionPatterns.some((pattern) => pattern.test(normalized))) {
