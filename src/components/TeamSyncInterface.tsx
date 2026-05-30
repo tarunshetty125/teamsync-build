@@ -1078,7 +1078,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     );
 
     useEffect(() => {
-        console.log('[MODE_DEBUG]', {
+        console.log('[MODE_DEBUG]', JSON.stringify({
             templateId: activeModeTemplateId,
             recommendationMode,
             liveOverlayCopilotMode: overlayCopilotMode,
@@ -1088,7 +1088,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             overlayVersion: 'v1',
             source: currentSourceRef.current,
             renderReason: 'mode_state_changed',
-        });
+        }));
     }, [activeModeTemplateId, recommendationMode, overlayCopilotMode, currentSessionMode]);
 
     const resetOverlayRecommendationState = useCallback(() => {
@@ -1144,13 +1144,13 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         currentQuestionTurnIdRef.current = questionTurnId;
         setCurrentQuestionTurnId(questionTurnId);
         const seq = ++seqRef.current;
-        console.log('[MODE_PIPELINE]', {
+        console.log('[MODE_PIPELINE]', JSON.stringify({
             source,
             input: combined,
             detectedMode: 'pending',
             previousMode: intentState.detectedType,
             nextMode: 'pending',
-        });
+        }));
         dispatchIntent({
             type: 'EVALUATE',
             combinedText: combined,
@@ -1171,13 +1171,13 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         currentQuestionTurnIdRef.current = questionTurnId;
         setCurrentQuestionTurnId(questionTurnId);
         const seq = ++seqRef.current;
-        console.log('[MODE_PIPELINE]', {
+        console.log('[MODE_PIPELINE]', JSON.stringify({
             source: 'transcript',
             input: combined,
             detectedMode: 'pending',
             previousMode: intentState.detectedType,
             nextMode: 'pending',
-        });
+        }));
         dispatchIntent({
             type: 'EVALUATE',
             combinedText: combined,
@@ -1189,13 +1189,13 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const previousDetectedQuestionTypeRef = useRef<SessionMode>('general');
     useEffect(() => {
         if (previousDetectedQuestionTypeRef.current === detectedQuestionType) return;
-        console.log('[MODE_PIPELINE]', {
+        console.log('[MODE_PIPELINE]', JSON.stringify({
             source: currentSourceRef.current === 'Manual Input' ? 'manual_input' : 'transcript',
             input: latestCombinedRef.current || lastFinalSentenceRef.current,
             detectedMode: detectedQuestionType,
             previousMode: previousDetectedQuestionTypeRef.current,
             nextMode: recommendationMode,
-        });
+        }));
         previousDetectedQuestionTypeRef.current = detectedQuestionType;
     }, [detectedQuestionType, recommendationMode]);
 

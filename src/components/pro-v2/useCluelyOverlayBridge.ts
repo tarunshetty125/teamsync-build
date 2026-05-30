@@ -118,21 +118,8 @@ export interface CluelyOverlayBridgeProps {
 
 function readPersistedManualSessionMode(): SessionMode | null {
     try {
-        if (localStorage.getItem(MANUAL_SESSION_MODE_EXPLICIT_KEY) !== 'true') return null;
-        const stored = localStorage.getItem(MANUAL_SESSION_MODE_KEY);
-        if (
-            stored === 'behavioral'
-            || stored === 'coding'
-            || stored === 'follow_up'
-            || stored === 'salary'
-            || stored === 'system_design'
-        ) {
-            return stored;
-        }
-        if (stored === 'general') {
-            localStorage.removeItem(MANUAL_SESSION_MODE_KEY);
-            localStorage.removeItem(MANUAL_SESSION_MODE_EXPLICIT_KEY);
-        }
+        localStorage.removeItem(MANUAL_SESSION_MODE_KEY);
+        localStorage.removeItem(MANUAL_SESSION_MODE_EXPLICIT_KEY);
     } catch {
         /* ignore localStorage access issues */
     }
@@ -312,13 +299,13 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const previousDetectedQuestionTypeRef = useRef<SessionMode>('general');
     useEffect(() => {
         if (previousDetectedQuestionTypeRef.current === detectedQuestionType) return;
-        console.log('[MODE_PIPELINE]', {
+        console.log('[MODE_PIPELINE]', JSON.stringify({
             source: currentSourceRef.current === 'Manual Input' ? 'manual_input' : 'transcript',
             input: currentTurnTextRef.current || lastFinalSentenceRef.current,
             detectedMode: detectedQuestionType,
             previousMode: previousDetectedQuestionTypeRef.current,
             nextMode: recommendationMode,
-        });
+        }));
         previousDetectedQuestionTypeRef.current = detectedQuestionType;
     }, [detectedQuestionType, recommendationMode]);
 
@@ -448,13 +435,13 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         currentQuestionTurnIdRef.current = questionTurnId;
         setCurrentQuestionTurnId(questionTurnId);
         const seq = ++seqRef.current;
-        console.log('[MODE_PIPELINE]', {
+        console.log('[MODE_PIPELINE]', JSON.stringify({
             source,
             input: nextText,
             detectedMode: 'pending',
             previousMode,
             nextMode: 'pending',
-        });
+        }));
         dispatchIntent({
             type: 'EVALUATE',
             combinedText: nextText,
@@ -493,11 +480,14 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         activeIntentRequestIdsRef.current = {};
         requestStartTimeRef.current = null;
         currentSourceRef.current = undefined;
+        manualSessionModeRef.current = null;
+        persistManualSessionMode(null);
+        setSession({ currentMode: 'general' });
 
         resetRecommendation();
         resetOverlayRecommendationState();
         analytics.trackConversationStarted();
-    }, [resetRecommendation, resetOverlayRecommendationState]);
+    }, [persistManualSessionMode, resetRecommendation, resetOverlayRecommendationState]);
 
     const { isStalePayload, adoptSessionIdFromPayload } = useOverlayActiveSession({
         onSessionReset,
@@ -575,13 +565,13 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             currentQuestionTurnIdRef.current = questionTurnId;
             setCurrentQuestionTurnId(questionTurnId);
             const seq = ++seqRef.current;
-            console.log('[MODE_PIPELINE]', {
+            console.log('[MODE_PIPELINE]', JSON.stringify({
                 source: 'transcript',
                 input: combined,
                 detectedMode: 'pending',
                 previousMode: intentState.detectedType,
                 nextMode: 'pending',
-            });
+            }));
             dispatchIntent({
                 type: 'EVALUATE',
                 combinedText: combined,
@@ -718,11 +708,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             .then((result: any) => {
                 if (!result?.mode) return;
                 const nextMode = result.mode as SessionMode;
-                if (!manualSessionModeRef.current && nextMode !== 'general') {
-                    manualSessionModeRef.current = nextMode;
-                    persistManualSessionMode(nextMode);
-                }
-                setSession({ currentMode: manualSessionModeRef.current ?? nextMode });
+                setSession({ currentMode: nextMode });
             })
             .catch(() => {});
         const unsub = window.electronAPI?.onSessionModeChanged?.((data: any) => {
@@ -736,7 +722,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     }, [persistManualSessionMode]);
 
     useEffect(() => {
-        console.log('[MODE_DEBUG]', {
+        console.log('[MODE_DEBUG]', JSON.stringify({
             templateId: activeModeTemplateId,
             recommendationMode,
             liveOverlayCopilotMode,
@@ -746,7 +732,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             overlayVersion: 'pro-v2',
             source: currentSourceRef.current,
             renderReason: 'mode_state_changed',
-        });
+        }));
     }, [
         activeModeTemplateId,
         recommendationMode,
