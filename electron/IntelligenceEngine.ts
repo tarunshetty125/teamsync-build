@@ -55,6 +55,7 @@ import { evaluateResponseQuality, isQualityAcceptable, getMostCriticalIssue } fr
 import type { QualityEvaluationResult } from './intelligence/evaluation';
 import { compileTinyPrompt } from './intelligence/TinyPromptCompiler';
 import { adaptPromptBudget } from './intelligence/AdaptivePromptBudgeter';
+import { buildProviderPrompt } from './llm/ProviderPromptBuilder';
 import { BenchmarkManager, countHallucinationIndicators, hasConfidenceSignal } from './intelligence/BenchmarkManager';
 import { ModesManager } from './services/ModesManager';
 import type { ModeTemplateId } from '../src/lib/modes/types';
@@ -726,15 +727,26 @@ export class IntelligenceEngine extends EventEmitter {
                         provider: this.llmHelper.getCurrentProvider(),
                     });
                     contextLayers.promptObject = adaptiveBudget.prompt;
-                    maxPromptTokens = adaptiveBudget.maxTokens;
+                    const providerPreview = buildProviderPrompt({
+                        prompt: contextLayers.promptObject,
+                        model: this.llmHelper.getCurrentModel(),
+                        provider: this.llmHelper.getCurrentProvider(),
+                        isSystemDesign: getQuestionResponseProfile(contextLayers.promptObject.question, contextLayers.promptObject.mode, contextLayers.promptObject.intent) === 'system_design',
+                    });
+                    maxPromptTokens = Math.min(adaptiveBudget.maxTokens, providerPreview.maxInputTokens);
 
                     const budgeted = enforceTokenBudget({
                         prompt: contextLayers.promptObject,
                         maxTokens: maxPromptTokens,
                     });
                     validatePromptObject(budgeted.prompt, { maxTokens: maxPromptTokens });
-                    const serializedPrompt = serializePromptObject(budgeted.prompt);
-                    inputTokens = this.session.estimateTokenCount(serializedPrompt.finalPrompt);
+                    const providerPrompt = buildProviderPrompt({
+                        prompt: budgeted.prompt,
+                        model: this.llmHelper.getCurrentModel(),
+                        provider: this.llmHelper.getCurrentProvider(),
+                        isSystemDesign: getQuestionResponseProfile(budgeted.prompt.question, budgeted.prompt.mode, budgeted.prompt.intent) === 'system_design',
+                    });
+                    inputTokens = this.session.estimateTokenCount(providerPrompt.finalPrompt);
                     promptAfterTokens = inputTokens;
 
                     logPrompt({
@@ -745,7 +757,7 @@ export class IntelligenceEngine extends EventEmitter {
                         transcriptApproxTokens: budgeted.transcriptTokens,
                         profileUsed: contextLayers.profileApplied,
                         profilePolicy: contextLayers.profilePolicy,
-                        finalPrompt: serializedPrompt.finalPrompt,
+                        finalPrompt: providerPrompt.finalPrompt,
                     });
 
                     if (!isOwnedRequest()) {
@@ -1119,7 +1131,6 @@ export class IntelligenceEngine extends EventEmitter {
     }): Promise<string | null> {
         const { prompt, imagePaths, modelOverride, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
         const originalModel = this.llmHelper.getCurrentModel();
-        const serialized = serializePromptObject(prompt);
         const isSystemDesignOutput = getQuestionResponseProfile(prompt.question, prompt.mode, prompt.intent) === 'system_design';
 
         try {
@@ -1130,12 +1141,19 @@ export class IntelligenceEngine extends EventEmitter {
                 this.llmHelper.setModel(modelOverride);
             }
 
+            const providerPrompt = buildProviderPrompt({
+                prompt,
+                model: this.llmHelper.getCurrentModel(),
+                provider: this.llmHelper.getCurrentProvider(),
+                isSystemDesign: isSystemDesignOutput,
+            });
+
             let fullResponse = '';
             const stream = this.llmHelper.streamStructuredPrompt(
                 {
                     question: prompt.question,
-                    context: serialized.context,
-                    systemPrompt: serialized.systemPrompt,
+                    context: providerPrompt.context,
+                    systemPrompt: providerPrompt.systemPrompt,
                 },
                 imagePaths,
                 {
@@ -1143,7 +1161,7 @@ export class IntelligenceEngine extends EventEmitter {
                     skipKnowledgeInjection: true,
                     skipModeInjection: true,
                     skipCustomNotesInjection,
-                    maxOutputTokens: isSystemDesignOutput ? 8192 : undefined,
+                    maxOutputTokens: providerPrompt.maxOutputTokens,
                 }
             );
 

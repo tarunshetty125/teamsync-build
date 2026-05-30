@@ -1,7 +1,7 @@
 import type { PromptContextOrderKey, PromptInstruction, PromptObject, PromptProfileSection, PromptContextSection } from '../ActionContextBuilder';
 import type { ModeTemplateId } from '../../src/lib/modes/types';
 
-type LlmProvider = 'ollama' | 'gemini' | 'custom';
+type LlmProvider = 'ollama' | 'gemini' | 'custom' | 'bedrock';
 type AdaptivePromptTier = 'weak_local' | 'medium_local' | 'strong_local' | 'cloud';
 type AdaptivePromptMode =
     | 'general'

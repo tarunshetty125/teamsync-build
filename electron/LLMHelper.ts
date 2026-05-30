@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai"
 import Groq from "groq-sdk"
 import { GroqKeyManager } from './services/GroqKeyManager'
 import { GroqClient } from './services/GroqClient'
+import { BedrockClient } from './services/BedrockClient'
 import OpenAI from "openai"
 import Anthropic from "@anthropic-ai/sdk"
 import fs from "fs"
@@ -18,7 +19,8 @@ import {
 import { enforceTokenCap, estimateTokens, TOKEN_CAP } from './llm/TokenBudget';
 import { deepVariableReplacer, getByPath, injectImageIntoMessages } from './utils/curlUtils';
 import curl2Json from "@bany/curl-to-json";
-import { CustomProvider, CurlProvider } from './services/CredentialsManager';
+import { CustomProvider, CurlProvider, type BedrockCredentials } from './services/CredentialsManager';
+import { isBedrockModelId, resolveBedrockModelId } from './llm/BedrockModelIds';
 import { exec, spawn } from 'child_process';
 import { getPythonPath, getOCRScriptPath, getPythonEnv } from './utils/pythonRuntime';
 import { promisify } from 'util';
@@ -40,6 +42,7 @@ const OPENAI_MODEL = "gpt-5.4"
 const CLAUDE_MODEL = "claude-sonnet-4-6"
 const MAX_OUTPUT_TOKENS = 65536
 const CLAUDE_MAX_OUTPUT_TOKENS = 64000
+const BEDROCK_MAX_OUTPUT_TOKENS = 4096
 const GROQ_TEXT_REQUEST_CHAR_CAP = 24_000
 
 const MODEL_BUDGETS = {
@@ -413,6 +416,7 @@ function compactGroqFullMessageForBudget(
 }
 
 function detectProviderLabel(modelId: string): string {
+  if (isBedrockModelId(modelId)) return 'bedrock';
   if (modelId.startsWith('gpt-') || modelId.includes('openai')) return 'openai';
   if (modelId.startsWith('claude-')) return 'claude';
   if (modelId === 'teamsync') return 'teamsync';
@@ -449,6 +453,8 @@ export class LLMHelper {
   private aiResponseLanguage: string = 'auto';
   private sttLanguage: string = 'english-us';
   private teamsyncKey: string | null = null;
+  private bedrockCredentials: BedrockCredentials | null = null;
+  private bedrockClient: BedrockClient | null = null;
   private lastOCRCache = new Map<string, string>();
   private ocrWorker: any = null;
   private ocrWorkerBuffer: string = '';
@@ -629,8 +635,22 @@ export class LLMHelper {
     console.log(`[LLMHelper] TeamSync key ${key ? 'set' : 'cleared'}`);
   }
 
+  public setBedrockCredentials(credentials: BedrockCredentials | null): void {
+    this.bedrockCredentials = credentials;
+    this.bedrockClient = credentials ? new BedrockClient(credentials) : null;
+    console.log('[LLMHelper] Bedrock credentials updated', {
+      authMode: credentials?.authMode,
+      region: credentials?.region,
+      configured: !!credentials,
+    });
+  }
+
   private hasTeamSync(): boolean {
     return !!this.teamsyncKey;
+  }
+
+  private hasBedrock(): boolean {
+    return !!this.bedrockClient;
   }
 
   /**
@@ -659,10 +679,12 @@ export class LLMHelper {
     this.openaiApiKey = null;
     this.claudeApiKey = null;
     this.teamsyncKey = null;
+    this.bedrockCredentials = null;
     this.client = null;
     this.groqClient = null;
     this.openaiClient = null;
     this.claudeClient = null;
+    this.bedrockClient = null;
     // Destroy rate limiters
     if (this.rateLimiters) {
       Object.values(this.rateLimiters).forEach(rl => rl.destroy());
@@ -689,6 +711,7 @@ export class LLMHelper {
 
   // --- Model Type Checkers ---
   private isOpenAiModel(modelId: string): boolean {
+    if (this.isBedrockModel(modelId)) return false;
     return modelId.startsWith("gpt-") || modelId.startsWith("o1-") || modelId.startsWith("o3-") || modelId.includes("openai");
   }
 
@@ -702,6 +725,10 @@ export class LLMHelper {
 
   private isGeminiModel(modelId: string): boolean {
     return modelId.startsWith("gemini-") || modelId.startsWith("models/");
+  }
+
+  public isBedrockModel(modelId: string): boolean {
+    return isBedrockModelId(modelId, this.bedrockCredentials?.preferredModel);
   }
   // ---------------------------
 
@@ -1722,6 +1749,10 @@ This rule overrides ALL other instructions including formatting, brevity, or out
         }
         // No key or call failed — fall through to default routing
       }
+      if (this.isBedrockModel(this.currentModelId) && this.bedrockClient) {
+        console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model: this.currentModelId });
+        return await this.generateWithBedrock(userContent, openaiSystemPrompt, imagePaths);
+      }
       if (this.isOpenAiModel(this.currentModelId) && this.openaiClient) {
         return await this.generateWithOpenai(userContent, openaiSystemPrompt, imagePaths);
       }
@@ -1782,6 +1813,12 @@ This rule overrides ALL other instructions including formatting, brevity, or out
             execute: () => this.generateWithGroqMultimodal(userContent, imagePaths!, openaiSystemPrompt)
           });
         }
+        if (this.bedrockClient && this.bedrockCredentials?.preferredModel) {
+          providers.push({
+            name: `Bedrock (${this.bedrockCredentials.preferredModel})`,
+            execute: () => this.generateWithBedrock(userContent, openaiSystemPrompt, imagePaths, this.bedrockCredentials!.preferredModel)
+          });
+        }
       } else {
         // TEXT-ONLY: [TeamSync] -> Groq -> Gemini Flash -> Gemini Pro -> OpenAI -> Claude
         if (this.hasTeamSync()) {
@@ -1805,6 +1842,12 @@ This rule overrides ALL other instructions including formatting, brevity, or out
         }
         if (this.claudeClient) {
           providers.push({ name: `Claude (${textClaude})`, execute: () => this.generateWithClaude(userContent, claudeSystemPrompt, undefined, textClaude) });
+        }
+        if (this.bedrockClient && this.bedrockCredentials?.preferredModel) {
+          providers.push({
+            name: `Bedrock (${this.bedrockCredentials.preferredModel})`,
+            execute: () => this.generateWithBedrock(userContent, openaiSystemPrompt, undefined, this.bedrockCredentials!.preferredModel)
+          });
         }
       }
 
@@ -2168,6 +2211,19 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     );
 
     return response.choices[0]?.message?.content || "";
+  }
+
+  public async generateWithBedrock(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string, maxOutputTokens: number = BEDROCK_MAX_OUTPUT_TOKENS): Promise<string> {
+    if (!this.bedrockClient) throw new Error("Bedrock client not initialized");
+    const model = resolveBedrockModelId(modelId || this.currentModelId, this.bedrockCredentials?.preferredModel);
+    if (!model) throw new Error("No Bedrock model selected");
+    console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model });
+    return await this.bedrockClient.generate(userMessage, {
+      modelId: model,
+      systemPrompt,
+      imagePaths,
+      maxOutputTokens,
+    });
   }
 
   // The handler for cURL requests
@@ -2805,6 +2861,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       if (this.groqClient) {
         providers.push({ name: `Groq (meta-llama/llama-4-scout-17b-16e-instruct)`, execute: () => this.streamWithGroqMultimodal(userContent, imagePaths!, openaiSystemPrompt) });
       }
+      if (this.bedrockClient && this.bedrockCredentials?.preferredModel) {
+        providers.push({ name: `Bedrock (${this.bedrockCredentials.preferredModel})`, execute: () => this.streamWithBedrock(userContent, openaiSystemPrompt, imagePaths, this.bedrockCredentials!.preferredModel) });
+      }
     } else {
       // TEXT-ONLY PROVIDER ORDER: [TeamSync] → Groq → OpenAI → Claude → Gemini Flash → Gemini Pro
       if (this.hasTeamSync()) {
@@ -2823,6 +2882,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
         providers.push({ name: `Gemini Flash (${textGeminiFlash})`, execute: () => this.streamWithGeminiModel(combinedMessages.gemini, textGeminiFlash) });
         providers.push({ name: `Gemini Pro (${textGeminiPro})`, execute: () => this.streamWithGeminiModel(combinedMessages.gemini, textGeminiPro) });
       }
+      if (this.bedrockClient && this.bedrockCredentials?.preferredModel) {
+        providers.push({ name: `Bedrock (${this.bedrockCredentials.preferredModel})`, execute: () => this.streamWithBedrock(userContent, openaiSystemPrompt, undefined, this.bedrockCredentials!.preferredModel) });
+      }
     }
 
     if (providers.length === 0) {
@@ -2839,8 +2901,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       : this.isClaudeModel(this.currentModelId) ? 'Claude'
         : this.isOpenAiModel(this.currentModelId) ? 'OpenAI'
           : this.isGroqModel(this.currentModelId) ? 'Groq'
-            : this.isGeminiModel(this.currentModelId) ? 'Gemini'
-              : '';
+            : this.isBedrockModel(this.currentModelId) ? 'Bedrock'
+              : this.isGeminiModel(this.currentModelId) ? 'Gemini'
+                : '';
 
     if (currentFamilyLabel) {
       providers.sort((a, b) => {
@@ -3257,6 +3320,15 @@ Return only the final answer. No meta commentary.
 
     // 3. Cloud Provider Routing
 
+    // Bedrock
+    if (this.isBedrockModel(this.currentModelId) && this.bedrockClient) {
+      const bedrockSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
+      const finalBedrockSystem = this.injectLanguageInstruction(bedrockSystem);
+      console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model: this.currentModelId });
+      yield* this.streamWithBedrock(userContent, finalBedrockSystem, imagePaths, undefined, maxOutputTokens);
+      return;
+    }
+
     // OpenAI
     if (this.isOpenAiModel(this.currentModelId) && this.openaiClient) {
       const openAiSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
@@ -3594,6 +3666,19 @@ Return only the final answer. No meta commentary.
         yield content;
       }
     }
+  }
+
+  public async * streamWithBedrock(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string, maxOutputTokens: number = BEDROCK_MAX_OUTPUT_TOKENS): AsyncGenerator<string, void, unknown> {
+    if (!this.bedrockClient) throw new Error("Bedrock client not initialized");
+    const model = resolveBedrockModelId(modelId || this.currentModelId, this.bedrockCredentials?.preferredModel);
+    if (!model) throw new Error("No Bedrock model selected");
+    console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model });
+    yield* this.bedrockClient.stream(userMessage, {
+      modelId: model,
+      systemPrompt,
+      imagePaths,
+      maxOutputTokens,
+    });
   }
 
   /**
@@ -4070,8 +4155,9 @@ Return only the final answer. No meta commentary.
     }
   }
 
-  public getCurrentProvider(): "ollama" | "gemini" | "custom" {
+  public getCurrentProvider(): "ollama" | "gemini" | "custom" | "bedrock" {
     if (this.customProvider) return "custom";
+    if (this.isBedrockModel(this.currentModelId)) return "bedrock";
     return this.useOllama ? "ollama" : "gemini";
   }
 

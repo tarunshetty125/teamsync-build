@@ -82,6 +82,15 @@ export class ProcessingHelper {
       this.llmHelper.setClaudeApiKey(claudeKey);
     }
 
+    const bedrockCredentials = credManager.getBedrockCredentials();
+    if (bedrockCredentials && credManager.hasBedrockCredentials()) {
+      console.log("[ProcessingHelper] Loading stored Bedrock credentials from CredentialsManager", {
+        authMode: bedrockCredentials.authMode,
+        region: bedrockCredentials.region,
+      });
+      this.llmHelper.setBedrockCredentials(bedrockCredentials);
+    }
+
     const teamsyncKey = credManager.getTeamSyncApiKey();
     if (teamsyncKey) {
       console.log("[ProcessingHelper] Loading stored TeamSync API Key from CredentialsManager");

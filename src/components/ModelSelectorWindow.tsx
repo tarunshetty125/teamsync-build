@@ -103,12 +103,26 @@ const ModelSelectorWindow = () => {
                     dynamicModels['groq'] = groqModels;
                 }
 
+                const bedrockModels = creds?.bedrockFetchedModels;
+                if (bedrockModels && bedrockModels.length > 0) {
+                    dynamicModels['bedrock'] = bedrockModels;
+                } else if (creds?.hasBedrockCredentials) {
+                    try {
+                        const result = await window.electronAPI?.fetchBedrockModels?.();
+                        if (result?.success && result.models) {
+                            dynamicModels['bedrock'] = result.models;
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch Bedrock models:', e);
+                    }
+                }
+
                 // Cloud Models — standard models + unique preferred models + dynamic models
                 for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
                     if (!cfg.hasKeyCheck(creds)) continue;
                     
                     if (dynamicModels[prov] && dynamicModels[prov].length > 0) {
-                        const providerName = prov === 'openai' ? 'OpenAI' : prov === 'claude' ? 'Claude' : prov === 'groq' ? 'Groq' : 'Gemini';
+                        const providerName = prov === 'openai' ? 'OpenAI' : prov === 'claude' ? 'Claude' : prov === 'groq' ? 'Groq' : prov === 'bedrock' ? 'Bedrock' : 'Gemini';
                         dynamicModels[prov].forEach(m => {
                             if (!models.find(x => x.id === m.id)) {
                                 models.push({ id: m.id, name: `${providerName} ${prettifyModelId(m.label || m.id)}`, type: 'cloud', provider: prov });
@@ -179,10 +193,20 @@ const ModelSelectorWindow = () => {
     const panelClass = isLight
         ? 'bg-[#F3F4F6]/92 border-black/10 shadow-black/10'
         : 'bg-[#1E1E1E]/80 border-white/10 shadow-black/40';
+    const providerLabels: Record<string, string> = {
+        teamsync: 'TeamSync',
+        gemini: 'Gemini',
+        groq: 'Groq',
+        openai: 'OpenAI',
+        claude: 'Claude',
+        bedrock: 'Amazon Bedrock',
+        custom: 'Custom Providers',
+        ollama: 'Ollama / Local',
+    };
 
     return (
         <div className="w-fit h-fit bg-transparent flex flex-col">
-            <div className={`w-[140px] h-[200px] backdrop-blur-md border rounded-[16px] overflow-hidden shadow-2xl p-2 flex flex-col animate-scale-in origin-top-left ${panelClass}`}>
+            <div className={`w-[320px] max-w-[calc(100vw-24px)] h-[280px] backdrop-blur-md border rounded-[16px] overflow-hidden shadow-2xl p-2 flex flex-col animate-scale-in origin-top-left ${panelClass}`}>
 
                 {isLoading ? (
                     <div className={`flex items-center justify-center py-4 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -196,23 +220,33 @@ const ModelSelectorWindow = () => {
                                 No models connected.<br />Check Settings.
                             </div>
                         ) : (
-                            availableModels.map((model) => {
+                            availableModels.map((model, index) => {
                                 const isSelected = currentModel === model.id;
+                                const provider = model.provider || model.type;
+                                const previousProvider = availableModels[index - 1]?.provider || availableModels[index - 1]?.type;
+                                const showProviderHeader = provider && provider !== previousProvider;
                                 return (
-                                    <button
-                                        key={model.id}
-                                        onClick={() => handleSelectFn(model.id)}
-                                        className={`
-                                            w-full text-left px-3 py-2 flex items-center justify-between group transition-colors duration-200 rounded-lg
-                                            ${isSelected
-                                                ? (isLight ? 'bg-black/[0.07] text-slate-900' : 'bg-white/10 text-[#FDE68A]')
-                                                : (isLight ? 'text-slate-500 hover:bg-black/[0.04] hover:text-slate-800' : 'text-[#FDE68A]/60 hover:bg-white/5 hover:text-[#FDE68A]')
-                                            }
-                                        `}
-                                    >
-                                        <span className="text-[12px] font-medium truncate flex-1 min-w-0">{model.name}</span>
-                                        {isSelected && <Check className={`w-3.5 h-3.5 shrink-0 ml-2 ${isLight ? 'text-emerald-600' : 'text-[#FDE68A]'}`} />}
-                                    </button>
+                                    <React.Fragment key={model.id}>
+                                        {showProviderHeader && (
+                                            <div className={`px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide ${isLight ? 'text-slate-400' : 'text-[#FDE68A]/35'}`}>
+                                                {providerLabels[provider] || provider}
+                                            </div>
+                                        )}
+                                        <button
+                                            onClick={() => handleSelectFn(model.id)}
+                                            title={model.name}
+                                            className={`
+                                                w-full text-left px-3 py-2 flex items-center justify-between group transition-colors duration-200 rounded-lg
+                                                ${isSelected
+                                                    ? (isLight ? 'bg-black/[0.07] text-slate-900' : 'bg-white/10 text-[#FDE68A]')
+                                                    : (isLight ? 'text-slate-500 hover:bg-black/[0.04] hover:text-slate-800' : 'text-[#FDE68A]/60 hover:bg-white/5 hover:text-[#FDE68A]')
+                                                }
+                                            `}
+                                        >
+                                            <span className="text-[12px] font-medium whitespace-normal break-words leading-snug flex-1 min-w-0">{model.name}</span>
+                                            {isSelected && <Check className={`w-3.5 h-3.5 shrink-0 ml-2 ${isLight ? 'text-emerald-600' : 'text-[#FDE68A]'}`} />}
+                                        </button>
+                                    </React.Fragment>
                                 );
                             })
                         )}

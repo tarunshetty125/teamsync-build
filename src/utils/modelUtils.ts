@@ -3,7 +3,7 @@ export const STANDARD_CLOUD_MODELS: Record<string, {
     ids: string[];
     names: string[];
     descs: string[];
-    pmKey: 'geminiPreferredModel' | 'openaiPreferredModel' | 'claudePreferredModel' | 'groqPreferredModel';
+    pmKey: 'geminiPreferredModel' | 'openaiPreferredModel' | 'claudePreferredModel' | 'groqPreferredModel' | 'bedrockPreferredModel';
 }> = {
     gemini: {
         hasKeyCheck: (creds) => !!creds?.hasGeminiKey,
@@ -33,6 +33,13 @@ export const STANDARD_CLOUD_MODELS: Record<string, {
         descs: ['Ultra Fast'],
         pmKey: 'groqPreferredModel'
     },
+    bedrock: {
+        hasKeyCheck: (creds) => !!creds?.hasBedrockCredentials,
+        ids: [],
+        names: [],
+        descs: ['Amazon Bedrock'],
+        pmKey: 'bedrockPreferredModel'
+    },
 };
 
 export const prettifyModelId = (id: string): string => {
@@ -49,5 +56,6 @@ export function getOverlayModelDisplayName(model: string): string {
     if (model === 'llama-3.3-70b-versatile') return 'Groq Llama 3.3';
     if (model === 'gpt-5.4') return 'GPT 5.4';
     if (model === 'claude-sonnet-4-6') return 'Sonnet 4.6';
+    if (/^(anthropic|amazon|meta|mistral|cohere|ai21|openai|us|eu|apac)\./.test(model) || model.startsWith('openai/gpt-oss-')) return `Bedrock ${prettifyModelId(model)}`;
     return prettifyModelId(model);
 }

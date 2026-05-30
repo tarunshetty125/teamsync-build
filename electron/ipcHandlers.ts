@@ -1916,6 +1916,16 @@ export function initializeIpcHandlers(appState: AppState): void {
       // Groq vault check: user may have keys only in the vault (multi-key rotation)
       const cm = CredentialsManager.getInstance();
       const hasGroqVaultKey = (cm.getGroqKeyVault?.() || []).some((k: any) => k.enabled);
+      const bedrockCredentials = cm.getBedrockCredentials();
+      const safeBedrockCredentials = bedrockCredentials ? {
+        authMode: bedrockCredentials.authMode,
+        region: bedrockCredentials.region,
+        profileName: bedrockCredentials.profileName,
+        preferredModel: bedrockCredentials.preferredModel,
+        hasAccessKeyId: hasKey(bedrockCredentials.accessKeyId),
+        hasSecretAccessKey: hasKey(bedrockCredentials.secretAccessKey),
+        hasSessionToken: hasKey(bedrockCredentials.sessionToken),
+      } : undefined;
 
       return {
         hasGeminiKey: hasKey(creds.geminiApiKey),
@@ -1951,10 +1961,14 @@ export function initializeIpcHandlers(appState: AppState): void {
         groqPreferredModel: creds.groqPreferredModel || undefined,
         openaiPreferredModel: creds.openaiPreferredModel || undefined,
         claudePreferredModel: creds.claudePreferredModel || undefined,
+        bedrockPreferredModel: creds.bedrockPreferredModel || creds.bedrockCredentials?.preferredModel || undefined,
         groqFetchedModels: cm.getGroqFetchedModels(),
+        bedrockCredentials: safeBedrockCredentials,
+        bedrockFetchedModels: cm.getBedrockFetchedModels(),
+        hasBedrockCredentials: cm.hasBedrockCredentials(),
       };
     } catch (error: any) {
-      return { hasGeminiKey: false, hasGroqKey: false, hasOpenaiKey: false, hasClaudeKey: false, hasTeamSyncKey: false, googleServiceAccountPath: null, sttProvider: 'deepgram', groqSttModel: 'whisper-large-v3-turbo', hasSttGroqKey: false, hasSttOpenaiKey: false, hasDeepgramKey: false, hasElevenLabsKey: false, hasAzureKey: false, azureRegion: 'eastus', hasIbmWatsonKey: false, ibmWatsonRegion: 'us-south', hasSonioxKey: false, hasTavilyKey: false, sttGroqKey: '', sttOpenaiKey: '', sttDeepgramKey: '', sttElevenLabsKey: '', sttAzureKey: '', sttIbmKey: '', sttSonioxKey: '' };
+      return { hasGeminiKey: false, hasGroqKey: false, hasOpenaiKey: false, hasClaudeKey: false, hasTeamSyncKey: false, hasBedrockCredentials: false, googleServiceAccountPath: null, sttProvider: 'deepgram', groqSttModel: 'whisper-large-v3-turbo', hasSttGroqKey: false, hasSttOpenaiKey: false, hasDeepgramKey: false, hasElevenLabsKey: false, hasAzureKey: false, azureRegion: 'eastus', hasIbmWatsonKey: false, ibmWatsonRegion: 'us-south', hasSonioxKey: false, hasTavilyKey: false, sttGroqKey: '', sttOpenaiKey: '', sttDeepgramKey: '', sttElevenLabsKey: '', sttAzureKey: '', sttIbmKey: '', sttSonioxKey: '' };
     }
   });
 
@@ -1962,8 +1976,14 @@ export function initializeIpcHandlers(appState: AppState): void {
   // Dynamic Model Discovery Handlers
   // ==========================================
 
-  safeHandle("fetch-provider-models", async (_, provider: 'gemini' | 'groq' | 'openai' | 'claude', apiKey: string) => {
+  safeHandle("fetch-provider-models", async (_, provider: 'gemini' | 'groq' | 'openai' | 'claude' | 'bedrock', apiKey: string) => {
     try {
+      if (provider === 'bedrock') {
+        const { CredentialsManager } = require('./services/CredentialsManager');
+        const models = await CredentialsManager.getInstance().fetchBedrockModels();
+        return { success: true, models };
+      }
+
       // Fall back to stored key if no key was explicitly provided
       let key = apiKey?.trim();
       if (!key) {
@@ -2002,7 +2022,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("set-provider-preferred-model", async (_, provider: 'gemini' | 'groq' | 'openai' | 'claude', modelId: string) => {
+  safeHandle("set-provider-preferred-model", async (_, provider: 'gemini' | 'groq' | 'openai' | 'claude' | 'bedrock', modelId: string) => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().setPreferredModel(provider, modelId);
@@ -2018,6 +2038,102 @@ export function initializeIpcHandlers(appState: AppState): void {
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };
+    }
+  });
+
+  safeHandle("set-bedrock-credentials", async (_, credentials: any) => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const cm = CredentialsManager.getInstance();
+      const stored = cm.getBedrockCredentials();
+      const nextCredentials = {
+        ...stored,
+        ...credentials,
+        authMode: credentials?.authMode || 'aws_cli',
+        region: credentials?.region || stored?.region || 'us-east-1',
+      };
+      if (!credentials?.accessKeyId?.trim()) nextCredentials.accessKeyId = stored?.accessKeyId;
+      if (!credentials?.secretAccessKey?.trim()) nextCredentials.secretAccessKey = stored?.secretAccessKey;
+      if (credentials?.sessionToken === '') nextCredentials.sessionToken = stored?.sessionToken;
+      await cm.testBedrockConnection(nextCredentials);
+      const models = await cm.fetchBedrockModels(nextCredentials);
+      if (!nextCredentials.preferredModel && models.length > 0) {
+        nextCredentials.preferredModel = models[0].id;
+      }
+      cm.setBedrockCredentials(nextCredentials);
+      const llmHelper = appState.processingHelper?.getLLMHelper?.();
+      llmHelper?.setBedrockCredentials?.(cm.getBedrockCredentials());
+      const saved = cm.getBedrockCredentials();
+      return {
+        success: true,
+        models,
+        credentials: saved ? {
+          authMode: saved.authMode,
+          region: saved.region,
+          profileName: saved.profileName,
+          preferredModel: saved.preferredModel,
+        } : undefined,
+      };
+    } catch (error: any) {
+      const { BedrockClient } = require('./services/BedrockClient');
+      const msg = sanitizeErrorMessage(BedrockClient.normalizeError(error));
+      console.error('[IPC] Bedrock credential save failed:', msg);
+      return { success: false, error: msg };
+    }
+  });
+
+  safeHandle("test-bedrock-connection", async (_, credentials: any) => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const cm = CredentialsManager.getInstance();
+      const stored = cm.getBedrockCredentials();
+      const nextCredentials = {
+        ...stored,
+        ...credentials,
+        authMode: credentials?.authMode || 'aws_cli',
+        region: credentials?.region || stored?.region || 'us-east-1',
+      };
+      if (!credentials?.accessKeyId?.trim()) nextCredentials.accessKeyId = stored?.accessKeyId;
+      if (!credentials?.secretAccessKey?.trim()) nextCredentials.secretAccessKey = stored?.secretAccessKey;
+      if (credentials?.sessionToken === '') nextCredentials.sessionToken = stored?.sessionToken;
+      await cm.testBedrockConnection(nextCredentials);
+      const models = await cm.fetchBedrockModels(nextCredentials);
+      if (!nextCredentials.preferredModel && models.length > 0) {
+        nextCredentials.preferredModel = models[0].id;
+      }
+      cm.setBedrockCredentials(nextCredentials);
+      const llmHelper = appState.processingHelper?.getLLMHelper?.();
+      llmHelper?.setBedrockCredentials?.(cm.getBedrockCredentials());
+      const saved = cm.getBedrockCredentials();
+      return {
+        success: true,
+        models,
+        credentials: saved ? {
+          authMode: saved.authMode,
+          region: saved.region,
+          profileName: saved.profileName,
+          preferredModel: saved.preferredModel,
+        } : undefined,
+      };
+    } catch (error: any) {
+      const { BedrockClient } = require('./services/BedrockClient');
+      const msg = sanitizeErrorMessage(BedrockClient.normalizeError(error));
+      console.error('[IPC] Bedrock connection test failed:', msg);
+      return { success: false, error: msg };
+    }
+  });
+
+  safeHandle("fetch-bedrock-models", async (_, credentials?: any) => {
+    try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const cm = CredentialsManager.getInstance();
+      const models = await cm.fetchBedrockModels(credentials || undefined);
+      return { success: true, models };
+    } catch (error: any) {
+      const { BedrockClient } = require('./services/BedrockClient');
+      const msg = sanitizeErrorMessage(BedrockClient.normalizeError(error));
+      console.error('[IPC] Bedrock model fetch failed:', msg);
+      return { success: false, error: msg };
     }
   });
 
@@ -2643,15 +2759,20 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("set-default-model", async (_, modelId: string) => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
+      const { isBedrockModelId, resolveBedrockModelId } = require('./llm/BedrockModelIds');
       const cm = CredentialsManager.getInstance();
-      cm.setDefaultModel(modelId);
+      const bedrockPreferred = cm.getPreferredModel('bedrock') || cm.getBedrockCredentials()?.preferredModel;
+      const finalModelId = isBedrockModelId(modelId, bedrockPreferred)
+        ? (resolveBedrockModelId(modelId, bedrockPreferred) || modelId)
+        : modelId;
+      cm.setDefaultModel(finalModelId);
 
       // Also update the runtime model
       const llmHelper = appState.processingHelper.getLLMHelper();
       const curlProviders = cm.getCurlProviders();
       const legacyProviders = cm.getCustomProviders() || [];
       const allProviders = [...curlProviders, ...legacyProviders];
-      llmHelper.setModel(modelId, allProviders);
+      llmHelper.setModel(finalModelId, allProviders);
 
       // Close the selector window if open
       appState.modelSelectorWindowHelper.hideWindow();
@@ -2659,7 +2780,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       // Broadcast to all windows so TeamSyncInterface can update its selector
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) {
-          win.webContents.send('model-changed', modelId);
+          win.webContents.send('model-changed', finalModelId);
         }
       });
 

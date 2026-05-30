@@ -17,7 +17,9 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { ModelVersionManager, ModelFamily, TextModelFamily } from '../services/ModelVersionManager';
 import { createProviderRateLimiters } from '../services/RateLimiter';
-import type { CustomProvider, CurlProvider } from '../services/CredentialsManager';
+import { BedrockClient } from '../services/BedrockClient';
+import type { CustomProvider, CurlProvider, BedrockCredentials } from '../services/CredentialsManager';
+import { isBedrockModelId } from './BedrockModelIds';
 
 // ---------------------------------------------------------------------------
 // Model constants
@@ -41,6 +43,7 @@ export class ProviderRegistry {
     private _groqClient: Groq | null = null;
     private _openaiClient: OpenAI | null = null;
     private _claudeClient: Anthropic | null = null;
+    private _bedrockClient: BedrockClient | null = null;
 
     // --- API Keys ---
     private _apiKey: string | null = null;
@@ -48,6 +51,7 @@ export class ProviderRegistry {
     private _openaiApiKey: string | null = null;
     private _claudeApiKey: string | null = null;
     private _teamsyncKey: string | null = null;
+    private _bedrockCredentials: BedrockCredentials | null = null;
 
     // --- Ollama ---
     private _useOllama: boolean = false;
@@ -153,6 +157,16 @@ export class ProviderRegistry {
         console.log(`[ProviderRegistry] TeamSync key ${key ? 'set' : 'cleared'}`);
     }
 
+    setBedrockCredentials(credentials: BedrockCredentials | null): void {
+        this._bedrockCredentials = credentials;
+        this._bedrockClient = credentials ? new BedrockClient(credentials) : null;
+        console.log('[ProviderRegistry] Bedrock credentials updated', {
+            authMode: credentials?.authMode,
+            region: credentials?.region,
+            configured: !!credentials,
+        });
+    }
+
     // -----------------------------------------------------------------------
     // Client getters
     // -----------------------------------------------------------------------
@@ -161,7 +175,9 @@ export class ProviderRegistry {
     get groqClient(): Groq | null { return this._groqClient; }
     get openaiClient(): OpenAI | null { return this._openaiClient; }
     get claudeClient(): Anthropic | null { return this._claudeClient; }
+    get bedrockClient(): BedrockClient | null { return this._bedrockClient; }
     get teamsyncKey(): string | null { return this._teamsyncKey; }
+    get bedrockCredentials(): BedrockCredentials | null { return this._bedrockCredentials; }
     get rateLimiters(): ReturnType<typeof createProviderRateLimiters> { return this._rateLimiters; }
     get modelVersionManager(): ModelVersionManager { return this._modelVersionManager; }
 
@@ -227,6 +243,7 @@ export class ProviderRegistry {
     // -----------------------------------------------------------------------
 
     isOpenAiModel(modelId: string): boolean {
+        if (this.isBedrockModel(modelId)) return false;
         return modelId.startsWith("gpt-") || modelId.startsWith("o1-") || modelId.startsWith("o3-") || modelId.includes("openai");
     }
 
@@ -242,6 +259,10 @@ export class ProviderRegistry {
         return modelId.startsWith("gemini-") || modelId.startsWith("models/");
     }
 
+    isBedrockModel(modelId: string): boolean {
+        return isBedrockModelId(modelId, this._bedrockCredentials?.preferredModel);
+    }
+
     hasTeamSync(): boolean {
         return !!this._teamsyncKey;
     }
@@ -250,6 +271,7 @@ export class ProviderRegistry {
     hasOpenai(): boolean { return this._openaiClient !== null; }
     hasClaude(): boolean { return this._claudeClient !== null; }
     hasGemini(): boolean { return this._client !== null; }
+    hasBedrock(): boolean { return this._bedrockClient !== null; }
 
     // -----------------------------------------------------------------------
     // Model switching
@@ -353,10 +375,12 @@ export class ProviderRegistry {
         this._openaiApiKey = null;
         this._claudeApiKey = null;
         this._teamsyncKey = null;
+        this._bedrockCredentials = null;
         this._client = null;
         this._groqClient = null;
         this._openaiClient = null;
         this._claudeClient = null;
+        this._bedrockClient = null;
         if (this._rateLimiters) {
             Object.values(this._rateLimiters).forEach(rl => rl.destroy());
         }
@@ -368,8 +392,9 @@ export class ProviderRegistry {
     // Provider info
     // -----------------------------------------------------------------------
 
-    getCurrentProvider(): "ollama" | "gemini" | "custom" {
+    getCurrentProvider(): "ollama" | "gemini" | "custom" | "bedrock" {
         if (this._customProvider) return "custom";
+        if (this.isBedrockModel(this._currentModelId)) return "bedrock";
         return this._useOllama ? "ollama" : "gemini";
     }
 

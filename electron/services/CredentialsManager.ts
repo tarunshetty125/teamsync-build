@@ -12,6 +12,7 @@ import {
     normalizeRuntimeSttProvider,
     type SupportedRuntimeSttProvider,
 } from '../audio/stt/SttRuntimeConfig';
+import { isBedrockModelId, resolveBedrockModelId } from '../llm/BedrockModelIds';
 
 const CREDENTIALS_PATH = path.join(app.getPath('userData'), 'credentials.enc');
 
@@ -35,6 +36,18 @@ export interface GroqVaultKey {
     enabled: boolean;     // user toggle
     addedAt: number;      // Date.now() when added
     label?: string;       // optional user label
+}
+
+export type BedrockAuthMode = 'aws_cli' | 'access_keys';
+
+export interface BedrockCredentials {
+    authMode: BedrockAuthMode;
+    accessKeyId?: string;
+    secretAccessKey?: string;
+    sessionToken?: string;
+    profileName?: string;
+    region: string;
+    preferredModel?: string;
 }
 
 export interface StoredCredentials {
@@ -68,6 +81,9 @@ export interface StoredCredentials {
     groqPreferredModel?: string;
     openaiPreferredModel?: string;
     claudePreferredModel?: string;
+    bedrockPreferredModel?: string;
+    bedrockCredentials?: BedrockCredentials;
+    bedrockFetchedModels?: { id: string; label: string }[];
     // Groq Provider Vault — multi-key management
     groqKeyVault?: GroqVaultKey[];
     // Groq fetched model catalog — persisted so overlay windows can read without re-fetching
@@ -199,8 +215,32 @@ export class CredentialsManager {
     public getAiResponseLanguage(): string {
         return this.credentials.aiResponseLanguage || 'auto';
     }
+
+    public getBedrockCredentials(): BedrockCredentials | undefined {
+        const existing = this.credentials.bedrockCredentials;
+        if (!existing) return undefined;
+        return {
+            ...existing,
+            authMode: existing.authMode || 'aws_cli',
+            region: existing.region || 'us-east-1',
+            preferredModel: existing.preferredModel || this.credentials.bedrockPreferredModel,
+        };
+    }
+
+    public hasBedrockCredentials(): boolean {
+        const creds = this.getBedrockCredentials();
+        if (!creds?.region?.trim()) return false;
+        if (creds.authMode === 'aws_cli') return true;
+        return !!(creds.accessKeyId?.trim() && creds.secretAccessKey?.trim());
+    }
+
     public getDefaultModel(): string {
-        return this.credentials.defaultModel || 'gemini-3.1-flash-lite-preview';
+        const model = this.credentials.defaultModel || 'gemini-3.1-flash-lite-preview';
+        const bedrockPreferred = this.credentials.bedrockPreferredModel || this.credentials.bedrockCredentials?.preferredModel;
+        if (isBedrockModelId(model, bedrockPreferred)) {
+            return resolveBedrockModelId(model, bedrockPreferred) || model;
+        }
+        return model;
     }
 
     public getTeamSyncApiKey(): string | undefined {
@@ -408,16 +448,78 @@ export class CredentialsManager {
         console.log('[CredentialsManager] TeamSync API Key updated');
     }
 
-    public getPreferredModel(provider: 'gemini' | 'groq' | 'openai' | 'claude'): string | undefined {
+    public getPreferredModel(provider: 'gemini' | 'groq' | 'openai' | 'claude' | 'bedrock'): string | undefined {
         const key = `${provider}PreferredModel` as keyof StoredCredentials;
         return this.credentials[key] as string | undefined;
     }
 
-    public setPreferredModel(provider: 'gemini' | 'groq' | 'openai' | 'claude', modelId: string): void {
+    public setPreferredModel(provider: 'gemini' | 'groq' | 'openai' | 'claude' | 'bedrock', modelId: string): void {
         const key = `${provider}PreferredModel` as keyof StoredCredentials;
         (this.credentials as any)[key] = modelId;
+        if (provider === 'bedrock') {
+            this.credentials.bedrockCredentials = {
+                authMode: 'aws_cli',
+                region: 'us-east-1',
+                ...this.credentials.bedrockCredentials,
+                preferredModel: modelId,
+            };
+        }
         this.saveCredentials();
         console.log(`[CredentialsManager] ${provider} preferred model set to: ${modelId}`);
+    }
+
+    public setBedrockCredentials(credentials: Partial<BedrockCredentials> & { authMode: BedrockAuthMode; region: string }): void {
+        const previous = this.credentials.bedrockCredentials || {
+            authMode: 'aws_cli' as BedrockAuthMode,
+            region: 'us-east-1',
+        };
+
+        this.credentials.bedrockCredentials = {
+            ...previous,
+            ...credentials,
+            authMode: credentials.authMode,
+            region: credentials.region?.trim() || previous.region || 'us-east-1',
+            accessKeyId: credentials.accessKeyId !== undefined ? credentials.accessKeyId.trim() || undefined : previous.accessKeyId,
+            secretAccessKey: credentials.secretAccessKey !== undefined ? credentials.secretAccessKey.trim() || undefined : previous.secretAccessKey,
+            sessionToken: credentials.sessionToken !== undefined ? credentials.sessionToken.trim() || undefined : previous.sessionToken,
+            profileName: credentials.profileName !== undefined ? credentials.profileName.trim() || undefined : previous.profileName,
+            preferredModel: credentials.preferredModel !== undefined ? credentials.preferredModel.trim() || undefined : previous.preferredModel,
+        };
+
+        if (this.credentials.bedrockCredentials.preferredModel) {
+            this.credentials.bedrockPreferredModel = this.credentials.bedrockCredentials.preferredModel;
+        }
+
+        this.saveCredentials();
+        console.log('[CredentialsManager] Bedrock credentials updated', {
+            authMode: this.credentials.bedrockCredentials.authMode,
+            region: this.credentials.bedrockCredentials.region,
+            hasAccessKeyId: !!this.credentials.bedrockCredentials.accessKeyId,
+            hasSecretAccessKey: !!this.credentials.bedrockCredentials.secretAccessKey,
+            hasSessionToken: !!this.credentials.bedrockCredentials.sessionToken,
+            hasProfileName: !!this.credentials.bedrockCredentials.profileName,
+        });
+    }
+
+    public async testBedrockConnection(credentials?: BedrockCredentials): Promise<void> {
+        const resolved = credentials || this.getBedrockCredentials();
+        if (!resolved) throw new Error('No Bedrock credentials configured.');
+        const { BedrockClient } = require('./BedrockClient');
+        await new BedrockClient(resolved).validate();
+        console.log('[BEDROCK_AUTH]', {
+            authMode: resolved.authMode,
+            region: resolved.region,
+            success: true,
+        });
+    }
+
+    public async fetchBedrockModels(credentials?: BedrockCredentials): Promise<{ id: string; label: string }[]> {
+        const resolved = credentials || this.getBedrockCredentials();
+        if (!resolved) throw new Error('No Bedrock credentials configured.');
+        const { BedrockClient } = require('./BedrockClient');
+        const models = await new BedrockClient(resolved).fetchModels();
+        this.setBedrockFetchedModels(models);
+        return models;
     }
 
     public saveCustomProvider(provider: CustomProvider): void {
@@ -537,6 +639,15 @@ export class CredentialsManager {
 
     public clearGroqFetchedModels(): void {
         delete this.credentials.groqFetchedModels;
+        this.saveCredentials();
+    }
+
+    public getBedrockFetchedModels(): { id: string; label: string }[] {
+        return this.credentials.bedrockFetchedModels || [];
+    }
+
+    public setBedrockFetchedModels(models: { id: string; label: string }[]): void {
+        this.credentials.bedrockFetchedModels = models;
         this.saveCredentials();
     }
 

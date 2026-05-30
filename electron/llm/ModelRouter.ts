@@ -66,6 +66,7 @@ export class ModelRouter {
     getCurrentFamilyLabel(): string {
         const modelId = this.registry.currentModelId;
         if (modelId === 'teamsync') return 'TeamSync';
+        if (this.registry.isBedrockModel(modelId)) return 'Bedrock';
         if (this.registry.isClaudeModel(modelId)) return 'Claude';
         if (this.registry.isOpenAiModel(modelId)) return 'OpenAI';
         if (this.registry.isGroqModel(modelId)) return 'Groq';

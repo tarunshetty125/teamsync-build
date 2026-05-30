@@ -9,7 +9,7 @@ import type {
 import type { ModeTemplateId } from '../../src/lib/modes/types';
 import { OllamaEmbeddingProvider } from '../rag/providers/OllamaEmbeddingProvider';
 
-type LlmProvider = 'ollama' | 'gemini' | 'custom';
+type LlmProvider = 'ollama' | 'gemini' | 'custom' | 'bedrock';
 type TinyPromptMode =
     | 'general'
     | 'technical-interview'

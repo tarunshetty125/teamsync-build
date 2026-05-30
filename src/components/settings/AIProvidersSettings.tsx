@@ -15,6 +15,19 @@ interface CustomProvider {
 interface ModelOption {
     id: string;
     name: string;
+    provider?: string;
+}
+
+type BedrockAuthMode = 'aws_cli' | 'access_keys';
+
+interface BedrockCredentials {
+    authMode: BedrockAuthMode;
+    accessKeyId?: string;
+    secretAccessKey?: string;
+    sessionToken?: string;
+    profileName?: string;
+    region: string;
+    preferredModel?: string;
 }
 
 interface ModelSelectProps {
@@ -39,35 +52,60 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
     }, []);
 
     const selectedOption = options.find(o => o.id === value);
+    const showProviderSections = options.some(option => option.provider);
+    const providerLabels: Record<string, string> = {
+        teamsync: 'TeamSync',
+        gemini: 'Gemini',
+        groq: 'Groq',
+        openai: 'OpenAI',
+        claude: 'Claude',
+        bedrock: 'Amazon Bedrock',
+        custom: 'Custom Providers',
+        ollama: 'Ollama / Local',
+    };
+    let lastProvider = '';
 
     return (
         <div className="relative" ref={containerRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-40 bg-bg-input border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary flex items-center justify-between hover:bg-bg-elevated transition-colors"
+                className="w-72 max-w-[52vw] bg-bg-input border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary flex items-center justify-between hover:bg-bg-elevated transition-colors"
                 type="button"
+                title={selectedOption ? selectedOption.name : placeholder}
             >
                 <span className="truncate pr-2">{selectedOption ? selectedOption.name : placeholder}</span>
                 <ChevronDown size={14} className={`text-text-secondary transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (
-                <div className="absolute top-full right-0 mt-1 w-full bg-bg-elevated border border-border-subtle rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto animated fadeIn">
+                <div className="absolute top-full right-0 mt-1 w-[min(560px,80vw)] bg-bg-elevated border border-border-subtle rounded-lg shadow-xl z-50 max-h-72 overflow-y-auto animated fadeIn">
                     <div className="p-1 space-y-0.5">
-                        {options.map((option) => (
-                            <button
-                                key={option.id}
-                                onClick={() => {
-                                    onChange(option.id);
-                                    setIsOpen(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-xs rounded-md flex items-center justify-between group transition-colors ${value === option.id ? 'bg-bg-input hover:bg-bg-elevated text-text-primary' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
-                                type="button"
-                            >
-                                <span className="truncate">{option.name}</span>
-                                {value === option.id && <Check size={14} className="text-accent-primary shrink-0 ml-2" />}
-                            </button>
-                        ))}
+                        {options.map((option) => {
+                            const provider = option.provider || '';
+                            const shouldRenderHeader = showProviderSections && provider && provider !== lastProvider;
+                            if (shouldRenderHeader) lastProvider = provider;
+                            return (
+                                <React.Fragment key={option.id}>
+                                    {shouldRenderHeader && (
+                                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+                                            {providerLabels[provider] || provider}
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={() => {
+                                            onChange(option.id);
+                                            setIsOpen(false);
+                                        }}
+                                        className={`w-full text-left px-3 py-2 text-xs rounded-md flex items-center justify-between group transition-colors ${value === option.id ? 'bg-bg-input hover:bg-bg-elevated text-text-primary' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
+                                        type="button"
+                                        title={option.name}
+                                    >
+                                        <span className="whitespace-normal break-words leading-snug pr-2">{option.name}</span>
+                                        {value === option.id && <Check size={14} className="text-accent-primary shrink-0 ml-2" />}
+                                    </button>
+                                </React.Fragment>
+                            );
+                        })}
                         {options.length === 0 && (
                             <div className="px-3 py-2 text-xs text-gray-500 italic">No models available</div>
                         )}
@@ -84,6 +122,10 @@ export const AIProvidersSettings: React.FC = () => {
     const [groqApiKey, setGroqApiKey] = useState('');
     const [openaiApiKey, setOpenaiApiKey] = useState('');
     const [claudeApiKey, setClaudeApiKey] = useState('');
+    const [bedrockCredentials, setBedrockCredentials] = useState<BedrockCredentials>({
+        authMode: 'aws_cli',
+        region: 'us-east-1',
+    });
 
     // Status
     const [savedStatus, setSavedStatus] = useState<Record<string, boolean>>({});
@@ -134,6 +176,7 @@ export const AIProvidersSettings: React.FC = () => {
                         groq: creds.hasGroqKey,
                         openai: creds.hasOpenaiKey,
                         claude: creds.hasClaudeKey,
+                        bedrock: creds.hasBedrockCredentials || false,
                         teamsync: creds.hasTeamSyncKey || false
                     });
                     // Load preferred models
@@ -142,7 +185,20 @@ export const AIProvidersSettings: React.FC = () => {
                     if (creds.groqPreferredModel) pm.groq = creds.groqPreferredModel;
                     if (creds.openaiPreferredModel) pm.openai = creds.openaiPreferredModel;
                     if (creds.claudePreferredModel) pm.claude = creds.claudePreferredModel;
+                    if (creds.bedrockPreferredModel) pm.bedrock = creds.bedrockPreferredModel;
                     setPreferredModels(pm);
+
+                    if (creds.bedrockCredentials) {
+                        setBedrockCredentials({
+                            authMode: creds.bedrockCredentials.authMode || 'aws_cli',
+                            region: creds.bedrockCredentials.region || 'us-east-1',
+                            accessKeyId: creds.bedrockCredentials.accessKeyId || '',
+                            secretAccessKey: creds.bedrockCredentials.secretAccessKey || '',
+                            sessionToken: creds.bedrockCredentials.sessionToken || '',
+                            profileName: creds.bedrockCredentials.profileName || '',
+                            preferredModel: creds.bedrockCredentials.preferredModel || creds.bedrockPreferredModel || '',
+                        });
+                    }
 
                     // Pre-populate Groq dynamic models from persisted catalog (no API call needed)
                     const groqModels = creds.groqFetchedModels;
@@ -152,6 +208,17 @@ export const AIProvidersSettings: React.FC = () => {
                             name: `Groq ${prettifyModelId(m.label || m.id)}`
                         }));
                         setDynamicModels(prev => ({ ...prev, groq: providerModels }));
+                    }
+
+                    const bedrockModels = creds.bedrockFetchedModels;
+                    if (bedrockModels && bedrockModels.length > 0) {
+                        setDynamicModels(prev => ({
+                            ...prev,
+                            bedrock: bedrockModels.map((m: any) => ({
+                                id: m.id,
+                                name: `Bedrock ${prettifyModelId(m.label || m.id)}`
+                            }))
+                        }));
                     }
                 }
 
@@ -237,6 +304,22 @@ export const AIProvidersSettings: React.FC = () => {
                 }
             }
         });
+
+        if (hasStoredKey.bedrock && !dynamicModels.bedrock) {
+            window.electronAPI?.fetchBedrockModels?.()
+                .then((result) => {
+                    if (result?.success && result.models) {
+                        setDynamicModels(prev => ({
+                            ...prev,
+                            bedrock: result.models!.map((m: any) => ({
+                                id: m.id,
+                                name: `Bedrock ${prettifyModelId(m.label || m.id)}`
+                            }))
+                        }));
+                    }
+                })
+                .catch((e) => console.error('Failed to fetch Bedrock models:', e));
+        }
     }, [hasStoredKey, credentialsLoaded]);
 
     // Poll for Ollama status every 3 seconds requesting smart start on mount
@@ -408,6 +491,98 @@ export const AIProvidersSettings: React.FC = () => {
         setPreferredModels(prev => ({ ...prev, groq: modelId }));
     };
 
+    const applyBedrockConnectionResult = async (result: { success: boolean; models?: { id: string; label: string }[]; credentials?: BedrockCredentials; error?: string }) => {
+        if (!result.success) {
+            setTestStatus(prev => ({ ...prev, bedrock: 'error' }));
+            setTestError(prev => ({ ...prev, bedrock: result.error || 'Connection failed' }));
+            return;
+        }
+
+        const models = result.models || [];
+        const selectedModel = result.credentials?.preferredModel || bedrockCredentials.preferredModel || models[0]?.id || '';
+        setBedrockCredentials(prev => ({
+            ...prev,
+            ...(result.credentials || {}),
+            preferredModel: selectedModel || result.credentials?.preferredModel || prev.preferredModel,
+        }));
+        setPreferredModels(prev => selectedModel ? ({ ...prev, bedrock: selectedModel }) : prev);
+        setHasStoredKey(prev => ({ ...prev, bedrock: true }));
+        setSavedStatus(prev => ({ ...prev, bedrock: true }));
+        setTestStatus(prev => ({ ...prev, bedrock: 'success' }));
+        setDynamicModels(prev => ({
+            ...prev,
+            bedrock: models.map((m) => ({
+                id: m.id,
+                name: `Bedrock ${prettifyModelId(m.label || m.id)}`
+            }))
+        }));
+        if (selectedModel) {
+            await window.electronAPI?.setProviderPreferredModel?.('bedrock', selectedModel);
+        }
+        setTimeout(() => setSavedStatus(prev => ({ ...prev, bedrock: false })), 2000);
+        setTimeout(() => setTestStatus(prev => ({ ...prev, bedrock: 'idle' })), 3000);
+    };
+
+    const handleBedrockConnect = async () => {
+        setTestStatus(prev => ({ ...prev, bedrock: 'testing' }));
+        setSavingStatus(prev => ({ ...prev, bedrock: true }));
+        setTestError(prev => ({ ...prev, bedrock: '' }));
+
+        try {
+            const result = await window.electronAPI?.testBedrockConnection?.(bedrockCredentials);
+            if (result) await applyBedrockConnectionResult(result);
+        } catch (e: any) {
+            setTestStatus(prev => ({ ...prev, bedrock: 'error' }));
+            setTestError(prev => ({ ...prev, bedrock: e.message || 'Connection failed' }));
+        } finally {
+            setSavingStatus(prev => ({ ...prev, bedrock: false }));
+        }
+    };
+
+    const handleBedrockSave = async () => {
+        setSavingStatus(prev => ({ ...prev, bedrock: true }));
+        setTestError(prev => ({ ...prev, bedrock: '' }));
+
+        try {
+            const result = await window.electronAPI?.setBedrockCredentials?.(bedrockCredentials);
+            if (result) await applyBedrockConnectionResult(result);
+        } catch (e: any) {
+            setTestStatus(prev => ({ ...prev, bedrock: 'error' }));
+            setTestError(prev => ({ ...prev, bedrock: e.message || 'Failed to save credentials' }));
+        } finally {
+            setSavingStatus(prev => ({ ...prev, bedrock: false }));
+        }
+    };
+
+    const handleBedrockFetchModels = async () => {
+        setSavingStatus(prev => ({ ...prev, bedrockFetch: true }));
+        setTestError(prev => ({ ...prev, bedrock: '' }));
+        try {
+            const result = await window.electronAPI?.fetchBedrockModels?.();
+            if (result?.success && result.models) {
+                setDynamicModels(prev => ({
+                    ...prev,
+                    bedrock: result.models!.map((m: any) => ({
+                        id: m.id,
+                        name: `Bedrock ${prettifyModelId(m.label || m.id)}`
+                    }))
+                }));
+            } else {
+                setTestError(prev => ({ ...prev, bedrock: result?.error || 'Failed to fetch models' }));
+            }
+        } catch (e: any) {
+            setTestError(prev => ({ ...prev, bedrock: e.message || 'Failed to fetch models' }));
+        } finally {
+            setSavingStatus(prev => ({ ...prev, bedrockFetch: false }));
+        }
+    };
+
+    const handleBedrockPreferredModelChange = async (modelId: string) => {
+        setBedrockCredentials(prev => ({ ...prev, preferredModel: modelId }));
+        setPreferredModels(prev => ({ ...prev, bedrock: modelId }));
+        await window.electronAPI?.setProviderPreferredModel?.('bedrock', modelId);
+    };
+
     const handleGroqVaultKeyCountChanged = (hasEnabledKeys: boolean) => {
         setHasStoredKey(prev => ({ ...prev, groq: hasEnabledKeys }));
         // If all Groq keys removed/disabled, reset active model if it was a Groq model
@@ -528,10 +703,10 @@ export const AIProvidersSettings: React.FC = () => {
                     <ModelSelect
                         value={defaultModel}
                         options={(() => {
-                            const opts: { id: string; name: string }[] = [];
+                            const opts: ModelOption[] = [];
 
                             if (hasStoredKey.teamsync) {
-                                opts.push({ id: 'teamsync', name: 'TeamSync API' });
+                                opts.push({ id: 'teamsync', name: 'TeamSync API', provider: 'teamsync' });
                             }
 
                             for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
@@ -541,27 +716,27 @@ export const AIProvidersSettings: React.FC = () => {
                                 if (dynamicModels[prov] && dynamicModels[prov].length > 0) {
                                     dynamicModels[prov].forEach(m => {
                                         if (!opts.find(o => o.id === m.id)) {
-                                            opts.push({ id: m.id, name: m.name });
+                                            opts.push({ id: m.id, name: m.name, provider: prov });
                                         }
                                     });
                                 } else {
                                     cfg.ids.forEach((id, i) => {
                                         if (!opts.find(o => o.id === id)) {
-                                            opts.push({ id, name: cfg.names[i] });
+                                            opts.push({ id, name: cfg.names[i], provider: prov });
                                         }
                                     });
                                 }
                                 
                                 const pm = preferredModels[prov as keyof typeof preferredModels];
                                 if (pm && !opts.find(o => o.id === pm)) {
-                                    opts.push({ id: pm, name: prettifyModelId(pm) });
+                                    opts.push({ id: pm, name: prettifyModelId(pm), provider: prov });
                                 }
                             }
-                            customProviders.forEach(p => opts.push({ id: p.id, name: p.name }));
-                            ollamaModels.forEach(m => opts.push({ id: `ollama-${m}`, name: `${m} (Local)` }));
+                            customProviders.forEach(p => opts.push({ id: p.id, name: p.name, provider: 'custom' }));
+                            ollamaModels.forEach(m => opts.push({ id: `ollama-${m}`, name: `${m} (Local)`, provider: 'ollama' }));
                             
                             if (defaultModel && !opts.find(o => o.id === defaultModel)) {
-                                opts.unshift({ id: defaultModel, name: prettifyModelId(defaultModel) });
+                                opts.unshift({ id: defaultModel, name: prettifyModelId(defaultModel), provider: 'custom' });
                             }
                             return opts;
                         })()}
@@ -685,6 +860,128 @@ export const AIProvidersSettings: React.FC = () => {
                         keyUrl="https://console.anthropic.com/settings/keys"
                         onPreferredModelChange={(model) => setPreferredModels(prev => ({ ...prev, claude: model }))}
                     />
+
+                    {/* Amazon Bedrock */}
+                    <div className="bg-bg-item-surface rounded-xl p-5 border border-border-subtle">
+                        <div className="mb-4 flex items-center justify-between gap-3">
+                            <div>
+                                <label className="flex items-center text-xs font-medium text-text-primary uppercase tracking-wide">
+                                    Amazon Bedrock
+                                    {hasStoredKey.bedrock && <span className="ml-2 text-green-500 normal-case">✓ Saved</span>}
+                                </label>
+                                <p className="text-[10px] text-text-secondary mt-1">Uses your AWS account, region, and enabled Bedrock model access.</p>
+                            </div>
+                            {dynamicModels.bedrock?.length > 0 && (
+                                <ModelSelect
+                                    value={preferredModels.bedrock || bedrockCredentials.preferredModel || ''}
+                                    options={dynamicModels.bedrock}
+                                    onChange={handleBedrockPreferredModelChange}
+                                    placeholder="Select model"
+                                />
+                            )}
+                        </div>
+
+                        <div className="inline-flex rounded-lg border border-border-subtle bg-bg-input p-1 mb-4">
+                            {([
+                                ['aws_cli', 'AWS CLI / Profile'],
+                                ['access_keys', 'Access Keys'],
+                            ] as const).map(([mode, label]) => (
+                                <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => setBedrockCredentials(prev => ({ ...prev, authMode: mode }))}
+                                    className={`px-3 py-1.5 rounded-md text-xs transition-colors ${bedrockCredentials.authMode === mode ? 'bg-bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {bedrockCredentials.authMode === 'aws_cli' ? (
+                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                <input
+                                    value={bedrockCredentials.profileName || ''}
+                                    onChange={(e) => setBedrockCredentials(prev => ({ ...prev, profileName: e.target.value }))}
+                                    placeholder="Profile Name (optional)"
+                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                />
+                                <input
+                                    value={bedrockCredentials.region}
+                                    onChange={(e) => setBedrockCredentials(prev => ({ ...prev, region: e.target.value }))}
+                                    placeholder="Region"
+                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                />
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                <input
+                                    type="password"
+                                    value={bedrockCredentials.accessKeyId || ''}
+                                    onChange={(e) => setBedrockCredentials(prev => ({ ...prev, accessKeyId: e.target.value }))}
+                                    placeholder="Access Key ID"
+                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                />
+                                <input
+                                    type="password"
+                                    value={bedrockCredentials.secretAccessKey || ''}
+                                    onChange={(e) => setBedrockCredentials(prev => ({ ...prev, secretAccessKey: e.target.value }))}
+                                    placeholder="Secret Access Key"
+                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                />
+                                <input
+                                    type="password"
+                                    value={bedrockCredentials.sessionToken || ''}
+                                    onChange={(e) => setBedrockCredentials(prev => ({ ...prev, sessionToken: e.target.value }))}
+                                    placeholder="Session Token (optional)"
+                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                />
+                                <input
+                                    value={bedrockCredentials.region}
+                                    onChange={(e) => setBedrockCredentials(prev => ({ ...prev, region: e.target.value }))}
+                                    placeholder="Region"
+                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                />
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleBedrockConnect}
+                                    disabled={testStatus.bedrock === 'testing' || !bedrockCredentials.region.trim()}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-border-subtle flex items-center gap-2 ${testStatus.bedrock === 'success' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
+                                        testStatus.bedrock === 'error' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                            'bg-bg-input hover:bg-bg-elevated text-text-primary disabled:opacity-50'
+                                        }`}
+                                >
+                                    {testStatus.bedrock === 'testing' ? <><Loader2 size={12} className="animate-spin" /> Testing...</> :
+                                        testStatus.bedrock === 'success' ? <><CheckCircle size={12} /> Connected</> :
+                                            testStatus.bedrock === 'error' ? <><AlertCircle size={12} /> Error</> :
+                                                bedrockCredentials.authMode === 'aws_cli' ? 'Connect AWS CLI' : 'Test Connection'}
+                                </button>
+                                <button
+                                    onClick={handleBedrockSave}
+                                    disabled={savingStatus.bedrock || !bedrockCredentials.region.trim()}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-border-subtle ${savedStatus.bedrock
+                                        ? 'bg-green-500/20 text-green-400 border-green-500/20'
+                                        : 'bg-bg-input hover:bg-bg-elevated text-text-primary disabled:opacity-50'
+                                        }`}
+                                >
+                                    {savingStatus.bedrock ? 'Saving...' : savedStatus.bedrock ? 'Saved!' : 'Save Credentials'}
+                                </button>
+                            </div>
+                            {hasStoredKey.bedrock && (
+                                <button
+                                    onClick={handleBedrockFetchModels}
+                                    disabled={savingStatus.bedrockFetch}
+                                    className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors border border-accent-primary/20 flex items-center gap-2 bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 disabled:opacity-50"
+                                >
+                                    {savingStatus.bedrockFetch ? <><Loader2 size={12} className="animate-spin" /> Fetching...</> : <><RefreshCw size={12} /> Fetch Models</>}
+                                </button>
+                            )}
+                        </div>
+                        {testError.bedrock && <p className="text-[10px] text-red-400 mt-2">{testError.bedrock}</p>}
+                    </div>
 
                 </div>
             </div>
