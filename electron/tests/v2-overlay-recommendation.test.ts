@@ -48,6 +48,20 @@ test('resolveOverlayCopilotMode maps coding detection under technical-interview'
     assert.equal(mode, 'coding');
 });
 
+test('resolveOverlayCopilotMode keeps general template dynamic for system design', () => {
+    const mode = resolveOverlayCopilotMode('general', 'system_design');
+    assert.equal(mode, 'system_design');
+});
+
+test('resolveOverlayCopilotMode only locks non-adaptive templates', () => {
+    assert.equal(resolveOverlayCopilotMode('sales', 'system_design'), 'sales');
+    assert.equal(resolveOverlayCopilotMode('lecture', 'coding'), 'lecture');
+    assert.equal(resolveOverlayCopilotMode('recruiting', 'salary'), 'recruiting');
+    assert.equal(resolveOverlayCopilotMode('team-meet', 'system_design'), 'team-meet');
+    assert.equal(resolveOverlayCopilotMode('looking-for-work', 'system_design'), 'system_design');
+    assert.equal(resolveOverlayCopilotMode('looking-for-work', 'general'), 'looking-for-work');
+});
+
 test('coding transcript switches quick actions to tech set', () => {
     const actions = getOverlayQuickActions('coding', true);
     assert.deepEqual(

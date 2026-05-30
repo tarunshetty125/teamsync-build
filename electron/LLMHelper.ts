@@ -42,6 +42,35 @@ const MAX_OUTPUT_TOKENS = 65536
 const CLAUDE_MAX_OUTPUT_TOKENS = 64000
 const GROQ_TEXT_REQUEST_CHAR_CAP = 24_000
 
+const MODEL_BUDGETS = {
+  groq_llama_70b: {
+    hardMax: 9000,
+    safeTPM: 7000,
+    target: 5000,
+  },
+  gemini_flash: {
+    hardMax: 24000,
+    target: 12000,
+  },
+  local_model: {
+    hardMax: 12000,
+    target: 7000,
+  },
+} as const;
+
+type ModelRequestSize = {
+  provider: string;
+  model: string;
+  systemTokens: number;
+  transcriptTokens: number;
+  ragTokens: number;
+  rulesTokens: number;
+  modeTokens: number;
+  totalTokens: number;
+  safeLimit: number;
+  exceedsLimit: boolean;
+};
+
 // Simple prompt for image analysis (not interview copilot - kept separate)
 const IMAGE_ANALYSIS_PROMPT = `Analyze concisely. Be direct. No markdown formatting. Return plain text only.`
 
@@ -75,6 +104,302 @@ function compactGroqTextPayload(systemPrompt: string, userContent: string): { sy
   }
 
   return { systemPrompt: nextSystemPrompt, userContent: nextUserContent, changed: true };
+}
+
+function compactSystemDesignContracts(text: string): string {
+  return text
+    .replace(/<architecture_json_contract>[\s\S]*?<\/architecture_json_contract>/gi, [
+      'architecture_json format:',
+      '{',
+      ' diagram: { type: "architecture", direction: "TB", nodes: Node[], edges: Edge[] }',
+      '}',
+      'Node: id,label,kind,technology,purpose,layer,latency,failureMode',
+      'Edge: source,target,label,protocol,latency',
+    ].join('\n'))
+    .replace(/### 4\. Architecture Diagram[\s\S]*?(?=### 5\.|$)/gi, [
+      '### 4. Architecture Diagram',
+      'Return exactly one fenced architecture_json block. Never Mermaid.',
+      'Schema: { diagram: { type, direction, nodes[], edges[] } }',
+      'Node: id,label,kind,technology,purpose,layer,latency,failureMode.',
+      'Edge: source,target,label,protocol,latency.',
+    ].join('\n'))
+    .replace(/```architecture_json\n\{"diagram":\{"type":"architecture"[\s\S]*?\n```/g, [
+      '```architecture_json',
+      '{"diagram":{"type":"architecture","direction":"TB","nodes":[{"id":"client","label":"Client","kind":"client","technology":"","purpose":"","layer":"client","latency":"","failureMode":""}],"edges":[{"source":"client","target":"gateway","label":"","protocol":"","latency":""}]}}',
+      '```',
+    ].join('\n'))
+    .replace(/Example fenced block:[\s\S]*?Use the exact opening fence/g, 'Compact schema only:\nUse the exact opening fence')
+    .replace(/Use this production-grade shape:[\s\S]*?Allowed node kinds only:/g, [
+      'architecture_json compact schema:',
+      '{"diagram":{"type":"architecture","direction":"TB","nodes":[{"id":"","label":"","kind":"","technology":"","purpose":"","layer":"","latency":"","failureMode":""}],"edges":[{"source":"","target":"","label":"","protocol":"","latency":""}]}}',
+      'Allowed node kinds only:',
+    ].join('\n'));
+}
+
+function splitContextTokenBuckets(userContent: string) {
+  const context = userContent.split('\n\nCONTEXT:\n')[1] || '';
+  const transcript = [
+    ...context.matchAll(/(?:transcript|meeting|conversation|interviewer|user):?[\s\S]{0,1800}/gi),
+  ].map((match) => match[0]).join('\n');
+  const rag = [
+    ...context.matchAll(/(?:RAG|MEMORY|PROFILE|KNOWLEDGE|user_context)[\s\S]{0,1800}/gi),
+  ].map((match) => match[0]).join('\n');
+  return {
+    transcriptTokens: estimateTokens(transcript),
+    ragTokens: estimateTokens(rag),
+  };
+}
+
+function estimateModelRequestSize(
+  provider: string,
+  model: string,
+  systemPrompt: string,
+  userContent: string,
+  safeLimit: number,
+): ModelRequestSize {
+  const { transcriptTokens, ragTokens } = splitContextTokenBuckets(userContent);
+  const modeTokens = estimateTokens((systemPrompt.match(/## ACTIVE MODE[\s\S]*/i) || [''])[0]);
+  const rulesTokens = estimateTokens((systemPrompt.match(/(?:RULES|OUTPUT|CONTRACT|architecture_json)[\s\S]*/i) || [''])[0]);
+  const systemTokens = estimateTokens(systemPrompt);
+  const totalTokens = systemTokens + estimateTokens(userContent);
+  return {
+    provider,
+    model,
+    systemTokens,
+    transcriptTokens,
+    ragTokens,
+    rulesTokens,
+    modeTokens,
+    totalTokens,
+    safeLimit,
+    exceedsLimit: totalTokens > safeLimit,
+  };
+}
+
+function removeDuplicatePromptLines(text: string): string {
+  const seen = new Set<string>();
+  return text
+    .split('\n')
+    .filter((line) => {
+      const normalized = line.trim().replace(/\s+/g, ' ');
+      if (normalized.length < 24) return true;
+      if (!/(OUTPUT CONTRACT|CONTEXT PRIORITY|EXECUTION CONTRACT|architecture_json|SYSTEM DESIGN|Return|Every|Never|Always|schema|contract)/i.test(normalized)) {
+        return true;
+      }
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function compactProfileText(text: string, maxChars: number = 600): string {
+  if (!text.trim()) return '';
+  const candidateName = text.match(/\b(?:Candidate|Name)\s*:\s*([^\n]+)/i)?.[1]?.trim();
+  const role = text.match(/\b(?:Role|Target role|Title)\s*:\s*([^\n]+)/i)?.[1]?.trim();
+  const style = text.match(/\b(?:Style|Tone|Preference)\s*:\s*([^\n]+)/i)?.[1]?.trim();
+  const lines = [
+    'Candidate:',
+    candidateName ? `Name: ${candidateName}` : null,
+    role ? `Role: ${role}` : null,
+    style ? `Style: ${style}` : 'Style: concise, professional',
+  ].filter(Boolean).join('\n');
+  return (candidateName || role || style || lines.length > 0)
+    ? lines.slice(0, maxChars)
+    : compactMiddle(text, maxChars);
+}
+
+function compactContextForGroq(context: string, question: string, maxChars: number): string {
+  if (!context.trim()) return '';
+  const normalizedQuestionTerms = new Set(
+    question
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((term) => term.length >= 4),
+  );
+
+  const turns = context
+    .split(/\n|  ·  /)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const scored = turns.map((line, index) => {
+    const lower = line.toLowerCase();
+    let score = index / Math.max(1, turns.length);
+    normalizedQuestionTerms.forEach((term) => {
+      if (lower.includes(term)) score += 3;
+    });
+    if (/system design|architecture|scale|cache|database|queue|gateway|service|latency|throughput|whatsapp|uber|netflix/i.test(line)) {
+      score += 2;
+    }
+    if (/rag|memory|profile|candidate|resume|experience/i.test(line)) {
+      score += 1;
+    }
+    return { line, score };
+  });
+
+  const lastRelevantTurns = turns.slice(-2).join('\n').slice(-250);
+  const topRelevant = scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2)
+    .map((item) => item.line)
+    .join('\n')
+    .slice(0, Math.max(500, maxChars - 700));
+  const profileMatch = context.match(/<user_context>[\s\S]*?<\/user_context>|(?:PROFILE|Candidate|Resume|Experience)[\s\S]{0,1200}/i);
+  const profile = profileMatch ? compactProfileText(profileMatch[0], 420) : '';
+
+  return [
+    lastRelevantTurns ? `rolling_summary:\n${lastRelevantTurns}` : '',
+    topRelevant ? `relevant_context:\n${topRelevant}` : '',
+    profile ? `profile:\n${profile}` : '',
+  ].filter(Boolean).join('\n\n').slice(0, maxChars);
+}
+
+function compactGroqUserContent(userContent: string, systemPrompt: string, safeLimit: number): string {
+  const contextMarker = '\n\nCONTEXT:\n';
+  const markerIndex = userContent.indexOf(contextMarker);
+  if (markerIndex < 0) {
+    const budgetChars = Math.max(1_800, (safeLimit - estimateTokens(systemPrompt) - 400) * 4);
+    return compactMiddle(userContent, budgetChars);
+  }
+
+  const questionPart = userContent.slice(0, markerIndex).trim();
+  const contextPart = userContent.slice(markerIndex + contextMarker.length).trim();
+  const question = questionPart.replace(/^USER QUESTION:\s*/i, '').trim();
+  const contextBudgetChars = Math.max(1_200, (safeLimit - estimateTokens(systemPrompt) - estimateTokens(questionPart) - 500) * 4);
+  const compactContext = compactContextForGroq(contextPart, question, contextBudgetChars);
+  return compactContext
+    ? `${questionPart}\n\nCONTEXT:\n${compactContext}`
+    : questionPart;
+}
+
+function logGroqPromptReduction(
+  model: string,
+  originalTokens: number,
+  reducedTokens: number,
+  transcriptReduced: boolean,
+  ragReduced: boolean,
+): void {
+  const reductionPercent = originalTokens > 0
+    ? Math.max(0, Math.round((1 - (reducedTokens / originalTokens)) * 100))
+    : 0;
+  console.log('[GROQ_PROMPT_REDUCTION]', {
+    originalTokens,
+    reducedTokens,
+    reductionPercent,
+    transcriptReduced,
+    ragReduced,
+    compactMode: true,
+    provider: 'groq',
+    model,
+  });
+}
+
+function compactGroqPromptForBudget(
+  systemPrompt: string,
+  userContent: string,
+  model: string,
+  safeLimit: number,
+): { systemPrompt: string; userContent: string; originalTokens: number; compressedTokens: number; stillExceeds: boolean } {
+  const originalTokens = estimateTokens(systemPrompt) + estimateTokens(userContent);
+  const originalBuckets = splitContextTokenBuckets(userContent);
+  let nextSystemPrompt = removeDuplicatePromptLines(compactSystemDesignContracts(systemPrompt));
+  nextSystemPrompt = nextSystemPrompt.replace(/<user_context>[\s\S]*?<\/user_context>/gi, (match) => {
+    return `<user_context>\n${compactProfileText(match, 420)}\n</user_context>`;
+  });
+
+  let nextUserContent = compactGroqUserContent(userContent, nextSystemPrompt, safeLimit);
+  let compressedTokens = estimateTokens(nextSystemPrompt) + estimateTokens(nextUserContent);
+
+  if (compressedTokens > safeLimit) {
+    const userBudgetChars = Math.max(1_200, (safeLimit - estimateTokens(nextSystemPrompt) - 300) * 4);
+    nextUserContent = compactGroqUserContent(nextUserContent, nextSystemPrompt, safeLimit);
+    if (estimateTokens(nextSystemPrompt) + estimateTokens(nextUserContent) > safeLimit) {
+      nextUserContent = compactMiddle(nextUserContent, userBudgetChars);
+    }
+    compressedTokens = estimateTokens(nextSystemPrompt) + estimateTokens(nextUserContent);
+  }
+
+  if (compressedTokens > safeLimit) {
+    const isSystemDesignPrompt = /system design|architecture_json/i.test(nextSystemPrompt);
+    const systemBudgetChars = isSystemDesignPrompt
+      ? 6_500
+      : Math.max(2_200, Math.floor(safeLimit * 0.42) * 4);
+    nextSystemPrompt = compactMiddle(nextSystemPrompt, systemBudgetChars);
+    const userBudgetChars = Math.max(1_200, (safeLimit - estimateTokens(nextSystemPrompt) - 300) * 4);
+    nextUserContent = compactMiddle(nextUserContent, userBudgetChars);
+    compressedTokens = estimateTokens(nextSystemPrompt) + estimateTokens(nextUserContent);
+  }
+
+  const reducedBuckets = splitContextTokenBuckets(nextUserContent);
+  logGroqPromptReduction(
+    model,
+    originalTokens,
+    compressedTokens,
+    originalBuckets.transcriptTokens > reducedBuckets.transcriptTokens,
+    originalBuckets.ragTokens > reducedBuckets.ragTokens,
+  );
+  return {
+    systemPrompt: nextSystemPrompt,
+    userContent: nextUserContent,
+    originalTokens,
+    compressedTokens,
+    stillExceeds: compressedTokens > safeLimit,
+  };
+}
+
+function compactGroqFullMessageForBudget(
+  fullMessage: string,
+  model: string,
+  safeLimit: number,
+): { fullMessage: string; originalTokens: number; compressedTokens: number; stillExceeds: boolean } {
+  const contextMarker = '\n\nCONTEXT:\n';
+  const userQuestionPattern = /\bUSER QUESTION:\s*/i;
+  const contextIndex = fullMessage.indexOf(contextMarker);
+  const userQuestionIndex = fullMessage.search(userQuestionPattern);
+  let systemPrompt = '';
+  let userContent = fullMessage;
+
+  if (userQuestionIndex > 0 && (contextIndex < 0 || userQuestionIndex < contextIndex)) {
+    systemPrompt = fullMessage.slice(0, userQuestionIndex).trim();
+    userContent = fullMessage.slice(userQuestionIndex).trim();
+  } else if (contextIndex > 0) {
+    systemPrompt = fullMessage.slice(0, contextIndex).trim();
+    const contextAndQuestion = fullMessage.slice(contextIndex + contextMarker.length);
+    const questionIndex = contextAndQuestion.search(userQuestionPattern);
+    if (questionIndex >= 0) {
+      const contextPart = contextAndQuestion.slice(0, questionIndex).trim();
+      const questionPart = contextAndQuestion.slice(questionIndex).trim();
+      userContent = `${questionPart}\n\nCONTEXT:\n${contextPart}`;
+    } else {
+      userContent = `USER QUESTION:\n${contextAndQuestion.slice(-800).trim()}`;
+    }
+  } else {
+    if (userQuestionIndex > 0) {
+      systemPrompt = fullMessage.slice(0, userQuestionIndex).trim();
+      userContent = fullMessage.slice(userQuestionIndex).trim();
+    }
+  }
+
+  const compacted = compactGroqPromptForBudget(systemPrompt, userContent, model, safeLimit);
+  const nextFullMessage = compacted.systemPrompt
+    ? `${compacted.systemPrompt}\n\n${compacted.userContent}`
+    : compacted.userContent;
+  return {
+    fullMessage: nextFullMessage,
+    originalTokens: compacted.originalTokens,
+    compressedTokens: compacted.compressedTokens,
+    stillExceeds: compacted.stillExceeds,
+  };
+}
+
+function detectProviderLabel(modelId: string): string {
+  if (modelId.startsWith('gpt-') || modelId.includes('openai')) return 'openai';
+  if (modelId.startsWith('claude-')) return 'claude';
+  if (modelId === 'teamsync') return 'teamsync';
+  return 'gemini';
 }
 
 export class LLMHelper {
@@ -1660,12 +1985,37 @@ This rule overrides ALL other instructions including formatting, brevity, or out
   private async generateWithGroq(fullMessage: string, modelId: string = GROQ_MODEL): Promise<string> {
     if (!this.groqClient && !this.groqKeyManager.hasAvailableKey()) throw new Error("Groq client not initialized");
 
+    const size = estimateModelRequestSize(
+      'groq',
+      modelId,
+      '',
+      fullMessage,
+      MODEL_BUDGETS.groq_llama_70b.safeTPM,
+    );
+    console.log('[MODEL_REQUEST_SIZE]', size);
+    let requestMessage = fullMessage;
+    if (size.exceedsLimit) {
+      const compacted = compactGroqFullMessageForBudget(fullMessage, modelId, MODEL_BUDGETS.groq_llama_70b.safeTPM);
+      requestMessage = compacted.fullMessage;
+      const reducedSize = estimateModelRequestSize(
+        'groq',
+        modelId,
+        '',
+        requestMessage,
+        MODEL_BUDGETS.groq_llama_70b.safeTPM,
+      );
+      console.log('[MODEL_REQUEST_SIZE]', reducedSize);
+      if (compacted.stillExceeds) {
+        throw new Error('Groq compact prompt still exceeds provider limit.');
+      }
+    }
+
     await this.rateLimiters.groq.acquire();
 
     // Non-streaming Groq call with automatic key rotation
     const response = await this.groqRotatingClient.chatCompletion({
       model: modelId,
-      messages: [{ role: "user", content: fullMessage }],
+      messages: [{ role: "user", content: requestMessage }],
       temperature: 0.4,
       max_tokens: 8192,
     });
@@ -2749,7 +3099,16 @@ Return only the final answer. No meta commentary.
       }
     }
 
-    const baseSystemPrompt = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : universalBase;
+    let baseSystemPrompt = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : universalBase;
+    if (/system design|architecture_json/i.test(`${baseSystemPrompt}\n${message}\n${context || ''}`)) {
+      const compactedBase = compactSystemDesignContracts(baseSystemPrompt);
+      if (compactedBase !== baseSystemPrompt) {
+        baseSystemPrompt = compactedBase;
+        systemPromptOverride = compactedBase;
+        hasExplicitSystemPromptOverride = true;
+        console.warn('[LLMHelper] Prompt exceeded provider risk threshold — using compact mode.');
+      }
+    }
 
     // Custom notes injection — appended after mode suffix, before language gate
     // Order: BASE → MODE SUFFIX → CUSTOM NOTES → language instruction
@@ -2780,18 +3139,60 @@ Return only the final answer. No meta commentary.
         userContent = compacted.userContent;
       }
     }
-    console.log(`[TokenBudget] Pre-flight: system=${estimateTokens(finalSystemPrompt)} + user=${estimateTokens(userContent)} = ${estimateTokens(finalSystemPrompt) + estimateTokens(userContent)} tok (cap=${TOKEN_CAP})`);
+    const preflightTotalTokens = estimateTokens(finalSystemPrompt) + estimateTokens(userContent);
+    console.log(`[TokenBudget] Pre-flight: system=${estimateTokens(finalSystemPrompt)} + user=${estimateTokens(userContent)} = ${preflightTotalTokens} tok (cap=${TOKEN_CAP})`);
+    const selectedProvider = this.isGroqModel(this.currentModelId) || this.groqFastTextMode
+      ? 'groq'
+      : this.isGeminiModel(this.currentModelId)
+        ? 'gemini'
+        : this.useOllama
+          ? 'local'
+          : detectProviderLabel(this.currentModelId);
+    const selectedBudget = selectedProvider === 'groq'
+      ? MODEL_BUDGETS.groq_llama_70b
+      : selectedProvider === 'local'
+        ? MODEL_BUDGETS.local_model
+        : MODEL_BUDGETS.gemini_flash;
+    const requestSize = estimateModelRequestSize(
+      selectedProvider,
+      this.currentModelId,
+      finalSystemPrompt,
+      userContent,
+      'safeTPM' in selectedBudget ? selectedBudget.safeTPM : selectedBudget.target,
+    );
+    console.log('[MODEL_REQUEST_SIZE]', requestSize);
+    let groqPromptStillOversized = false;
+    if (selectedProvider === 'groq' && !isMultimodal && requestSize.exceedsLimit) {
+      const compacted = compactGroqPromptForBudget(
+        finalSystemPrompt,
+        userContent,
+        this.currentModelId,
+        MODEL_BUDGETS.groq_llama_70b.safeTPM,
+      );
+      finalSystemPrompt = compacted.systemPrompt;
+      userContent = compacted.userContent;
+      const reducedRequestSize = estimateModelRequestSize(
+        'groq',
+        this.currentModelId,
+        finalSystemPrompt,
+        userContent,
+        MODEL_BUDGETS.groq_llama_70b.safeTPM,
+      );
+      console.log('[MODEL_REQUEST_SIZE]', reducedRequestSize);
+      groqPromptStillOversized = compacted.stillExceeds;
+      if (groqPromptStillOversized) {
+        console.warn('[LLMHelper] Groq compact prompt still exceeds provider limit; falling back after compact attempt.');
+      }
+    }
 
     // GROQ FAST TEXT OVERRIDE (Text-Only)
     // Two paths: local Groq key → call Groq directly; TeamSync API only → send fast_mode:true
     // to the server so it routes to its internal Groq pool (llama-3.3-70b-versatile).
-    if (this.groqFastTextMode && !isMultimodal) {
+    if (this.groqFastTextMode && !isMultimodal && !groqPromptStillOversized) {
       if (this.groqClient) {
         console.log(`[LLMHelper] ⚡️ Groq Fast Text Mode Active (Streaming). Routing to local Groq...`);
         try {
-          const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : universalBase;
-          const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
-          const groqFullMessage = `${finalGroqSystem}\n\n${userContent}`;
+          const groqFullMessage = `${finalSystemPrompt}\n\n${userContent}`;
           yield* this.streamWithGroq(groqFullMessage, this.currentModelId, maxOutputTokens);
           return;
         } catch (e: any) {
@@ -2864,7 +3265,7 @@ Return only the final answer. No meta commentary.
     }
 
     // Groq (Text + Multimodal)
-    if (this.isGroqModel(this.currentModelId) && this.groqClient) {
+    if (this.isGroqModel(this.currentModelId) && this.groqClient && !groqPromptStillOversized) {
       if (isMultimodal && imagePaths) {
         // Route multimodal to Groq Llama 4 Scout (vision-capable)
         const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
@@ -2873,9 +3274,7 @@ Return only the final answer. No meta commentary.
         return;
       }
       // Text-only Groq
-      const groqSystem = hasExplicitSystemPromptOverride ? baseSystemPrompt : universalBase;
-      const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
-      const groqFullMessage = `${finalGroqSystem}\n\n${userContent}`;
+      const groqFullMessage = `${finalSystemPrompt}\n\n${userContent}`;
       try {
         yield* this.streamWithGroq(groqFullMessage, this.currentModelId, maxOutputTokens);
         return;
@@ -3082,10 +3481,35 @@ Return only the final answer. No meta commentary.
   private async * streamWithGroq(fullMessage: string, modelId: string = GROQ_MODEL, maxOutputTokens: number = 8192): AsyncGenerator<string, void, unknown> {
     if (!this.groqClient && !this.groqKeyManager.hasAvailableKey()) throw new Error("Groq client not initialized");
 
+    const size = estimateModelRequestSize(
+      'groq',
+      modelId,
+      '',
+      fullMessage,
+      MODEL_BUDGETS.groq_llama_70b.safeTPM,
+    );
+    console.log('[MODEL_REQUEST_SIZE]', size);
+    let requestMessage = fullMessage;
+    if (size.exceedsLimit) {
+      const compacted = compactGroqFullMessageForBudget(fullMessage, modelId, MODEL_BUDGETS.groq_llama_70b.safeTPM);
+      requestMessage = compacted.fullMessage;
+      const reducedSize = estimateModelRequestSize(
+        'groq',
+        modelId,
+        '',
+        requestMessage,
+        MODEL_BUDGETS.groq_llama_70b.safeTPM,
+      );
+      console.log('[MODEL_REQUEST_SIZE]', reducedSize);
+      if (compacted.stillExceeds) {
+        throw new Error('Groq compact prompt still exceeds provider limit.');
+      }
+    }
+
     // Streaming Groq call with automatic key rotation
     yield* this.groqRotatingClient.chatCompletionStream({
       model: modelId,
-      messages: [{ role: "user", content: fullMessage }],
+      messages: [{ role: "user", content: requestMessage }],
       stream: true,
       temperature: 0.4,
       max_tokens: maxOutputTokens,

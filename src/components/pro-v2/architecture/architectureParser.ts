@@ -358,8 +358,7 @@ function inferArchitectureDiagramFromText(text: string): ArchitectureDiagram | n
 }
 
 function fallbackFromText(text: string, mermaidChart: string | null): ArchitectureDiagram | null {
-    const mermaidDiagram = mermaidToArchitectureDiagram(mermaidChart);
-    if (mermaidDiagram) return mermaidDiagram;
+    void mermaidChart;
 
     const inferredDiagram = inferArchitectureDiagramFromText(text);
     if (inferredDiagram) return inferredDiagram;
@@ -479,5 +478,5 @@ export function parseArchitectureResponse(text: string, options: { isStreaming: 
 export function looksLikeSystemDesignResponse(text: string): boolean {
     return /architecture_json/i.test(text)
         || Boolean(inferArchitectureDiagramFromText(text))
-        || (/```[ \t]*mermaid/i.test(text) && /\b(Architecture Diagram|Component Breakdown|Scaling Strategy|Database Design|High-Level Design|Low-Level Design|system design)\b/i.test(text));
+        || /\b(Architecture Diagram|Component Breakdown|Scaling Strategy|Database Design|High-Level Design|Low-Level Design|system design)\b/i.test(text);
 }

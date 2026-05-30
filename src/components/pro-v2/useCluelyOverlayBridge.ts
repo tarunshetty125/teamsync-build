@@ -22,6 +22,7 @@ import {
     type OverlaySessionMode,
 } from '../../lib/overlay/screenScanMode';
 import {
+    detectRealtimeMode,
     intentReducer,
     isSalaryRelatedText,
     type DetectedQuestionType,
@@ -123,11 +124,14 @@ function readPersistedManualSessionMode(): SessionMode | null {
             stored === 'behavioral'
             || stored === 'coding'
             || stored === 'follow_up'
-            || stored === 'general'
             || stored === 'salary'
             || stored === 'system_design'
         ) {
             return stored;
+        }
+        if (stored === 'general') {
+            localStorage.removeItem(MANUAL_SESSION_MODE_KEY);
+            localStorage.removeItem(MANUAL_SESSION_MODE_EXPLICIT_KEY);
         }
     } catch {
         /* ignore localStorage access issues */
@@ -305,6 +309,18 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     );
 
     const liveContextSummary = actionContextSummaryOverride ?? derivedContextSummary;
+    const previousDetectedQuestionTypeRef = useRef<SessionMode>('general');
+    useEffect(() => {
+        if (previousDetectedQuestionTypeRef.current === detectedQuestionType) return;
+        console.log('[MODE_PIPELINE]', {
+            source: currentSourceRef.current === 'Manual Input' ? 'manual_input' : 'transcript',
+            input: currentTurnTextRef.current || lastFinalSentenceRef.current,
+            detectedMode: detectedQuestionType,
+            previousMode: previousDetectedQuestionTypeRef.current,
+            nextMode: recommendationMode,
+        });
+        previousDetectedQuestionTypeRef.current = detectedQuestionType;
+    }, [detectedQuestionType, recommendationMode]);
 
     const prevIsProcessingRef = useRef(isProcessing);
     useEffect(() => {
@@ -421,23 +437,31 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         liveContextSummary,
     ]);
 
-    const markCurrentTurnFromText = useCallback((text: string) => {
+    const markCurrentTurnFromText = useCallback((text: string, source: 'manual_input' | 'transcript' = 'transcript') => {
         const nextText = text.trim();
         if (nextText.length < 3) return;
 
         unlockRecommendationForTurn();
         currentTurnTextRef.current = nextText;
+        const previousMode = intentState.detectedType;
         const questionTurnId = nextRequestId('question-turn');
         currentQuestionTurnIdRef.current = questionTurnId;
         setCurrentQuestionTurnId(questionTurnId);
         const seq = ++seqRef.current;
+        console.log('[MODE_PIPELINE]', {
+            source,
+            input: nextText,
+            detectedMode: 'pending',
+            previousMode,
+            nextMode: 'pending',
+        });
         dispatchIntent({
             type: 'EVALUATE',
             combinedText: nextText,
             now: performance.now(),
             seq,
         });
-    }, [unlockRecommendationForTurn]);
+    }, [intentState.detectedType, unlockRecommendationForTurn]);
 
     const onSessionReset = useCallback(() => {
         void window.electronAPI.cancelGeminiChatStream?.().catch(() => {});
@@ -551,6 +575,13 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             currentQuestionTurnIdRef.current = questionTurnId;
             setCurrentQuestionTurnId(questionTurnId);
             const seq = ++seqRef.current;
+            console.log('[MODE_PIPELINE]', {
+                source: 'transcript',
+                input: combined,
+                detectedMode: 'pending',
+                previousMode: intentState.detectedType,
+                nextMode: 'pending',
+            });
             dispatchIntent({
                 type: 'EVALUATE',
                 combinedText: combined,
@@ -558,7 +589,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 seq,
             });
         },
-        [unlockRecommendationForTurn],
+        [intentState.detectedType, unlockRecommendationForTurn],
     );
 
     useEffect(() => {
@@ -697,12 +728,32 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         const unsub = window.electronAPI?.onSessionModeChanged?.((data: any) => {
             if (!data?.mode) return;
             const nextMode = data.mode as SessionMode;
-            manualSessionModeRef.current = nextMode;
-            persistManualSessionMode(nextMode);
+            manualSessionModeRef.current = nextMode === 'general' ? null : nextMode;
+            persistManualSessionMode(manualSessionModeRef.current);
             setSession({ currentMode: nextMode });
         });
         return () => unsub?.();
     }, [persistManualSessionMode]);
+
+    useEffect(() => {
+        console.log('[MODE_DEBUG]', {
+            templateId: activeModeTemplateId,
+            recommendationMode,
+            liveOverlayCopilotMode,
+            sessionMode: session.currentMode,
+            finalResolvedMode: liveOverlayCopilotMode,
+            sessionModeLocked: Boolean(manualSessionModeRef.current),
+            overlayVersion: 'pro-v2',
+            source: currentSourceRef.current,
+            renderReason: 'mode_state_changed',
+        });
+    }, [
+        activeModeTemplateId,
+        recommendationMode,
+        liveOverlayCopilotMode,
+        session.currentMode,
+        detectedQuestionType,
+    ]);
 
     useEffect(() => {
         if (!window.electronAPI?.onEnsureExpanded) return;
@@ -1022,7 +1073,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
             await cancelInFlightOverlayRequests();
             if (!isTranscriptPausedRef.current) {
-                markCurrentTurnFromText(userText);
+                markCurrentTurnFromText(userText, 'manual_input');
             }
 
             if (hasProContextAccess && hasNegotiationScript) {
@@ -1060,13 +1111,15 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 },
             ]);
 
+            const manualDetectedMode = detectRealtimeMode(userText, 'general', 'general').nextType;
+            const transcriptWindow = manualDetectedMode === 'system_design' ? 250 : 700;
             const streamContext =
                 [
-                    finalizedTranscriptRef.current.slice(-700),
+                    finalizedTranscriptRef.current.slice(-transcriptWindow),
                     [
                         'RESPONSE RULES:',
-                        '- ANY coding / DSA problem: **Problem:**, **Approach:**, **Complexity:**, **Solution:** (mandatory fenced code).',
-                        '- ANY system design question (URL shortener, Instagram, Uber, notifications, etc.): full 10-section answer per SYSTEM DESIGN format — requirements, ```architecture_json``` diagram, components, data flow, DB, scaling, tradeoffs, spoken summary. Diagram JSON is mandatory.',
+                        '- Coding / DSA: Problem, Approach, Complexity, Solution with fenced code.',
+                        '- System design: concise 10-section architecture answer with exactly one ```architecture_json``` block; never Mermaid.',
                         '- architecture_json rules: valid JSON only, no comments, no trailing commas, exact opening fence ```architecture_json and exact closing fence ```.',
                         '- architecture_json node schema: {"id":"","label":"","kind":"","technology":"","purpose":"","layer":"","latency":"","failureMode":""}. Edge schema: {"source":"","target":"","label":"","protocol":"","latency":""}.',
                         '- Minimum diagram quality: simple systems 12+ nodes, medium production 20+ nodes, FAANG-scale 35-60+ nodes. Include clients, edge/gateway, core services, async, data, cache, observability, and security layers.',

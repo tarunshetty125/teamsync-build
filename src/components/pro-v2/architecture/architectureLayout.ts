@@ -1,5 +1,5 @@
 import type { Edge, Node } from '@xyflow/react';
-import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js';
+import dagre from 'dagre';
 import type { ArchitectureDiagram, ArchitectureDirection } from './architectureSchema';
 import { ARCHITECTURE_NODE_HEIGHT, ARCHITECTURE_NODE_WIDTH } from './architectureStyles';
 
@@ -29,42 +29,33 @@ export interface ArchitectureLayoutResult {
     edges: ArchitectureFlowEdge[];
 }
 
-const elk = new ELK();
-
 function getLayoutDensity(nodeCount: number) {
     if (nodeCount >= 35) {
         return {
-            nodeSpacing: '54',
-            layerSpacing: '112',
-            padding: '[top=52,left=64,bottom=52,right=64]',
+            nodeSpacing: 54,
+            layerSpacing: 112,
+            marginX: 64,
+            marginY: 52,
         };
     }
     if (nodeCount >= 20) {
         return {
-            nodeSpacing: '46',
-            layerSpacing: '92',
-            padding: '[top=44,left=52,bottom=44,right=52]',
+            nodeSpacing: 46,
+            layerSpacing: 92,
+            marginX: 52,
+            marginY: 44,
         };
     }
     return {
-        nodeSpacing: '38',
-        layerSpacing: '72',
-        padding: '[top=36,left=40,bottom=36,right=40]',
+        nodeSpacing: 38,
+        layerSpacing: 72,
+        marginX: 40,
+        marginY: 36,
     };
 }
 
-function elkDirection(direction: ArchitectureDirection): string {
-    switch (direction) {
-        case 'LR':
-            return 'RIGHT';
-        case 'RL':
-            return 'LEFT';
-        case 'BT':
-            return 'UP';
-        case 'TB':
-        default:
-            return 'DOWN';
-    }
+function dagreDirection(direction: ArchitectureDirection): 'TB' | 'BT' | 'LR' | 'RL' {
+    return direction || 'TB';
 }
 
 export function architectureDiagramFingerprint(diagram: ArchitectureDiagram): string {
@@ -77,47 +68,40 @@ export function architectureDiagramFingerprint(diagram: ArchitectureDiagram): st
 
 export async function layoutArchitectureDiagram(diagram: ArchitectureDiagram): Promise<ArchitectureLayoutResult> {
     const density = getLayoutDensity(diagram.nodes.length);
-    const graph: ElkNode = {
-        id: 'root',
-        layoutOptions: {
-            'elk.algorithm': 'layered',
-            'elk.direction': elkDirection(diagram.direction),
-            'elk.spacing.nodeNode': density.nodeSpacing,
-            'elk.layered.spacing.nodeNodeBetweenLayers': density.layerSpacing,
-            'elk.layered.spacing.edgeNodeBetweenLayers': '28',
-            'elk.layered.spacing.edgeEdgeBetweenLayers': '18',
-            'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-            'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-            'elk.layered.edgeRouting': 'ORTHOGONAL',
-            'elk.edgeRouting': 'ORTHOGONAL',
-            'elk.padding': density.padding,
-        },
-        children: diagram.nodes.map((node) => ({
-            id: node.id,
+    const graph = new dagre.graphlib.Graph();
+    graph.setDefaultEdgeLabel(() => ({}));
+    graph.setGraph({
+        rankdir: dagreDirection(diagram.direction),
+        nodesep: density.nodeSpacing,
+        ranksep: density.layerSpacing,
+        marginx: density.marginX,
+        marginy: density.marginY,
+        ranker: 'network-simplex',
+    });
+
+    diagram.nodes.forEach((node) => {
+        graph.setNode(node.id, {
             width: ARCHITECTURE_NODE_WIDTH,
             height: node.kind === 'gateway' ? ARCHITECTURE_NODE_HEIGHT + 8 : ARCHITECTURE_NODE_HEIGHT,
-        })),
-        edges: diagram.edges.map((edge, index) => ({
-            id: `edge-${edge.source}-${edge.target}-${index}`,
-            sources: [edge.source],
-            targets: [edge.target],
-            labels: edge.label ? [{ text: edge.label }] : undefined,
-        })),
-    };
+        });
+    });
+    diagram.edges.forEach((edge) => {
+        graph.setEdge(edge.source, edge.target, {
+            label: edge.label || '',
+            width: edge.label ? Math.min(160, Math.max(48, edge.label.length * 7)) : 0,
+            height: edge.label ? 18 : 0,
+        });
+    });
 
-    const laidOut = await elk.layout(graph);
-    const positionById = new Map(
-        (laidOut.children ?? []).map((node) => [
-            node.id,
-            {
-                x: node.x ?? 0,
-                y: node.y ?? 0,
-            },
-        ]),
-    );
+    dagre.layout(graph);
 
     const nodes: ArchitectureFlowNode[] = diagram.nodes.map((node, index) => {
-        const position = positionById.get(node.id) ?? { x: index * 220, y: 0 };
+        const laidOut = graph.node(node.id);
+        const width = ARCHITECTURE_NODE_WIDTH;
+        const height = node.kind === 'gateway' ? ARCHITECTURE_NODE_HEIGHT + 8 : ARCHITECTURE_NODE_HEIGHT;
+        const position = laidOut
+            ? { x: laidOut.x - width / 2, y: laidOut.y - height / 2 }
+            : { x: index * (ARCHITECTURE_NODE_WIDTH + density.nodeSpacing), y: 0 };
         return {
             id: node.id,
             type: 'architecture',

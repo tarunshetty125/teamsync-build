@@ -64,6 +64,7 @@ import {
     type OverlayQuickActionDef,
     type OverlayRecommendationId,
 } from '../lib/modes/overlayCopilotConfig';
+import { detectRealtimeMode } from '../lib/overlay/overlayIntent';
 
 interface Message {
     id: string;
@@ -295,7 +296,7 @@ function getSuggestedAnswerIntent(question: string): string {
 }
 
 // ── Context-Aware Question Type Detection (mirrors IntentClassifier patterns) ──
-type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'follow_up' | 'general';
+type DetectedQuestionType = 'coding' | 'system_design' | 'behavioral' | 'follow_up' | 'salary' | 'general';
 type SessionMode = DetectedQuestionType | 'salary';
 
 type ActionIntent =
@@ -411,119 +412,9 @@ function buildIntentTranscriptWindow(transcript: string, fallback: string): stri
 function detectQuestionType(
     text: string,
     currentType: DetectedQuestionType,
-    _lastStrongType: DetectedQuestionType
+    lastStrongType: DetectedQuestionType
 ): { nextType: DetectedQuestionType; nextStrong?: DetectedQuestionType } {
-    if (/tell me about yourself|introduce yourself/i.test(text)) {
-        return { nextType: 'behavioral', nextStrong: 'behavioral' };
-    }
-
-    // Normalize: fix OCR/STT artifacts, collapse whitespace
-    let t = normalizeTranscript(text);
-
-    const scores = {
-        coding: 0,
-        system_design: 0,
-        behavioral: 0,
-        follow_up: 0,
-        general: 0
-    };
-
-    // Helper to count regex matches with a cap to prevent inflation from repeated words
-    const cap = (regex: RegExp) => {
-        let count = 0;
-        for (const _ of t.matchAll(new RegExp(regex.source, 'gi'))) {
-            if (++count >= 3) break;
-        }
-        return count;
-    };
-
-    // --- PRIORITY WEIGHTING ---
-    // Core Signals (+3)
-    scores.coding += cap(REGEX_CODING_CORE) * 3;
-    scores.behavioral += cap(REGEX_BEHAVIORAL_CORE) * 3;
-
-    // Strong Signals (+2)
-    scores.coding += cap(REGEX_CODING_STRONG) * 2;
-    scores.behavioral += cap(REGEX_BEHAVIORAL_STRONG) * 2;
-
-    // Cross-pollination boosts for mixed queries (+1)
-    scores.coding += cap(REGEX_CODING_BOOST);
-
-    // Follow-up signals
-    scores.follow_up += cap(REGEX_FOLLOW_UP_CORE) * 3;
-    scores.follow_up += cap(REGEX_FOLLOW_UP_STRONG) * 2;
-
-    const systemSignals = scoreSystemDesignSignals(cap);
-    const systemSignalDensity =
-        systemSignals.directHits
-        + systemSignals.archHits
-        + systemSignals.scaleHits
-        + systemSignals.framingHits
-        + systemSignals.reasoningHits;
-    const meetsSystemGate =
-        systemSignals.strong
-        || systemSignals.bucketHits >= SYSTEM_SIGNAL_MIN_BUCKETS
-        || (systemSignalDensity >= 3 && (systemSignals.archHits > 0 || systemSignals.scaleHits > 0));
-    if (meetsSystemGate && systemSignals.score >= SYSTEM_SIGNAL_MIN_SCORE) {
-        scores.system_design += systemSignals.score;
-    } else {
-        scores.system_design += Math.min(systemSignals.score, 0.5);
-    }
-
-    const hasNonSystemDesignSignal = REGEX_NON_SYSTEM_DESIGN.test(t);
-    if (
-        hasNonSystemDesignSignal
-        && systemSignals.directHits === 0
-        && systemSignals.scaleHits === 0
-        && systemSignals.reasoningHits === 0
-    ) {
-        scores.system_design = 0;
-    } else if (hasNonSystemDesignSignal && !systemSignals.strong && systemSignals.bucketHits < SYSTEM_SIGNAL_MIN_BUCKETS) {
-        scores.system_design = Math.max(0, scores.system_design - 2);
-    }
-
-    // FOLLOW-UP FALLBACK: if general + short question + previous answer exists
-    // This catches "what about X?" / "and Y?" style follow-ups
-    const wordCount = t.split(/\s+/).filter((w: string) => w.length > 0).length;
-    if (scores.general >= scores.follow_up && wordCount <= 8 && wordCount >= 2) {
-        // Short ambiguous question → likely a follow-up
-        scores.follow_up = Math.max(scores.follow_up, 2);
-    }
-
-    // Weighted persistence (memory of previous intent)
-    if (currentType !== 'general') {
-        scores[currentType] += 0.5;
-    }
-
-    const entries = (Object.entries(scores) as [DetectedQuestionType, number][])
-        .filter(([type]) => type !== 'general') // Evaluate active intents only
-        .sort((a, b) => b[1] - a[1]);
-
-    const [primary, primaryScore] = entries[0];
-    const [, secondScore] = entries[1] || [null, 0];
-
-    // Confidence fallback: if signal is too weak, use memory of last strong intent
-    if (primaryScore < 2) {
-        return { nextType: 'general' };
-    }
-
-    const nextStrong = primaryScore >= 3 ? primary : undefined;
-
-    // Hysteresis: only switch if the primary intent beats the secondary intent cleanly
-    const SWITCH_THRESHOLD = 2;
-    if (
-        primary !== currentType
-        && primary === 'system_design'
-        && scores.system_design >= SYSTEM_FAST_SWITCH_SCORE
-    ) {
-        return { nextType: 'system_design', nextStrong };
-    }
-
-    if (primary !== currentType && currentType !== 'general' && (primaryScore - secondScore) < SWITCH_THRESHOLD) {
-        return { nextType: currentType, nextStrong };
-    }
-
-    return { nextType: primary, nextStrong };
+    return detectRealtimeMode(text, currentType, lastStrongType);
 }
 
 type IntentState = {
@@ -1186,6 +1077,20 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         [activeModeTemplateId, isMeetingActive, recommendationMode]
     );
 
+    useEffect(() => {
+        console.log('[MODE_DEBUG]', {
+            templateId: activeModeTemplateId,
+            recommendationMode,
+            liveOverlayCopilotMode: overlayCopilotMode,
+            sessionMode: currentSessionMode,
+            finalResolvedMode: overlayCopilotMode,
+            sessionModeLocked: currentSessionMode !== 'general',
+            overlayVersion: 'v1',
+            source: currentSourceRef.current,
+            renderReason: 'mode_state_changed',
+        });
+    }, [activeModeTemplateId, recommendationMode, overlayCopilotMode, currentSessionMode]);
+
     const resetOverlayRecommendationState = useCallback(() => {
         if (recommendationTimerRef.current) {
             clearTimeout(recommendationTimerRef.current);
@@ -1211,7 +1116,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     );
 
     useEffect(() => {
-        console.log('[Realtime Overlay] Session mode locked by user:', currentSessionMode);
+        if (currentSessionMode !== 'general') {
+            console.log('[Realtime Overlay] Session mode locked by user:', currentSessionMode);
+        }
     }, [currentSessionMode]);
 
     useEffect(() => {
@@ -1226,6 +1133,32 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const latestCombinedRef = useRef<string>('');
     const seqRef = useRef(0);
 
+    const markCurrentTurnFromText = useCallback((text: string, source: 'manual_input' | 'transcript') => {
+        const combined = text.trim();
+        if (combined.length < 3) return;
+
+        recommendationLockTurnIdRef.current = null;
+        latestCombinedRef.current = combined;
+        lastFinalSentenceRef.current = combined;
+        const questionTurnId = nextRequestId('question-turn');
+        currentQuestionTurnIdRef.current = questionTurnId;
+        setCurrentQuestionTurnId(questionTurnId);
+        const seq = ++seqRef.current;
+        console.log('[MODE_PIPELINE]', {
+            source,
+            input: combined,
+            detectedMode: 'pending',
+            previousMode: intentState.detectedType,
+            nextMode: 'pending',
+        });
+        dispatchIntent({
+            type: 'EVALUATE',
+            combinedText: combined,
+            now: performance.now(),
+            seq,
+        });
+    }, [intentState.detectedType]);
+
     const recomputeIntentFromFinalTranscript = useCallback((questionTurnId: string) => {
         const combined = buildIntentTranscriptWindow(
             finalizedTranscriptRef.current,
@@ -1238,13 +1171,33 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         currentQuestionTurnIdRef.current = questionTurnId;
         setCurrentQuestionTurnId(questionTurnId);
         const seq = ++seqRef.current;
+        console.log('[MODE_PIPELINE]', {
+            source: 'transcript',
+            input: combined,
+            detectedMode: 'pending',
+            previousMode: intentState.detectedType,
+            nextMode: 'pending',
+        });
         dispatchIntent({
             type: 'EVALUATE',
             combinedText: combined,
             now: performance.now(),
             seq
         });
-    }, []);
+    }, [intentState.detectedType]);
+
+    const previousDetectedQuestionTypeRef = useRef<SessionMode>('general');
+    useEffect(() => {
+        if (previousDetectedQuestionTypeRef.current === detectedQuestionType) return;
+        console.log('[MODE_PIPELINE]', {
+            source: currentSourceRef.current === 'Manual Input' ? 'manual_input' : 'transcript',
+            input: latestCombinedRef.current || lastFinalSentenceRef.current,
+            detectedMode: detectedQuestionType,
+            previousMode: previousDetectedQuestionTypeRef.current,
+            nextMode: recommendationMode,
+        });
+        previousDetectedQuestionTypeRef.current = detectedQuestionType;
+    }, [detectedQuestionType, recommendationMode]);
 
     useEffect(() => {
         screenContextTextRef.current = screenScanOverlay.answer || '';
@@ -3036,6 +2989,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
 
         const userText = inputValue;
         const currentAttachments = attachedContextRef.current;
+        if (userText.trim()) {
+            markCurrentTurnFromText(userText, 'manual_input');
+        }
 
         // Clear inputs immediately
         setInputValue('');
@@ -3090,10 +3046,12 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             // Pass imagePath if attached, AND conversation context.
             // Live RAG is now injected by the unified backend action path when available.
             requestStartTimeRef.current = Date.now();
+            const manualDetectedMode = detectRealtimeMode(userText, 'general', 'general').nextType;
+            const transcriptWindow = manualDetectedMode === 'system_design' ? 250 : 700;
             const streamContext = [
                 conversationContext.trim(),
-                finalizedTranscriptRef.current.slice(-700),
-                'RESPONSE RULES:\n- ANY coding / DSA: **Problem:**, **Approach:**, **Complexity:**, **Solution:** (mandatory fenced code).\n- ANY system design: full 10-section architecture answer with ```mermaid``` diagram, components, data flow, DB, scaling, tradeoffs (mandatory).\n- Other: under 120 words; 3-5 bullets when listing.\n- No preamble.'
+                finalizedTranscriptRef.current.slice(-transcriptWindow),
+                'RESPONSE RULES:\n- Coding / DSA: Problem, Approach, Complexity, Solution with fenced code.\n- System design: concise 10-section architecture answer with exactly one ```architecture_json``` block; never Mermaid.\n- Other: under 120 words; 3-5 bullets when listing.\n- No preamble.'
             ].filter(Boolean).join('\n') || undefined;
             await window.electronAPI.streamGeminiChat(
                 userText || 'Analyze this screenshot',

@@ -552,29 +552,21 @@ export function resolveOverlayCopilotMode(
     return activeTemplateType;
   }
 
-  // Technical-interview: dynamic sub-mode — transcript selects button set.
-  // Salary passthrough allowed here because this is an adaptive template.
-  if (activeTemplateType === 'technical-interview') {
-    if (sessionMode === 'salary') return 'salary';
-    if (sessionMode === 'coding') return 'coding';
-    if (sessionMode === 'system_design') return 'system_design';
-    if (sessionMode === 'behavioral') return 'behavioral';
-    if (sessionMode === 'follow_up') return 'follow_up';
-    if (sessionMode === 'general') return 'general';
-    return 'technical-interview';
+  // Adaptive templates: runtime intent selects the button set.
+  // This includes "general"; treating it as locked caused general + system_design
+  // to resolve back to general after the layered mode refactor.
+  if (!activeTemplateType || activeTemplateType === 'general' || activeTemplateType === 'technical-interview') {
+    return sessionMode;
   }
 
-  // Looking-for-work: dynamic sub-mode for coding / system_design / salary.
   if (activeTemplateType === 'looking-for-work') {
-    if (sessionMode === 'salary') return 'salary';
-    if (sessionMode === 'coding') return 'coding';
-    if (sessionMode === 'system_design') return 'system_design';
+    if (sessionMode === 'coding' || sessionMode === 'system_design' || sessionMode === 'salary') {
+      return sessionMode;
+    }
     return 'looking-for-work';
   }
 
-  // All other templates (general, etc.): template is authoritative.
-  // Transcript intent influences button highlight, never button set.
-  return activeTemplateType || 'general';
+  return sessionMode;
 }
 
 export function getOverlayQuickActions(

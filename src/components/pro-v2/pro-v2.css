@@ -1010,6 +1010,17 @@
   line-height: 1;
 }
 
+.v2-architecture-parse-error {
+  width: 100%;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  background: rgba(251, 191, 36, 0.08);
+  color: rgba(254, 243, 199, 0.92);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .v2-architecture-mermaid-fallback {
   background: linear-gradient(180deg, rgba(23, 23, 27, 0.86) 0%, rgba(17, 17, 20, 0.76) 100%);
   border: 1px solid rgba(255,255,255,0.10);

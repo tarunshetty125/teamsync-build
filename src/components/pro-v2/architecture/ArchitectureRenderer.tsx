@@ -1,9 +1,7 @@
-import React, { Component, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Component, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import mermaid from 'mermaid';
 import ArchitectureCanvas from './ArchitectureCanvas';
 import type { ArchitectureDiagram } from './architectureSchema';
-import { createLinearFallbackDiagram } from './architectureSchema';
 import type { ArchitectureParseState } from './architectureParser';
 
 interface ArchitectureRendererProps {
@@ -98,118 +96,24 @@ function ArchitectureCards({ diagram }: { diagram: ArchitectureDiagram }) {
     );
 }
 
-let architectureMermaidCounter = 0;
-function nextArchitectureMermaidId() {
-    architectureMermaidCounter += 1;
-    return `v2-architecture-mermaid-${Date.now()}-${architectureMermaidCounter}`;
-}
-
-function MermaidGuard({ chart, fallbackDiagram }: { chart: string; fallbackDiagram: ArchitectureDiagram }) {
-    const renderIdRef = useRef('');
-    const [svgHtml, setSvgHtml] = useState<string | null>(null);
-    const [failed, setFailed] = useState(false);
-
-    useEffect(() => {
-        let cancelled = false;
-        const renderId = nextArchitectureMermaidId();
-        renderIdRef.current = renderId;
-        setSvgHtml(null);
-        setFailed(false);
-
-        mermaid.initialize({
-            startOnLoad: false,
-            securityLevel: 'loose',
-            theme: 'dark',
-            suppressErrorRendering: true,
-            fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            fontSize: 13,
-            flowchart: {
-                htmlLabels: true,
-                curve: 'basis',
-                padding: 12,
-                nodeSpacing: 50,
-                rankSpacing: 54,
-                useMaxWidth: true,
-            },
-            themeVariables: {
-                background: 'transparent',
-                mainBkg: 'rgba(31,31,35,0.94)',
-                primaryColor: '#1F1F23',
-                primaryTextColor: '#F5F5F7',
-                primaryBorderColor: 'rgba(255,255,255,0.12)',
-                lineColor: 'rgba(255,255,255,0.26)',
-                textColor: '#F5F5F7',
-                nodeTextColor: '#F5F5F7',
-                edgeLabelBackground: 'rgba(24,24,28,0.88)',
-                clusterBkg: 'rgba(255,255,255,0.03)',
-                clusterBorder: 'rgba(255,255,255,0.08)',
-            },
-        });
-
-        (async () => {
-            try {
-                const parsed = await mermaid.parse(chart, { suppressErrors: true });
-                if (parsed === false) throw new Error('Invalid Mermaid');
-                const { svg } = await mermaid.render(renderId, chart);
-                if (cancelled || renderIdRef.current !== renderId) return;
-                const responsiveSvg = svg.replace(/(<svg\s)([^>]*?)>/i, (_match, svgOpen, attrs) => {
-                    const cleanedAttrs = String(attrs).replace(/\s?(width|height)="[^"]*"/g, '');
-                    return `${svgOpen}${cleanedAttrs}>`;
-                });
-                setSvgHtml(responsiveSvg);
-            } catch {
-                if (!cancelled) setFailed(true);
-            } finally {
-                document.getElementById(renderId)?.remove();
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-            document.getElementById(renderId)?.remove();
-        };
-    }, [chart]);
-
-    if (failed) return <ArchitectureCards diagram={fallbackDiagram} />;
-    if (!svgHtml) return <ArchitectureLoading />;
-
-    return (
-        <motion.div
-            className="mermaid-container v2-architecture-mermaid-fallback my-2.5 rounded-2xl overflow-hidden group/mermaid"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-        >
-            <div className="v2-architecture-mermaid-header">
-                Architecture Diagram
-            </div>
-            <div
-                className="v2-architecture-mermaid-body mermaid"
-                dangerouslySetInnerHTML={{ __html: svgHtml }}
-            />
-        </motion.div>
-    );
-}
-
 const ArchitectureRenderer = memo<ArchitectureRendererProps>(function ArchitectureRenderer({
     state,
     diagram,
-    mermaidChart,
     fallbackDiagram,
     isStreaming = false,
 }) {
-    const [stage, setStage] = useState<'flow' | 'mermaid' | 'cards'>('flow');
+    const [stage, setStage] = useState<'flow' | 'cards'>('flow');
     const cardsDiagram = fallbackDiagram ?? diagram ?? null;
 
     useEffect(() => {
         setStage('flow');
-    }, [diagram, mermaidChart, state]);
+    }, [diagram, state]);
 
     const handleFlowError = useCallback(() => {
-        setStage(mermaidChart ? 'mermaid' : 'cards');
-    }, [mermaidChart]);
+        setStage('cards');
+    }, []);
 
-    if (state === 'loading' || (isStreaming && state !== 'ready' && !mermaidChart)) {
+    if (state === 'loading' || (isStreaming && state !== 'ready')) {
         return <ArchitectureLoading />;
     }
 
@@ -221,8 +125,12 @@ const ArchitectureRenderer = memo<ArchitectureRendererProps>(function Architectu
         );
     }
 
-    if ((stage === 'mermaid' || state === 'missing' || state === 'invalid') && mermaidChart) {
-        return <MermaidGuard chart={mermaidChart} fallbackDiagram={cardsDiagram ?? createLinearFallbackDiagram([])} />;
+    if ((state === 'invalid' || state === 'missing') && !cardsDiagram) {
+        return (
+            <div className="v2-architecture-parse-error">
+                Architecture diagram JSON could not be parsed. Ask again and I will regenerate it in architecture_json format.
+            </div>
+        );
     }
 
     if (!cardsDiagram) return null;

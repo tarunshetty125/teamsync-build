@@ -262,6 +262,14 @@ export function detectQuestionType(
     return { nextType: primary, nextStrong };
 }
 
+export function detectRealtimeMode(
+    input: string,
+    currentType: DetectedQuestionType = 'general',
+    lastStrongType: DetectedQuestionType = 'general',
+): { nextType: DetectedQuestionType; nextStrong?: DetectedQuestionType } {
+    return detectQuestionType(input, currentType, lastStrongType);
+}
+
 export type IntentState = {
     detectedType: DetectedQuestionType;
     lastStrongType: DetectedQuestionType;
