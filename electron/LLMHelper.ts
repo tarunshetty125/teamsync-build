@@ -157,11 +157,13 @@ function estimateModelRequestSize(
   userContent: string,
   safeLimit: number,
 ): ModelRequestSize {
+  const multiplier = getProviderTokenSafetyMultiplier(provider, systemPrompt, userContent);
+  const providerEstimate = (text: string) => Math.ceil(estimateTokens(text) * multiplier);
   const { transcriptTokens, ragTokens } = splitContextTokenBuckets(userContent);
-  const modeTokens = estimateTokens((systemPrompt.match(/## ACTIVE MODE[\s\S]*/i) || [''])[0]);
-  const rulesTokens = estimateTokens((systemPrompt.match(/(?:RULES|OUTPUT|CONTRACT|architecture_json)[\s\S]*/i) || [''])[0]);
-  const systemTokens = estimateTokens(systemPrompt);
-  const totalTokens = systemTokens + estimateTokens(userContent);
+  const modeTokens = providerEstimate((systemPrompt.match(/## ACTIVE MODE[\s\S]*/i) || [''])[0]);
+  const rulesTokens = providerEstimate((systemPrompt.match(/(?:RULES|OUTPUT|CONTRACT|architecture_json)[\s\S]*/i) || [''])[0]);
+  const systemTokens = providerEstimate(systemPrompt);
+  const totalTokens = systemTokens + providerEstimate(userContent);
   return {
     provider,
     model,
@@ -174,6 +176,20 @@ function estimateModelRequestSize(
     safeLimit,
     exceedsLimit: totalTokens > safeLimit,
   };
+}
+
+function isSystemDesignGroqPayload(systemPrompt: string, userContent: string): boolean {
+  return /\bsystem design\b|architecture_json|diagram\.type|nodes\[\]|edges\[\]|MINIMUM 12 nodes/i.test(`${systemPrompt}\n${userContent}`);
+}
+
+function getProviderTokenSafetyMultiplier(provider: string, systemPrompt: string, userContent: string): number {
+  if (provider !== 'groq') return 1;
+  return isSystemDesignGroqPayload(systemPrompt, userContent) ? 2.5 : 1.4;
+}
+
+function getEffectiveGroqSafeLimit(systemPrompt: string, userContent: string, safeLimit: number): number {
+  const multiplier = getProviderTokenSafetyMultiplier('groq', systemPrompt, userContent);
+  return Math.max(1_800, Math.floor(safeLimit / multiplier));
 }
 
 function removeDuplicatePromptLines(text: string): string {
@@ -304,31 +320,32 @@ function compactGroqPromptForBudget(
   safeLimit: number,
 ): { systemPrompt: string; userContent: string; originalTokens: number; compressedTokens: number; stillExceeds: boolean } {
   const originalTokens = estimateTokens(systemPrompt) + estimateTokens(userContent);
+  const effectiveSafeLimit = getEffectiveGroqSafeLimit(systemPrompt, userContent, safeLimit);
   const originalBuckets = splitContextTokenBuckets(userContent);
   let nextSystemPrompt = removeDuplicatePromptLines(compactSystemDesignContracts(systemPrompt));
   nextSystemPrompt = nextSystemPrompt.replace(/<user_context>[\s\S]*?<\/user_context>/gi, (match) => {
     return `<user_context>\n${compactProfileText(match, 420)}\n</user_context>`;
   });
 
-  let nextUserContent = compactGroqUserContent(userContent, nextSystemPrompt, safeLimit);
+  let nextUserContent = compactGroqUserContent(userContent, nextSystemPrompt, effectiveSafeLimit);
   let compressedTokens = estimateTokens(nextSystemPrompt) + estimateTokens(nextUserContent);
 
-  if (compressedTokens > safeLimit) {
-    const userBudgetChars = Math.max(1_200, (safeLimit - estimateTokens(nextSystemPrompt) - 300) * 4);
-    nextUserContent = compactGroqUserContent(nextUserContent, nextSystemPrompt, safeLimit);
-    if (estimateTokens(nextSystemPrompt) + estimateTokens(nextUserContent) > safeLimit) {
+  if (compressedTokens > effectiveSafeLimit) {
+    const userBudgetChars = Math.max(1_200, (effectiveSafeLimit - estimateTokens(nextSystemPrompt) - 300) * 4);
+    nextUserContent = compactGroqUserContent(nextUserContent, nextSystemPrompt, effectiveSafeLimit);
+    if (estimateTokens(nextSystemPrompt) + estimateTokens(nextUserContent) > effectiveSafeLimit) {
       nextUserContent = compactMiddle(nextUserContent, userBudgetChars);
     }
     compressedTokens = estimateTokens(nextSystemPrompt) + estimateTokens(nextUserContent);
   }
 
-  if (compressedTokens > safeLimit) {
+  if (compressedTokens > effectiveSafeLimit) {
     const isSystemDesignPrompt = /system design|architecture_json/i.test(nextSystemPrompt);
     const systemBudgetChars = isSystemDesignPrompt
-      ? 6_500
-      : Math.max(2_200, Math.floor(safeLimit * 0.42) * 4);
+      ? 4_500
+      : Math.max(2_200, Math.floor(effectiveSafeLimit * 0.42) * 4);
     nextSystemPrompt = compactMiddle(nextSystemPrompt, systemBudgetChars);
-    const userBudgetChars = Math.max(1_200, (safeLimit - estimateTokens(nextSystemPrompt) - 300) * 4);
+    const userBudgetChars = Math.max(1_200, (effectiveSafeLimit - estimateTokens(nextSystemPrompt) - 300) * 4);
     nextUserContent = compactMiddle(nextUserContent, userBudgetChars);
     compressedTokens = estimateTokens(nextSystemPrompt) + estimateTokens(nextUserContent);
   }
@@ -346,7 +363,7 @@ function compactGroqPromptForBudget(
     userContent: nextUserContent,
     originalTokens,
     compressedTokens,
-    stillExceeds: compressedTokens > safeLimit,
+    stillExceeds: compressedTokens > effectiveSafeLimit,
   };
 }
 

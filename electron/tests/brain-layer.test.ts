@@ -664,6 +664,8 @@ test('Depth-aware brains adapt coding and system design contracts safely', () =>
     assert.ok(shortCoding.instructions.some((instruction) => instruction.content.includes('primary artifact')));
     assert.ok(deepSystem.instructions.some((instruction) => instruction.content.includes('Failure Handling:')));
     assert.ok(deepSystem.instructions.some((instruction) => instruction.content.includes('RAG MEMORY')));
+    assert.equal(deepSystem.instructions.filter((instruction) => instruction.title === 'OUTPUT CONTRACT').length, 0);
+    assert.equal(deepSystem.instructions.filter((instruction) => instruction.title === 'CONTEXT PRIORITY').length, 0);
 });
 
 test('runAction emits safe fallback action_result when buildContext throws', async () => {

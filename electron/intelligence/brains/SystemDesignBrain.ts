@@ -30,79 +30,28 @@ export class SystemDesignBrain implements Brain {
                 'Call out tradeoffs explicitly — never present a design as the only option.',
                 'Include scale estimates when relevant (QPS, storage, bandwidth).',
                 'Mention specific technologies by name (Redis, Kafka, PostgreSQL, etc.).',
-                'Address failure modes and how the system recovers.',
+                'Failure Handling: address the most likely failure modes and how the system recovers.',
+                ragPriority === 'high' || ragPriority === 'critical'
+                    ? 'RAG MEMORY: use only architecture-specific facts, constraints, or prior decisions that directly affect the design.'
+                    : 'Use prior context only when it materially changes the architecture.',
             ].join('\n'),
         });
 
-        // Structured output based on depth
         const [minBullets, maxBullets] = strategy.bulletRange;
         const isShort = strategy.depth === 'short';
         const isDeep = analysis.estimatedDepth === 'deep' || strategy.depth === 'deep';
-
-        if (isShort) {
-            instructions.push({
-                key: 'output_contract',
-                title: 'OUTPUT CONTRACT',
-                content: [
-                    'Lead with one direct sentence stating the architecture direction.',
-                    `Then provide ${minBullets} to ${maxBullets} concise bullets covering the core components and primary tradeoff.`,
-                    'Mention scale or reliability only at a high level.',
-                    `Keep under ${strategy.maxWords} words.`,
-                ].join('\n'),
-            });
-        } else if (isDeep) {
-            instructions.push({
-                key: 'output_contract',
-                title: 'OUTPUT CONTRACT',
-                content: [
-                    'Structure your answer in this order:',
-                    '1. "Requirements:" — 2-3 bullets clarifying functional and non-functional requirements.',
-                    '2. "High-Level Design:" — describe the architecture with key components.',
-                    '3. "Deep Dive:" — detail the most critical component (data model, API design, or scaling strategy).',
-                    '4. "Tradeoffs:" — 2-3 bullets on key design decisions and their alternatives.',
-                    '5. "Failure Handling:" — how the system handles the most likely failure modes.',
-                    '6. Include exactly one fenced ```architecture_json``` block with diagram.type="architecture", direction, nodes, and edges.',
-                    '',
-                    'architecture_json is mandatory for every system design answer. Do not use Mermaid or loose component lists as the diagram.',
-                    'MINIMUM 12 nodes. Use 20+ nodes for medium production systems and 35-60+ nodes for FAANG-scale systems.',
-                    'Every new node should include technology, purpose, layer, latency, and failureMode when useful.',
-                    'Every new edge should include label, protocol, and latency when useful.',
-                    'Allowed node kinds: client, gateway, service, database, cache, queue, storage, external.',
-                    'Include client, edge/gateway, core_services, async, data, cache, observability, and security layers.',
-                    'Use concrete numbers: QPS, latency targets, storage estimates.',
-                    `Target ${strategy.maxWords} words.`,
-                ].join('\n'),
-            });
-        } else {
-            instructions.push({
-                key: 'output_contract',
-                title: 'OUTPUT CONTRACT',
-                content: [
-                    'Use ### section headers in this order:',
-                    'Problem Description — brief description of the problem being solved, what system is being designed and why it matters',
-                    '1. High-Level Understanding',
-                    '2. Clarifying Questions (2-5 bullets)',
-                    '3. Requirements (functional + non-functional)',
-                    '4. Architecture Diagram — fenced ```architecture_json``` block (mandatory)',
-                    '5. Component Breakdown',
-                    '6. Data Flow',
-                    '7. Database Design',
-                    '8. Scaling Strategy',
-                    '9. Bottlenecks & Tradeoffs',
-                    '10. Interview-Ready Final Answer',
-                    '',
-                    'Real architecture only — no placeholder labels. No generic Frontend → Backend → Database.',
-                    'MINIMUM 12 nodes. Use 20+ nodes for medium production systems and 35-60+ nodes for FAANG-scale systems.',
-                    'architecture_json node schema: {"id":"","label":"","kind":"","technology":"","purpose":"","layer":"","latency":"","failureMode":""}.',
-                    'architecture_json edge schema: {"source":"","target":"","label":"","protocol":"","latency":""}.',
-                    'architecture_json is mandatory for every system design answer. Do not use Mermaid or loose component lists as the diagram.',
-                    'Allowed node kinds: client, gateway, service, database, cache, queue, storage, external.',
-                    'Include layers: clients, load balancers, gateways, core services, caches, queues, databases, storage, search, observability, security.',
-                    'Name REAL technologies: Redis, Kafka, PostgreSQL, Cassandra, Elasticsearch, S3, CloudFront, Kong, Envoy, OpenTelemetry.',
-                    `Keep prose concise; architecture_json + components are mandatory.`,
-                ].join('\n'),
-            });
-        }
+        instructions.push({
+            key: 'answer_focus',
+            title: 'SYSTEM DESIGN FOCUS',
+            content: [
+                isShort
+                    ? `Keep prose tight: one architecture direction plus ${minBullets}-${maxBullets} bullets.`
+                    : isDeep
+                        ? `Deep dive on the hardest component and include concrete scale assumptions. Target ${strategy.maxWords} words outside the diagram.`
+                        : 'Cover architecture direction, component roles, data flow, scaling, and tradeoffs concisely.',
+                'The canonical output contract is supplied by ActionContextBuilder; do not repeat schema examples here.',
+            ].join('\n'),
+        });
 
         // Plan-aware reasoning emphasis
         const plan = input.reasoningPlan;
@@ -152,23 +101,7 @@ export class SystemDesignBrain implements Brain {
             });
         }
 
-        // Context priority
-        instructions.push({
-            key: 'context_priority',
-            title: 'CONTEXT PRIORITY',
-            content: [
-                'Answer the latest question first.',
-                ragPriority === 'high' || ragPriority === 'critical'
-                    ? 'If RAG MEMORY is present, use it for architecture-specific facts, constraints, or prior decisions.'
-                    : 'Use only the most relevant prior context that sharpens the design.',
-                screenPriority === 'high' || screenPriority === 'critical'
-                    ? 'Use visible diagrams or OCR text as current-state evidence when present.'
-                    : 'Use screen context only when it materially changes the architecture discussion.',
-                'Highlight architecture choices, tradeoffs, and open risks.',
-                'Prefer architecture alternatives over generic brainstorming.',
-                'Include operational tradeoffs for each option.',
-            ].join('\n'),
-        });
+        void screenPriority;
 
         const baseOutput: BrainOutput = {
             instructions,
