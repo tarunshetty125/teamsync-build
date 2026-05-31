@@ -1,4 +1,9 @@
-import type { ActionContract, ContextTarget, ResponseOwnership } from './actionContextTypes';
+import {
+  resolveEffectiveActionContract,
+  type ActionContract,
+  type ContextTarget,
+  type ResponseOwnership,
+} from './actionContextTypes';
 
 export interface ActionContextAction {
   id?: string;
@@ -93,9 +98,11 @@ export function resolveActionContext(args: {
   const fallbackTurnText = latestTurnText(latestTurn);
   const fallbackTurnId = latestTurn.questionTurnId || 'unassigned-turn';
   const fallbackVersion = latestTurn.transcriptVersion || 0;
-  const contract = action.actionContract && action.actionContract !== 'default'
-    ? action.actionContract
-    : undefined;
+  const contract = resolveEffectiveActionContract({
+    intent: action.intent,
+    actionId: action.id,
+    actionContract: action.actionContract,
+  });
 
   if (effectiveTarget === 'transcript') {
     return {

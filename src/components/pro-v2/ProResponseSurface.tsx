@@ -12,11 +12,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
 import { SkeletonLoader, EmptyListeningState } from '../ui/PremiumStates';
 import CodeBlock from '../ui/CodeBlock';
 import MermaidRenderer from '../ui/MermaidRenderer';
 import type { V2Message } from './useCluelyOverlayBridge';
+import type { ResponseSelectionMode } from '../../lib/overlay/responseHistorySelection';
+import { getProviderModelMetadata } from '../../lib/providers/providerModelMetadata';
 import { resolveV2ResponseWidthPx, V2_RESPONSE_MIN_WIDTH, V2_RESPONSE_MAX_WIDTH } from './v2Layout';
 import ArchitectureRenderer from './architecture/ArchitectureRenderer';
 import {
@@ -34,10 +36,13 @@ interface ProResponseSurfaceProps {
     isProcessing: boolean;
     activeResponseIndex: number;
     responseHistoryTotal: number;
+    selectionMode: ResponseSelectionMode;
     canGoPreviousResponse: boolean;
     canGoNextResponse: boolean;
+    canJumpLatestResponse: boolean;
     onPreviousResponse: () => void;
     onNextResponse: () => void;
+    onJumpLatestResponse: () => void;
     scrollContainerRef: React.RefObject<HTMLDivElement>;
 }
 
@@ -61,10 +66,13 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
     isProcessing,
     activeResponseIndex,
     responseHistoryTotal,
+    selectionMode,
     canGoPreviousResponse,
     canGoNextResponse,
+    canJumpLatestResponse,
     onPreviousResponse,
     onNextResponse,
+    onJumpLatestResponse,
     scrollContainerRef,
 }) {
     const [copied, setCopied] = useState(false);
@@ -85,6 +93,11 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
     // Chips
     const chips = renderedResponse?.chips;
     const hasHistory = responseHistoryTotal > 1;
+    const isPinnedSelection = selectionMode === 'pinned';
+    const responseMetaItems = useMemo(
+        () => buildResponseMetaItems(renderedResponse),
+        [renderedResponse],
+    );
 
     const responseWidthPx = useMemo(
         () => resolveV2ResponseWidthPx(renderedResponse?.text),
@@ -163,6 +176,17 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                 </div>
             </div>
 
+            {responseMetaItems.length > 0 && (
+                <div className="v2-response-meta-strip v2-no-drag" aria-label="Response metadata">
+                    {responseMetaItems.map((item) => (
+                        <div className="v2-response-meta-item" key={item.label} title={item.title ?? item.value}>
+                            <span className="v2-response-meta-label">{item.label}</span>
+                            <span className="v2-response-meta-value">{item.value}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             <div className="v2-response-drag-rail v2-response-drag-rail--left" aria-hidden="true" />
             <div className="v2-response-drag-rail v2-response-drag-rail--right" aria-hidden="true" />
 
@@ -232,6 +256,8 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                                     text={renderedResponse.text}
                                     isStreaming={!!isStreaming}
                                     isCode={!!renderedResponse.isCode}
+                                    actionContract={renderedResponse.actionContract}
+                                    diagramChainKey={getDiagramChainKey(renderedResponse)}
                                 />
                             )}
 
@@ -288,7 +314,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                                         <ChevronLeft size={14} strokeWidth={2} aria-hidden />
                                     </button>
                                     <span className="v2-response-switcher-count">
-                                        {activeResponseIndex + 1} / {responseHistoryTotal}
+                                        Response {activeResponseIndex + 1} of {responseHistoryTotal}
                                     </span>
                                     <button
                                         type="button"
@@ -300,6 +326,19 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                                     >
                                         <ChevronRight size={14} strokeWidth={2} aria-hidden />
                                     </button>
+                                    {isPinnedSelection && (
+                                        <button
+                                            type="button"
+                                            className="v2-response-switcher-jump"
+                                            onClick={onJumpLatestResponse}
+                                            disabled={!canJumpLatestResponse}
+                                            title="Jump to latest response"
+                                            aria-label="Jump to latest response"
+                                        >
+                                            <ChevronsRight size={13} strokeWidth={2} aria-hidden />
+                                            <span>Jump to Latest</span>
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </motion.div>
@@ -319,6 +358,149 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         </motion.div>
     );
 });
+
+type ResponseMetaItem = {
+    label: string;
+    value: string;
+    title?: string;
+};
+
+function buildResponseMetaItems(response: V2Message | null): ResponseMetaItem[] {
+    if (!response) return [];
+
+    const ownership = response.ownership;
+    const createdAt = ownership?.createdAt ?? response.timestamp;
+    const questionTurnId = ownership?.questionTurnId ?? response.questionTurnId;
+    const questionTurnTitle = [
+        questionTurnId,
+        ownership?.transcriptVersion !== undefined ? `Transcript v${ownership.transcriptVersion}` : '',
+    ].filter(Boolean).join(' | ');
+    const requestedProvider = ownership?.requestedProvider ?? ownership?.sourceProvider ?? response.provider;
+    const requestedModel = ownership?.requestedModel ?? ownership?.sourceModel ?? response.model;
+    const actualProvider = ownership?.actualProvider ?? requestedProvider;
+    const actualModel = ownership?.actualModel ?? requestedModel;
+    const routeChanged = Boolean(
+        ownership?.routingReason
+        || (requestedProvider && actualProvider && requestedProvider !== actualProvider)
+        || (requestedModel && actualModel && requestedModel !== actualModel)
+    );
+
+    return [
+        {
+            label: 'Mode',
+            value: formatReadableMetaValue(ownership?.mode ?? response.intent),
+        },
+        {
+            label: 'Provider',
+            value: formatProviderMetaValue(actualProvider),
+            title: buildProviderRouteTitle(requestedProvider, actualProvider),
+        },
+        {
+            label: 'Model',
+            value: compactMetaValue(actualModel, 24),
+            title: buildModelRouteTitle(requestedModel, actualModel),
+        },
+        routeChanged ? {
+            label: 'Route',
+            value: formatRoutingMetaValue({
+                requestedProvider,
+                requestedModel,
+                actualProvider,
+                actualModel,
+                reason: ownership?.routingReason,
+            }),
+            title: [
+                requestedProvider || requestedModel ? `Requested: ${[requestedProvider, requestedModel].filter(Boolean).join(' / ')}` : '',
+                actualProvider || actualModel ? `Actual: ${[actualProvider, actualModel].filter(Boolean).join(' / ')}` : '',
+                ownership?.routingReason ? `Reason: ${ownership.routingReason}` : '',
+            ].filter(Boolean).join(' | '),
+        } : null,
+        {
+            label: 'Action',
+            value: formatReadableMetaValue(ownership?.actionId ?? response.source ?? response.intent),
+            title: ownership?.actionId ?? response.source ?? response.intent,
+        },
+        {
+            label: 'Timestamp',
+            value: formatResponseTimestamp(createdAt),
+            title: createdAt ? new Date(createdAt).toLocaleString() : undefined,
+        },
+        {
+            label: 'Question Turn',
+            value: compactMetaValue(questionTurnId, 18),
+            title: questionTurnTitle || undefined,
+        },
+    ].filter((item): item is ResponseMetaItem => Boolean(item && item.value));
+}
+
+function formatResponseTimestamp(timestamp?: number): string {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function compactMetaValue(value?: string | null, maxLength: number = 18): string {
+    const normalized = value?.trim();
+    if (!normalized) return '';
+    if (normalized.length <= maxLength) return normalized;
+    return `...${normalized.slice(-(maxLength - 3))}`;
+}
+
+function formatReadableMetaValue(value?: string | null): string {
+    const normalized = value?.trim();
+    if (!normalized) return '';
+    return normalized
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatProviderMetaValue(value?: string | null): string {
+    const normalized = value?.trim();
+    if (!normalized) return '';
+    const metadata = getProviderModelMetadata('', { explicitProvider: normalized });
+    if (metadata.providerId !== 'custom' || /^custom$/i.test(normalized)) {
+        return metadata.providerLabel;
+    }
+    if (/^openai$/i.test(normalized)) return 'OpenAI';
+    if (/^aws$/i.test(normalized)) return 'AWS';
+    return formatReadableMetaValue(normalized);
+}
+
+function buildProviderRouteTitle(requestedProvider?: string | null, actualProvider?: string | null): string | undefined {
+    if (!requestedProvider || !actualProvider || requestedProvider === actualProvider) return undefined;
+    return `Requested ${formatProviderMetaValue(requestedProvider)} | Actual ${formatProviderMetaValue(actualProvider)}`;
+}
+
+function buildModelRouteTitle(requestedModel?: string | null, actualModel?: string | null): string | undefined {
+    if (!requestedModel || !actualModel || requestedModel === actualModel) return actualModel ?? requestedModel ?? undefined;
+    return `Requested ${requestedModel} | Actual ${actualModel}`;
+}
+
+function formatRoutingMetaValue(args: {
+    requestedProvider?: string | null;
+    requestedModel?: string | null;
+    actualProvider?: string | null;
+    actualModel?: string | null;
+    reason?: string | null;
+}): string {
+    if (args.requestedProvider && args.actualProvider && args.requestedProvider !== args.actualProvider) {
+        return compactMetaValue(`${formatProviderMetaValue(args.requestedProvider)} -> ${formatProviderMetaValue(args.actualProvider)}`, 22);
+    }
+    if (args.requestedModel && args.actualModel && args.requestedModel !== args.actualModel) {
+        return 'Model remap';
+    }
+    return compactMetaValue(formatReadableMetaValue(args.reason), 18);
+}
+
+function getDiagramChainKey(response: V2Message | null): string | undefined {
+    if (!response) return undefined;
+    return response.rootResponseId || response.ownership?.parentResponseId || response.id;
+}
 
 function isMermaidLanguage(lang: string): boolean {
     const normalized = lang.trim().toLowerCase();
@@ -616,7 +798,7 @@ function logV2DiagramRenderAudit(text: string, parsedArchitecture: ReturnType<ty
     }));
 }
 
-function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
+function renderV2ResponseBody(text: string, allowOpenMermaid: boolean, diagramChainKey?: string) {
     const normalizedText = normalizeV2MermaidMarkdown(text, { isStreaming: !allowOpenMermaid });
     const parsedArchitecture = parseArchitectureResponse(normalizedText, { isStreaming: !allowOpenMermaid });
     logV2DiagramRenderAudit(normalizedText, parsedArchitecture, allowOpenMermaid);
@@ -632,6 +814,7 @@ function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
                 mermaidChart={parsedArchitecture.mermaidChart}
                 fallbackDiagram={parsedArchitecture.fallbackDiagram}
                 isStreaming={!allowOpenMermaid}
+                diagramChainKey={diagramChainKey}
             />
         );
         const architectureSplit = parsedArchitecture.markdown
@@ -667,17 +850,95 @@ function responseContainsMermaid(text: string): boolean {
     return /```[ \t]*mermaid/i.test(normalizedText) || looksLikeMermaidSource(normalizedText);
 }
 
+type CodingContractSectionKey = 'Problem' | 'Approach' | 'Complexity' | 'Solution';
+
+interface CodingContractSection {
+    key: CodingContractSectionKey;
+    content: string;
+}
+
+function parseCodingContractSections(text: string): CodingContractSection[] | null {
+    if (!text.trim() || responseContainsMermaid(text)) return null;
+
+    const normalized = text.replace(/\r\n?/g, '\n');
+    const sectionRegex = /(^|\n)[ \t]*(?:\*\*)?(Problem|Approach|Complexity|Solution)(?:\*\*)?:(?:\*\*)?[ \t]*(?=\n|$)/gi;
+    const matches: Array<{ key: CodingContractSectionKey; start: number; end: number }> = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = sectionRegex.exec(normalized)) !== null) {
+        const rawKey = match[2] as CodingContractSectionKey;
+        const lineStartOffset = match[1] ? 1 : 0;
+        matches.push({
+            key: rawKey,
+            start: match.index + lineStartOffset,
+            end: match.index + match[0].length,
+        });
+    }
+
+    if (matches.length < 2) return null;
+
+    const sections = matches
+        .map((entry, index) => {
+            const next = matches[index + 1];
+            return {
+                key: entry.key,
+                content: normalized.slice(entry.end, next ? next.start : normalized.length).trim(),
+            };
+        })
+        .filter((section) => section.content);
+
+    const seen = new Set(sections.map((section) => section.key));
+    const hasContractShape =
+        seen.has('Problem')
+        && seen.has('Approach')
+        && seen.has('Complexity')
+        && seen.has('Solution');
+
+    if (!hasContractShape) return null;
+    return sections;
+}
+
+function renderStructuredCodingContract(text: string, allowOpenMermaid: boolean) {
+    const sections = parseCodingContractSections(text);
+    if (!sections) return null;
+
+    return (
+        <div className="v2-coding-contract">
+            <div className="v2-coding-contract-label">Coding Response</div>
+            {sections.map((section) => (
+                <section className="v2-coding-contract-section" key={section.key}>
+                    <div className="v2-coding-contract-section-title">{section.key}</div>
+                    <div className="v2-coding-contract-section-body">
+                        {renderStandardV2ResponseBody(section.content, allowOpenMermaid)}
+                    </div>
+                </section>
+            ))}
+        </div>
+    );
+}
+
 const V2ResponseText = memo<{
     text: string;
     isStreaming?: boolean;
     isCode?: boolean;
-}>(function V2ResponseText({ text, isStreaming, isCode }) {
+    actionContract?: V2Message['actionContract'];
+    diagramChainKey?: string;
+}>(function V2ResponseText({ text, isStreaming, isCode, actionContract, diagramChainKey }) {
     // During streaming: render Mermaid blocks that have complete fences.
     // Incomplete / open fences show as raw pre blocks (handled by renderFenceBlock).
     // This ensures completed Mermaid diagrams appear even mid-stream,
     // and the final completed response always triggers a proper render.
     const allowOpenMermaid = !isStreaming;
-    const body = renderV2ResponseBody(text, allowOpenMermaid);
+    const structuredCodingContract = actionContract === 'hint_only'
+        || actionContract === 'complexity_only'
+        || actionContract === 'edge_cases_only'
+        || actionContract === 'debugging_only'
+        || actionContract === 'followup_questions_only'
+        ? null
+        : renderStructuredCodingContract(text, allowOpenMermaid);
+    if (structuredCodingContract) return structuredCodingContract;
+
+    const body = renderV2ResponseBody(text, allowOpenMermaid, diagramChainKey);
     const wrapAsCodeSection = Boolean(isCode) && !responseContainsMermaid(text);
 
     if (wrapAsCodeSection) {

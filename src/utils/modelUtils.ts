@@ -1,3 +1,12 @@
+import {
+    UI_PROVIDER_LABELS,
+    UI_PROVIDER_SHORT_LABELS,
+    formatOverlayModelDisplayName,
+    prettifyModelId,
+    resolveUiProviderId,
+    type ModelProviderId,
+} from '../lib/providers/providerModelMetadata';
+
 export const STANDARD_CLOUD_MODELS: Record<string, {
     hasKeyCheck: (creds: any) => boolean;
     ids: string[];
@@ -42,71 +51,37 @@ export const STANDARD_CLOUD_MODELS: Record<string, {
     },
 };
 
-export const prettifyModelId = (id: string): string => {
-    if (!id) return '';
-    return id.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-};
-
-export type ModelProviderId =
-    | 'teamsync'
-    | 'gemini'
-    | 'groq'
-    | 'openai'
-    | 'claude'
-    | 'bedrock'
-    | 'custom'
-    | 'ollama';
-
 export const MODEL_PROVIDER_LABELS: Record<ModelProviderId, string> = {
-    teamsync: 'TeamSync',
-    gemini: 'Gemini',
-    groq: 'Groq',
-    openai: 'OpenAI',
-    claude: 'Claude',
-    bedrock: 'Amazon Bedrock',
-    custom: 'Custom Providers',
-    ollama: 'Ollama / Local',
+    teamsync: UI_PROVIDER_LABELS.teamsync,
+    gemini: UI_PROVIDER_LABELS.gemini,
+    groq: UI_PROVIDER_LABELS.groq,
+    openai: UI_PROVIDER_LABELS.openai,
+    claude: UI_PROVIDER_LABELS.claude,
+    bedrock: UI_PROVIDER_LABELS.bedrock,
+    custom: UI_PROVIDER_LABELS.custom,
+    ollama: UI_PROVIDER_LABELS.ollama,
 };
 
 export const MODEL_PROVIDER_SHORT_LABELS: Record<ModelProviderId, string> = {
-    teamsync: 'TS',
-    gemini: 'Gemini',
-    groq: 'Groq',
-    openai: 'OpenAI',
-    claude: 'Claude',
-    bedrock: 'AWS',
-    custom: 'Custom',
-    ollama: 'Local',
+    teamsync: UI_PROVIDER_SHORT_LABELS.teamsync,
+    gemini: UI_PROVIDER_SHORT_LABELS.gemini,
+    groq: UI_PROVIDER_SHORT_LABELS.groq,
+    openai: UI_PROVIDER_SHORT_LABELS.openai,
+    claude: UI_PROVIDER_SHORT_LABELS.claude,
+    bedrock: UI_PROVIDER_SHORT_LABELS.bedrock,
+    custom: UI_PROVIDER_SHORT_LABELS.custom,
+    ollama: UI_PROVIDER_SHORT_LABELS.ollama,
 };
 
 export function getModelProviderId(model: string, explicitProvider?: string, type?: string): ModelProviderId {
-    const provider = explicitProvider || type;
-    if (provider === 'teamsync' || provider === 'gemini' || provider === 'groq' || provider === 'openai' || provider === 'claude' || provider === 'bedrock' || provider === 'custom' || provider === 'ollama') {
-        return provider;
-    }
-    if (provider === 'local') return 'ollama';
-
-    const normalized = model.toLowerCase();
-    if (!normalized) return 'custom';
-    if (normalized === 'teamsync') return 'teamsync';
-    if (normalized.startsWith('ollama-')) return 'ollama';
-    if (normalized.startsWith('gemini-')) return 'gemini';
-    if (normalized.startsWith('gpt-') || normalized.startsWith('o1') || normalized.startsWith('o3') || normalized.startsWith('o4') || normalized.startsWith('o5')) return 'openai';
-    if (normalized.startsWith('claude-')) return 'claude';
-    if (normalized.includes('llama') || normalized.includes('mixtral') || normalized.includes('deepseek') || normalized.includes('qwen')) return 'groq';
-    if (/^(anthropic|amazon|meta|mistral|cohere|ai21|openai|us|eu|apac)\./.test(normalized) || normalized.startsWith('openai/gpt-oss-')) return 'bedrock';
-    return 'custom';
+    const provider = resolveUiProviderId(model, explicitProvider, type);
+    return provider === 'unknown' ? 'custom' : provider;
 }
 
 /** Short label for overlay model picker (matches v1 overlay). */
 export function getOverlayModelDisplayName(model: string): string {
-    if (!model) return 'Model';
-    if (model.startsWith('ollama-')) return model.replace('ollama-', '');
-    if (model === 'gemini-3.1-flash-lite-preview' || model === 'gemini-3-flash-preview') return 'Gemini 3.1 Flash';
-    if (model === 'gemini-3.1-pro-preview') return 'Gemini 3.1 Pro';
-    if (model === 'llama-3.3-70b-versatile') return 'Groq Llama 3.3';
-    if (model === 'gpt-5.4') return 'GPT 5.4';
-    if (model === 'claude-sonnet-4-6') return 'Sonnet 4.6';
-    if (/^(anthropic|amazon|meta|mistral|cohere|ai21|openai|us|eu|apac)\./.test(model) || model.startsWith('openai/gpt-oss-')) return `Bedrock ${prettifyModelId(model)}`;
-    return prettifyModelId(model);
+    return formatOverlayModelDisplayName(model);
 }
+
+export { prettifyModelId };
+export type { ModelProviderId };

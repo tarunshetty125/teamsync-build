@@ -2,8 +2,17 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveNextActiveResponseSelection } from '../../src/lib/overlay/responseHistorySelection.ts';
+import {
+    capResponseHistoryMessages,
+    sanitizeCappedResponseHistory,
+} from '../../src/lib/overlay/responseHistoryState.ts';
 
 const root = process.cwd();
+
+type DiagramFixtureEdge = { source: string; target: string };
+type DiagramDiffNodeFixture = string;
+type DiagramDiffEdgeFixture = string;
 
 function read(rel: string): string {
     return fs.readFileSync(path.join(root, rel), 'utf8');
@@ -14,11 +23,13 @@ test('Pro V2 keeps a bounded response history instead of replacing the latest an
 
     assert.match(bridge, /const MAX_RESPONSE_HISTORY = 30/);
     assert.match(bridge, /function capOverlayMessages/);
-    assert.match(bridge, /systemIndexes\.length - MAX_RESPONSE_HISTORY/);
-    assert.match(bridge, /const \[activeResponseIndex, setActiveResponseIndex\]/);
+    assert.match(bridge, /capResponseHistoryMessages\(nextMessages, MAX_RESPONSE_HISTORY\)/);
+    assert.match(bridge, /const \[activeResponseId, setActiveResponseId\]/);
+    assert.match(bridge, /const \[selectionMode, setSelectionMode\]/);
     assert.match(bridge, /const responseHistory = useMemo/);
     assert.match(bridge, /messages\.filter\(\(message\) => message\.role === 'system'\)/);
-    assert.match(bridge, /const activeResponse = activeResponseIndex >= 0/);
+    assert.match(bridge, /const activeResponse = activeResponseId/);
+    assert.match(bridge, /capResponseHistoryMessages/);
 });
 
 test('Pro V2 action routing reuses selected response history state', () => {
@@ -40,13 +51,188 @@ test('Pro V2 action routing reuses selected response history state', () => {
 test('Pro V2 auto-selects new responses and exposes previous/next navigation state', () => {
     const bridge = read('src/components/pro-v2/useCluelyOverlayBridge.ts');
 
-    assert.match(bridge, /latestResponseIdRef\.current !== latestId/);
-    assert.match(bridge, /setActiveResponseIndex\(responseHistory\.length - 1\)/);
+    assert.match(bridge, /previousLatestResponseId: latestResponseIdRef\.current/);
+    assert.match(bridge, /resolveNextActiveResponseSelection/);
+    assert.match(bridge, /setResponseSelection\(latestResponse\?\.id \?\? null, 'latest'\)/);
     assert.match(bridge, /goToPreviousResponse/);
     assert.match(bridge, /goToNextResponse/);
+    assert.match(bridge, /jumpToLatestResponse/);
     assert.match(bridge, /canGoPreviousResponse/);
     assert.match(bridge, /canGoNextResponse/);
+    assert.match(bridge, /canJumpLatestResponse/);
     assert.match(bridge, /responseHistoryTotal/);
+});
+
+test('Pro V2 pinned historical response selection is not stolen by new incoming responses', () => {
+    const nextSelection = resolveNextActiveResponseSelection({
+        currentActiveResponseId: 'response-old',
+        selectionMode: 'pinned',
+        previousLatestResponseId: 'response-current',
+        nextLatestResponseId: 'response-new',
+        responseIds: ['response-old', 'response-current', 'response-new'],
+    });
+
+    assert.equal(nextSelection.activeResponseId, 'response-old');
+    assert.equal(nextSelection.selectionMode, 'pinned');
+    assert.equal(nextSelection.latestResponseId, 'response-new');
+});
+
+test('Pro V2 latest mode follows new responses until a response is pinned', () => {
+    const nextSelection = resolveNextActiveResponseSelection({
+        currentActiveResponseId: 'response-current',
+        selectionMode: 'latest',
+        previousLatestResponseId: 'response-current',
+        nextLatestResponseId: 'response-new',
+        responseIds: ['response-current', 'response-new'],
+    });
+
+    assert.equal(nextSelection.activeResponseId, 'response-new');
+    assert.equal(nextSelection.selectionMode, 'latest');
+});
+
+test('Pro V2 history cap preserves valid chain roots after trimming dropped parents', () => {
+    const capped = sanitizeCappedResponseHistory([
+        {
+            id: 'child-kept',
+            role: 'system',
+            rootResponseId: 'root-trimmed',
+            ownership: {
+                responseId: 'child-kept',
+                questionTurnId: 'turn-1',
+                transcriptVersion: 2,
+                contextTarget: 'active_context' as const,
+                parentResponseId: 'root-trimmed',
+                createdAt: 2000,
+            },
+        },
+        {
+            id: 'grandchild-kept',
+            role: 'system',
+            rootResponseId: 'root-trimmed',
+            ownership: {
+                responseId: 'grandchild-kept',
+                questionTurnId: 'turn-1',
+                transcriptVersion: 3,
+                contextTarget: 'active_context' as const,
+                parentResponseId: 'child-kept',
+                createdAt: 3000,
+            },
+        },
+    ]);
+
+    assert.equal(capped[0].ownership?.parentResponseId, undefined);
+    assert.equal(capped[0].rootResponseId, 'child-kept');
+    assert.equal(capped[1].ownership?.parentResponseId, 'child-kept');
+    assert.equal(capped[1].rootResponseId, 'child-kept');
+});
+
+test('Pro V2 30-response cap trims history without stale parent or root references', () => {
+    const messages = Array.from({ length: 32 }, (_, index) => {
+        const responseNumber = index + 1;
+        const id = `response-${responseNumber}`;
+        const parentResponseId = responseNumber > 1 ? `response-${responseNumber - 1}` : undefined;
+
+        return {
+            id,
+            role: 'system',
+            rootResponseId: 'response-1',
+            ownership: {
+                responseId: id,
+                questionTurnId: 'turn-chain',
+                transcriptVersion: responseNumber,
+                contextTarget: 'active_context' as const,
+                parentResponseId,
+                createdAt: responseNumber,
+            },
+        };
+    });
+
+    const capped = capResponseHistoryMessages(messages, 30);
+    const keptIds = new Set(capped.map((message) => message.id));
+
+    assert.equal(capped.length, 30);
+    assert.equal(capped[0].id, 'response-3');
+    assert.equal(capped[0].ownership?.parentResponseId, undefined);
+    assert.equal(capped[0].rootResponseId, 'response-3');
+    capped.forEach((message) => {
+        assert.equal(keptIds.has(message.rootResponseId ?? ''), true);
+        const parentResponseId = message.ownership?.parentResponseId;
+        assert.equal(!parentResponseId || keptIds.has(parentResponseId), true);
+    });
+});
+
+test('Pro V2 history cap re-roots retained diagram artifacts with their responses', () => {
+    const messages = Array.from({ length: 45 }, (_, index) => {
+        const responseNumber = index + 1;
+        const id = `response-${responseNumber}`;
+        const parentResponseId = responseNumber > 1 ? `response-${responseNumber - 1}` : undefined;
+        const payload = {
+            diagram: {
+                type: 'architecture',
+                nodes: [{ id: `node-${responseNumber}`, label: `Node ${responseNumber}` }],
+                edges: [] as DiagramFixtureEdge[],
+            },
+            diff: {
+                addedNodes: [`node-${responseNumber}`],
+                removedNodes: [] as DiagramDiffNodeFixture[],
+                modifiedNodes: [] as DiagramDiffNodeFixture[],
+                addedEdges: [] as DiagramDiffEdgeFixture[],
+                removedEdges: [] as DiagramDiffEdgeFixture[],
+            },
+        };
+
+        return {
+            id,
+            role: 'system',
+            rootResponseId: 'response-1',
+            ownership: {
+                responseId: id,
+                questionTurnId: 'turn-chain',
+                transcriptVersion: responseNumber,
+                contextTarget: 'active_context' as const,
+                parentResponseId,
+                createdAt: responseNumber,
+            },
+            artifacts: [
+                {
+                    id: `${id}:architecture`,
+                    responseId: id,
+                    parentResponseId,
+                    rootResponseId: 'response-1',
+                    kind: 'architecture' as const,
+                    source: 'architecture_json' as const,
+                    createdAt: responseNumber,
+                    status: 'parsed' as const,
+                    payload,
+                },
+            ],
+        };
+    });
+
+    const originalPayloadByResponseId = new Map(
+        messages.map((message) => [message.id, message.artifacts[0].payload]),
+    );
+    const capped = capResponseHistoryMessages(messages, 30);
+    const keptIds = new Set(capped.map((message) => message.id));
+
+    assert.equal(capped.length, 30);
+    assert.equal(capped[0].id, 'response-16');
+    assert.equal(capped[0].ownership?.parentResponseId, undefined);
+    assert.equal(capped[0].rootResponseId, 'response-16');
+
+    capped.forEach((message, index) => {
+        const artifact = message.artifacts?.[0];
+        const expectedParentId = index === 0 ? undefined : capped[index - 1].id;
+
+        assert.equal(message.rootResponseId, 'response-16');
+        assert.equal(message.ownership?.parentResponseId, expectedParentId);
+        assert.equal(artifact?.responseId, message.id);
+        assert.equal(artifact?.parentResponseId, message.ownership?.parentResponseId);
+        assert.equal(artifact?.rootResponseId, message.rootResponseId);
+        assert.equal(artifact?.payload, originalPayloadByResponseId.get(message.id));
+        assert.equal(keptIds.has(artifact?.rootResponseId ?? ''), true);
+        assert.equal(!artifact?.parentResponseId || keptIds.has(artifact.parentResponseId), true);
+    });
 });
 
 test('Pro V2 renderer follows the selected history entry, including system design diagrams', () => {
@@ -79,10 +265,58 @@ test('Pro V2 navigation controls render previous/next buttons and current count'
 
     assert.match(surface, /aria-label="Previous response"/);
     assert.match(surface, /aria-label="Next response"/);
-    assert.match(surface, /\{activeResponseIndex \+ 1\} \/ \{responseHistoryTotal\}/);
+    assert.match(surface, /aria-label="Jump to latest response"/);
+    assert.match(surface, /Response \{activeResponseIndex \+ 1\} of \{responseHistoryTotal\}/);
     assert.match(css, /\.v2-response-switcher/);
     assert.match(css, /\.v2-response-switcher-btn/);
+    assert.match(css, /\.v2-response-switcher-jump/);
     assert.match(css, /\.v2-response-switcher-count/);
+});
+
+test('Pro V2 metadata strip reflects selected response ownership without chain visualization UI', () => {
+    const surface = read('src/components/pro-v2/ProResponseSurface.tsx');
+    const css = read('src/components/pro-v2/pro-v2.css');
+
+    assert.match(surface, /const responseMetaItems = useMemo/);
+    assert.match(surface, /buildResponseMetaItems\(renderedResponse\)/);
+    assert.match(surface, /aria-label="Response metadata"/);
+    assert.match(surface, /ownership\?\.mode/);
+    assert.match(surface, /ownership\?\.sourceProvider/);
+    assert.match(surface, /ownership\?\.sourceModel/);
+    assert.match(surface, /ownership\?\.actionId/);
+    assert.match(surface, /ownership\?\.createdAt/);
+    assert.match(surface, /ownership\?\.questionTurnId/);
+    assert.match(surface, /ownership\?\.transcriptVersion/);
+    assert.match(surface, /Question Turn/);
+    assert.match(css, /\.v2-response-meta-strip/);
+    assert.match(css, /\.v2-response-meta-item/);
+    assert.match(css, /\.v2-response-meta-label/);
+    assert.match(css, /\.v2-response-meta-value/);
+    assert.doesNotMatch(surface, /Diagram 1/);
+});
+
+test('Pro V2 derives rootResponseId and keeps response artifacts data-ready without diagram history UI', () => {
+    const bridge = read('src/components/pro-v2/useCluelyOverlayBridge.ts');
+    const streams = read('src/components/pro-v2/useOverlayIpcStreams.ts');
+    const artifacts = read('src/lib/overlay/responseArtifacts.ts');
+    const diagramArtifacts = read('src/components/pro-v2/architecture/diagramArtifacts.ts');
+
+    assert.match(bridge, /rootResponseId\?: string/);
+    assert.match(bridge, /function deriveNewResponseRootId/);
+    assert.match(bridge, /function buildResponseRootIdMap/);
+    assert.match(bridge, /activeRootResponseId/);
+    assert.match(bridge, /activeResponseChain/);
+    assert.match(streams, /buildArchitectureResponseArtifacts/);
+    assert.match(bridge, /buildArchitectureResponseArtifacts/);
+    assert.match(artifacts, /function detectResponseArtifacts/);
+    assert.match(artifacts, /parentResponseId\?: string/);
+    assert.match(artifacts, /kind: 'architecture'/);
+    assert.match(artifacts, /kind: 'mermaid'/);
+    assert.match(diagramArtifacts, /parseArchitectureResponse/);
+    assert.match(diagramArtifacts, /parentResponseId/);
+    assert.match(diagramArtifacts, /rootResponseId/);
+    assert.match(diagramArtifacts, /diffArchitectureDiagrams/);
+    assert.doesNotMatch(bridge, /Diagram 1/);
 });
 
 test('Pro V2 model selector has enough width for long dynamic model names', () => {
@@ -120,6 +354,8 @@ test('Pro V2 architecture diagrams expose working pan, zoom, and inner controls'
     assert.match(canvas, /function ArchitectureSkeletonContent/);
     assert.match(canvas, /getViewport/);
     assert.match(canvas, /setViewport/);
+    assert.match(canvas, /viewportByChainKey/);
+    assert.match(canvas, /diagramChainKey/);
     assert.match(canvas, /x: viewport\.x \+ 18/);
     assert.match(canvas, /y: viewport\.y \+ 16/);
     assert.match(canvas, /!isLayoutReady \? \(/);
@@ -136,6 +372,7 @@ test('Pro V2 architecture diagrams expose working pan, zoom, and inner controls'
     assert.doesNotMatch(canvas, /onWheelCapture=\{\(event\) => event\.stopPropagation\(\)\}/);
     assert.match(css, /\.v2-architecture-controls/);
     assert.match(css, /\.v2-architecture-shell \.react-flow__controls/);
+    assert.match(css, /\.v2-architecture-node-failure/);
     assert.doesNotMatch(architectureCss, /drop-shadow/);
     assert.doesNotMatch(architectureCss, /will-change: transform/);
     assert.doesNotMatch(architectureCss, /backdrop-filter/);

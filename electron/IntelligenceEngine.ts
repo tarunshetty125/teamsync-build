@@ -59,7 +59,12 @@ import { buildProviderPrompt } from './llm/ProviderPromptBuilder';
 import { BenchmarkManager, countHallucinationIndicators, hasConfidenceSignal } from './intelligence/BenchmarkManager';
 import { ModesManager } from './services/ModesManager';
 import type { ModeTemplateId } from '../src/lib/modes/types';
-import type { ActionContract, ContextTarget } from '../src/lib/overlay/actionContextTypes';
+import {
+    actionContractAllowsCode,
+    resolveEffectiveActionContract,
+    type ActionContract,
+    type ContextTarget,
+} from '../src/lib/overlay/actionContextTypes';
 import { ModePredictor } from './intelligence/adaptive/ModePredictor';
 import {
     emitActionComplete,
@@ -1237,7 +1242,13 @@ export class IntelligenceEngine extends EventEmitter {
                         transcriptStrategy: contextLayers.transcriptStrategy,
                         requestId: activeRequestId,
                     });
-	                    const finalValidation = validateActionOutput(budgeted.prompt.intent, budgeted.prompt.mode, finalContent, budgeted.prompt.question);
+	                    const finalValidation = validateActionOutput(
+	                        budgeted.prompt.intent,
+	                        budgeted.prompt.mode,
+	                        finalContent,
+	                        budgeted.prompt.question,
+	                        budgeted.prompt.actionContract
+	                    );
                     this.recordBenchmark({
                         activeTemplateType,
                         sessionMode,
@@ -1295,7 +1306,12 @@ export class IntelligenceEngine extends EventEmitter {
 	                    const safeFallback = buildSafeActionFallback(
 	                        params.intent,
 	                        sessionMode,
-	                        params.message || this.session.getLastInterviewerTurn() || 'the latest question'
+	                        params.message || this.session.getLastInterviewerTurn() || 'the latest question',
+	                        resolveEffectiveActionContract({
+	                            intent: params.intent,
+	                            actionId: params.actionId,
+	                            actionContract: params.actionContract,
+	                        })
 	                    );
 	                    const fallbackReason = error?.message || String(error);
 	                    const fallbackValidation: ValidationOutcome = {
@@ -1814,7 +1830,7 @@ export class IntelligenceEngine extends EventEmitter {
 	            reason: 'all_attempts_failed',
 	        };
 	        return {
-	            content: buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question),
+	            content: buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question, prompt.actionContract),
 	            retryCount: Math.max(0, attempts.length - 1),
 	            fallbackUsed: true,
 	            requestedModel: primaryModel,
@@ -1871,7 +1887,7 @@ export class IntelligenceEngine extends EventEmitter {
         const validation = this.enforceScreenScanLanguageCompliance(
             prompt,
             content,
-            validateActionOutput(prompt.intent, prompt.mode, content, prompt.question)
+	            validateActionOutput(prompt.intent, prompt.mode, content, prompt.question, prompt.actionContract)
         );
         if (isSystemDesignPrompt) {
             console.log(`[SYSTEM_DESIGN_RAW_OUTPUT] requestedModel=${args.requestedModel ?? 'unknown'} actualInvokedModel=${args.actualInvokedModel ?? this.llmHelper.getCurrentModel()} fallbackUsed=${args.fallbackUsed === true} fallbackReason=${args.fallbackReason ?? 'none'} intent=${prompt.intent} requestId=${requestId ?? 'none'} length=${content.length} redacted=true [SYSTEM_DESIGN_RAW_OUTPUT_END]`);
@@ -1891,7 +1907,7 @@ export class IntelligenceEngine extends EventEmitter {
             const correctedValidation = this.enforceScreenScanLanguageCompliance(
                 prompt,
                 validation.correctedContent,
-                validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent, prompt.question)
+                validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent, prompt.question, prompt.actionContract)
             );
 	            logSystemDesignDiagramAudit('corrected', correctedValidation.correctedContent || validation.correctedContent, correctedValidation);
 	            if (correctedValidation.valid) {
@@ -1914,7 +1930,7 @@ export class IntelligenceEngine extends EventEmitter {
                     key: 'output_repair',
                     title: 'OUTPUT REPAIR',
                     content: [
-                        buildRepairInstruction(prompt.intent, validation.issues),
+                        buildRepairInstruction(prompt.intent, validation.issues, prompt.actionContract),
                         this.buildScreenScanLanguageRepairInstruction(prompt),
                         `INVALID DRAFT EXCERPT:\n${invalidDraftForRepair}`,
                     ].filter(Boolean).join('\n\n'),
@@ -1946,7 +1962,7 @@ export class IntelligenceEngine extends EventEmitter {
 	            sessionIdSnapshot,
 	        });
 	        if (!repaired?.trim()) {
-	            const fallback = buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question);
+	            const fallback = buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question, prompt.actionContract);
 	            return {
 	                content: fallback,
 	                validation: {
@@ -1963,7 +1979,7 @@ export class IntelligenceEngine extends EventEmitter {
         const repairedValidation = this.enforceScreenScanLanguageCompliance(
             prompt,
             repaired,
-            validateActionOutput(prompt.intent, prompt.mode, repaired, prompt.question)
+            validateActionOutput(prompt.intent, prompt.mode, repaired, prompt.question, prompt.actionContract)
         );
 	        logSystemDesignDiagramAudit('repair', repairedValidation.correctedContent || repaired, repairedValidation);
 	        if (repairedValidation.valid) {
@@ -1979,7 +1995,7 @@ export class IntelligenceEngine extends EventEmitter {
             const correctedRepairValidation = this.enforceScreenScanLanguageCompliance(
                 prompt,
                 repairedValidation.correctedContent,
-                validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent, prompt.question)
+                validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent, prompt.question, prompt.actionContract)
             );
 	            logSystemDesignDiagramAudit('corrected_repair', correctedRepairValidation.correctedContent || repairedValidation.correctedContent, correctedRepairValidation);
 	            if (correctedRepairValidation.valid) {
@@ -1992,7 +2008,7 @@ export class IntelligenceEngine extends EventEmitter {
 	                };
 	            }
 	        }
-	        const fallback = buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question);
+	        const fallback = buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question, prompt.actionContract);
 	        return {
 	            content: fallback,
 	            validation: {
@@ -2011,6 +2027,7 @@ export class IntelligenceEngine extends EventEmitter {
         content: string,
         validation: ActionOutputValidationResult
     ): ActionOutputValidationResult {
+        if (prompt.actionContract && !actionContractAllowsCode(prompt.actionContract)) return validation;
         const issue = buildScreenScanLanguageMismatchIssue(prompt, validation.correctedContent || content);
         if (!issue) return validation;
         return {
@@ -2544,6 +2561,7 @@ export class IntelligenceEngine extends EventEmitter {
                 imagePaths,
                 requestId,
                 modeOverride: 'coding',
+                actionContract: 'hint_only',
                 profilePreference: 'force_off',
             });
         } finally {

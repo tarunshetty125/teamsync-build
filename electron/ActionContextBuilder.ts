@@ -18,7 +18,11 @@ import type { ScreenContentMode } from './llm';
 import { looksLikeCodingInterviewQuestion } from './intelligence/codingQuestionHeuristics';
 import { looksLikeSystemDesignInterviewQuestion } from './intelligence/systemDesignQuestionHeuristics';
 import { normalizeSystemDesignEntityTypos } from '../src/lib/overlay/systemDesignEntityNormalizer';
-import type { ActionContract, ContextTarget } from '../src/lib/overlay/actionContextTypes';
+import {
+    resolveEffectiveActionContract,
+    type ActionContract,
+    type ContextTarget,
+} from '../src/lib/overlay/actionContextTypes';
 
 export type UnifiedActionIntent =
     | 'what_to_answer'
@@ -124,6 +128,7 @@ export type PromptContextOrderKey = 'rag' | 'supplemental' | 'profile' | 'transc
 export interface PromptObject {
     mode: SessionActionMode;
     intent: UnifiedActionIntent;
+    actionContract?: ActionContract;
     question: string;
     transcript: PromptTranscriptSection;
     profile: PromptProfileSection | null;
@@ -442,8 +447,64 @@ export function getQuestionResponseProfile(
     return 'general';
 }
 
+interface CodingContractLanguage {
+    label: string;
+    fence: string;
+    source: 'explicit' | 'preference' | 'default';
+}
+
+const CODING_CONTRACT_LANGUAGES: Array<Omit<CodingContractLanguage, 'source'> & { patterns: RegExp[] }> = [
+    { label: 'JavaScript', fence: 'javascript', patterns: [/\b(?:javascript|java\s*script|js|node(?:\.js)?|nodejs)\b/i] },
+    { label: 'TypeScript', fence: 'typescript', patterns: [/\b(?:typescript|type\s*script|ts)\b/i] },
+    { label: 'Python', fence: 'python', patterns: [/\b(?:python|python3|py)\b/i] },
+    { label: 'Java', fence: 'java', patterns: [/\bjava\b/i] },
+    { label: 'C++', fence: 'cpp', patterns: [/\bc\+\+\b|\bcpp\b/i] },
+    { label: 'C#', fence: 'csharp', patterns: [/\bc#\b|\bcsharp\b|\bc\s*sharp\b/i] },
+    { label: 'C', fence: 'c', patterns: [/\bc\b/i] },
+    { label: 'Go', fence: 'go', patterns: [/\b(?:go|golang)\b/i] },
+    { label: 'Rust', fence: 'rust', patterns: [/\brust\b/i] },
+    { label: 'Kotlin', fence: 'kotlin', patterns: [/\bkotlin\b/i] },
+    { label: 'Swift', fence: 'swift', patterns: [/\bswift\b/i] },
+    { label: 'Ruby', fence: 'ruby', patterns: [/\bruby\b/i] },
+    { label: 'PHP', fence: 'php', patterns: [/\bphp\b/i] },
+];
+
+function detectCodingContractLanguage(value?: string | null): Omit<CodingContractLanguage, 'source'> | null {
+    const text = value?.trim();
+    if (!text) return null;
+    return CODING_CONTRACT_LANGUAGES.find((language) => (
+        language.patterns.some((pattern) => pattern.test(text))
+    )) ?? null;
+}
+
+function resolveCodingContractLanguage(
+    question?: string,
+    preferredCodingLanguage?: string | null,
+): CodingContractLanguage {
+    const explicitLanguage = detectCodingContractLanguage(question);
+    if (explicitLanguage) return { ...explicitLanguage, source: 'explicit' };
+
+    const preferredLanguage = detectCodingContractLanguage(preferredCodingLanguage);
+    if (preferredLanguage) return { ...preferredLanguage, source: 'preference' };
+
+    return { label: 'JavaScript', fence: 'javascript', source: 'default' };
+}
+
+function describeCodingContractLanguage(language: CodingContractLanguage): string {
+    switch (language.source) {
+        case 'explicit':
+            return `Required solution language for this prompt: ${language.label}, because the latest question explicitly requested it.`;
+        case 'preference':
+            return `Required solution language for this prompt: ${language.label}, from the user preferred coding language setting.`;
+        case 'default':
+        default:
+            return 'Required solution language for this prompt: JavaScript, because no explicit language or user preference was provided.';
+    }
+}
+
 /** Full coding-interview shape for manual input and what-to-answer on DSA/coding questions. */
-function buildCodingInterviewOutputContract(): string {
+function buildCodingInterviewOutputContract(question?: string, preferredCodingLanguage?: string | null): string {
+    const language = resolveCodingContractLanguage(question, preferredCodingLanguage);
     return [
         'Return a complete coding interview answer with these sections in order:',
         '',
@@ -458,10 +519,11 @@ function buildCodingInterviewOutputContract(): string {
         '',
         '**Solution:**',
         'FULL working code in one fenced markdown block with the correct language tag.',
-        'Use the programming language explicitly requested in the latest question only.',
-        'If the latest question does not explicitly name a programming language, default to Python.',
+        'Language priority: (1) explicit language requested in the latest question, (2) user preferred coding language setting if explicitly available, (3) JavaScript default.',
+        describeCodingContractLanguage(language),
         'Do not infer the programming language from older transcript, profile, RAG, or previous assistant answers.',
-        'Use exactly this fence shape: opening line ```python by default (or the explicitly requested language), code on following lines, closing line ```.',
+        'Only use a preferred language when it is explicitly provided as a user coding-language setting.',
+        `Use exactly this fence shape: opening line \`\`\`${language.fence}, code on following lines, closing line \`\`\`.`,
         'Never use two backticks. Never put the solution in inline code. Never put code on the same line as the opening fence.',
         'Code must compile and run — not pseudocode or placeholders.',
         'For Python, preserve real indentation and put each import on its own line.',
@@ -844,7 +906,8 @@ function sessionTokenEstimate(text: string): number {
 function buildActionContractInstruction(
     actionContract: ActionContract | undefined,
     responseProfile: QuestionResponseProfile,
-    modeAwareRules: string[]
+    modeAwareRules: string[],
+    question?: string,
 ): PromptInstruction | null {
     switch (actionContract) {
         case 'hint_only':
@@ -896,7 +959,7 @@ function buildActionContractInstruction(
             }
             if (responseProfile === 'coding') {
                 return createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                    buildCodingInterviewOutputContract(),
+                    buildCodingInterviewOutputContract(question),
                     'Emphasize why this is the optimal approach and call out the key tradeoff.',
                     ...modeAwareRules,
                 ].join('\n'));
@@ -926,14 +989,20 @@ export function buildIntentPrompt(
     const modeAwareRules = buildModeAwareIntentRules(intent, mode);
     const responseProfile = getQuestionResponseProfile(question?.trim() || '', mode, intent);
     const contextPriorityRules = buildContextPriorityRules(profileApplied, intent);
-    const contractInstruction = buildActionContractInstruction(actionContract, responseProfile, modeAwareRules);
+    const effectiveActionContract = resolveEffectiveActionContract({ intent, actionContract });
+    const contractInstruction = buildActionContractInstruction(
+        effectiveActionContract,
+        responseProfile,
+        modeAwareRules,
+        question,
+    );
 
     if (contractInstruction) {
         return [
             createInstruction(
                 'intent',
                 'INTENT',
-                actionContract === 'optimal_solution' && responseProfile === 'system_design'
+                effectiveActionContract === 'optimal_solution' && responseProfile === 'system_design'
                     ? SYSTEM_DESIGN_COPILOT_PROMPT
                     : basePrompt
             ),
@@ -950,7 +1019,7 @@ export function buildIntentPrompt(
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
                         'Return only the final answer.',
-                        buildCodingInterviewOutputContract(),
+                        buildCodingInterviewOutputContract(question),
                         'Focus the explanation on time/space complexity, dominant factors, and the key tradeoff.',
                         'Keep the full code block present even when the user asked about one aspect only.',
                         'No preamble or meta-commentary.',
@@ -988,7 +1057,7 @@ export function buildIntentPrompt(
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
                         'Return only the final answer.',
-                        buildCodingInterviewOutputContract(),
+                        buildCodingInterviewOutputContract(question),
                         'Use the Approach and Edge Cases to surface 3 to 5 important edge cases, tradeoffs, or alternative branches.',
                         'Keep the full code block present so the implementation stays usable.',
                         'No preamble or meta-commentary.',
@@ -1034,7 +1103,7 @@ export function buildIntentPrompt(
                     createInstruction('intent', 'INTENT', basePrompt),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        buildCodingInterviewOutputContract(),
+                        buildCodingInterviewOutputContract(question),
                         'Keep prose sections concise; the code block is mandatory.',
                         ...modeAwareRules,
                     ].join('\n')),
@@ -1106,7 +1175,7 @@ export function buildIntentPrompt(
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
                         'Return only the final answer.',
-                        buildCodingInterviewOutputContract(),
+                        buildCodingInterviewOutputContract(question),
                         'No preamble or meta-commentary.',
                     ].join('\n')),
                 ];
@@ -1160,7 +1229,7 @@ export function buildIntentPrompt(
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
                         'Return only the final answer.',
-                        buildCodingInterviewOutputContract(),
+                        buildCodingInterviewOutputContract(question),
                         'Lead the Approach with the single most important hint or invariant.',
                         'Still include the full executable code solution in a valid fenced markdown block.',
                         'No preamble or meta-commentary.',
@@ -1200,9 +1269,9 @@ export function buildIntentPrompt(
                     screenScanMode === 'coding' || screenScanMode === 'interview_question' || responseProfile === 'coding'
                         ? [
                             'Return only the final answer.',
-                            buildCodingInterviewOutputContract(),
+                            buildCodingInterviewOutputContract(question),
                             'Use the visible editor language or REQUIRED CODE FENCE when present.',
-                            'Default to Python only when no language signal is visible.',
+                            'Default to JavaScript only when no language signal or user preferred coding language setting is visible.',
                         ].join('\n')
                         : [
                             'Analyze the visible screen content and answer directly.',
@@ -1230,7 +1299,7 @@ export function buildIntentPrompt(
                     createInstruction('intent', 'INTENT', basePrompt),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        buildCodingInterviewOutputContract(),
+                        buildCodingInterviewOutputContract(question),
                         'Keep prose sections interview-ready; the code block is mandatory.',
                         ...modeAwareRules,
                     ].join('\n')),
@@ -1320,6 +1389,7 @@ export async function buildContextLayers({
     additionalContext,
     transcriptOverride,
     actionContract,
+    actionId,
     rag,
     includeModeCustomContext = true,
     screenScanMode,
@@ -1354,7 +1424,8 @@ export async function buildContextLayers({
         ? []
         : buildModeContext(mode, { includeModeCustomContext: resolvedPolicy.includeModeCustomContext });
     const profileResult = await buildProfileContext(intent, profile, question, resolvedPolicy.resolvedProfilePreference);
-    const intentInstructions = buildIntentPrompt(intent, mode, screenScanMode, question, profileResult.profile?.used === true, actionContract);
+    const effectiveActionContract = resolveEffectiveActionContract({ intent, actionId, actionContract });
+    const intentInstructions = buildIntentPrompt(intent, mode, screenScanMode, question, profileResult.profile?.used === true, effectiveActionContract);
     const profileInstruction = profileResult.profile?.instruction?.trim()
         ? [createInstruction('profile_instruction', 'PROFILE INTELLIGENCE', profileResult.profile.instruction.trim())]
         : [];
@@ -1371,6 +1442,7 @@ export async function buildContextLayers({
     const promptObject: PromptObject = {
         mode,
         intent,
+        actionContract: effectiveActionContract,
         question,
         transcript,
         profile: profileResult.profile ?? null,

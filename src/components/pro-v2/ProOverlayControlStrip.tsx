@@ -12,6 +12,7 @@ import {
     getModelProviderId,
     getOverlayModelDisplayName,
 } from '../../utils/modelUtils';
+import { getProviderModelMetadata } from '../../lib/providers/providerModelMetadata';
 
 const POPUP_GAP = 8;
 
@@ -66,10 +67,12 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
         }
     }, [isSettingsOpen, openPopupBelowPanel]);
 
+    const modelMetadata = getProviderModelMetadata(currentModel, { source: 'runtime' });
     const modelDisplayName = getOverlayModelDisplayName(currentModel);
     const modelProvider = getModelProviderId(currentModel);
     const modelProviderLabel = MODEL_PROVIDER_LABELS[modelProvider];
     const modelProviderShortLabel = MODEL_PROVIDER_SHORT_LABELS[modelProvider];
+    const modelStatusLabel = modelMetadata.statusLabel;
 
     return (
         <div className="v2-overlay-controls v2-no-drag">
@@ -78,7 +81,7 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
                 className="v2-overlay-model-btn v2-no-drag"
                 onClick={handleModelClick}
                 title={`${modelProviderLabel} · ${modelDisplayName}`}
-                aria-label={`Change model, current model ${modelDisplayName} from ${modelProviderLabel}`}
+                aria-label={`Change model, current model ${modelDisplayName} from ${modelProviderLabel}, ${modelStatusLabel}`}
             >
                 <span className="v2-overlay-model-provider" data-provider={modelProvider} aria-hidden="true">
                     <span className="v2-overlay-model-provider-dot" />
@@ -88,6 +91,9 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
                 </span>
                 <span className="v2-overlay-model-label">
                     {modelDisplayName}
+                </span>
+                <span className="v2-overlay-model-status">
+                    {modelStatusLabel}
                 </span>
                 <ChevronDown size={13} className="v2-overlay-model-chevron" />
             </button>

@@ -59,4 +59,4 @@ export const ARCHITECTURE_KIND_STYLES: Record<ArchitectureNodeKind, Architecture
 };
 
 export const ARCHITECTURE_NODE_WIDTH = 212;
-export const ARCHITECTURE_NODE_HEIGHT = 112;
+export const ARCHITECTURE_NODE_HEIGHT = 124;

@@ -637,6 +637,24 @@
   white-space: nowrap;
 }
 
+.v2-overlay-model-status {
+  flex: 0 0 auto;
+  max-width: 62px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 8px;
+  font-weight: 680;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .v2-overlay-model-chevron {
   flex-shrink: 0;
   opacity: 0.4;
@@ -952,6 +970,55 @@
   letter-spacing: 0.012em;
 }
 
+/* ── Response Metadata Strip ─────────────────────────────── */
+
+.v2-response-meta-strip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 0 14px 9px;
+  margin-top: -3px;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.v2-response-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  height: 21px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.038);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.v2-response-meta-label {
+  flex: 0 0 auto;
+  font-size: 8.5px;
+  font-weight: 720;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.v2-response-meta-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.72);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── ChatGPT-style response version switcher ─────────────── */
 
 .v2-response-switcher {
@@ -999,13 +1066,49 @@
 }
 
 .v2-response-switcher-count {
-  min-width: 38px;
+  min-width: 96px;
   text-align: center;
   font-size: 11px;
   font-weight: 500;
   line-height: 1;
   color: rgba(255, 255, 255, 0.66);
   font-variant-numeric: tabular-nums;
+}
+
+.v2-response-switcher-jump {
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 9px;
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.76);
+  cursor: pointer;
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 1;
+  letter-spacing: 0;
+  transition:
+    background 0.16s var(--v2-ease-premium),
+    color 0.16s var(--v2-ease-premium),
+    transform 0.14s var(--v2-ease-premium);
+}
+
+.v2-response-switcher-jump:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.v2-response-switcher-jump:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.v2-response-switcher-jump:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 
 .v2-response-body pre,
@@ -1077,6 +1180,49 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.v2-coding-contract {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 8px;
+}
+
+.v2-coding-contract-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.v2-coding-contract-section {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.032);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.v2-coding-contract-section-title {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.v2-coding-contract-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.v2-coding-contract-section-body > :last-child,
+.v2-coding-contract-section-body p:last-child {
+  margin-bottom: 0;
 }
 
 .v2-response-body pre code {
@@ -1241,7 +1387,7 @@
 
 .v2-architecture-node {
   width: 212px;
-  min-height: 112px;
+  min-height: 124px;
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
   align-items: start;
@@ -1310,6 +1456,10 @@
   -webkit-box-orient: vertical;
 }
 
+.v2-architecture-node--has-failure .v2-architecture-node-purpose {
+  -webkit-line-clamp: 1;
+}
+
 .v2-architecture-node-meta {
   margin-top: 5px;
   overflow: hidden;
@@ -1320,6 +1470,18 @@
   line-height: 1.15;
   font-weight: 650;
   letter-spacing: 0.02em;
+}
+
+.v2-architecture-node-failure {
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(254, 202, 202, 0.70);
+  font-size: 9.5px;
+  line-height: 1.15;
+  font-weight: 680;
+  letter-spacing: 0;
 }
 
 .v2-architecture-node-kind {
@@ -2376,6 +2538,7 @@
   .v2-action-row:hover,
   .v2-action-row:active,
   .v2-response-switcher-btn,
+  .v2-response-switcher-jump,
   .v2-panel-btn,
   .v2-bar-logo-btn,
   .v2-bar-btn,

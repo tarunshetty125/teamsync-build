@@ -5,6 +5,20 @@ import { buildIntentPrompt } from '../ActionContextBuilder';
 import * as outputValidator from '../ActionOutputValidator';
 import { buildScreenScanQuestion } from '../llm/prompts';
 
+function codingContractFor(question: string): string {
+    const instructions = buildIntentPrompt(
+        'manual_chat',
+        'coding',
+        undefined,
+        question,
+        false,
+    );
+
+    const contract = instructions.find((instruction) => instruction.key === 'output_contract');
+    assert.ok(contract, 'output contract should exist');
+    return contract!.content;
+}
+
 test('coding clarify prompt keeps full fenced code contract', () => {
     const instructions = buildIntentPrompt(
         'clarify',
@@ -21,7 +35,7 @@ test('coding clarify prompt keeps full fenced code contract', () => {
     assert.match(contract!.content, /Never use two backticks/i);
 });
 
-test('coding code_hint prompt still requires executable fenced code', () => {
+test('coding code_hint prompt resolves to hint-only contract', () => {
     const instructions = buildIntentPrompt(
         'code_hint',
         'coding',
@@ -32,23 +46,34 @@ test('coding code_hint prompt still requires executable fenced code', () => {
 
     const contract = instructions.find((instruction) => instruction.key === 'output_contract');
     assert.ok(contract, 'output contract should exist');
-    assert.match(contract!.content, /FULL working code in one fenced markdown block/i);
-    assert.match(contract!.content, /single most important hint or invariant/i);
+    assert.match(contract!.content, /Return hints only/i);
+    assert.match(contract!.content, /Do NOT provide a full solution/i);
+    assert.doesNotMatch(contract!.content, /FULL working code in one fenced markdown block/i);
 });
 
-test('manual coding prompt defaults to Python when no language is requested', () => {
-    const instructions = buildIntentPrompt(
-        'manual_chat',
-        'coding',
-        undefined,
-        'implement dijkstra algorithm',
-        false,
-    );
+test('manual coding prompt defaults to JavaScript when no language is requested', () => {
+    const contract = codingContractFor('solve two sum');
 
-    const contract = instructions.find((instruction) => instruction.key === 'output_contract');
-    assert.ok(contract, 'output contract should exist');
-    assert.match(contract!.content, /default to Python/i);
-    assert.match(contract!.content, /Do not infer the programming language from older transcript/i);
+    assert.match(contract, /Required solution language for this prompt: JavaScript/i);
+    assert.match(contract, /opening line ```javascript/i);
+    assert.doesNotMatch(contract, /default to Python/i);
+    assert.match(contract, /Do not infer the programming language from older transcript/i);
+});
+
+test('manual coding prompt uses explicit Java request over JavaScript default', () => {
+    const contract = codingContractFor('solve two sum in Java');
+
+    assert.match(contract, /Required solution language for this prompt: Java\b/i);
+    assert.match(contract, /opening line ```java/i);
+    assert.doesNotMatch(contract, /opening line ```javascript/i);
+});
+
+test('manual coding prompt uses explicit Python request over JavaScript default', () => {
+    const contract = codingContractFor('solve two sum in Python');
+
+    assert.match(contract, /Required solution language for this prompt: Python/i);
+    assert.match(contract, /opening line ```python/i);
+    assert.doesNotMatch(contract, /opening line ```javascript/i);
 });
 
 test('manual chat fallback does not leak interview evidence template for greetings', () => {
@@ -63,6 +88,31 @@ test('manual chat fallback does not leak interview evidence template for greetin
     assert.doesNotMatch(fallback, /^I would answer/i);
 });
 
+test('coding full-solution fallback is explicit instead of pretending to satisfy the contract', () => {
+    const fallback = outputValidator.buildSafeActionFallback(
+        'what_to_answer',
+        'coding',
+        'two sum',
+        'optimal_solution',
+    );
+
+    assert.match(fallback, /could not generate a contract-compliant coding solution/i);
+    assert.doesNotMatch(fallback, /^I would answer/i);
+});
+
+test('coding hint fallback remains hint-only', () => {
+    const fallback = outputValidator.buildSafeActionFallback(
+        'code_hint',
+        'coding',
+        'two sum',
+        'hint_only',
+    );
+
+    assert.match(fallback, /invariant/i);
+    assert.doesNotMatch(fallback, /```/);
+    assert.doesNotMatch(fallback, /Solution:/i);
+});
+
 test('coding clarify output without fenced code is rejected for repair', () => {
     const result = outputValidator.validateActionOutput(
         'clarify',
@@ -73,6 +123,97 @@ test('coding clarify output without fenced code is rejected for repair', () => {
 
     assert.equal(result.valid, false);
     assert.deepEqual(result.issues, ['coding_missing_code_block']);
+});
+
+test('coding hint-only output accepts concise hints without code', () => {
+    const result = outputValidator.validateActionOutput(
+        'code_hint',
+        'coding',
+        [
+            '- Track the last seen index for each value.',
+            '- Before inserting the current value, check whether its complement was seen.',
+            '- The invariant is that the map only contains earlier positions.',
+        ].join('\n'),
+        'two sum',
+        'hint_only',
+    );
+
+    assert.equal(result.valid, true);
+    assert.equal(result.correctedContent.includes('```'), false);
+});
+
+test('coding hint-only output rejects full code', () => {
+    const result = outputValidator.validateActionOutput(
+        'code_hint',
+        'coding',
+        [
+            '**Solution:**',
+            '```python',
+            'def two_sum(nums, target):',
+            '    return []',
+            '```',
+        ].join('\n'),
+        'two sum',
+        'hint_only',
+    );
+
+    assert.equal(result.valid, false);
+    assert.ok(result.issues.includes('coding_hint_only_must_not_include_code_block'));
+});
+
+test('coding complexity-only output rejects implementation code', () => {
+    const result = outputValidator.validateActionOutput(
+        'clarify',
+        'coding',
+        [
+            'Time: O(n). Space: O(n).',
+            '```python',
+            'def solve():',
+            '    pass',
+            '```',
+        ].join('\n'),
+        'analyze complexity',
+        'complexity_only',
+    );
+
+    assert.equal(result.valid, false);
+    assert.ok(result.issues.includes('coding_complexity_only_must_not_include_code_block'));
+});
+
+test('coding optimal solution accepts normal Python assignment before loop', () => {
+    const result = outputValidator.validateActionOutput(
+        'manual_chat',
+        'coding',
+        [
+            '**Problem:**',
+            'Find two indices whose values add to target.',
+            '',
+            '**Approach:**',
+            '- Scan once.',
+            '- Store previously seen values in a map.',
+            '- Check each value against its complement.',
+            '',
+            '**Complexity:**',
+            'Time O(n), because each item is processed once. Space O(n), because the map may store every value.',
+            '',
+            '**Solution:**',
+            '```python',
+            'def two_sum(nums, target):',
+            '    seen = {}',
+            '    for i, value in enumerate(nums):',
+            '        complement = target - value',
+            '        if complement in seen:',
+            '            return [seen[complement], i]',
+            '        seen[value] = i',
+            '    return []',
+            '```',
+        ].join('\n'),
+        'solve two sum',
+        'optimal_solution',
+    );
+
+    assert.equal(result.valid, true);
+    assert.equal(result.issues.includes('coding_likely_compile_error'), false);
 });
 
 test('coding manual output repairs two-backtick C fence before rendering', () => {

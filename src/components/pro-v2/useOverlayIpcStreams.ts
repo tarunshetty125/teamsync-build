@@ -5,6 +5,12 @@
 
 import { useEffect } from 'react';
 import { mergeStreamChunk } from '../../lib/overlay/mergeStreamChunk';
+import {
+    applyRoutingMetadataToOwnership,
+    extractRoutingOwnershipMetadata,
+    hasRoutingOwnershipMetadata,
+} from '../../lib/overlay/responseRoutingMetadata';
+import { buildArchitectureResponseArtifacts } from './architecture/diagramArtifacts';
 import type { V2Message } from './useCluelyOverlayBridge';
 
 export type OverlayRequestChannel = 'chat' | 'intelligence' | 'rag' | 'screen_scan';
@@ -84,15 +90,34 @@ function hydrateFinalMessage(
     ctx: OverlayIpcStreamsContext,
     requestId: string,
     text: string,
+    debugMetadata?: unknown,
 ) {
     ctx.setMessages((prev) => {
         const idx = prev.findIndex((msg) => msg.requestId === requestId);
         if (idx < 0) return prev;
         const u = [...prev];
-        u[idx] = {
+        const routingMetadata = extractRoutingOwnershipMetadata(debugMetadata);
+        const hasRoutingMetadata = hasRoutingOwnershipMetadata(routingMetadata);
+        const ownership = applyRoutingMetadataToOwnership(u[idx].ownership, debugMetadata);
+        const hydratedMessage = {
             ...u[idx],
             text,
             isCode: text.includes('```'),
+            ownership,
+            provider: routingMetadata.requestedProvider ?? u[idx].provider,
+            model: routingMetadata.requestedModel ?? u[idx].model,
+            intelligenceMetadata: debugMetadata ?? u[idx].intelligenceMetadata,
+        };
+        const routedMessage = hasRoutingMetadata
+            ? {
+                ...hydratedMessage,
+                provider: routingMetadata.requestedProvider ?? hydratedMessage.provider,
+                model: routingMetadata.requestedModel ?? hydratedMessage.model,
+            }
+            : hydratedMessage;
+        u[idx] = {
+            ...routedMessage,
+            artifacts: buildArchitectureResponseArtifacts(routedMessage, text, u),
         };
         return u;
     });
@@ -243,7 +268,7 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
                     const channel: OverlayRequestChannel = isScreenScan ? 'screen_scan' : 'intelligence';
                     if (!matchesRequestChannel(ctx, requestId, channel)) return;
                     if (typeof data.content === 'string') {
-                        hydrateFinalMessage(ctx, requestId, data.content);
+                        hydrateFinalMessage(ctx, requestId, data.content, data.debugMetadata);
                     }
                     ctx.finishStreamingMessage(requestId, data.intent);
                     if (isScreenScan) {
@@ -280,7 +305,7 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
                         return;
                     }
                     if (typeof data.answer === 'string') {
-                        hydrateFinalMessage(ctx, requestId, data.answer);
+                        hydrateFinalMessage(ctx, requestId, data.answer, data.debugMetadata);
                     }
                     ctx.finishStreamingMessage(requestId, 'screen_scan');
                     ctx.activeScreenScanRequestIdRef.current = null;

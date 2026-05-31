@@ -1,5 +1,10 @@
 import type { SessionMode } from './SessionTracker';
 import { getQuestionResponseProfile, type UnifiedActionIntent } from './ActionContextBuilder';
+import {
+    normalizeActionContract,
+    resolveEffectiveActionContract,
+    type ActionContract,
+} from '../src/lib/overlay/actionContextTypes';
 
 export interface ActionOutputValidationResult {
     valid: boolean;
@@ -479,7 +484,7 @@ function hasLikelyPythonSyntaxIssue(code: string): boolean {
         return true;
     }
 
-    if (/\b[A-Za-z_]\w*\s*=\s*[^\n;#]+?\s+\b(print|return|for|while|if|def|class|[A-Za-z_]\w*\s*=)\b/.test(cleaned)) {
+    if (/\b[A-Za-z_]\w*\s*=\s*[^\n;#]+?[ \t]+\b(print|return|for|while|if|def|class|[A-Za-z_]\w*\s*=)\b/.test(cleaned)) {
         return true;
     }
 
@@ -538,6 +543,15 @@ function validateCodingInterviewAnswer(content: string): ActionOutputValidationR
     const hasCompleteCodingShape = hasProblem && hasApproach && hasComplexity && hasSolution && hasCodeBlock && trimmed.length > 180;
 
     if (hasCompleteCodingShape) {
+        if (codeSyntaxIssues.length > 0) {
+            return {
+                valid: false,
+                correctedContent: trimmed,
+                autoCorrected: normalized.changed,
+                issues: codeSyntaxIssues,
+            };
+        }
+
         return {
             valid: true,
             correctedContent: trimmed,
@@ -586,6 +600,104 @@ function validateCodingInterviewAnswer(content: string): ActionOutputValidationR
     }
 
     return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
+}
+
+function hasSolutionSection(content: string): boolean {
+    return /\*\*solution:?\*\*|^solution:/im.test(content);
+}
+
+function hasImplementationLanguage(content: string): boolean {
+    return /\b(implementation|full solution|complete solution|here'?s the code|code below)\b/i.test(content);
+}
+
+function validateCodingNoCodeContract(
+    content: string,
+    contract: Exclude<ActionContract, 'default' | 'optimal_solution' | 'bruteforce_only'>
+): ActionOutputValidationResult {
+    const normalized = normalizeCodingMarkdown(content);
+    const trimmed = normalized.text.trim();
+    if (!trimmed) {
+        return {
+            valid: false,
+            correctedContent: '',
+            autoCorrected: normalized.changed,
+            issues: ['empty_output'],
+        };
+    }
+
+    const hasCodeBlock = hasFencedCodeBlock(trimmed);
+    const issues: string[] = [];
+    if (hasCodeBlock) issues.push(`coding_${contract}_must_not_include_code_block`);
+    if (hasSolutionSection(trimmed)) issues.push(`coding_${contract}_must_not_include_solution_section`);
+    if (contract === 'hint_only' && hasImplementationLanguage(trimmed)) {
+        issues.push('coding_hint_only_must_not_present_implementation');
+    }
+
+    if (issues.length > 0) {
+        return {
+            valid: false,
+            correctedContent: trimmed,
+            autoCorrected: normalized.changed,
+            issues,
+        };
+    }
+
+    return {
+        valid: true,
+        correctedContent: trimmed,
+        autoCorrected: normalized.changed,
+        issues: normalized.changed ? ['normalized_coding_markdown_fences'] : [],
+    };
+}
+
+function validateBruteforceOnlyAnswer(content: string): ActionOutputValidationResult {
+    const normalized = normalizeCodingMarkdown(content);
+    const trimmed = normalized.text.trim();
+    if (!trimmed) {
+        return {
+            valid: false,
+            correctedContent: '',
+            autoCorrected: normalized.changed,
+            issues: ['empty_output'],
+        };
+    }
+
+    if (/\b(optimal|optimized|best approach|most efficient)\b/i.test(trimmed)) {
+        return {
+            valid: false,
+            correctedContent: trimmed,
+            autoCorrected: normalized.changed,
+            issues: ['coding_bruteforce_only_must_not_present_optimal_solution'],
+        };
+    }
+
+    return {
+        valid: true,
+        correctedContent: trimmed,
+        autoCorrected: normalized.changed,
+        issues: normalized.changed ? ['normalized_coding_markdown_fences'] : [],
+    };
+}
+
+function validateCodingContractAnswer(
+    content: string,
+    actionContract?: ActionContract
+): ActionOutputValidationResult {
+    const contract = normalizeActionContract(actionContract);
+    switch (contract) {
+        case 'hint_only':
+        case 'complexity_only':
+        case 'edge_cases_only':
+        case 'debugging_only':
+        case 'followup_questions_only':
+            return validateCodingNoCodeContract(content, contract);
+        case 'bruteforce_only':
+            return validateBruteforceOnlyAnswer(content);
+        case 'optimal_solution':
+        case undefined:
+        default:
+            return validateCodingInterviewAnswer(content);
+    }
 }
 
 function stripSystemDesignPostDiagramDetail(content: string): { text: string; changed: boolean } {
@@ -687,14 +799,16 @@ function validateCodingScreenScan(content: string): ActionOutputValidationResult
     // complete answer with a fallback just because the lightweight syntax
     // heuristic thinks a code block may be truncated or unbalanced.
     if (hasCodeBlock || hasSubstantialContent) {
+        const ignoredSyntaxIssues = codeSyntaxIssues.map((issue) => `${issue}_ignored_for_screen_scan`);
         return {
             valid: true,
             correctedContent: trimmed,
             autoCorrected: normalized.changed,
             issues: [
                 ...(normalized.changed ? ['normalized_coding_markdown_fences'] : []),
+                ...ignoredSyntaxIssues,
             ],
-            warnings: codeSyntaxIssues.map((issue) => `${issue}_ignored_for_screen_scan`),
+            warnings: ignoredSyntaxIssues,
         };
     }
 
@@ -711,7 +825,8 @@ export function validateActionOutput(
     intent: UnifiedActionIntent,
     mode: SessionMode,
     content: string,
-    question?: string
+    question?: string,
+    actionContract?: ActionContract
 ): ActionOutputValidationResult {
     const trimmed = content.trim();
     if (!trimmed) {
@@ -740,6 +855,8 @@ export function validateActionOutput(
         return validateSystemDesignInterviewAnswer(trimmed, question);
     }
 
+    const effectiveActionContract = resolveEffectiveActionContract({ intent, actionContract });
+
     if (profile === 'coding' && (
         intent === 'manual_chat'
         || intent === 'what_to_answer'
@@ -748,7 +865,7 @@ export function validateActionOutput(
         || intent === 'brainstorm'
         || intent === 'code_hint'
     )) {
-        return validateCodingInterviewAnswer(trimmed);
+        return validateCodingContractAnswer(trimmed, effectiveActionContract);
     }
 
     switch (intent) {
@@ -765,7 +882,9 @@ export function validateActionOutput(
             return validateDirectAnswer(trimmed);
         case 'screen_scan':
             return mode === 'coding'
-                ? validateCodingScreenScan(trimmed)
+                ? effectiveActionContract
+                    ? validateCodingContractAnswer(trimmed, effectiveActionContract)
+                    : validateCodingScreenScan(trimmed)
                 : validateDirectAnswer(trimmed);
         case 'system_design_tradeoffs':
             return validateBrainstorm(trimmed);
@@ -776,13 +895,35 @@ export function validateActionOutput(
     }
 }
 
-export function buildRepairInstruction(intent: UnifiedActionIntent, issues: string[]): string {
+function buildActionContractRepairInstruction(actionContract?: ActionContract): string {
+    const contract = normalizeActionContract(actionContract);
+    switch (contract) {
+        case 'hint_only':
+            return 'For this hint-only coding action, return hints only: 2 to 4 concise bullets, no full solution, no Solution section, and no fenced code block.';
+        case 'complexity_only':
+            return 'For this complexity-only coding action, return only time and space complexity with brief reasoning. Do not include implementation, a Solution section, or any fenced code block.';
+        case 'edge_cases_only':
+            return 'For this edge-cases-only coding action, return only edge cases or test cases. Do not include algorithm walkthrough, implementation, a Solution section, or any fenced code block.';
+        case 'debugging_only':
+            return 'For this debugging-only coding action, return likely failure points and the next diagnostic step. Do not include a full rewrite or fenced code block.';
+        case 'bruteforce_only':
+            return 'For this brute-force-only coding action, explain the naive approach and its complexity. Do not present the optimal solution.';
+        case 'followup_questions_only':
+            return 'For this follow-up-questions-only action, return questions only as concise bullets. Do not include answers or code.';
+        default:
+            return '';
+    }
+}
+
+export function buildRepairInstruction(intent: UnifiedActionIntent, issues: string[], actionContract?: ActionContract): string {
     const architectureJsonRepair = issues.some((issue) => issue.startsWith('system_design_architecture_json') || issue === 'system_design_missing_fenced_architecture_json');
     const codingRepair = issues.some((issue) => issue === 'coding_missing_code_block' || issue === 'coding_unbalanced_delimiters' || issue === 'coding_likely_compile_error');
+    const contractRepair = buildActionContractRepairInstruction(resolveEffectiveActionContract({ intent, actionContract }));
     const screenScanLanguageRepair = issues.some((issue) => issue.startsWith('screen_scan_language_mismatch_expected_'));
     return [
         `The previous draft violated the output contract for intent "${intent}".`,
         `Fix these issues: ${issues.join(', ')}.`,
+        contractRepair,
         architectureJsonRepair
             ? 'For system design answers, include one fenced ```architecture_json``` block with valid JSON only. MINIMUM 12 nodes required. Simple systems need 12+ nodes, medium production systems need 20+ nodes, FAANG-scale systems need 35-60+ nodes. Each node requires id, label, kind and should include technology, purpose, layer, latency, failureMode. Each edge requires source, target and should include label, protocol, latency. Kinds: client, gateway, service, database, cache, queue, storage, external. Include client, edge/gateway, core services, async, data, cache, security, and observability layers. Do not use Mermaid.'
             : '',
@@ -816,13 +957,60 @@ function buildManualChatFallback(question: string): string {
 export function buildSafeActionFallback(
     intent: UnifiedActionIntent,
     mode: SessionMode,
-    question: string
+    question: string,
+    actionContract?: ActionContract
 ): string {
+    const effectiveActionContract = resolveEffectiveActionContract({ intent, actionContract });
+    if (mode === 'coding' || effectiveActionContract) {
+        switch (effectiveActionContract) {
+            case 'hint_only':
+                return [
+                    '- Identify the invariant before writing code.',
+                    '- Work through the smallest edge case by hand.',
+                    '- Choose the data structure that makes each operation cheap.',
+                ].join('\n');
+            case 'complexity_only':
+                return [
+                    '- Time complexity: state the dominant operation and how many times it runs.',
+                    '- Space complexity: count the auxiliary data structures, excluding the input.',
+                ].join('\n');
+            case 'edge_cases_only':
+                return [
+                    '- Empty or minimum-size input.',
+                    '- Duplicate values or repeated states.',
+                    '- Boundary values at the stated constraints.',
+                    '- Inputs that force the worst-case path.',
+                ].join('\n');
+            case 'debugging_only':
+                return [
+                    '- Check the first state mutation that can make the output diverge.',
+                    '- Verify boundary conditions before changing the core algorithm.',
+                    '- Add one tiny failing case and trace each variable update.',
+                ].join('\n');
+            case 'bruteforce_only':
+                return [
+                    '- Start by enumerating every candidate answer.',
+                    '- Validate each candidate directly against the problem constraints.',
+                    '- Use this baseline to reason about correctness before optimizing.',
+                ].join('\n');
+            case 'followup_questions_only':
+                return [
+                    '- What input size should the solution handle?',
+                    '- Are duplicate or invalid inputs possible?',
+                    '- Which language should the final implementation use?',
+                ].join('\n');
+            case 'optimal_solution':
+            case undefined:
+            default:
+                if (mode === 'coding') {
+                    return 'I could not generate a contract-compliant coding solution on this attempt. Please retry so I can return the full Problem, Approach, Complexity, and Solution sections with runnable code.';
+                }
+        }
+    }
+
     const modePrefix = mode === 'system_design'
         ? 'architecture'
-        : mode === 'coding'
-            ? 'implementation'
-            : 'response';
+        : 'response';
 
     switch (intent) {
         case 'clarify':
@@ -846,9 +1034,6 @@ export function buildSafeActionFallback(
                 `- Use a more advanced ${modePrefix} for scale and resilience, with the tradeoff of higher operational cost.`,
             ].join('\n');
         case 'screen_scan':
-            if (mode === 'coding') {
-                return 'The OCR was captured, but the selected model did not return a usable coding solution on this attempt.';
-            }
         case 'manual_chat':
             return buildManualChatFallback(question);
         case 'code_hint':

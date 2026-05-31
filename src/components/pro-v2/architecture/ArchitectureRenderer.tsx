@@ -10,6 +10,7 @@ interface ArchitectureRendererProps {
     mermaidChart?: string | null;
     fallbackDiagram?: ArchitectureDiagram | null;
     isStreaming?: boolean;
+    diagramChainKey?: string;
 }
 
 interface ArchitectureErrorBoundaryProps {
@@ -101,6 +102,7 @@ const ArchitectureRenderer = memo<ArchitectureRendererProps>(function Architectu
     diagram,
     fallbackDiagram,
     isStreaming = false,
+    diagramChainKey,
 }) {
     const [stage, setStage] = useState<'flow' | 'cards'>('flow');
     const cardsDiagram = fallbackDiagram ?? diagram ?? null;
@@ -120,7 +122,11 @@ const ArchitectureRenderer = memo<ArchitectureRendererProps>(function Architectu
     if (stage === 'flow' && state === 'ready' && diagram) {
         return (
             <ArchitectureErrorBoundary onError={handleFlowError}>
-                <ArchitectureCanvas diagram={diagram} onRenderError={handleFlowError} />
+                <ArchitectureCanvas
+                    diagram={diagram}
+                    diagramChainKey={diagramChainKey}
+                    onRenderError={handleFlowError}
+                />
             </ArchitectureErrorBoundary>
         );
     }

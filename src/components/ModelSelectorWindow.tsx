@@ -7,6 +7,11 @@ import {
     getModelProviderId,
     prettifyModelId,
 } from '../utils/modelUtils';
+import {
+    getProviderModelMetadata,
+    type ProviderModelAccessState,
+    type UiProviderModelMetadata,
+} from '../lib/providers/providerModelMetadata';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 
 // Define Model Types
@@ -15,6 +20,48 @@ interface ModelOption {
     name: string;
     type: 'cloud' | 'local' | 'custom' | 'ollama';
     provider?: string;
+    metadata?: UiProviderModelMetadata;
+}
+
+function toErrorMessage(error: unknown): string {
+    if (!error) return 'Unknown error';
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    try {
+        return JSON.stringify(error);
+    } catch {
+        return 'Unknown error';
+    }
+}
+
+function formatAccessStateLabel(accessState: ProviderModelAccessState): string {
+    switch (accessState) {
+        case 'available':
+            return 'Available';
+        case 'configured':
+            return 'Configured';
+        case 'fetch_error':
+            return 'Fetch failed';
+        case 'no_access':
+            return 'No access';
+        default:
+            return 'Unknown';
+    }
+}
+
+function formatReadableProviderLabel(provider: string): string {
+    const metadata = getProviderModelMetadata('', { explicitProvider: provider });
+    return metadata.providerId !== 'custom' ? metadata.providerLabel : prettifyModelId(provider);
+}
+
+function getBedrockBadges(metadata: UiProviderModelMetadata): string[] {
+    const badges = [
+        metadata.region,
+        metadata.isGptOss ? 'GPT-OSS' : undefined,
+        metadata.isVisionCapable ? 'Vision' : 'Text-only',
+        `Access: ${formatAccessStateLabel(metadata.accessState)}`,
+    ].filter((badge): badge is string => Boolean(badge));
+    return badges;
 }
 
 
@@ -29,6 +76,7 @@ const ModelSelectorWindow = () => {
         } catch { return []; }
     });
     const [isLoading, setIsLoading] = useState<boolean>(() => availableModels.length === 0);
+    const [providerFetchErrors, setProviderFetchErrors] = useState<Record<string, string>>({});
 
 
 
@@ -45,6 +93,8 @@ const ModelSelectorWindow = () => {
                 
                 // 1. Get Stored Credentials (to know which Cloud providers are active)
                 const creds = await window.electronAPI?.getStoredCredentials?.();
+                const fetchErrors: Record<string, string> = {};
+                const bedrockRegion = creds?.bedrockCredentials?.region;
 
                 // 2. Custom Providers
                 const customProviders = await window.electronAPI?.getCustomProviders?.() || [];
@@ -80,7 +130,17 @@ const ModelSelectorWindow = () => {
                 const models: ModelOption[] = [];
 
                 if (creds?.hasTeamSyncKey) {
-                    models.push({ id: 'teamsync', name: 'TeamSync API', type: 'cloud', provider: 'teamsync' });
+                    models.push({
+                        id: 'teamsync',
+                        name: 'TeamSync API',
+                        type: 'cloud',
+                        provider: 'teamsync',
+                        metadata: getProviderModelMetadata('teamsync', {
+                            explicitProvider: 'teamsync',
+                            source: 'standard',
+                            displayName: 'TeamSync API',
+                        }),
+                    });
                 }
 
                 // Fetch dynamic models
@@ -96,8 +156,11 @@ const ModelSelectorWindow = () => {
                             const result = await window.electronAPI?.fetchProviderModels?.(prov, '');
                             if (result?.success && result.models) {
                                 dynamicModels[prov] = result.models;
+                            } else if (result && !result.success) {
+                                fetchErrors[prov] = result.error || 'Model fetch failed';
                             }
                         } catch (e) {
+                            fetchErrors[prov] = toErrorMessage(e);
                             console.error(`Failed to fetch models for ${prov}:`, e);
                         }
                     }
@@ -117,8 +180,11 @@ const ModelSelectorWindow = () => {
                         const result = await window.electronAPI?.fetchBedrockModels?.();
                         if (result?.success && result.models) {
                             dynamicModels['bedrock'] = result.models;
+                        } else if (result && !result.success) {
+                            fetchErrors['bedrock'] = result.error || 'Bedrock model fetch failed';
                         }
                     } catch (e) {
+                        fetchErrors['bedrock'] = toErrorMessage(e);
                         console.error('Failed to fetch Bedrock models:', e);
                     }
                 }
@@ -131,35 +197,96 @@ const ModelSelectorWindow = () => {
                         const providerName = prov === 'openai' ? 'OpenAI' : prov === 'claude' ? 'Claude' : prov === 'groq' ? 'Groq' : prov === 'bedrock' ? 'Bedrock' : 'Gemini';
                         dynamicModels[prov].forEach(m => {
                             if (!models.find(x => x.id === m.id)) {
-                                models.push({ id: m.id, name: `${providerName} ${prettifyModelId(m.label || m.id)}`, type: 'cloud', provider: prov });
+                                const name = `${providerName} ${prettifyModelId(m.label || m.id)}`;
+                                models.push({
+                                    id: m.id,
+                                    name,
+                                    type: 'cloud',
+                                    provider: prov,
+                                    metadata: getProviderModelMetadata(m.id, {
+                                        explicitProvider: prov,
+                                        region: prov === 'bedrock' ? bedrockRegion : undefined,
+                                        inputModalities: m.inputModalities,
+                                        accessState: prov === 'bedrock' ? 'available' : 'configured',
+                                        source: 'dynamic',
+                                        displayName: name,
+                                    }),
+                                });
                             }
                         });
                     } else {
                         cfg.ids.forEach((id, i) => {
                             if (!models.find(x => x.id === id)) {
-                                models.push({ id, name: cfg.names[i], type: 'cloud', provider: prov });
+                                models.push({
+                                    id,
+                                    name: cfg.names[i],
+                                    type: 'cloud',
+                                    provider: prov,
+                                    metadata: getProviderModelMetadata(id, {
+                                        explicitProvider: prov,
+                                        region: prov === 'bedrock' ? bedrockRegion : undefined,
+                                        accessState: prov === 'bedrock' && fetchErrors[prov] ? 'fetch_error' : 'configured',
+                                        source: 'standard',
+                                        displayName: cfg.names[i],
+                                    }),
+                                });
                             }
                         });
                     }
                     
                     const pm = creds?.[cfg.pmKey];
                     if (pm && !models.find(x => x.id === pm)) {
-                        models.push({ id: pm, name: prettifyModelId(pm), type: 'cloud', provider: prov });
+                        const name = prettifyModelId(pm);
+                        models.push({
+                            id: pm,
+                            name,
+                            type: 'cloud',
+                            provider: prov,
+                            metadata: getProviderModelMetadata(pm, {
+                                explicitProvider: prov,
+                                region: prov === 'bedrock' ? bedrockRegion : undefined,
+                                accessState: prov === 'bedrock' && fetchErrors[prov] ? 'fetch_error' : 'configured',
+                                source: 'preferred',
+                                displayName: name,
+                            }),
+                        });
                     }
                 }
 
                 // Custom Providers
                 customProviders.forEach((p: any) => {
-                    models.push({ id: p.id, name: p.name, type: 'custom' });
+                    models.push({
+                        id: p.id,
+                        name: p.name,
+                        type: 'custom',
+                        metadata: getProviderModelMetadata(p.id, {
+                            explicitProvider: 'custom',
+                            source: 'custom',
+                            displayName: p.name,
+                        }),
+                    });
                 });
 
                 // Ollama
                 ollamaModels.forEach((m: string) => {
-                    models.push({ id: `ollama-${m}`, name: `${m} (Local)`, type: 'ollama' });
+                    const id = `ollama-${m}`;
+                    const name = `${m} (Local)`;
+                    models.push({
+                        id,
+                        name,
+                        type: 'ollama',
+                        provider: 'ollama',
+                        metadata: getProviderModelMetadata(id, {
+                            explicitProvider: 'ollama',
+                            source: 'local',
+                            displayName: name,
+                        }),
+                    });
                 });
 
                 localStorage.setItem('cached-models', JSON.stringify(models));
                 setAvailableModels(models);
+                setProviderFetchErrors(fetchErrors);
 
                 // 4. Get Current Active Model
                 const config = await window.electronAPI?.getCurrentLlmConfig?.(); // Get runtime model
@@ -209,6 +336,12 @@ const ModelSelectorWindow = () => {
         custom: { dot: 'bg-violet-400', header: 'text-violet-300', rule: 'bg-violet-400/30', chip: 'border-violet-400/25 bg-violet-400/10 text-violet-200' },
         ollama: { dot: 'bg-lime-400', header: 'text-lime-300', rule: 'bg-lime-400/30', chip: 'border-lime-400/25 bg-lime-400/10 text-lime-200' },
     };
+    const providerIdsWithModels = new Set<string>(
+        availableModels.map((model) => getModelProviderId(model.id, model.provider, model.type)),
+    );
+    const orphanedProviderFetchErrors = Object.entries(providerFetchErrors)
+        .filter(([, message]) => Boolean(message))
+        .filter(([provider]) => !providerIdsWithModels.has(provider));
 
     return (
         <div className="w-fit h-fit bg-transparent flex flex-col">
@@ -226,9 +359,16 @@ const ModelSelectorWindow = () => {
                                 No models connected.<br />Check Settings.
                             </div>
                         ) : (
-                            availableModels.map((model, index) => {
+                            <>
+                                {availableModels.map((model, index) => {
                                 const isSelected = currentModel === model.id;
                                 const provider = getModelProviderId(model.id, model.provider, model.type);
+                                const metadata = model.metadata ?? getProviderModelMetadata(model.id, {
+                                    explicitProvider: model.provider,
+                                    type: model.type,
+                                    displayName: model.name,
+                                });
+                                const bedrockBadges = provider === 'bedrock' ? getBedrockBadges(metadata) : [];
                                 const previousModel = availableModels[index - 1];
                                 const previousProvider = previousModel
                                     ? getModelProviderId(previousModel.id, previousModel.provider, previousModel.type)
@@ -246,6 +386,11 @@ const ModelSelectorWindow = () => {
                                                 </span>
                                             </div>
                                         )}
+                                        {showProviderHeader && providerFetchErrors[provider] && (
+                                            <div className={`mx-3 mb-1 rounded-md border px-2 py-1 text-[10px] leading-snug ${isLight ? 'border-rose-500/20 bg-rose-50 text-rose-700' : 'border-rose-300/15 bg-rose-400/10 text-rose-100/75'}`}>
+                                                Fetch error: {providerFetchErrors[provider]}
+                                            </div>
+                                        )}
                                         <button
                                             onClick={() => handleSelectFn(model.id)}
                                             title={model.name}
@@ -259,7 +404,21 @@ const ModelSelectorWindow = () => {
                                         >
                                             <span className="flex min-w-0 flex-1 items-start gap-2 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug pr-2">
                                                 <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${accent?.dot || 'bg-slate-400'}`} />
-                                                <span className="min-w-0 flex-1 text-[12px] font-medium">{model.name}</span>
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block text-[12px] font-medium">{model.name}</span>
+                                                    {bedrockBadges.length > 0 && (
+                                                        <span className="mt-1 flex flex-wrap gap-1">
+                                                            {bedrockBadges.map((badge) => (
+                                                                <span
+                                                                    key={badge}
+                                                                    className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${isLight ? 'border-black/10 bg-black/[0.035] text-slate-500' : 'border-white/10 bg-white/5 text-white/50'}`}
+                                                                >
+                                                                    {badge}
+                                                                </span>
+                                                            ))}
+                                                        </span>
+                                                    )}
+                                                </span>
                                             </span>
                                             <span className="ml-2 flex shrink-0 items-center gap-1.5">
                                                 <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${isLight ? 'border-black/10 bg-black/[0.035] text-slate-500' : (accent?.chip || 'border-white/10 bg-white/5 text-white/60')}`}>
@@ -270,7 +429,16 @@ const ModelSelectorWindow = () => {
                                         </button>
                                     </React.Fragment>
                                 );
-                            })
+                                })}
+                                {orphanedProviderFetchErrors.map(([provider, message]) => (
+                                    <div
+                                        key={`fetch-error-${provider}`}
+                                        className={`mx-3 my-1 rounded-md border px-2 py-1 text-[10px] leading-snug ${isLight ? 'border-rose-500/20 bg-rose-50 text-rose-700' : 'border-rose-300/15 bg-rose-400/10 text-rose-100/75'}`}
+                                    >
+                                        {formatReadableProviderLabel(provider)} fetch error: {message}
+                                    </div>
+                                ))}
+                            </>
                         )}
                     </div>
                 )}

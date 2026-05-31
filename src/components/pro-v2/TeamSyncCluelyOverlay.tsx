@@ -322,10 +322,13 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                             isProcessing={bridge.isProcessing}
                             activeResponseIndex={bridge.activeResponseIndex}
                             responseHistoryTotal={bridge.responseHistoryTotal}
+                            selectionMode={bridge.selectionMode}
                             canGoPreviousResponse={bridge.canGoPreviousResponse}
                             canGoNextResponse={bridge.canGoNextResponse}
+                            canJumpLatestResponse={bridge.canJumpLatestResponse}
                             onPreviousResponse={bridge.goToPreviousResponse}
                             onNextResponse={bridge.goToNextResponse}
+                            onJumpLatestResponse={bridge.jumpToLatestResponse}
                             scrollContainerRef={bridge.scrollContainerRef}
                         />
                     </motion.div>

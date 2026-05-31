@@ -37,10 +37,18 @@ const ArchitectureNode = memo<NodeProps<ArchitectureFlowNode>>(function Architec
     const Icon = ICONS[data.kind] ?? Cable;
     const positions = handlePositions(data.direction);
     const metadata = [data.layer, data.latency].filter(Boolean).join(' · ');
+    const title = [
+        data.label,
+        data.technology ? `Technology: ${data.technology}` : '',
+        data.purpose ? `Purpose: ${data.purpose}` : '',
+        data.latency ? `Latency: ${data.latency}` : '',
+        data.failureMode ? `Failure mode: ${data.failureMode}` : '',
+    ].filter(Boolean).join('\n');
 
     return (
         <div
-            className={`v2-architecture-node v2-architecture-node--${data.kind} ${data.emphasized ? 'v2-architecture-node--emphasized' : ''}`}
+            className={`v2-architecture-node v2-architecture-node--${data.kind} ${data.emphasized ? 'v2-architecture-node--emphasized' : ''} ${data.failureMode ? 'v2-architecture-node--has-failure' : ''}`}
+            title={title}
             style={{
                 borderColor: style.border,
                 background: `linear-gradient(180deg, rgba(255,255,255,0.105) 0%, rgba(255,255,255,0.045) 100%), ${style.tint}`,
@@ -60,6 +68,9 @@ const ArchitectureNode = memo<NodeProps<ArchitectureFlowNode>>(function Architec
                 )}
                 {metadata && (
                     <div className="v2-architecture-node-meta">{metadata}</div>
+                )}
+                {data.failureMode && (
+                    <div className="v2-architecture-node-failure">Risk: {data.failureMode}</div>
                 )}
                 <div className="v2-architecture-node-kind" style={{ color: style.accent }}>
                     {style.label}

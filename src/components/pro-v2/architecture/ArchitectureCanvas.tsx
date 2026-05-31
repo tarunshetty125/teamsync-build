@@ -37,6 +37,7 @@ function getViewportSettings(nodeCount: number) {
 interface ArchitectureCanvasProps {
     diagram: ArchitectureDiagram;
     onRenderError: (error: unknown) => void;
+    diagramChainKey?: string;
 }
 
 function ArchitectureSkeletonContent() {
@@ -54,8 +55,21 @@ function ArchitectureSkeletonContent() {
     );
 }
 
-const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function ArchitectureFlowInner({ diagram, onRenderError }) {
+type ArchitectureViewport = ReturnType<ReturnType<typeof useReactFlow>['getViewport']>;
+
+const viewportByChainKey = new Map<string, ArchitectureViewport>();
+
+function rememberViewport(cacheKey: string, viewport: ArchitectureViewport) {
+    if (viewportByChainKey.size > 80) {
+        const oldestKey = viewportByChainKey.keys().next().value;
+        if (oldestKey) viewportByChainKey.delete(oldestKey);
+    }
+    viewportByChainKey.set(cacheKey, viewport);
+}
+
+const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function ArchitectureFlowInner({ diagram, onRenderError, diagramChainKey }) {
     const diagramKey = useMemo(() => architectureDiagramFingerprint(diagram), [diagram]);
+    const viewportCacheKey = diagramChainKey || diagramKey;
     const [nodes, setNodes] = useState<ArchitectureFlowNode[]>([]);
     const [edges, setEdges] = useState<ArchitectureFlowEdge[]>([]);
     const [isLayoutReady, setIsLayoutReady] = useState(false);
@@ -72,6 +86,10 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
     const endDiagramInteraction = useCallback(() => {
         setDiagramInteraction(false);
     }, [setDiagramInteraction]);
+
+    const saveViewport = useCallback(() => {
+        rememberViewport(viewportCacheKey, getViewport());
+    }, [getViewport, viewportCacheKey]);
 
     useEffect(() => {
         const handleVisibilityChange = () => {
@@ -114,6 +132,12 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
                 })));
                 setIsLayoutReady(true);
                 window.requestAnimationFrame(() => {
+                    const cachedViewport = viewportByChainKey.get(viewportCacheKey);
+                    if (cachedViewport) {
+                        void setViewport(cachedViewport, { duration: 120 });
+                        return;
+                    }
+
                     void fitView({
                         padding: viewportSettings.padding,
                         minZoom: viewportSettings.minZoom,
@@ -126,6 +150,11 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
                             x: viewport.x + 18,
                             y: viewport.y + 16,
                         }, { duration: 160 });
+                        rememberViewport(viewportCacheKey, {
+                            ...viewport,
+                            x: viewport.x + 18,
+                            y: viewport.y + 16,
+                        });
                     });
                 });
             })
@@ -139,7 +168,7 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
         };
         // diagramKey intentionally owns layout invalidation; diagram is the matching value for that fingerprint.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [diagramKey, fitView, getViewport, onRenderError, setViewport, viewportSettings.maxZoom, viewportSettings.minZoom, viewportSettings.padding]);
+    }, [diagramKey, fitView, getViewport, onRenderError, setViewport, viewportCacheKey, viewportSettings.maxZoom, viewportSettings.minZoom, viewportSettings.padding]);
 
     return (
         <motion.div
@@ -180,7 +209,10 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
                     preventScrolling
                     zoomOnDoubleClick={false}
                     onMoveStart={() => setDiagramInteraction(true)}
-                    onMoveEnd={() => setDiagramInteraction(false)}
+                    onMoveEnd={() => {
+                        setDiagramInteraction(false);
+                        saveViewport();
+                    }}
                     onMouseDown={(event) => event.stopPropagation()}
                     onContextMenu={(event) => event.preventDefault()}
                     proOptions={{ hideAttribution: true }}

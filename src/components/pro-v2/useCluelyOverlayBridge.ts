@@ -36,6 +36,14 @@ import {
     type ResolvedActionContext,
 } from '../../lib/overlay/actionContextResolver';
 import type { ActionContract, ContextTarget, ResponseOwnership } from '../../lib/overlay/actionContextTypes';
+import {
+    resolveNextActiveResponseSelection,
+    type ResponseSelectionMode,
+} from '../../lib/overlay/responseHistorySelection';
+import { capResponseHistoryMessages } from '../../lib/overlay/responseHistoryState';
+import type { V2ResponseArtifact } from '../../lib/overlay/responseArtifacts';
+import { getProviderModelMetadata } from '../../lib/providers/providerModelMetadata';
+import { buildArchitectureResponseArtifacts } from './architecture/diagramArtifacts';
 import { useOverlayIpcStreams } from './useOverlayIpcStreams';
 
 export interface V2Message {
@@ -49,12 +57,15 @@ export interface V2Message {
     hasScreenshot?: boolean;
     screenshotPreview?: string;
     isCode?: boolean;
+    actionContract?: ActionContract;
     intent?: string;
     source?: string;
     provider?: string;
     model?: string;
     question?: string;
+    rootResponseId?: string;
     ownership?: ResponseOwnership;
+    artifacts?: V2ResponseArtifact[];
     chips?: Array<{ label: string; variant: string }>;
     isNegotiationCoaching?: boolean;
     negotiationCoachingData?: any;
@@ -134,14 +145,47 @@ function buildManualStreamContext(text: string, detectedMode: SessionMode, final
 }
 
 function capOverlayMessages(nextMessages: V2Message[]): V2Message[] {
-    const systemIndexes: number[] = [];
-    nextMessages.forEach((message, index) => {
-        if (message.role === 'system') systemIndexes.push(index);
-    });
-    if (systemIndexes.length <= MAX_RESPONSE_HISTORY) return nextMessages;
+    return capResponseHistoryMessages(nextMessages, MAX_RESPONSE_HISTORY);
+}
 
-    const firstKeptSystemIndex = systemIndexes[systemIndexes.length - MAX_RESPONSE_HISTORY];
-    return nextMessages.slice(firstKeptSystemIndex);
+function deriveNewResponseRootId(responseId: string, parentResponse?: V2Message | null): string {
+    if (!parentResponse?.id) return responseId;
+    return parentResponse.rootResponseId || parentResponse.id;
+}
+
+function getUiProviderForModel(modelId: string): string {
+    return getProviderModelMetadata(modelId).providerId;
+}
+
+function buildResponseRootIdMap(responseHistory: V2Message[]): Map<string, string> {
+    const byId = new Map(responseHistory.map((response) => [response.id, response]));
+    const roots = new Map<string, string>();
+
+    function resolveRoot(response: V2Message, seen: Set<string> = new Set()): string {
+        const cached = roots.get(response.id);
+        if (cached) return cached;
+
+        if (response.rootResponseId) {
+            roots.set(response.id, response.rootResponseId);
+            return response.rootResponseId;
+        }
+
+        const parentId = response.ownership?.parentResponseId;
+        if (!parentId || parentId === response.id || seen.has(parentId)) {
+            roots.set(response.id, response.id);
+            return response.id;
+        }
+
+        const parent = byId.get(parentId);
+        const rootId = parent
+            ? resolveRoot(parent, new Set([...seen, response.id]))
+            : parentId;
+        roots.set(response.id, rootId);
+        return rootId;
+    }
+
+    responseHistory.forEach((response) => resolveRoot(response));
+    return roots;
 }
 
 const ACTION_CONTEXT_MESSAGES: Record<string, string> = {
@@ -203,7 +247,9 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const [attachedContext, setAttachedContext] = useState<ScreenshotAttachment[]>([]);
     const attachedContextRef = useRef<ScreenshotAttachment[]>([]);
     const activeResponseRef = useRef<V2Message | null>(null);
-    const [activeResponseIndex, setActiveResponseIndex] = useState(-1);
+    const [activeResponseId, setActiveResponseId] = useState<string | null>(null);
+    const [selectionMode, setSelectionMode] = useState<ResponseSelectionMode>('latest');
+    const selectionModeRef = useRef<ResponseSelectionMode>('latest');
     const [isProcessing, setIsProcessing] = useState(false);
     const [isExpanded, setIsExpanded] = useState(true);
     const [lastFinalSentence, setLastFinalSentence] = useState('');
@@ -557,6 +603,16 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         };
     }, [liveOverlayCopilotMode]);
 
+    const setResponseSelection = useCallback((responseId: string | null, mode: ResponseSelectionMode) => {
+        selectionModeRef.current = mode;
+        setSelectionMode(mode);
+        setActiveResponseId(responseId);
+    }, []);
+
+    useEffect(() => {
+        selectionModeRef.current = selectionMode;
+    }, [selectionMode]);
+
     const onSessionReset = useCallback(() => {
         void window.electronAPI.cancelGeminiChatStream?.().catch(() => {});
         void window.electronAPI.cancelIntelligenceRequest?.().catch(() => {});
@@ -564,7 +620,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
         setMessages([]);
         setAttachedContext([]);
-        setActiveResponseIndex(-1);
+        setResponseSelection(null, 'latest');
         setInputValue('');
         setIsProcessing(false);
         setRollingTranscript('');
@@ -597,7 +653,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         resetRecommendation();
         resetOverlayRecommendationState();
         analytics.trackConversationStarted();
-    }, [persistManualSessionMode, resetRecommendation, resetOverlayRecommendationState]);
+    }, [persistManualSessionMode, resetRecommendation, resetOverlayRecommendationState, setResponseSelection]);
 
     const { isStalePayload, adoptSessionIdFromPayload } = useOverlayActiveSession({
         onSessionReset,
@@ -789,6 +845,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             u[idx] = {
                 ...lastMsg,
                 isStreaming: false,
+                artifacts: buildArchitectureResponseArtifacts(lastMsg, lastMsg.text, prev),
                 chips: chips.length > 0 ? chips : undefined,
             };
             return u;
@@ -1164,8 +1221,10 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             const resolvedMessage = resolvedContext.message?.trim() || '';
             const mergedAdditionalContext = resolvedContext.additionalContext?.trim() || undefined;
             const responseId = nextMsgId();
+            const parentResponse = resolvedContext.parentResponseId ? activeResponseRef.current : null;
+            const rootResponseId = deriveNewResponseRootId(responseId, parentResponse);
             const sourceModel = currentModelRef.current;
-            const sourceProvider = detectProviderType(sourceModel);
+            const sourceProvider = getUiProviderForModel(sourceModel);
             const ownership: ResponseOwnership = {
                 responseId,
                 questionTurnId: resolvedContext.questionTurnId,
@@ -1177,6 +1236,10 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 createdAt: Date.now(),
                 sourceProvider,
                 sourceModel,
+                requestedProvider: sourceProvider,
+                requestedModel: sourceModel,
+                actualProvider: sourceProvider,
+                actualModel: sourceModel,
             };
 
             if (options?.userBubbleText || options?.screenshotPreview) {
@@ -1201,16 +1264,22 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     requestId,
                     role: 'system',
                     text: '',
+                    actionContract: options?.actionContract ?? resolvedContext.actionContract,
                     intent,
                     source: options?.source,
                     model: sourceModel,
                     provider: sourceProvider,
                     question: resolvedMessage || options?.userBubbleText || mergedAdditionalContext,
                     questionTurnId: ownership.questionTurnId,
+                    rootResponseId,
                     ownership,
                     isStreaming: true,
                 },
             ]);
+            setResponseSelection(
+                responseId,
+                resolvedContext.contextTarget === 'active_context' ? 'pinned' : 'latest',
+            );
 
             try {
                 await window.electronAPI.generateAction({
@@ -1238,7 +1307,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 });
             }
         },
-        [cancelInFlightOverlayRequests, getVisibleTranscriptSnapshot, rememberIntentRequest],
+        [cancelInFlightOverlayRequests, getVisibleTranscriptSnapshot, rememberIntentRequest, setResponseSelection],
     );
 
     const executeQuickAction = useCallback(
@@ -1312,6 +1381,25 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             activeRagRequestIdRef.current = requestId;
             setIsProcessing(true);
             requestStartTimeRef.current = Date.now();
+            const responseId = nextMsgId();
+            const sourceModel = currentModelRef.current;
+            const sourceProvider = getUiProviderForModel(sourceModel);
+            const manualSnapshot = getVisibleTranscriptSnapshot();
+            const ownership: ResponseOwnership = {
+                responseId,
+                questionTurnId: manualSnapshot.questionTurnId || requestId,
+                transcriptVersion: manualSnapshot.transcriptVersion,
+                contextTarget: 'latest_turn',
+                actionId: 'manual_chat',
+                mode: manualSnapshot.mode,
+                createdAt: Date.now(),
+                sourceProvider,
+                sourceModel,
+                requestedProvider: sourceProvider,
+                requestedModel: sourceModel,
+                actualProvider: sourceProvider,
+                actualModel: sourceModel,
+            };
 
             setMessages((prev) => [
                 ...prev,
@@ -1324,21 +1412,26 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     screenshotPreview: currentAttachments[0]?.preview,
                 },
                 {
-                    id: nextMsgId(),
+                    id: responseId,
                     timestamp: Date.now(),
                     requestId,
                     role: 'system',
                     text: '',
+                    actionContract: undefined,
                     intent: 'manual_chat',
                     source: 'Manual Input',
-                    model: currentModelRef.current,
-                    provider: detectProviderType(currentModelRef.current),
+                    model: sourceModel,
+                    provider: sourceProvider,
                     question: promptText,
+                    questionTurnId: ownership.questionTurnId,
+                    rootResponseId: responseId,
+                    ownership,
                     isStreaming: true,
                     hasScreenshot: hasAttachments,
                     screenshotPreview: currentAttachments[0]?.preview,
                 },
             ]);
+            setResponseSelection(responseId, 'latest');
 
             const manualDetectedMode = detectRealtimeMode(promptText, 'general', 'general').nextType;
             const streamContext = buildManualStreamContext(promptText, manualDetectedMode, finalizedTranscriptRef.current);
@@ -1367,11 +1460,13 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         [
             cancelInFlightOverlayRequests,
             clearAttachedContext,
+            getVisibleTranscriptSnapshot,
             handleToggleNegotiationContext,
             hasNegotiationScript,
             hasProContextAccess,
             markCurrentTurnFromText,
             negotiationContextEnabled,
+            setResponseSelection,
         ],
     );
 
@@ -1398,25 +1493,48 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             setIsExpanded(true);
             requestStartTimeRef.current = Date.now();
             currentSourceRef.current = 'Screen Analysis';
+            const responseId = nextMsgId();
+            const sourceModel = currentModelRef.current;
+            const sourceProvider = getUiProviderForModel(sourceModel);
+            const screenSnapshot = getVisibleTranscriptSnapshot();
+            const ownership: ResponseOwnership = {
+                responseId,
+                questionTurnId: screenSnapshot.questionTurnId || requestId,
+                transcriptVersion: screenSnapshot.transcriptVersion,
+                contextTarget: 'latest_turn',
+                actionId: 'screen_scan',
+                mode: screenSnapshot.mode,
+                createdAt: Date.now(),
+                sourceProvider,
+                sourceModel,
+                requestedProvider: sourceProvider,
+                requestedModel: sourceModel,
+                actualProvider: sourceProvider,
+                actualModel: sourceModel,
+            };
 
             setMessages((prev) => [
                 ...prev,
                 {
-                    id: nextMsgId(),
+                    id: responseId,
                     timestamp: Date.now(),
                     requestId,
                     role: 'system',
                     text: '',
                     intent: 'screen_scan',
                     source: 'Screen Analysis',
-                    model: currentModelRef.current,
-                    provider: detectProviderType(currentModelRef.current),
+                    model: sourceModel,
+                    provider: sourceProvider,
                     question: 'Screen analysis',
+                    questionTurnId: ownership.questionTurnId,
+                    rootResponseId: responseId,
+                    ownership,
                     isStreaming: true,
                     hasScreenshot: true,
                     screenshotPreview: data.preview,
                 },
             ]);
+            setResponseSelection(responseId, 'latest');
 
             const scanMode = getScreenScanModeForSessionMode(
                 session.currentMode as OverlaySessionMode,
@@ -1434,7 +1552,14 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             activeScreenScanRequestIdRef.current = null;
             rememberIntentRequest('screen_scan', null);
         }
-    }, [cancelInFlightOverlayRequests, clearAttachedContext, rememberIntentRequest, session.currentMode]);
+    }, [
+        cancelInFlightOverlayRequests,
+        clearAttachedContext,
+        getVisibleTranscriptSnapshot,
+        rememberIntentRequest,
+        session.currentMode,
+        setResponseSelection,
+    ]);
 
     useEffect(() => {
         const cleanupTaken = window.electronAPI.onScreenshotTaken?.(appendScreenshotAttachment);
@@ -1472,46 +1597,82 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         () => messages.filter((message) => message.role === 'system'),
         [messages],
     );
+    const responseIds = useMemo(
+        () => responseHistory.map((response) => response.id),
+        [responseHistory],
+    );
+    const responseById = useMemo(
+        () => new Map(responseHistory.map((response) => [response.id, response])),
+        [responseHistory],
+    );
+    const responseRootIdById = useMemo(
+        () => buildResponseRootIdMap(responseHistory),
+        [responseHistory],
+    );
 
     const latestResponse = responseHistory[responseHistory.length - 1] ?? null;
     const latestResponseIdRef = useRef<string | null>(null);
 
     useEffect(() => {
-        const latestId = latestResponse?.id ?? null;
-        if (!latestId) {
-            latestResponseIdRef.current = null;
-            setActiveResponseIndex(-1);
-            return;
-        }
-
-        if (latestResponseIdRef.current !== latestId) {
-            latestResponseIdRef.current = latestId;
-            setActiveResponseIndex(responseHistory.length - 1);
-            return;
-        }
-
-        setActiveResponseIndex((index) => {
-            if (responseHistory.length === 0) return -1;
-            if (index < 0) return responseHistory.length - 1;
-            return Math.min(index, responseHistory.length - 1);
+        const nextSelection = resolveNextActiveResponseSelection({
+            currentActiveResponseId: activeResponseId,
+            selectionMode: selectionModeRef.current,
+            previousLatestResponseId: latestResponseIdRef.current,
+            nextLatestResponseId: latestResponse?.id ?? null,
+            responseIds,
         });
-    }, [latestResponse?.id, responseHistory.length]);
 
-    const activeResponse = activeResponseIndex >= 0
-        ? responseHistory[activeResponseIndex] ?? latestResponse
+        latestResponseIdRef.current = nextSelection.latestResponseId;
+
+        if (nextSelection.selectionMode !== selectionModeRef.current) {
+            selectionModeRef.current = nextSelection.selectionMode;
+            setSelectionMode(nextSelection.selectionMode);
+        }
+
+        if (nextSelection.activeResponseId !== activeResponseId) {
+            setActiveResponseId(nextSelection.activeResponseId);
+        }
+    }, [activeResponseId, latestResponse?.id, responseIds]);
+
+    const activeResponse = activeResponseId
+        ? responseById.get(activeResponseId) ?? latestResponse
         : latestResponse;
+    const activeResponseIndex = activeResponse
+        ? responseHistory.findIndex((response) => response.id === activeResponse.id)
+        : -1;
 
     useEffect(() => {
         activeResponseRef.current = activeResponse;
     }, [activeResponse]);
 
     const goToPreviousResponse = useCallback(() => {
-        setActiveResponseIndex((index) => Math.max(0, index - 1));
-    }, []);
+        if (responseHistory.length === 0) return;
+        const currentIndex = activeResponseIndex >= 0 ? activeResponseIndex : responseHistory.length - 1;
+        const previous = responseHistory[Math.max(0, currentIndex - 1)];
+        if (previous) setResponseSelection(previous.id, 'pinned');
+    }, [activeResponseIndex, responseHistory, setResponseSelection]);
 
     const goToNextResponse = useCallback(() => {
-        setActiveResponseIndex((index) => Math.min(responseHistory.length - 1, index + 1));
-    }, [responseHistory.length]);
+        if (responseHistory.length === 0) return;
+        const currentIndex = activeResponseIndex >= 0 ? activeResponseIndex : responseHistory.length - 1;
+        const next = responseHistory[Math.min(responseHistory.length - 1, currentIndex + 1)];
+        if (next) setResponseSelection(next.id, 'pinned');
+    }, [activeResponseIndex, responseHistory, setResponseSelection]);
+
+    const jumpToLatestResponse = useCallback(() => {
+        setResponseSelection(latestResponse?.id ?? null, 'latest');
+    }, [latestResponse?.id, setResponseSelection]);
+
+    const activeRootResponseId = activeResponse
+        ? responseRootIdById.get(activeResponse.id) ?? activeResponse.rootResponseId ?? activeResponse.id
+        : null;
+    const activeResponseChain = useMemo(() => {
+        if (!activeRootResponseId) return [];
+        return responseHistory.filter((response) => {
+            const rootId = responseRootIdById.get(response.id) ?? response.rootResponseId ?? response.id;
+            return rootId === activeRootResponseId;
+        });
+    }, [activeRootResponseId, responseHistory, responseRootIdById]);
 
     const responseNavigation = useMemo(() => {
         const total = responseHistory.length;
@@ -1523,8 +1684,9 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             total,
             canGoPrevious: safeIndex > 0,
             canGoNext: safeIndex >= 0 && safeIndex < total - 1,
+            canJumpLatest: selectionMode === 'pinned' && Boolean(latestResponse?.id),
         };
-    }, [activeResponseIndex, responseHistory.length]);
+    }, [activeResponseIndex, latestResponse?.id, responseHistory.length, selectionMode]);
 
     const frozenTranscriptUiSnapshot = frozenTranscriptUiSnapshotRef.current;
     const visibleRollingTranscript = isTranscriptPaused
@@ -1592,10 +1754,15 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         contextPreviewByActionId,
         responseHistory,
         activeResponse,
+        activeResponseId: activeResponse?.id ?? null,
         activeResponseIndex: responseNavigation.activeIndex,
+        selectionMode,
+        activeRootResponseId,
+        activeResponseChain,
         responseHistoryTotal: responseNavigation.total,
         canGoPreviousResponse: responseNavigation.canGoPrevious,
         canGoNextResponse: responseNavigation.canGoNext,
+        canJumpLatestResponse: responseNavigation.canJumpLatest,
         latestResponse,
         attachedContext,
         activeModeLabel,
@@ -1629,6 +1796,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         handleReset,
         goToPreviousResponse,
         goToNextResponse,
+        jumpToLatestResponse,
         toggleExpanded,
         toggleTranscriptPause,
         toggleMousePassthrough,
