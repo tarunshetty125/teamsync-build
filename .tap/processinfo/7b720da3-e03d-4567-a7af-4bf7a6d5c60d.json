@@ -1,8 +1,8 @@
 {
-  "date": "2026-05-28T06:46:45.714Z",
+  "date": "2026-05-31T07:19:09.501Z",
   "argv": [
     "/opt/homebrew/Cellar/node/25.6.0/bin/node",
-    "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/electron/tests/v2-overlay-recommendation.test.ts"
+    "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/electron/tests/coding-output-contract.test.ts"
   ],
   "execArgv": [
     "--import=file:///Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/node_modules/@tapjs/typescript/dist/esm/import.mjs",
@@ -12,17 +12,17 @@
   ],
   "NODE_OPTIONS": "\"--import=file:///Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/node_modules/@tapjs/processinfo/dist/esm/import.mjs\"",
   "cwd": "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant",
-  "pid": 70571,
-  "ppid": 70494,
+  "pid": 22271,
+  "ppid": 22234,
   "parent": null,
-  "uuid": "f2553072-5a17-4d86-85fa-a664d4b2ea84",
+  "uuid": "7b720da3-e03d-4567-a7af-4bf7a6d5c60d",
   "files": [
-    "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/electron/tests/v2-overlay-recommendation.test.ts"
+    "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/electron/tests/coding-output-contract.test.ts"
   ],
   "sources": {},
-  "root": "f2553072-5a17-4d86-85fa-a664d4b2ea84",
-  "externalID": "electron/tests/v2-overlay-recommendation.test.ts",
+  "root": "7b720da3-e03d-4567-a7af-4bf7a6d5c60d",
+  "externalID": "electron/tests/coding-output-contract.test.ts",
   "code": 1,
   "signal": null,
-  "runtime": 401.200167
+  "runtime": 343.203916
 }

@@ -1,0 +1,28 @@
+{
+  "date": "2026-05-31T07:19:09.503Z",
+  "argv": [
+    "/opt/homebrew/Cellar/node/25.6.0/bin/node",
+    "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/electron/tests/action-context-builder.test.ts"
+  ],
+  "execArgv": [
+    "--import=file:///Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/node_modules/@tapjs/typescript/dist/esm/import.mjs",
+    "--import=file:///Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/node_modules/@tapjs/mock/dist/esm/import.mjs",
+    "--enable-source-maps",
+    "--import=file:///Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/node_modules/@tapjs/processinfo/dist/esm/import.mjs"
+  ],
+  "NODE_OPTIONS": "\"--import=file:///Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/node_modules/@tapjs/processinfo/dist/esm/import.mjs\"",
+  "cwd": "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant",
+  "pid": 22266,
+  "ppid": 22234,
+  "parent": null,
+  "uuid": "cd2ed6e5-063f-4bf9-a797-4fb422d7ac5c",
+  "files": [
+    "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/electron/tests/action-context-builder.test.ts"
+  ],
+  "sources": {},
+  "root": "cd2ed6e5-063f-4bf9-a797-4fb422d7ac5c",
+  "externalID": "electron/tests/action-context-builder.test.ts",
+  "code": 1,
+  "signal": null,
+  "runtime": 326.371667
+}

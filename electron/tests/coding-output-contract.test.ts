@@ -51,6 +51,18 @@ test('manual coding prompt defaults to Python when no language is requested', ()
     assert.match(contract!.content, /Do not infer the programming language from older transcript/i);
 });
 
+test('manual chat fallback does not leak interview evidence template for greetings', () => {
+    const fallback = outputValidator.buildSafeActionFallback(
+        'manual_chat',
+        'general',
+        'hello who are you',
+    );
+
+    assert.match(fallback, /TeamSync Intelligence/);
+    assert.doesNotMatch(fallback, /strongest available evidence/i);
+    assert.doesNotMatch(fallback, /^I would answer/i);
+});
+
 test('coding clarify output without fenced code is rejected for repair', () => {
     const result = outputValidator.validateActionOutput(
         'clarify',

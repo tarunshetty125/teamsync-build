@@ -1241,6 +1241,28 @@
   transform: scale(0.94);
 }
 
+.v2-response-drag-rail {
+  position: absolute;
+  top: 42px;
+  bottom: 0;
+  width: 24px;
+  z-index: 6;
+  cursor: grab;
+  -webkit-app-region: drag;
+}
+
+.v2-response-drag-rail:active {
+  cursor: grabbing;
+}
+
+.v2-response-drag-rail--left {
+  left: 0;
+}
+
+.v2-response-drag-rail--right {
+  right: 0;
+}
+
 /* ── Transcript Toggle ────────────────────────────────────── */
 
 .v2-transcript-toggle {
@@ -1298,7 +1320,7 @@
 
 .v2-response-scroll {
   max-height: min(72vh, 660px);
-  padding: 8px 26px 26px;
+  padding: 8px 34px 26px;
   overflow-y: auto;
   overflow-x: auto;
   overscroll-behavior: contain;
@@ -1306,7 +1328,7 @@
 
 .v2-response-scroll--system-design {
   max-height: min(76vh, 700px);
-  padding: 10px 16px 24px 30px;
+  padding: 10px 26px 24px 38px;
 }
 
 /* ── Response Source Pill ──────────────────────────────────── */
@@ -1625,6 +1647,22 @@
 
 .v2-draggable {
   -webkit-app-region: drag;
+}
+
+.v2-surface-bar.v2-draggable,
+.v2-surface-response.v2-draggable,
+.v2-surface-response .v2-panel-header {
+  -webkit-app-region: drag;
+}
+
+.v2-surface-bar.v2-draggable,
+.v2-surface-response .v2-panel-header {
+  cursor: grab;
+}
+
+.v2-surface-bar.v2-draggable:active,
+.v2-surface-response .v2-panel-header:active {
+  cursor: grabbing;
 }
 
 .v2-no-drag,

@@ -50,7 +50,7 @@ test('Pro V2 renderer follows the selected history entry, including system desig
     assert.match(surface, /<ArchitectureRenderer/);
     assert.match(css, /\.v2-response-scroll--system-design/);
     assert.match(css, /max-height: min\(76vh, 700px\)/);
-    assert.match(css, /padding: 10px 16px 24px 30px/);
+    assert.match(css, /padding: 10px 26px 24px 38px/);
     assert.match(layout, /V2_RESPONSE_MAX_WIDTH = 880/);
     assert.match(layout, /looksLikeWideSystemDesignResponse/);
     assert.match(layout, /V2_OVERLAY_WINDOW_MAX_HEIGHT = 860/);

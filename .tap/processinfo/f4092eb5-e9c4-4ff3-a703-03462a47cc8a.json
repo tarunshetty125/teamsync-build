@@ -1,0 +1,28 @@
+{
+  "date": "2026-05-31T07:19:09.502Z",
+  "argv": [
+    "/opt/homebrew/Cellar/node/25.6.0/bin/node",
+    "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/electron/tests/brain-layer.test.ts"
+  ],
+  "execArgv": [
+    "--import=file:///Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/node_modules/@tapjs/typescript/dist/esm/import.mjs",
+    "--import=file:///Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/node_modules/@tapjs/mock/dist/esm/import.mjs",
+    "--enable-source-maps",
+    "--import=file:///Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/node_modules/@tapjs/processinfo/dist/esm/import.mjs"
+  ],
+  "NODE_OPTIONS": "\"--import=file:///Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/node_modules/@tapjs/processinfo/dist/esm/import.mjs\"",
+  "cwd": "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant",
+  "pid": 22270,
+  "ppid": 22234,
+  "parent": null,
+  "uuid": "f4092eb5-e9c4-4ff3-a703-03462a47cc8a",
+  "files": [
+    "/Users/tarunshetty/Desktop/teamsync-cluely-ai-assistant/electron/tests/brain-layer.test.ts"
+  ],
+  "sources": {},
+  "root": "f4092eb5-e9c4-4ff3-a703-03462a47cc8a",
+  "externalID": "electron/tests/brain-layer.test.ts",
+  "code": 1,
+  "signal": null,
+  "runtime": 368.688958
+}

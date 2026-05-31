@@ -106,7 +106,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
             transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1], delay: 0.06 }}
-            className="v2-surface-response v2-no-drag"
+            className="v2-surface-response v2-draggable"
             style={{
                 minWidth: `${V2_RESPONSE_MIN_WIDTH}px`,
                 maxWidth: `${V2_RESPONSE_MAX_WIDTH}px`,
@@ -128,7 +128,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                     </svg>
                     TeamSync Intelligence
                 </div>
-                <div className="v2-panel-actions">
+                <div className="v2-panel-actions v2-no-drag">
                     {/* Source pill */}
                     {source && (
                         <div className="v2-source-pill">
@@ -163,10 +163,13 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                 </div>
             </div>
 
+            <div className="v2-response-drag-rail v2-response-drag-rail--left" aria-hidden="true" />
+            <div className="v2-response-drag-rail v2-response-drag-rail--right" aria-hidden="true" />
+
             {/* ── Response Body — dynamic height ── */}
             <div
                 ref={scrollContainerRef as React.RefObject<HTMLDivElement>}
-                className={`v2-scroll-area v2-response-scroll${isSystemDesignResponse ? ' v2-response-scroll--system-design' : ''}`}
+                className={`v2-scroll-area v2-response-scroll v2-no-drag${isSystemDesignResponse ? ' v2-response-scroll--system-design' : ''}`}
             >
                 <AnimatePresence mode="wait">
                     {isProcessing && !renderedResponse?.text ? (
