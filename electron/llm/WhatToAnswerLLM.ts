@@ -47,73 +47,7 @@ function hasValidCodeBlock(text: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Coding Enforcement Prompt — appended when intent is coding
-// ---------------------------------------------------------------------------
-
-const CODING_ENFORCEMENT = `
-STRICT CODING FORMAT (MANDATORY):
-1. Write exactly 1–2 short lines of explanation in first person.
-2. Then output the FULL working code inside a markdown code block.
-
-FORMAT:
-Explanation
-
-\`\`\`language
-// full working code here
-\`\`\`
-
-Follow-ups (Time, Space, Why)
-
-RULES:
-* You MUST include a code block using triple backticks
-* You MUST include the correct language tag (javascript, python, java, etc.)
-* Do NOT return only explanation — that is WRONG
-* Do NOT skip code under any condition
-* Code must be complete, minimal, and correct
-
-ENFORCEMENT:
-You must ALWAYS return a code block.
-Before responding, internally verify:
-- Does my response contain triple backticks?
-- Does it contain valid code?
-If NOT, rewrite the answer until it includes a proper code block.
-Never send a response without code.`;
-
-const SYSTEM_DESIGN_ENFORCEMENT = `
-STRICT SYSTEM DESIGN FORMAT (MANDATORY):
-Answer exactly like a Principal Engineer designing a production system at scale.
-
-FORMAT:
-1. Start with 1 short sentence clarifying the most important scale or constraint assumption if it is not already explicit.
-2. Then give a clear architecture answer in natural spoken prose.
-3. Cover these dimensions in order:
-   - high-level design with REAL technology choices
-   - core components and data flow with latency estimates
-   - trade-offs (consistency vs availability, latency vs cost)
-   - scale, reliability, bottlenecks, and failure modes
-4. End with 1 short sentence on what you would optimize next at larger scale.
-
-RULES:
-* Sound spoken, direct, and interview-ready
-* Use concrete system design language: cache, queue, read/write path, partitioning, replicas, consistency, latency, failure handling
-* Include exactly one valid fenced \`\`\`architecture_json\`\`\` block for every system design answer
-* MINIMUM 12 nodes required. Fewer than 12 is INVALID.
-* Simple systems require 12+ nodes, medium production requires 20+ nodes, FAANG-scale requires 35-60+ nodes
-* NEVER produce generic diagrams like Frontend → Backend → Database. This is BANNED.
-* architecture_json node schema: {"id":"service-name","label":"Display Name","kind":"service","technology":"Go + gRPC","purpose":"What this component does","layer":"core_services","latency":"~15ms","failureMode":"Circuit breaker to queue"}
-* architecture_json edge schema: {"source":"from-id","target":"to-id","label":"action","protocol":"gRPC","latency":"~5ms"}
-* Required fields per node: id, label, kind. Strongly encouraged: technology, purpose, layer, latency, failureMode.
-* Allowed node kinds: client, gateway, service, database, cache, queue, storage, external
-* Include layers: clients, load balancers, API gateways, core services, caches, queues, databases, object storage, search, monitoring, security
-* Name REAL technologies: Redis, Kafka, PostgreSQL, Cassandra, Elasticsearch, S3, CloudFront, Kong, Envoy, OpenTelemetry
-* Do NOT use Mermaid or loose component lists as the architecture diagram
-* Do NOT answer like a textbook definition
-* Do NOT write code
-* Do NOT skip trade-offs or failure modes
-* Prefer pragmatic assumptions over vague theory`;
-
-// ---------------------------------------------------------------------------
-// 5. Correction Prompt — used for retry when code block is missing
+// 4. Correction Prompt — used for retry when code block is missing
 // ---------------------------------------------------------------------------
 
 const CORRECTION_PROMPT = `
@@ -128,7 +62,7 @@ You MUST:
 Return ONLY the corrected answer.`;
 
 // ---------------------------------------------------------------------------
-// 6. Auto-wrap Fallback — detect code-like content and wrap in markdown fences
+// 5. Auto-wrap Fallback — detect code-like content and wrap in markdown fences
 // ---------------------------------------------------------------------------
 
 const CODE_LIKE_PATTERN = /\b(function|class|def |const |let |var |import |return |if |for |while )\b/;
@@ -153,7 +87,7 @@ function autoWrapCodeResponse(response: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// 7. WhatToAnswerLLM — adaptive answering pipeline with streaming
+// 6. WhatToAnswerLLM — adaptive answering pipeline with streaming
 // ---------------------------------------------------------------------------
 
 export class WhatToAnswerLLM {
@@ -202,15 +136,12 @@ ANSWER SHAPE: ${intentResult.answerShape}
             const isCodingIntent = intentResult?.intent === 'coding';
             const isSystemDesignIntent = intentResult?.intent === 'system_design';
 
-            // Inject strict coding enforcement when coding is detected
             if (isCodingIntent) {
-                contextParts.push(CODING_ENFORCEMENT);
-                console.log('[WhatToAnswerLLM] Coding intent detected — injecting strict format enforcement');
+                console.log('[WhatToAnswerLLM] Coding intent detected — universal prompt owns output format');
             }
 
             if (isSystemDesignIntent) {
-                contextParts.push(SYSTEM_DESIGN_ENFORCEMENT);
-                console.log('[WhatToAnswerLLM] System design intent detected — injecting architecture format enforcement');
+                console.log('[WhatToAnswerLLM] System design intent detected — universal prompt owns output format');
             }
 
             const extraContext = contextParts.join('\n\n');

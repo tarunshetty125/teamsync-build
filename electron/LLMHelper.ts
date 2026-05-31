@@ -3419,6 +3419,16 @@ Return only the final answer. No meta commentary.
         return;
       } catch (groqTextErr: any) {
         console.warn(`[LLMHelper] ⚠️ Groq text-only failed (${groqTextErr.message}), falling through to Gemini...`);
+        console.log('PRIMARY_MODEL_FAILED', JSON.stringify({
+          requestedModel: this.getCurrentModel(),
+          actualInvokedModel: this.currentModelId,
+          reason: groqTextErr?.message || String(groqTextErr),
+        }));
+        console.log('FALLBACK_MODEL_USED', JSON.stringify({
+          requestedModel: this.getCurrentModel(),
+          fallbackModel: 'gemini',
+          reason: 'groq_text_stream_failed',
+        }));
         // Fall through to Gemini routing below
       }
     }
@@ -3434,9 +3444,19 @@ Return only the final answer. No meta commentary.
           return;
         } catch (err: any) {
           console.warn('[LLMHelper] TeamSync API failed in streamChat, trying Groq fallback:', err.message);
+          console.log('PRIMARY_MODEL_FAILED', JSON.stringify({
+            requestedModel: this.getCurrentModel(),
+            actualInvokedModel: 'teamsync',
+            reason: err?.message || String(err),
+          }));
           // Try Groq before Gemini — Groq key is more commonly available
           if (this.groqClient) {
             try {
+              console.log('FALLBACK_MODEL_USED', JSON.stringify({
+                requestedModel: this.getCurrentModel(),
+                fallbackModel: isMultimodal && imagePaths ? 'groq_multimodal' : GROQ_MODEL,
+                reason: 'teamsync_stream_failed',
+              }));
               if (isMultimodal && imagePaths) {
                 const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
                 const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
@@ -3449,6 +3469,16 @@ Return only the final answer. No meta commentary.
               return;
             } catch (groqErr: any) {
               console.warn('[LLMHelper] Groq fallback also failed, trying Gemini:', groqErr.message);
+              console.log('PRIMARY_MODEL_FAILED', JSON.stringify({
+                requestedModel: this.getCurrentModel(),
+                actualInvokedModel: isMultimodal && imagePaths ? 'groq_multimodal' : GROQ_MODEL,
+                reason: groqErr?.message || String(groqErr),
+              }));
+              console.log('FALLBACK_MODEL_USED', JSON.stringify({
+                requestedModel: this.getCurrentModel(),
+                fallbackModel: 'gemini',
+                reason: 'teamsync_groq_fallback_failed',
+              }));
             }
           }
           // Fall through to Gemini

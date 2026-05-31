@@ -40,9 +40,30 @@ function duplicateSectionCounts(systemPrompt: string): Record<string, number> {
     );
 }
 
+function sectionTitleCounts(systemPrompt: string): Record<string, number> {
+    const counts: Record<string, number> = {
+        outputContract: 0,
+        contextPriority: 0,
+        format: 0,
+        codingContract: 0,
+    };
+
+    for (const match of systemPrompt.matchAll(/^##\s+(.+)$/gm)) {
+        const title = match[1]?.trim().toUpperCase();
+        if (!title) continue;
+        if (title === 'OUTPUT CONTRACT') counts.outputContract += 1;
+        if (title === 'CONTEXT PRIORITY') counts.contextPriority += 1;
+        if (title === 'FORMAT' || title === 'FORMAT CONTRACT') counts.format += 1;
+        if (title === 'CODING CONTRACT') counts.codingContract += 1;
+    }
+
+    return counts;
+}
+
 export function logPrompt(payload: PromptDebugPayload): void {
     const systemPrompt = extractSystemPrompt(payload.finalPrompt);
     const duplicates = duplicateSectionCounts(systemPrompt);
+    const sectionCounts = sectionTitleCounts(systemPrompt);
     console.log('[PromptDebug] Metadata:', JSON.stringify({
         intent: payload.intent,
         mode: payload.mode,
@@ -55,13 +76,22 @@ export function logPrompt(payload: PromptDebugPayload): void {
     console.log('[PromptDebug] SystemStats:', JSON.stringify({
         systemPromptLength: systemPrompt.length,
         sectionOccurrences: {
-            outputContract: countOccurrences(systemPrompt, 'OUTPUT CONTRACT'),
+            outputContract: sectionCounts.outputContract,
             ocrReconstructionRules: countOccurrences(systemPrompt, 'OCR RECONSTRUCTION RULES'),
-            contextPriority: countOccurrences(systemPrompt, 'CONTEXT PRIORITY'),
+            contextPriority: sectionCounts.contextPriority,
+            format: sectionCounts.format,
+            codingContract: sectionCounts.codingContract,
         },
         duplicateSectionCount: Object.keys(duplicates).length,
         duplicateSections: duplicates,
     }));
+    console.log(
+        `[PROMPT_AUDIT] OUTPUT_CONTRACT_COUNT=${sectionCounts.outputContract} ` +
+        `CONTEXT_PRIORITY_COUNT=${sectionCounts.contextPriority} ` +
+        `FORMAT_COUNT=${sectionCounts.format} ` +
+        `CODING_CONTRACT_COUNT=${sectionCounts.codingContract} ` +
+        `DUPLICATE_SECTION_COUNT=${Object.keys(duplicates).length}`
+    );
     console.log('[PromptDebug] FinalPromptStart');
     console.log(payload.finalPrompt);
     console.log('[PromptDebug] FinalPromptEnd');

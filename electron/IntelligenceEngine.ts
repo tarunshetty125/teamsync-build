@@ -4,7 +4,7 @@
 
 import { EventEmitter } from 'events';
 import { LLMHelper } from './LLMHelper';
-import { SessionTracker, TranscriptSegment, SuggestionTrigger, ContextItem } from './SessionTracker';
+import { SessionTracker, TranscriptSegment, SuggestionTrigger, ContextItem, type SessionMode } from './SessionTracker';
 import {
     type ActionRagContext,
     buildContext,
@@ -20,7 +20,7 @@ import { enforceTokenBudget } from './TokenBudgetEnforcer';
 import { validatePromptObject } from './PromptValidator';
 import { logActionMetrics } from './ActionMetricsLogger';
 import { ActionResponseCache } from './ActionResponseCache';
-import { buildRepairInstruction, buildSafeActionFallback, validateActionOutput } from './ActionOutputValidator';
+import { buildRepairInstruction, buildSafeActionFallback, validateActionOutput, type ActionOutputValidationResult } from './ActionOutputValidator';
 import {
     AnswerLLM, AssistLLM, BrainstormLLM, ClarifyLLM, CodeHintLLM, FollowUpLLM, RecapLLM,
     FollowUpQuestionsLLM, SystemDesignTradeoffsLLM, WhatToAnswerLLM,
@@ -179,6 +179,29 @@ function namespaceBrainInstructions(brainId: string, instructions: PromptInstruc
         ...instruction,
         key: `brain:${brainId}:${instruction.key}`,
     }));
+}
+
+const CONTROLLED_PROMPT_SECTION_TITLES = new Set([
+    'OUTPUT CONTRACT',
+    'CONTEXT PRIORITY',
+    'FORMAT CONTRACT',
+    'CODING CONTRACT',
+]);
+
+function consolidateControlledPromptSections(instructions: PromptInstruction[]): PromptInstruction[] {
+    const claimed = new Set<string>();
+    const output: PromptInstruction[] = [];
+
+    for (const instruction of instructions) {
+        const title = instruction.title.trim().toUpperCase();
+        if (CONTROLLED_PROMPT_SECTION_TITLES.has(title)) {
+            if (claimed.has(title)) continue;
+            claimed.add(title);
+        }
+        output.push(instruction);
+    }
+
+    return output;
 }
 
 function formatContextPriorityLabel(source: ContextPrioritySource): string {
@@ -683,6 +706,7 @@ export class IntelligenceEngine extends EventEmitter {
                                 ];
                                 console.log(`[IntelligenceEngine] Brain '${brain.id}' injected ${namespacedInstructions.length} instructions (stream: ${brainOutput.streamStrategy})`);
                             }
+                            contextLayers.promptObject.instructions = consolidateControlledPromptSections(contextLayers.promptObject.instructions);
                         } catch (brainError: any) {
                             // Brain layer failure is non-fatal — legacy path continues
                             console.warn('[IntelligenceEngine] Brain layer failed (non-fatal):', brainError?.message);
@@ -711,6 +735,8 @@ export class IntelligenceEngine extends EventEmitter {
                         }
                     }
                     // ──── End Shadow Mode Prediction ────
+
+                    contextLayers.promptObject.instructions = consolidateControlledPromptSections(contextLayers.promptObject.instructions);
 
                     const preTinyPrompt = contextLayers.promptObject;
                     const preTinySerialized = serializePromptObject(preTinyPrompt);
@@ -846,6 +872,7 @@ export class IntelligenceEngine extends EventEmitter {
                         return null;
                     }
 
+                    console.log('[FINAL_LENGTH]', finalContent.length);
                     this.persistActionResult(params.intent, budgeted.prompt.question, finalContent);
                     if (!isFailureResponseText(finalContent)) {
                         this.actionResponseCache.set(budgeted.prompt, sessionIdSnapshot, finalContent);
@@ -936,6 +963,25 @@ export class IntelligenceEngine extends EventEmitter {
                         sessionMode,
                         params.message || this.session.getLastInterviewerTurn() || 'the latest question'
                     );
+                    console.log('[FALLBACK_REASON]', JSON.stringify({
+                        stage: 'runAction',
+                        intent: params.intent,
+                        mode: sessionMode,
+                        reason: 'action_pipeline_failed_hard',
+                        error: error?.message || String(error),
+                    }));
+                    console.log('[RAW_LENGTH]', 0);
+                    console.log('[PARSED_LENGTH]', safeFallback.length);
+                    console.log('[VALIDATION_RESULT]', JSON.stringify({
+                        stage: 'hard_fallback',
+                        intent: params.intent,
+                        mode: sessionMode,
+                        valid: false,
+                        autoCorrected: false,
+                        issues: ['action_pipeline_failed_hard'],
+                        correctedLength: safeFallback.length,
+                    }));
+                    console.log('[FINAL_LENGTH]', safeFallback.length);
                     this.persistActionResult(params.intent, params.message || 'safe fallback', safeFallback);
                     await this.emitBufferedActionContent(
                         signal,
@@ -1126,13 +1172,15 @@ export class IntelligenceEngine extends EventEmitter {
         prompt: PromptObject;
         imagePaths?: string[];
         modelOverride?: string | null;
+        fallbackUsed?: boolean;
+        fallbackReason?: string | null;
         skipCustomNotesInjection?: boolean;
         signal?: AbortSignal;
         generationId: number;
         requestId: string | null;
         sessionIdSnapshot: string;
     }): Promise<string | null> {
-        const { prompt, imagePaths, modelOverride, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
+        const { prompt, imagePaths, modelOverride, fallbackUsed = false, fallbackReason = null, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
         const originalModel = this.llmHelper.getCurrentModel();
         const isSystemDesignOutput = getQuestionResponseProfile(prompt.question, prompt.mode, prompt.intent) === 'system_design';
 
@@ -1143,6 +1191,12 @@ export class IntelligenceEngine extends EventEmitter {
             if (modelOverride && modelOverride !== originalModel) {
                 this.llmHelper.setModel(modelOverride);
             }
+            console.log('[MODEL_SELECTION]', JSON.stringify({
+                requestedModel: originalModel,
+                actualInvokedModel: this.llmHelper.getCurrentModel(),
+                fallbackUsed,
+                fallbackReason,
+            }));
 
             const providerPrompt = buildProviderPrompt({
                 prompt,
@@ -1240,10 +1294,19 @@ export class IntelligenceEngine extends EventEmitter {
             }
 
             try {
+                if (attempt.fallbackUsed) {
+                    console.log('FALLBACK_MODEL_USED', JSON.stringify({
+                        requestedModel: primaryModel,
+                        fallbackModel: attempt.model,
+                        reason: failureReasons.join(' | ') || 'primary_model_failed',
+                    }));
+                }
                 const content = await this.collectStreamResponseForPrompt({
                     prompt,
                     imagePaths,
                     modelOverride: attempt.model,
+                    fallbackUsed: attempt.fallbackUsed,
+                    fallbackReason: attempt.fallbackUsed ? (failureReasons.join(' | ') || 'primary_model_failed') : null,
                     skipCustomNotesInjection,
                     signal,
                     generationId,
@@ -1263,10 +1326,24 @@ export class IntelligenceEngine extends EventEmitter {
                     };
                 }
                 failureReasons.push(`attempt_${attemptIndex + 1}:invalid_or_empty_response(${attempt.model})`);
+                if (!attempt.fallbackUsed) {
+                    console.log('PRIMARY_MODEL_FAILED', JSON.stringify({
+                        requestedModel: primaryModel,
+                        actualInvokedModel: attempt.model,
+                        reason: 'invalid_or_empty_response',
+                    }));
+                }
             } catch (error: any) {
                 const reason = error?.message || String(error);
                 failureReasons.push(`attempt_${attemptIndex + 1}:${attempt.model}:${reason}`);
                 console.warn('[IntelligenceEngine] Action attempt failed:', reason);
+                if (!attempt.fallbackUsed) {
+                    console.log('PRIMARY_MODEL_FAILED', JSON.stringify({
+                        requestedModel: primaryModel,
+                        actualInvokedModel: attempt.model,
+                        reason,
+                    }));
+                }
             }
         }
 
@@ -1429,6 +1506,50 @@ export class IntelligenceEngine extends EventEmitter {
             question,
             answer,
         });
+    }
+
+    private logDirectPipelineTelemetry(args: {
+        pipeline: IntelligenceMode | UnifiedActionIntent | string;
+        intent?: UnifiedActionIntent | string;
+        mode?: UserControlledMode | SessionMode | string;
+        raw: string;
+        final: string;
+        validatorResult?: ActionOutputValidationResult;
+        fallbackReason?: string;
+    }): void {
+        console.log('[RAW_LENGTH]', args.raw.length);
+        console.log('[PARSED_LENGTH]', args.validatorResult?.correctedContent.length ?? args.final.length);
+        console.log('[VALIDATION_RESULT]', JSON.stringify({
+            stage: args.validatorResult ? 'direct_validated' : 'direct_unvalidated',
+            pipeline: args.pipeline,
+            intent: args.intent,
+            mode: args.mode,
+            valid: args.validatorResult?.valid ?? true,
+            autoCorrected: args.validatorResult?.autoCorrected ?? false,
+            issues: args.validatorResult?.issues ?? [],
+            correctedLength: args.validatorResult?.correctedContent.length ?? args.final.length,
+        }));
+        if (args.fallbackReason) {
+            console.log('[FALLBACK_REASON]', JSON.stringify({
+                stage: 'direct_pipeline',
+                pipeline: args.pipeline,
+                intent: args.intent,
+                mode: args.mode,
+                reason: args.fallbackReason,
+            }));
+        }
+        console.log('[FINAL_LENGTH]', args.final.length);
+    }
+
+    private logDirectModelSelection(pipeline: string): void {
+        const model = this.llmHelper.getCurrentModel();
+        console.log('[MODEL_SELECTION]', JSON.stringify({
+            pipeline,
+            requestedModel: model,
+            actualInvokedModel: model,
+            fallbackUsed: false,
+            fallbackReason: null,
+        }));
     }
 
     private recordBenchmark(args: {
@@ -1777,6 +1898,7 @@ export class IntelligenceEngine extends EventEmitter {
             let fullAnswer = "";
             // RC-03 fix: hold a reference to the generator so we can call .return()
             // to properly terminate the network request when a new generation starts.
+            this.logDirectModelSelection('what_to_say');
             const stream = this.whatToAnswerLLM.generateStream(preparedTranscript, temporalContext, intentResult, imagePaths);
             let streamAborted = false;
 
@@ -1799,10 +1921,21 @@ export class IntelligenceEngine extends EventEmitter {
                 return null;
             }
 
+            const rawAnswer = fullAnswer;
+            let fallbackReason: string | undefined;
             if (!fullAnswer || fullAnswer.trim().length < 5) {
                 fullAnswer = "Could you repeat that? I want to make sure I address your question properly.";
+                fallbackReason = 'empty_or_too_short_what_to_say';
             }
 
+            this.logDirectPipelineTelemetry({
+                pipeline: 'what_to_say',
+                intent: 'what_to_answer',
+                mode: selectedMode,
+                raw: rawAnswer,
+                final: fullAnswer,
+                fallbackReason,
+            });
             this.session.addAssistantMessage(fullAnswer);
 
             this.session.pushUsage({
@@ -1863,6 +1996,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             const generationId = ++this.currentGenerationId;
             let fullRefined = "";
+            this.logDirectModelSelection('follow_up');
             const stream = this.followUpLLM.generateStream(
                 lastMsg,
                 refinementRequest,
@@ -1882,6 +2016,13 @@ export class IntelligenceEngine extends EventEmitter {
             }
 
             if (!streamAborted && !_signalFU?.aborted && fullRefined) {
+                this.logDirectPipelineTelemetry({
+                    pipeline: 'follow_up',
+                    intent,
+                    mode: this.session.getMode(),
+                    raw: fullRefined,
+                    final: fullRefined,
+                });
                 this.session.addAssistantMessage(fullRefined);
                 this.safeEmit(_signalFU, activeRequestId, 'refined_answer', fullRefined, intent);
 
@@ -1974,6 +2115,7 @@ export class IntelligenceEngine extends EventEmitter {
 
             const generationId = ++this.currentGenerationId;
             let fullAnswer = '';
+            this.logDirectModelSelection('system_design_tradeoffs');
             const stream = this.systemDesignTradeoffsLLM.generateStream(context);
             let streamAborted = false;
 
@@ -1993,9 +2135,12 @@ export class IntelligenceEngine extends EventEmitter {
                 return null;
             }
 
+            let emittedAnswer: string | null = null;
             if (fullAnswer && !_signalSDT?.aborted) {
+                const rawAnswer = fullAnswer;
                 let finalAnswer = fullAnswer;
                 const validation = validateActionOutput('system_design_tradeoffs', 'system_design', finalAnswer, 'System Design Trade-offs');
+                let finalValidation = validation;
                 if (!validation.valid) {
                     const repaired = await this.systemDesignTradeoffsLLM.repairWithStrictArchitectureJson(
                         context,
@@ -2005,6 +2150,7 @@ export class IntelligenceEngine extends EventEmitter {
                     const repairedValidation = validateActionOutput('system_design_tradeoffs', 'system_design', repaired, 'System Design Trade-offs');
                     if (repairedValidation.valid) {
                         finalAnswer = repairedValidation.correctedContent.trim();
+                        finalValidation = repairedValidation;
                     } else if (validation.correctedContent.trim()) {
                         finalAnswer = validation.correctedContent.trim();
                     }
@@ -2012,6 +2158,15 @@ export class IntelligenceEngine extends EventEmitter {
                     finalAnswer = validation.correctedContent.trim();
                 }
 
+                this.logDirectPipelineTelemetry({
+                    pipeline: 'system_design_tradeoffs',
+                    intent: 'system_design_tradeoffs',
+                    mode: 'system_design',
+                    raw: rawAnswer,
+                    final: finalAnswer,
+                    validatorResult: finalValidation,
+                    fallbackReason: validation.valid ? undefined : 'validation_repair_path',
+                });
                 this.session.addAssistantMessage(finalAnswer);
                 this.session.pushUsage({
                     type: 'assist',
@@ -2020,10 +2175,11 @@ export class IntelligenceEngine extends EventEmitter {
                     answer: finalAnswer
                 });
                 this.safeEmit(_signalSDT, activeRequestId, 'system_design_tradeoffs', finalAnswer);
+                emittedAnswer = finalAnswer;
             }
 
             this.setMode('idle');
-            return fullAnswer;
+            return emittedAnswer ?? fullAnswer;
         } catch (error) {
             this.cleanupRequestAbort(activeRequestId);
             this.emit('error', error as Error, 'system_design_tradeoffs', activeRequestId);
@@ -2082,78 +2238,35 @@ export class IntelligenceEngine extends EventEmitter {
 
         const activeRequestId = requestId ?? null;
         this.currentClientRequestId = activeRequestId;
-        this.setMode('code_hint');
-        const _abortCH = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
-        const _signalCH = _abortCH?.signal;
+        const sessionQuestion = this.session.getDetectedCodingQuestion();
+        const questionContext = problemStatement?.trim() || sessionQuestion.question?.trim() || undefined;
+        const transcriptContext = questionContext ? undefined : this.session.getFormattedContext(180);
+        console.log(`[IntelligenceEngine] Code hint — unified runAction path, question: ${questionContext ? 'yes' : 'none'}, transcript chars: ${transcriptContext?.length ?? 0}, images: ${imagePaths?.length ?? 0}`);
 
+        const onToken = (payload: any) => {
+            if (payload?.intent !== 'code_hint' || payload?.requestId !== activeRequestId) return;
+            this.emit('suggested_answer_token', payload.token || '', 'Code Hint', 1.0, activeRequestId, 'code_hint');
+        };
+        const onResult = (payload: any) => {
+            if (payload?.intent !== 'code_hint' || payload?.requestId !== activeRequestId) return;
+            this.emit('suggested_answer', payload.content || '', 'Code Hint', 1.0, activeRequestId, 'code_hint');
+        };
+
+        this.on('action_token', onToken);
+        this.on('action_result', onResult);
         try {
-            if (!this.codeHintLLM) {
-                this.setMode('idle');
-                return "Please configure your API Keys in Settings to use this feature.";
-            }
-
-            // Resolve question context from available sources (priority order)
-            const sessionQuestion = this.session.getDetectedCodingQuestion();
-            const questionContext = problemStatement ?? sessionQuestion.question ?? null;
-            const questionSource = problemStatement
-                ? 'screenshot'
-                : sessionQuestion.source;
-
-            // Pull transcript as fallback context when no question is pinned
-            const transcriptContext = questionContext === null
-                ? this.session.getFormattedContext(180)
-                : null;
-
-            console.log(`[IntelligenceEngine] Code hint — question source: ${questionContext ? (questionSource ?? 'passed') : 'none'}, transcript lines: ${transcriptContext ? transcriptContext.split('\n').length : 0}, images: ${imagePaths?.length ?? 0}`);
-
-            const generationId = ++this.currentGenerationId;
-            let fullHint = "";
-            const stream = this.codeHintLLM.generateStream(
+            return await this.runAction({
+                intent: 'code_hint',
+                message: questionContext || 'Review the visible code and give the next useful hint.',
+                additionalContext: transcriptContext,
                 imagePaths,
-                questionContext ?? undefined,
-                questionSource,
-                transcriptContext ?? undefined
-            );
-
-            let streamAborted = false;
-            for await (const token of stream) {
-                if (_signalCH?.aborted || this.currentGenerationId !== generationId) {
-                    console.log('[GENERATION_DISCARDED] code_hint stream aborted by new generation');
-                    await stream.return(undefined);
-                    streamAborted = true;
-                    break;
-                }
-                this.emit('suggested_answer_token', token, 'Code Hint', 1.0, activeRequestId, 'code_hint');
-                fullHint += token;
-            }
-
-            // V4 Fix: match brainstorm/recap pattern — abort before writing session state
-            if (streamAborted) {
-                this.setMode('idle');
-                return null;
-            }
-
-            if (!fullHint || fullHint.trim().length < 5) {
-                fullHint = "I couldn't detect any code in the screenshot. Try screenshotting your code editor directly.";
-            }
-
-            this.session.addAssistantMessage(fullHint);
-            this.session.pushUsage({
-                type: 'assist',
-                timestamp: Date.now(),
-                question: 'Code Hint',
-                answer: fullHint
+                requestId,
+                modeOverride: 'coding',
+                profilePreference: 'force_off',
             });
-
-            this.safeEmit(_signalCH, activeRequestId, 'suggested_answer', fullHint, 'Code Hint', 1.0, 'code_hint');
-            this.setMode('idle');
-            return fullHint;
-
-        } catch (error) {
-            this.cleanupRequestAbort(activeRequestId);
-            this.emit('error', error as Error, 'code_hint', activeRequestId);
-            this.setMode('idle');
-            return null;
+        } finally {
+            this.off('action_token', onToken);
+            this.off('action_result', onResult);
         }
     }
 
@@ -2169,73 +2282,47 @@ export class IntelligenceEngine extends EventEmitter {
 
         const activeRequestId = requestId ?? null;
         this.currentClientRequestId = activeRequestId;
-        this.setMode('brainstorm');
-        const _abortBS = activeRequestId ? this.registerRequestAbort(activeRequestId) : null;
-        const _signalBS = _abortBS?.signal;
+        const context = this.session.getFormattedContext(180);
+        const resolvedProblem = problemStatement?.trim() || this.session.getDetectedCodingQuestion().question?.trim() || undefined;
 
-        try {
-            if (!this.brainstormLLM) {
-                this.setMode('idle');
-                return "Please configure your API Keys in Settings to use this feature.";
-            }
-
-            let context = this.session.getFormattedContext(180);
-            // Prepend the problem statement so the LLM knows exactly what to brainstorm
-            const resolvedProblem = problemStatement?.trim() ||
-                this.session.getDetectedCodingQuestion().question?.trim();
-
-            if (!context.trim() && !resolvedProblem && (!imagePaths || imagePaths.length === 0)) {
-                this.setMode('idle');
-                const msg = "There's nothing to brainstorm right now. Make sure your question is visible or spoken aloud, then try again.";
-                this.session.addAssistantMessage(msg);
-                this.safeEmit(undefined, activeRequestId, 'suggested_answer', msg, 'Brainstorming Approaches', 1.0, 'brainstorm');
-                return msg;
-            }
-
-            if (resolvedProblem) {
-                context = `<problem_statement>\n${resolvedProblem}\n</problem_statement>\n\n${context}`;
-            }
-            const generationId = ++this.currentGenerationId;
-            let fullResult = "";
-            const stream = this.brainstormLLM.generateStream(context, imagePaths);
-            let streamAborted = false;
-
-            for await (const token of stream) {
-                if (_signalBS?.aborted || this.currentGenerationId !== generationId) {
-                    console.log('[GENERATION_DISCARDED] brainstorm stream aborted by new generation');
-                    await stream.return(undefined);
-                    streamAborted = true;
-                    break;
-                }
-                this.emit('suggested_answer_token', token, 'Brainstorming Approaches', 1.0, activeRequestId, 'brainstorm');
-                fullResult += token;
-            }
-
-            if (streamAborted) {
-                this.setMode('idle');
-                return null;
-            }
-
-            if (!fullResult || fullResult.trim().length < 5) {
-                fullResult = "I couldn't generate brainstorm approaches. Make sure your question is visible and try again.";
-            }
-
-            this.session.addAssistantMessage(fullResult);
-            this.session.pushUsage({
-                type: 'assist',
-                timestamp: Date.now(),
-                question: 'Brainstorm',
-                answer: fullResult
+        if (!context.trim() && !resolvedProblem && (!imagePaths || imagePaths.length === 0)) {
+            const msg = "There's nothing to brainstorm right now. Make sure your question is visible or spoken aloud, then try again.";
+            this.logDirectPipelineTelemetry({
+                pipeline: 'brainstorm',
+                intent: 'brainstorm',
+                mode: this.session.getMode(),
+                raw: '',
+                final: msg,
+                fallbackReason: 'brainstorm_no_context',
             });
+            this.session.addAssistantMessage(msg);
+            this.emit('suggested_answer', msg, 'Brainstorming Approaches', 1.0, activeRequestId, 'brainstorm');
+            return msg;
+        }
 
-            this.safeEmit(_signalBS, activeRequestId, 'suggested_answer', fullResult, 'Brainstorming Approaches', 1.0, 'brainstorm');
-            this.setMode('idle');
-            return fullResult;
+        const onToken = (payload: any) => {
+            if (payload?.intent !== 'brainstorm' || payload?.requestId !== activeRequestId) return;
+            this.emit('suggested_answer_token', payload.token || '', 'Brainstorming Approaches', 1.0, activeRequestId, 'brainstorm');
+        };
+        const onResult = (payload: any) => {
+            if (payload?.intent !== 'brainstorm' || payload?.requestId !== activeRequestId) return;
+            this.emit('suggested_answer', payload.content || '', 'Brainstorming Approaches', 1.0, activeRequestId, 'brainstorm');
+        };
 
-        } catch (error) {
-            this.emit('error', error as Error, 'brainstorm', activeRequestId);
-            this.setMode('idle');
-            return null;
+        this.on('action_token', onToken);
+        this.on('action_result', onResult);
+        try {
+            return await this.runAction({
+                intent: 'brainstorm',
+                message: resolvedProblem,
+                additionalContext: context.trim() ? context : undefined,
+                imagePaths,
+                requestId,
+                profilePreference: 'force_off',
+            });
+        } finally {
+            this.off('action_token', onToken);
+            this.off('action_result', onResult);
         }
     }
 
@@ -2260,12 +2347,28 @@ export class IntelligenceEngine extends EventEmitter {
             const MAX_SCREEN_CHARS = 6000;
             if (!this.screenScanLLM) {
                 const fallback = "Please configure your API Keys in Settings to use Screen Scan.";
+                this.logDirectPipelineTelemetry({
+                    pipeline: 'screen_scan',
+                    intent: 'screen_scan',
+                    mode: this.session.getMode(),
+                    raw: '',
+                    final: fallback,
+                    fallbackReason: 'screen_scan_llm_not_initialized',
+                });
                 this.safeEmit(signal, activeRequestId, 'screen_scan_result', fallback, 'ui_general');
                 return fallback;
             }
 
             if (!imagePaths || imagePaths.length === 0) {
                 const fallback = "No screenshot available. Capture your screen first.";
+                this.logDirectPipelineTelemetry({
+                    pipeline: 'screen_scan',
+                    intent: 'screen_scan',
+                    mode: this.session.getMode(),
+                    raw: '',
+                    final: fallback,
+                    fallbackReason: 'screen_scan_no_screenshot',
+                });
                 this.safeEmit(signal, activeRequestId, 'screen_scan_result', fallback, 'ui_general');
                 return fallback;
             }
@@ -2278,6 +2381,14 @@ export class IntelligenceEngine extends EventEmitter {
                     : await this.llmHelper.extractScreenTextHybrid(imagePaths);
                 if (rawText === '__NO_CHANGE__') {
                     const noChange = "No visible screen changes detected.";
+                    this.logDirectPipelineTelemetry({
+                        pipeline: 'screen_scan',
+                        intent: 'screen_scan',
+                        mode: this.session.getMode(),
+                        raw: rawText,
+                        final: noChange,
+                        fallbackReason: 'screen_scan_no_change',
+                    });
                     this.safeEmit(signal, activeRequestId, 'screen_scan_result', noChange, 'ui_general');
                     return noChange;
                 }
@@ -2291,6 +2402,14 @@ export class IntelligenceEngine extends EventEmitter {
 
                 if (screenText.length < 50) {
                     const fallback = "I couldn't detect enough readable text on screen. Try capturing a clearer area.";
+                    this.logDirectPipelineTelemetry({
+                        pipeline: 'screen_scan',
+                        intent: 'screen_scan',
+                        mode: this.session.getMode(),
+                        raw: screenText,
+                        final: fallback,
+                        fallbackReason: 'screen_scan_ocr_too_short',
+                    });
                     this.safeEmit(signal, activeRequestId, 'screen_scan_result', fallback, 'ui_general');
                     return fallback;
                 }
@@ -2335,16 +2454,17 @@ export class IntelligenceEngine extends EventEmitter {
 
                     if (!fullResult || fullResult.trim().length < 5) {
                         const fallback = "I couldn't detect meaningful content on screen. Try capturing a different area.";
+                        this.logDirectPipelineTelemetry({
+                            pipeline: 'screen_scan',
+                            intent: 'screen_scan',
+                            mode: detectedMode === 'coding' || detectedMode === 'interview_question' ? 'coding' : this.session.getMode(),
+                            raw: fullResult || '',
+                            final: fallback,
+                            fallbackReason: 'screen_scan_action_empty',
+                        });
                         this.safeEmit(signal, activeRequestId, 'screen_scan_result', fallback, detectedMode);
                         return fallback;
                     }
-
-                    this.session.pushUsage({
-                        type: 'screen_scan',
-                        timestamp: Date.now(),
-                        question: `Screen Scan (${detectedMode})`,
-                        answer: fullResult
-                    });
 
                     return fullResult;
                 } finally {

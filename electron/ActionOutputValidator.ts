@@ -528,9 +528,24 @@ function validateCodingInterviewAnswer(content: string): ActionOutputValidationR
     const normalized = normalizeCodingMarkdown(content);
     const trimmed = normalized.text.trim();
     const hasCodeBlock = hasFencedCodeBlock(trimmed);
+    const hasProblem = /\*\*problem:?\*\*|^problem:/im.test(trimmed);
     const hasApproach = /\*\*approach:?\*\*|^approach:/im.test(trimmed);
     const hasComplexity = /\*\*complexity:?\*\*|^complexity:/im.test(trimmed);
+    const hasSolution = /\*\*solution:?\*\*|^solution:/im.test(trimmed);
     const codeSyntaxIssues = hasCodeBlock ? validateFencedCodeSyntax(trimmed) : [];
+    const hasCompleteCodingShape = hasProblem && hasApproach && hasComplexity && hasSolution && hasCodeBlock && trimmed.length > 180;
+
+    if (hasCompleteCodingShape) {
+        return {
+            valid: true,
+            correctedContent: trimmed,
+            autoCorrected: normalized.changed,
+            issues: [
+                ...(normalized.changed ? ['normalized_coding_markdown_fences'] : []),
+                ...codeSyntaxIssues.map((issue) => `${issue}_warning_only`),
+            ],
+        };
+    }
 
     if (codeSyntaxIssues.length > 0) {
         return {
@@ -728,6 +743,22 @@ export function buildRepairInstruction(intent: UnifiedActionIntent, issues: stri
     ].filter(Boolean).join(' ');
 }
 
+function buildManualChatFallback(question: string): string {
+    const normalized = question.trim().toLowerCase();
+    const asksIdentity = /\b(who are you|what are you|your name|are you)\b/i.test(normalized);
+    const isGreeting = /^(hi|hello|hey|yo|sup|gm|good\s+(morning|afternoon|evening))\b/i.test(normalized);
+
+    if (asksIdentity || isGreeting) {
+        return "Hi, I'm TeamSync Intelligence. I can answer typed questions, help with coding and interview responses, and use meeting or screen context when you ask for it.";
+    }
+
+    if (normalized.length <= 120) {
+        return `I couldn't generate a reliable response for "${question.trim()}" on this attempt. Try sending it again or rephrasing it.`;
+    }
+
+    return "I couldn't generate a reliable response to that manual input on this attempt. Try sending it again or rephrasing it.";
+}
+
 export function buildSafeActionFallback(
     intent: UnifiedActionIntent,
     mode: SessionMode,
@@ -765,7 +796,7 @@ export function buildSafeActionFallback(
                 return 'The OCR was captured, but the selected model did not return a usable coding solution on this attempt.';
             }
         case 'manual_chat':
-            return `I would answer this directly using the strongest available evidence about ${question}.`;
+            return buildManualChatFallback(question);
         case 'code_hint':
             return 'Focus on the next implementation step, the core edge case, or the incorrect assumption in the current approach.';
         case 'system_design_tradeoffs':
