@@ -43,6 +43,7 @@ const REGEX_FOLLOW_UP_STRONG = /(follow.?up|continuation|building on|going back 
 const REGEX_CODING_BOOST = /(faster|efficient)/;
 const REGEX_GENERAL_CORE = /(\bweather\b|\bforecast\b|\btime\b|\bdate\b|\bnews\b|\bcompany\b|\bproduct\b|\broadmap\b|\bstrategy\b|\bbusiness\b|\bmarket\b|\bindustry\b|\bcustomer\b|\bfeature\b|\bpolicy\b|\bprocess\b|\bmission\b|\bvision\b|\bgoal\b|\boverview\b|\bsummary\b)/;
 const REGEX_GENERAL_STRONG = /(\bwhat(?:'s| is) the weather\b|\bcurrent time\b|\bwhat(?:'s| is) the date\b|\bproduct roadmap\b|\bcompany strategy\b|\bbusiness model\b|\bmarket size\b)/;
+const REGEX_CONCEPT_EXPLANATION = /^(?:explain|define|describe|summarize|compare|walk me through|tell me about)\b/;
 
 const REGEX_SALARY_CORE = /(\bsalary\b|\bcompensation\b|\btotal\s*comp|\bnegotiat|\bctc\b|\bin[\s-]?hand\b|\blpa\b|\blakhs?\b|\bcrores?\b|\bper\s*annum|\btake\s*home|\bgross\s*(?:salary|pay|income)|\bnet\s*(?:salary|pay|income)|\bhike\b|\bincrement\b|\bappraisal\b)/;
 const REGEX_SALARY_STRONG = /(\bpackage\b|\boffer\b|\bpay\s*(?:expect|scale|band|range|grade)|\bexpect.*(?:salary|pay|comp|ctc|lpa)|\bcurrent.*(?:salary|ctc|comp|lpa|package)|\bexpected.*(?:salary|ctc|comp|lpa|package)|\bhow much.*(?:pay|earn|make|want|expect|offer)|\bwhat.*(?:pay|earning|making|expect|offer)|\bcounter\s*offer|\bbase\s*(?:pay|salary)|\bstock\s*option|\bequity|\bsigning\s*bonus|\brsu|\bvesting|\bjoining\s*bonus|\bretention\s*bonus|\bvariable\s*(?:pay|comp)|\bfixed\s*(?:pay|comp)|\bnotice\s*period|\bbuyout|\brelocation|\bperks|\bbenefits|\bgratuity|\bprovident\s*fund|\bpf\b|\beps\b|\bhra\b)/;
@@ -50,7 +51,7 @@ const REGEX_SALARY_LOOSE = /(salary|compensation|comp|negotiate|negotiation|offe
 const REGEX_SALARY_BOOST = /(money|paying|afford|expensive|budget|worth|value|deserve|fair|reasonable|competitive|market|industry|standard|benchmark|average|median|percentile)/;
 
 /** Loose STT-friendly signals — one hit is enough to nudge classification. */
-const REGEX_CODING_LOOSE = new RegExp(`(write (?:me\\s+)?(?:code|a? ?(?:function|program|method|class|script|solution)|the code)|give me (?:code|a solution|the solution|${CODING_LANGUAGE_PATTERN}\\s+solution)|create (?:a\\s+)?(?:function|program|method|class|script|solution)|coding question|dsa|data struct|${CODING_DSA_TOPIC_PATTERN}|${CODING_PLATFORM_PATTERN}|big o|runtime|implement|algorithm|solve|(?:in|using|with|for)\\s+${CODING_LANGUAGE_PATTERN}|${CODING_PLATFORM_PATTERN}\\s+(?:style|solution|answer|problem))`);
+const REGEX_CODING_LOOSE = new RegExp(`(write (?:me\\s+)?(?:code|a? ?(?:function|program|method|class|script|solution)|the code)|give me (?:code|a solution|the solution|${CODING_LANGUAGE_PATTERN}\\s+solution)|create (?:a\\s+)?(?:function|program|method|class|script|solution)|coding question|dsa|data struct|${CODING_DSA_TOPIC_PATTERN}|${CODING_PLATFORM_PATTERN}|big o|runtime|implement|algorithm|solve|(?:in|using|with|for)\\s+(?:${CODING_LANGUAGE_PATTERN})(?:\\b|$)|${CODING_PLATFORM_PATTERN}\\s+(?:style|solution|answer|problem))`);
 const REGEX_BEHAVIORAL_LOOSE = /(tell me about|your experience|a time when|situation|on your team|leadership|conflict|challenge|project|worked on|background|resume|impact|outcome|failure|mistake|collaborat|deadline|priorit|why should we|why do you want|where do you see|what motivates|what drives|strengths?|weakness|hobbies|interests|culture|values|team|manager|supervisor|company|organization|role|position|opportunity|growth|career|passion|personality|work.?life|balance|remote|hybrid|flexible|environment)/;
 const REGEX_FOLLOW_UP_LOOSE = /(follow up|go deeper|more detail|elaborate|expand on|what about|you mentioned|earlier you|continue from|clarify that|repeat that)/;
 const REGEX_GENERAL_LOOSE = /(weather|forecast|today|tomorrow|time|date|news|company|product|roadmap|strategy|business|market|industry|customer|feature|policy|process|overview|summary)/;
@@ -142,6 +143,18 @@ export function detectQuestionType(
     }
 
     const t = normalizeTranscript(text);
+    if (
+        REGEX_CONCEPT_EXPLANATION.test(t)
+        && !REGEX_CODING_CORE.test(t)
+        && !REGEX_CODING_INTERVIEW_PHRASE.test(t)
+        && !REGEX_CODING_NAMED_PROBLEM.test(t)
+        && !REGEX_CODING_PROBLEM_STATEMENT.test(t)
+        && !REGEX_SYSTEM_DIRECT.test(t)
+        && !REGEX_SYSTEM_REAL_WORLD_DIRECT.test(t)
+    ) {
+        return { nextType: 'general' };
+    }
+
     const scores: Record<DetectedQuestionType, number> = {
         coding: 0,
         system_design: 0,

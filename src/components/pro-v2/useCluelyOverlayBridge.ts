@@ -212,6 +212,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     }, []);
     const [attachedContext, setAttachedContext] = useState<ScreenshotAttachment[]>([]);
     const attachedContextRef = useRef<ScreenshotAttachment[]>([]);
+    const activeResponseRef = useRef<V2Message | null>(null);
     const [activeResponseIndex, setActiveResponseIndex] = useState(-1);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isExpanded, setIsExpanded] = useState(true);
@@ -1085,12 +1086,30 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             requestStartTimeRef.current = Date.now();
             currentSourceRef.current = options?.source;
 
+            const activeResponse = activeResponseRef.current;
+            const activeResponseQuestion = activeResponse?.question?.trim() || '';
+            const activeResponseText = activeResponse?.text?.trim() || '';
+            const currentTurnText = currentTurnTextRef.current.trim();
             const latestFinalQuestion =
+                activeResponseQuestion ||
+                currentTurnText ||
                 lastFinalSentenceRef.current.trim() ||
                 finalizedTranscriptRef.current.split('  ·  ').pop()?.trim() ||
                 '';
             const resolvedMessage =
                 options?.message?.trim() || (intent === 'recap' ? '' : latestFinalQuestion);
+            const activeResponseContext = activeResponse
+                ? [
+                    'ACTIVE RESPONSE CONTEXT:',
+                    activeResponseQuestion ? `Original user question: ${activeResponseQuestion}` : '',
+                    activeResponseText ? `Current answer excerpt: ${activeResponseText.slice(0, 1200)}` : '',
+                    'Apply this action to the active response above, not to unrelated transcript text.',
+                ].filter(Boolean).join('\n')
+                : '';
+            const mergedAdditionalContext = [
+                options?.additionalContext,
+                activeResponseContext,
+            ].filter(Boolean).join('\n\n') || undefined;
 
             if (options?.userBubbleText || options?.screenshotPreview) {
                 setMessages((prev) => [
@@ -1118,7 +1137,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     source: options?.source,
                     model: currentModelRef.current,
                     provider: detectProviderType(currentModelRef.current),
-                    question: resolvedMessage || options?.userBubbleText || options?.additionalContext,
+                    question: resolvedMessage || options?.userBubbleText || mergedAdditionalContext,
                     isStreaming: true,
                 },
             ]);
@@ -1127,7 +1146,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 await window.electronAPI.generateAction({
                     intent: intent as ActionIntent,
                     message: resolvedMessage || undefined,
-                    additionalContext: options?.additionalContext,
+                    additionalContext: mergedAdditionalContext,
                     imagePaths: options?.imagePaths,
                     requestId,
                     profilePreference: options?.profilePreference as any,
@@ -1398,6 +1417,10 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const activeResponse = activeResponseIndex >= 0
         ? responseHistory[activeResponseIndex] ?? latestResponse
         : latestResponse;
+
+    useEffect(() => {
+        activeResponseRef.current = activeResponse;
+    }, [activeResponse]);
 
     const goToPreviousResponse = useCallback(() => {
         setActiveResponseIndex((index) => Math.max(0, index - 1));

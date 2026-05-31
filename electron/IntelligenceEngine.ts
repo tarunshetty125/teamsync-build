@@ -977,6 +977,9 @@ export class IntelligenceEngine extends EventEmitter {
                             content: primaryDirect,
                             retryCount: 0,
                             fallbackUsed: false,
+                            requestedModel: this.llmHelper.getCurrentModel(),
+                            actualInvokedModel: 'direct_response',
+                            fallbackReason: null,
                         }
                         : await this.executeActionWithRetry({
                             prompt: budgeted.prompt,
@@ -1002,6 +1005,10 @@ export class IntelligenceEngine extends EventEmitter {
                         generationId,
                         requestId: activeRequestId,
                         sessionIdSnapshot,
+                        requestedModel: executionResult.requestedModel,
+                        actualInvokedModel: executionResult.actualInvokedModel,
+                        fallbackUsed: executionResult.fallbackUsed,
+                        fallbackReason: executionResult.fallbackReason,
                     });
 
                     if (!finalContent || !isOwnedRequest()) {
@@ -1233,8 +1240,12 @@ export class IntelligenceEngine extends EventEmitter {
         content: string,
         expectedSessionId: string
     ): Promise<void> {
-        for (let index = 0; index < content.length; index += ACTION_EMIT_CHUNK_SIZE) {
-            const token = content.slice(index, index + ACTION_EMIT_CHUNK_SIZE);
+        const containsArchitectureJson = /```[ \t]*architecture_json\b/i.test(content);
+        const chunkSize = containsArchitectureJson ? 96 : ACTION_EMIT_CHUNK_SIZE;
+        const chunkDelayMs = containsArchitectureJson ? 6 : ACTION_EMIT_CHUNK_DELAY_MS;
+
+        for (let index = 0; index < content.length; index += chunkSize) {
+            const token = content.slice(index, index + chunkSize);
             if (!this.safeEmitAction(signal, requestId, generationId, 'action_token', {
                 intent,
                 requestId,
@@ -1245,8 +1256,8 @@ export class IntelligenceEngine extends EventEmitter {
                 return;
             }
 
-            if (index + ACTION_EMIT_CHUNK_SIZE < content.length) {
-                const shouldContinue = await this.waitWithBackoff(ACTION_EMIT_CHUNK_DELAY_MS, signal);
+            if (index + chunkSize < content.length) {
+                const shouldContinue = await this.waitWithBackoff(chunkDelayMs, signal);
                 if (!shouldContinue) {
                     return;
                 }
@@ -1372,7 +1383,14 @@ export class IntelligenceEngine extends EventEmitter {
         generationId: number;
         requestId: string | null;
         sessionIdSnapshot: string;
-    }): Promise<{ content: string; retryCount: number; fallbackUsed: boolean } | null> {
+    }): Promise<{
+        content: string;
+        retryCount: number;
+        fallbackUsed: boolean;
+        requestedModel: string;
+        actualInvokedModel: string;
+        fallbackReason: string | null;
+    } | null> {
         const { prompt, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
         const primaryModel = this.llmHelper.getCurrentModel();
         if (imagePaths?.length && !this.llmHelper.currentModelSupportsVision()) {
@@ -1420,6 +1438,9 @@ export class IntelligenceEngine extends EventEmitter {
                         content: content.trim(),
                         retryCount: attemptIndex,
                         fallbackUsed: attempt.fallbackUsed,
+                        requestedModel: primaryModel,
+                        actualInvokedModel: attempt.model,
+                        fallbackReason: attempt.fallbackUsed ? (failureReasons.join(' | ') || 'primary_model_failed') : null,
                     };
                 }
                 failureReasons.push(`attempt_${attemptIndex + 1}:invalid_or_empty_response(${attempt.model})`);
@@ -1435,6 +1456,9 @@ export class IntelligenceEngine extends EventEmitter {
             content: buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question),
             retryCount: Math.max(0, attempts.length - 1),
             fallbackUsed: attempts.some((attempt) => attempt.fallbackUsed),
+            requestedModel: primaryModel,
+            actualInvokedModel: 'safe_action_fallback',
+            fallbackReason: failureReasons.join(' | ') || 'all_attempts_failed',
         };
     }
 
@@ -1448,13 +1472,44 @@ export class IntelligenceEngine extends EventEmitter {
         generationId: number;
         requestId: string | null;
         sessionIdSnapshot: string;
+        requestedModel?: string;
+        actualInvokedModel?: string;
+        fallbackUsed?: boolean;
+        fallbackReason?: string | null;
     }): Promise<string | null> {
         const { prompt, content, maxTokens, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
+        const isSystemDesignPrompt = getQuestionResponseProfile(prompt.question, prompt.mode, prompt.intent) === 'system_design';
+        const logSystemDesignDiagramAudit = (
+            stage: string,
+            draft: string,
+            validationResult: ReturnType<typeof validateActionOutput>
+        ) => {
+            if (!isSystemDesignPrompt) return;
+            console.log('[SYSTEM_DESIGN_DIAGRAM_AUDIT]', JSON.stringify({
+                stage,
+                intent: prompt.intent,
+                mode: prompt.mode,
+                requestId,
+                valid: validationResult.valid,
+                issues: validationResult.issues,
+                length: draft.length,
+                hasArchitectureJsonFence: /```[ \t]*architecture_json\b/i.test(draft),
+                hasDiagramKey: /"diagram"\s*:/i.test(draft),
+                hasMermaid: /```[ \t]*mermaid\b/i.test(draft),
+                question: prompt.question.slice(0, 120),
+            }));
+        };
         const validation = this.enforceScreenScanLanguageCompliance(
             prompt,
             content,
             validateActionOutput(prompt.intent, prompt.mode, content, prompt.question)
         );
+        if (isSystemDesignPrompt) {
+            console.log(`[SYSTEM_DESIGN_RAW_OUTPUT] requestedModel=${args.requestedModel ?? 'unknown'} actualInvokedModel=${args.actualInvokedModel ?? this.llmHelper.getCurrentModel()} fallbackUsed=${args.fallbackUsed === true} fallbackReason=${args.fallbackReason ?? 'none'} intent=${prompt.intent} requestId=${requestId ?? 'none'} length=${content.length}`);
+            console.log(content);
+            console.log('[SYSTEM_DESIGN_RAW_OUTPUT_END]');
+        }
+        logSystemDesignDiagramAudit('initial', validation.correctedContent || content, validation);
         if (validation.valid) {
             return validation.correctedContent.trim();
         }
@@ -1465,6 +1520,7 @@ export class IntelligenceEngine extends EventEmitter {
                 validation.correctedContent,
                 validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent, prompt.question)
             );
+            logSystemDesignDiagramAudit('corrected', correctedValidation.correctedContent || validation.correctedContent, correctedValidation);
             if (correctedValidation.valid) {
                 return correctedValidation.correctedContent.trim();
             }
@@ -1510,6 +1566,7 @@ export class IntelligenceEngine extends EventEmitter {
             repaired,
             validateActionOutput(prompt.intent, prompt.mode, repaired, prompt.question)
         );
+        logSystemDesignDiagramAudit('repair', repairedValidation.correctedContent || repaired, repairedValidation);
         if (repairedValidation.valid) {
             return repairedValidation.correctedContent.trim();
         }
@@ -1519,6 +1576,7 @@ export class IntelligenceEngine extends EventEmitter {
                 repairedValidation.correctedContent,
                 validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent, prompt.question)
             );
+            logSystemDesignDiagramAudit('corrected_repair', correctedRepairValidation.correctedContent || repairedValidation.correctedContent, correctedRepairValidation);
             if (correctedRepairValidation.valid) {
                 return correctedRepairValidation.correctedContent.trim();
             }

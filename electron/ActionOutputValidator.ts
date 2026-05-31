@@ -1,5 +1,6 @@
 import type { SessionMode } from './SessionTracker';
 import { getQuestionResponseProfile, type UnifiedActionIntent } from './ActionContextBuilder';
+import { normalizeSystemDesignEntityTypos } from '../src/lib/overlay/systemDesignEntityNormalizer';
 
 export interface ActionOutputValidationResult {
     valid: boolean;
@@ -586,14 +587,176 @@ function validateCodingInterviewAnswer(content: string): ActionOutputValidationR
     return { valid: true, correctedContent: trimmed, autoCorrected: false, issues: [] };
 }
 
-function validateSystemDesignInterviewAnswer(content: string): ActionOutputValidationResult {
+function buildSystemDesignArchitectureDiagram(question: string, content: string): Record<string, unknown> {
+    const source = `${question}\n${content}`.toLowerCase();
+    const isMessaging = /\b(whatsapp|watsapp|chat|messag(?:e|es|ing)|group chats?|presence|typing|read receipts?|end-to-end encryption|e2e)\b/i.test(source);
+    const isStreamingMedia = !isMessaging && /\b(netflix|netflx|youtube|video streaming|streaming platform|ott|playback|movie)\b/i.test(source);
+    const productLabel = isMessaging ? 'Messaging Platform' : isStreamingMedia ? 'Streaming Platform' : 'Core Platform';
+    const domainServiceLabel = isMessaging ? 'User/Profile Service' : isStreamingMedia ? 'Catalog Service' : 'Domain Service';
+    const domainServicePurpose = isMessaging ? 'User profiles, contacts, device registration' : isStreamingMedia ? 'Titles, metadata, genres, availability windows' : 'Primary business domain APIs';
+    const coreServiceLabel = isMessaging ? 'Message Service' : isStreamingMedia ? 'Playback Service' : 'Core Service';
+    const coreServicePurpose = isMessaging ? 'Message validation, routing, delivery receipts' : isStreamingMedia ? 'Playback authorization, manifest lookup, session orchestration' : 'Primary workflow orchestration';
+    const personalizationLabel = isMessaging ? 'Presence Service' : 'Recommendation Service';
+    const personalizationTechnology = isMessaging ? 'Go + WebSocket state' : 'Python/Scala ML service';
+    const personalizationPurpose = isMessaging ? 'Online status, typing indicators, last seen' : isStreamingMedia ? 'Personalized rows and ranking' : 'Personalization and ranking';
+    const primaryDb = isStreamingMedia || isMessaging ? 'Cassandra' : 'PostgreSQL';
+
+    const nodes = [
+        { id: 'mobile-client', label: 'Mobile Client', kind: 'client', technology: 'iOS/Android', purpose: `User access to ${productLabel}`, layer: 'client', latency: '~80ms', failureMode: 'Offline retry and cached UI state' },
+        { id: 'web-client', label: 'Web Client', kind: 'client', technology: 'React SPA', purpose: isMessaging ? 'Web chat and account management' : 'Browser access and account management', layer: 'client', latency: '~80ms', failureMode: 'Static shell served from CDN' },
+        { id: 'cdn', label: 'CDN Edge', kind: 'storage', technology: 'CloudFront/Fastly', purpose: isMessaging ? 'Static assets and public media thumbnails' : isStreamingMedia ? 'Video segment and static asset delivery' : 'Static asset and response caching', layer: 'edge', latency: '~20ms', failureMode: 'Origin failover and stale-if-error' },
+        { id: 'waf', label: 'WAF', kind: 'gateway', technology: 'AWS WAF', purpose: 'Bot filtering, abuse protection, geo rules', layer: 'security', latency: '~3ms', failureMode: 'Fail closed for high-risk traffic' },
+        { id: 'load-balancer', label: 'Load Balancer', kind: 'gateway', technology: 'ALB/NLB', purpose: 'TLS termination and health-based routing', layer: 'edge', latency: '~5ms', failureMode: 'Multi-AZ failover' },
+        { id: 'api-gateway', label: isMessaging ? 'API + WebSocket Gateway' : 'API Gateway', kind: 'gateway', technology: isMessaging ? 'Kong + Envoy + WebSocket' : 'Kong + Envoy', purpose: isMessaging ? 'Auth enforcement, REST routing, persistent socket fanout' : 'Auth enforcement, routing, rate limits', layer: 'gateway', latency: '~10ms', failureMode: 'Circuit breakers and request shedding' },
+        { id: 'auth-service', label: 'Auth Service', kind: 'service', technology: 'Go + OAuth2/JWT', purpose: 'Identity, sessions, device authorization', layer: 'security', latency: '~15ms', failureMode: 'Token cache fallback' },
+        { id: 'catalog-service', label: domainServiceLabel, kind: 'service', technology: 'Java + gRPC', purpose: domainServicePurpose, layer: 'core_services', latency: '~25ms', failureMode: 'Read-only degraded mode from cache' },
+        { id: 'core-service', label: coreServiceLabel, kind: 'service', technology: 'Go + gRPC', purpose: coreServicePurpose, layer: 'core_services', latency: '~25ms', failureMode: 'Fallback to cached state and retry queue' },
+        { id: 'recommendation-service', label: personalizationLabel, kind: 'service', technology: personalizationTechnology, purpose: personalizationPurpose, layer: 'core_services', latency: isMessaging ? '~20ms' : '~60ms', failureMode: isMessaging ? 'Expire presence with TTL and reconnect' : 'Fallback to trending/popular results' },
+        { id: 'search-service', label: isMessaging ? 'Conversation Search' : 'Search Service', kind: 'service', technology: 'Elasticsearch/OpenSearch', purpose: isMessaging ? 'Message and contact search indexes' : 'Full-text search and filtering', layer: 'search', latency: '~40ms', failureMode: 'Cached popular query fallback' },
+        { id: 'redis-cache', label: 'Hot Cache', kind: 'cache', technology: 'Redis Cluster', purpose: isMessaging ? 'Sessions, socket mapping, rate counters, presence TTLs' : 'Sessions, metadata, rate counters, hot reads', layer: 'cache', latency: '~2ms', failureMode: 'DB fallback with rate limiting' },
+        { id: 'event-bus', label: 'Event Bus', kind: 'queue', technology: 'Apache Kafka', purpose: 'Durable event stream for async workflows', layer: 'async', latency: '~10ms', failureMode: 'Partition replication and DLQ' },
+        { id: 'worker-service', label: isMessaging ? 'Delivery Workers' : 'Async Workers', kind: 'service', technology: 'Kubernetes workers', purpose: isMessaging ? 'Offline delivery, retries, push notification fanout' : isStreamingMedia ? 'Encoding jobs, notifications, analytics enrichment' : 'Background jobs, retries, notifications', layer: 'async', latency: 'async', failureMode: 'Idempotent retry with DLQ' },
+        { id: 'primary-db', label: 'Primary Database', kind: 'database', technology: primaryDb, purpose: isMessaging ? 'Messages, conversations, users, delivery state' : isStreamingMedia ? 'User profiles, watch history, catalog indexes' : 'Transactional source of truth', layer: 'data', latency: '~15ms', failureMode: 'Multi-region replication' },
+        { id: 'object-storage', label: 'Object Storage', kind: 'storage', technology: 'S3/GCS', purpose: isMessaging ? 'Images, videos, voice notes, attachments' : isStreamingMedia ? 'Encoded video segments, thumbnails, subtitles' : 'Files, exports, backups', layer: 'storage', latency: '~50ms', failureMode: 'Cross-region replication' },
+        { id: 'analytics-store', label: isMessaging ? 'Analytics Store' : 'Analytics Store', kind: 'database', technology: 'Druid/ClickHouse', purpose: isMessaging ? 'Delivery metrics, abuse signals, reliability analytics' : isStreamingMedia ? 'Playback QoE, watch events, experiments' : 'Events, metrics, product analytics', layer: 'data', latency: '~100ms', failureMode: 'Batch replay from Kafka' },
+        { id: 'observability', label: 'Observability', kind: 'external', technology: 'OpenTelemetry + Prometheus', purpose: 'Tracing, metrics, logs, alerting', layer: 'observability', latency: 'async', failureMode: 'Local buffering during collector outage' },
+        ...(isMessaging ? [
+            { id: 'push-provider', label: 'Push Provider', kind: 'external', technology: 'FCM/APNs', purpose: 'Wake offline devices and deliver notifications', layer: 'external', latency: '~500ms', failureMode: 'Retry with exponential backoff' },
+            { id: 'encryption-service', label: 'Key Service', kind: 'service', technology: 'Signal Protocol key store', purpose: 'Pre-key bundles and device key metadata', layer: 'security', latency: '~20ms', failureMode: 'Client-side cached prekeys' },
+        ] : []),
+    ];
+
+    const edges = [
+        { source: 'mobile-client', target: 'cdn', label: isStreamingMedia ? 'fetch video/assets' : isMessaging ? 'fetch static/media previews' : 'fetch assets', protocol: 'HTTPS', latency: '~30ms' },
+        { source: 'web-client', target: 'cdn', label: 'fetch static assets', protocol: 'HTTPS', latency: '~30ms' },
+        { source: 'mobile-client', target: 'waf', label: isMessaging ? 'REST + socket connect' : 'API calls', protocol: isMessaging ? 'HTTPS/WSS' : 'HTTPS', latency: '~80ms' },
+        { source: 'web-client', target: 'waf', label: isMessaging ? 'REST + socket connect' : 'API calls', protocol: isMessaging ? 'HTTPS/WSS' : 'HTTPS', latency: '~80ms' },
+        { source: 'waf', target: 'load-balancer', label: 'clean traffic', protocol: 'HTTPS', latency: '~3ms' },
+        { source: 'load-balancer', target: 'api-gateway', label: 'route requests', protocol: 'HTTP/2', latency: '~5ms' },
+        { source: 'api-gateway', target: 'auth-service', label: 'validate token', protocol: 'gRPC', latency: '~10ms' },
+        { source: 'api-gateway', target: 'catalog-service', label: isMessaging ? 'profile/contact APIs' : 'metadata APIs', protocol: 'gRPC', latency: '~15ms' },
+        { source: 'api-gateway', target: 'core-service', label: isMessaging ? 'send/deliver message' : isStreamingMedia ? 'playback session' : 'business workflow', protocol: 'gRPC', latency: '~15ms' },
+        { source: 'api-gateway', target: 'search-service', label: 'search queries', protocol: 'HTTP', latency: '~20ms' },
+        { source: 'catalog-service', target: 'redis-cache', label: 'hot metadata', protocol: 'Redis', latency: '~2ms' },
+        { source: 'catalog-service', target: 'primary-db', label: 'source of truth', protocol: 'CQL/SQL', latency: '~15ms' },
+        { source: 'core-service', target: 'redis-cache', label: 'session/cache lookup', protocol: 'Redis', latency: '~2ms' },
+        { source: 'core-service', target: 'object-storage', label: isMessaging ? 'media attachment refs' : isStreamingMedia ? 'manifest/media lookup' : 'object access', protocol: 'S3 API', latency: '~50ms' },
+        { source: 'core-service', target: 'event-bus', label: 'publish events', protocol: 'Kafka', latency: '~10ms' },
+        { source: 'recommendation-service', target: 'analytics-store', label: 'features and aggregates', protocol: 'SQL/HTTP', latency: '~80ms' },
+        { source: 'search-service', target: 'primary-db', label: 'index source', protocol: 'CDC', latency: 'async' },
+        { source: 'event-bus', target: 'worker-service', label: 'consume async jobs', protocol: 'Kafka consumer', latency: 'async' },
+        { source: 'event-bus', target: 'analytics-store', label: 'stream analytics events', protocol: 'Kafka consumer', latency: 'async' },
+        { source: 'worker-service', target: 'object-storage', label: isMessaging ? 'process media uploads' : isStreamingMedia ? 'write encoded assets' : 'write processed files', protocol: 'S3 API', latency: 'async' },
+        { source: 'core-service', target: 'observability', label: 'traces/metrics', protocol: 'OTLP', latency: 'async' },
+        { source: 'api-gateway', target: 'observability', label: 'access logs', protocol: 'OTLP', latency: 'async' },
+        ...(isMessaging ? [
+            { source: 'api-gateway', target: 'recommendation-service', label: 'presence updates', protocol: 'gRPC/WSS', latency: '~20ms' },
+            { source: 'core-service', target: 'primary-db', label: 'persist messages', protocol: 'CQL', latency: '~15ms' },
+            { source: 'core-service', target: 'encryption-service', label: 'fetch prekeys', protocol: 'gRPC', latency: '~20ms' },
+            { source: 'worker-service', target: 'push-provider', label: 'offline push', protocol: 'HTTPS', latency: '~500ms' },
+        ] : []),
+    ];
+
+    return {
+        diagram: {
+            type: 'architecture',
+            direction: 'TB',
+            nodes,
+            edges,
+        },
+    };
+}
+
+function appendArchitectureJsonFallback(content: string, question: string): string {
+    const diagramJson = JSON.stringify(buildSystemDesignArchitectureDiagram(question, content));
+    const block = ['```architecture_json', diagramJson, '```'].join('\n');
+    const architectureHeader = /(^|\n)(#{1,6}\s*4\.\s*Architecture Diagram[^\n]*\n)/i;
+    if (architectureHeader.test(content)) {
+        return content.replace(architectureHeader, (_match, prefix: string, header: string) => `${prefix}${header}${block}\n\n`);
+    }
+
+    return `${content.trim()}\n\n### 4. Architecture Diagram\n${block}`;
+}
+
+function stripSystemDesignPostDiagramDetail(content: string): { text: string; changed: boolean } {
+    let changed = false;
+    let text = content;
+
+    const withoutIntermediateSections = text.replace(
+        /(^|\n)#{1,6}\s*(?:5|6|7|8|9)\.\s+[^\n]*(?:\n[\s\S]*?)(?=\n#{1,6}\s*(?:[1-9]|10)\.\s+|\n#{1,6}\s*Problem Description\b|$)/gi,
+        (match, prefix: string) => {
+            changed = true;
+            return prefix;
+        }
+    );
+    text = withoutIntermediateSections.replace(/\n{3,}/g, '\n\n').trim();
+
+    const fenceMatch = /```[ \t]*architecture_json[^\n]*\n[\s\S]*?\n```/i.exec(text);
+    if (!fenceMatch) return { text, changed };
+
+    const afterFenceStart = fenceMatch.index + fenceMatch[0].length;
+    const beforeAndFence = text.slice(0, afterFenceStart).trimEnd();
+    const afterFence = text.slice(afterFenceStart);
+    const finalAnswerMatch = /(?:^|\n)(#{1,6}\s*10\.\s*Interview-Ready Final Answer[\s\S]*)/i.exec(afterFence);
+    const trimmedAfterFence = finalAnswerMatch?.[1]?.trim() ?? '';
+
+    const next = [beforeAndFence, trimmedAfterFence].filter(Boolean).join('\n\n').trim();
+    if (next !== text) {
+        changed = true;
+        text = next;
+    }
+
+    return { text, changed };
+}
+
+function ensureSystemDesignFinalAnswer(content: string, question: string): { text: string; changed: boolean } {
+    if (/^#{1,6}\s*10\.\s*Interview-Ready Final Answer\b/im.test(content)) {
+        return { text: content, changed: false };
+    }
+
+    const subject = (() => {
+        const normalized = question.trim();
+        if (normalized) return normalizeSystemDesignEntityTypos(normalized);
+        if (/\bwhatsapp|chat|messag/i.test(content)) return 'this messaging system';
+        if (/\bnetflix|streaming|playback/i.test(content)) return 'this streaming system';
+        return 'this system';
+    })();
+
+    return {
+        text: `${content.trim()}\n\n### 10. Interview-Ready Final Answer\nI would design ${subject} as a horizontally scalable, event-driven system with edge gateways, stateless core services, Redis for hot state, Kafka for durable async processing, replicated persistent storage, object storage for large media, and strong observability. The key tradeoff is balancing low-latency user experience with durable delivery and graceful degradation during regional or downstream failures.`,
+        changed: true,
+    };
+}
+
+function validateSystemDesignInterviewAnswer(content: string, question: string = ''): ActionOutputValidationResult {
     const normalized = normalizeSystemDesignMermaid(content);
-    const trimmed = normalized.text.trim();
+    const finalAnswerNormalized = ensureSystemDesignFinalAnswer(normalized.text, question);
+    const trimmed = finalAnswerNormalized.text.trim();
     const architectureJson = validateArchitectureJsonContract(trimmed);
     const sectionHeaders = (trimmed.match(/^#{2,3}\s+\d+\./gm) || []).length;
     const hasComponents = /\b(component|api gateway|database|cache|queue|kafka|redis)\b/i.test(trimmed);
 
     if ('issues' in architectureJson) {
+        if (
+            architectureJson.issues.includes('system_design_missing_fenced_architecture_json')
+            && trimmed.length > 250
+        ) {
+            const corrected = appendArchitectureJsonFallback(trimmed, question);
+            const correctedArchitectureJson = validateArchitectureJsonContract(corrected);
+            if (!('issues' in correctedArchitectureJson)) {
+                const finalCorrected = ensureSystemDesignFinalAnswer(corrected, question);
+                return {
+                    valid: true,
+                    correctedContent: finalCorrected.text,
+                    autoCorrected: true,
+                    issues: [
+                        'system_design_architecture_json_appended',
+                        ...(finalCorrected.changed ? ['system_design_final_answer_appended'] : []),
+                    ],
+                };
+            }
+        }
+
         return {
             valid: false,
             correctedContent: trimmed,
@@ -606,8 +769,11 @@ function validateSystemDesignInterviewAnswer(content: string): ActionOutputValid
         return {
             valid: true,
             correctedContent: trimmed,
-            autoCorrected: normalized.changed,
-            issues: normalized.changed ? ['normalized_mermaid_fences'] : [],
+            autoCorrected: normalized.changed || finalAnswerNormalized.changed,
+            issues: [
+                ...(normalized.changed ? ['normalized_mermaid_fences'] : []),
+                ...(finalAnswerNormalized.changed ? ['system_design_final_answer_appended'] : []),
+            ],
         };
     }
 
@@ -615,8 +781,11 @@ function validateSystemDesignInterviewAnswer(content: string): ActionOutputValid
         return {
             valid: true,
             correctedContent: trimmed,
-            autoCorrected: normalized.changed,
-            issues: normalized.changed ? ['normalized_mermaid_fences'] : [],
+            autoCorrected: normalized.changed || finalAnswerNormalized.changed,
+            issues: [
+                ...(normalized.changed ? ['normalized_mermaid_fences'] : []),
+                ...(finalAnswerNormalized.changed ? ['system_design_final_answer_appended'] : []),
+            ],
         };
     }
 
@@ -687,7 +856,7 @@ export function validateActionOutput(
         || intent === 'answer_now'
         || intent === 'system_design_tradeoffs'
     )) {
-        return validateSystemDesignInterviewAnswer(trimmed);
+        return validateSystemDesignInterviewAnswer(trimmed, question);
     }
 
     if (profile === 'coding' && (

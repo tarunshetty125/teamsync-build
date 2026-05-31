@@ -587,9 +587,39 @@ function splitAtArchitectureSection(markdown: string): { before: string; archite
     };
 }
 
+const diagramAuditSeen = new Set<string>();
+
+function logV2DiagramRenderAudit(text: string, parsedArchitecture: ReturnType<typeof parseArchitectureResponse>, allowOpenMermaid: boolean) {
+    if (!/architecture_json|Architecture Diagram|Component Breakdown|Scaling Strategy|system design/i.test(text)) return;
+    if (!allowOpenMermaid && parsedArchitecture.state === 'loading') return;
+
+    const key = [
+        parsedArchitecture.state,
+        parsedArchitecture.diagram?.nodes.length ?? 0,
+        parsedArchitecture.fallbackDiagram?.nodes.length ?? 0,
+        /```[ \t]*architecture_json\b/i.test(text) ? 'arch' : 'no_arch',
+        text.length,
+    ].join(':');
+
+    if (diagramAuditSeen.has(key)) return;
+    if (diagramAuditSeen.size > 40) diagramAuditSeen.clear();
+    diagramAuditSeen.add(key);
+
+    console.log('[V2_DIAGRAM_RENDER_AUDIT]', JSON.stringify({
+        state: parsedArchitecture.state,
+        diagramNodes: parsedArchitecture.diagram?.nodes.length ?? 0,
+        fallbackNodes: parsedArchitecture.fallbackDiagram?.nodes.length ?? 0,
+        hasArchitectureJsonFence: /```[ \t]*architecture_json\b/i.test(text),
+        hasDiagramKey: /"diagram"\s*:/i.test(text),
+        issues: parsedArchitecture.issues,
+        length: text.length,
+    }));
+}
+
 function renderV2ResponseBody(text: string, allowOpenMermaid: boolean) {
     const normalizedText = normalizeV2MermaidMarkdown(text, { isStreaming: !allowOpenMermaid });
     const parsedArchitecture = parseArchitectureResponse(normalizedText, { isStreaming: !allowOpenMermaid });
+    logV2DiagramRenderAudit(normalizedText, parsedArchitecture, allowOpenMermaid);
     const shouldUseArchitectureRenderer =
         parsedArchitecture.state !== 'missing'
         || Boolean(parsedArchitecture.mermaidChart && looksLikeSystemDesignResponse(normalizedText));

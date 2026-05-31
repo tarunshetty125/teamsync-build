@@ -47,6 +47,7 @@ function countMatches(text: string, patterns: RegExp[]): number {
 const NON_CODING_SHORT_RE = /\b(tell me about|yourself|weakness|strengths?|experience|salary|negotiat|conflict|leadership|why (?:this|you|us)|walk me through your resume|greatest achievement|teamwork|behavioral)\b/i;
 const SYSTEM_DESIGN_SHORT_RE = /\b(system design|design (?:a |an |the )?(?:url|api|chat|feed|instagram|twitter|uber|netflix|youtube|whatsapp|notification|messaging|platform|service|system))\b/i;
 const GENERAL_QUESTION_SHORT_RE = /^\s*(?:what|who|when|where|why|how)\s+(?:is|are|was|were|do|does|did|can|could|should|would)\b/i;
+const CONCEPT_EXPLANATION_SHORT_RE = /^\s*(?:explain|define|describe|compare|summarize|walk\s+me\s+through|tell\s+me\s+about)\b/i;
 
 /** LeetCode-style short titles: "two sum", "trapping rain water", "clone graph". */
 function looksLikeShortCodingProblemTitle(text: string): boolean {
@@ -54,6 +55,7 @@ function looksLikeShortCodingProblemTitle(text: string): boolean {
     const words = q.split(/\s+/).filter(Boolean);
     if (words.length < 2 || words.length > 12) return false;
     if (q.includes('?')) return false;
+    if (CONCEPT_EXPLANATION_SHORT_RE.test(q)) return false;
     if (NON_CODING_SHORT_RE.test(q) || SYSTEM_DESIGN_SHORT_RE.test(q) || GENERAL_QUESTION_SHORT_RE.test(q)) {
         return false;
     }
