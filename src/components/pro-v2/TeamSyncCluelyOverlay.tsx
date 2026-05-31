@@ -184,6 +184,10 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         bridge.setShowTranscript((prev: boolean) => !prev);
     }, [bridge.setShowTranscript]);
 
+    const handleOpenLauncher = useCallback(() => {
+        window.electronAPI?.setWindowMode?.('launcher');
+    }, []);
+
     const transcriptPillText = useMemo(
         () => getTranscriptPillText(bridge.rollingTranscript, bridge.lastFinalSentence),
         [bridge.lastFinalSentence, bridge.rollingTranscript],
@@ -219,6 +223,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 onInputChange={bridge.setInputValue}
                 onScreenScan={bridge.handleScreenScan}
                 onToggleTranscriptPause={bridge.toggleTranscriptPause}
+                onOpenLauncher={handleOpenLauncher}
                 hasAttachments={bridge.attachedContext.length > 0}
             />
 

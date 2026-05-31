@@ -7,7 +7,17 @@
 
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { motion } from 'framer-motion';
-import { Pause, Play } from 'lucide-react';
+import {
+    Maximize2,
+    Minimize2,
+    Pause,
+    Play,
+    ScanSearch,
+    Search,
+    SendHorizontal,
+    Square,
+} from 'lucide-react';
+import icon from '../icon.png';
 
 interface ProFloatingBarProps {
     isExpanded: boolean;
@@ -24,6 +34,7 @@ interface ProFloatingBarProps {
     onInputChange: (val: string) => void;
     onScreenScan: () => void;
     onToggleTranscriptPause: () => void;
+    onOpenLauncher: () => void;
 }
 
 const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
@@ -41,6 +52,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
     onInputChange,
     onScreenScan,
     onToggleTranscriptPause,
+    onOpenLauncher,
 }) {
     const [elapsed, setElapsed] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -86,35 +98,42 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             initial={{ opacity: 0, y: -6, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            className="v2-surface-bar v2-draggable"
-            style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 8px 6px 14px',
-                height: '44px',
-                willChange: 'transform, opacity',
-            }}
+            className={`v2-surface-bar v2-draggable ${!isMeetingActive ? 'v2-surface-bar--paused' : ''}`}
         >
-            {/* Recording Dot */}
-            <div className={`v2-recording-dot ${!isMeetingActive ? 'v2-recording-dot--paused' : ''}`} />
+            <div className="v2-bar-status">
+                <button
+                    type="button"
+                    className="v2-no-drag v2-bar-logo-btn"
+                    onClick={onOpenLauncher}
+                    aria-label="Open launcher"
+                    title="Open launcher"
+                >
+                    <img src={icon} alt="" className="v2-bar-logo-img" draggable="false" />
+                </button>
 
-            {/* Waveform */}
-            <div className={`v2-waveform ${!isMeetingActive ? 'v2-waveform-paused' : ''}`}>
-                <div className="v2-waveform-bar" />
-                <div className="v2-waveform-bar" />
-                <div className="v2-waveform-bar" />
-                <div className="v2-waveform-bar" />
-                <div className="v2-waveform-bar" />
+                {/* Recording Dot */}
+                <span className="v2-recording-dot-shell" aria-hidden="true">
+                    <span className={`v2-recording-dot ${!isMeetingActive ? 'v2-recording-dot--paused' : ''}`} />
+                </span>
+
+                {/* Waveform */}
+                <div className={`v2-waveform ${!isMeetingActive ? 'v2-waveform-paused' : ''}`} aria-hidden="true">
+                    <div className="v2-waveform-bar" />
+                    <div className="v2-waveform-bar" />
+                    <div className="v2-waveform-bar" />
+                    <div className="v2-waveform-bar" />
+                    <div className="v2-waveform-bar" />
+                </div>
+
+                {/* Timer */}
+                <span className="v2-bar-timer">
+                    {formatTime(elapsed)}
+                </span>
             </div>
-
-            {/* Timer */}
-            <span className="v2-bar-timer">
-                {formatTime(elapsed)}
-            </span>
 
             <div className="relative group">
                 <button
+                    type="button"
                     onClick={onToggleTranscriptPause}
                     className={`v2-no-drag v2-transcript-pause-btn ${isTranscriptPaused ? 'v2-transcript-pause-btn--paused' : 'v2-transcript-pause-btn--listening'}`}
                     aria-pressed={isTranscriptPaused}
@@ -136,32 +155,8 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             <div className="v2-bar-sep" />
 
             {/* Ask TeamSync — fixed width inline input */}
-            <div
-                className="v2-no-drag"
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    position: 'relative',
-                    flexShrink: 0,
-                }}
-            >
-                {/* Search icon */}
-                <div style={{
-                    position: 'absolute',
-                    left: '8px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    pointerEvents: 'none',
-                    color: 'rgba(255, 255, 255, 0.28)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    zIndex: 1,
-                }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-                    </svg>
-                </div>
-
+            <div className="v2-no-drag v2-bar-input-shell">
+                <Search size={13} strokeWidth={2.2} className="v2-bar-input-icon" aria-hidden="true" />
                 <input
                     ref={inputRef}
                     className="v2-bar-input"
@@ -170,34 +165,18 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                     onKeyDown={handleInputKeyDown}
                     onKeyUp={e => e.stopPropagation()}
                     onKeyPress={e => e.stopPropagation()}
-                    placeholder="Ask TeamSync..."
+                    placeholder={hasAttachments ? 'Ask with context...' : 'Ask TeamSync...'}
                 />
 
                 {/* Send button */}
                 {(inputValue.trim() || hasAttachments) && (
                     <button
+                        type="button"
                         onClick={handleSendClick}
-                        style={{
-                            position: 'absolute',
-                            right: '3px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            width: '22px',
-                            height: '22px',
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#fff',
-                            border: 'none',
-                            background: 'rgba(139, 92, 246, 0.60)',
-                            cursor: 'pointer',
-                        }}
+                        className="v2-bar-send-btn"
+                        aria-label="Send message"
                     >
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="22" y1="2" x2="11" y2="13" />
-                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                        </svg>
+                        <SendHorizontal size={12} strokeWidth={2.4} />
                     </button>
                 )}
             </div>
@@ -207,13 +186,12 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             {/* Screen Scan — compact icon button */}
             <div className="relative group">
                 <button
+                    type="button"
                     onClick={onScreenScan}
-                    className="v2-no-drag v2-bar-btn"
+                    className="v2-no-drag v2-bar-btn v2-bar-btn--scan"
+                    aria-label="Analyse screen"
                 >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                    </svg>
+                    <ScanSearch size={14} strokeWidth={2.1} />
                 </button>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                     Analyse Screen
@@ -223,16 +201,16 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             {/* Show/Hide */}
             <div className="relative group">
                 <button
+                    type="button"
                     onClick={onToggleExpanded}
                     className="v2-no-drag v2-bar-btn"
+                    aria-label={isExpanded ? 'Hide panels' : 'Show panels'}
                 >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        {isExpanded ? (
-                            <><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" /></>
-                        ) : (
-                            <><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></>
-                        )}
-                    </svg>
+                    {isExpanded ? (
+                        <Minimize2 size={14} strokeWidth={2.1} />
+                    ) : (
+                        <Maximize2 size={14} strokeWidth={2.1} />
+                    )}
                 </button>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                     {isExpanded ? 'Hide panels' : 'Show panels'}
@@ -242,15 +220,12 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             {/* End Meeting */}
             <div className="relative group">
                 <button
+                    type="button"
                     onClick={onEndMeeting}
                     className="v2-no-drag v2-bar-btn v2-bar-btn--end"
+                    aria-label="End meeting"
                 >
-                    <div style={{
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '2px',
-                        background: 'currentColor',
-                    }} />
+                    <Square size={12} strokeWidth={2.3} fill="currentColor" />
                 </button>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                     End Meeting

@@ -47,6 +47,57 @@ export const prettifyModelId = (id: string): string => {
     return id.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 };
 
+export type ModelProviderId =
+    | 'teamsync'
+    | 'gemini'
+    | 'groq'
+    | 'openai'
+    | 'claude'
+    | 'bedrock'
+    | 'custom'
+    | 'ollama';
+
+export const MODEL_PROVIDER_LABELS: Record<ModelProviderId, string> = {
+    teamsync: 'TeamSync',
+    gemini: 'Gemini',
+    groq: 'Groq',
+    openai: 'OpenAI',
+    claude: 'Claude',
+    bedrock: 'Amazon Bedrock',
+    custom: 'Custom Providers',
+    ollama: 'Ollama / Local',
+};
+
+export const MODEL_PROVIDER_SHORT_LABELS: Record<ModelProviderId, string> = {
+    teamsync: 'TS',
+    gemini: 'Gemini',
+    groq: 'Groq',
+    openai: 'OpenAI',
+    claude: 'Claude',
+    bedrock: 'AWS',
+    custom: 'Custom',
+    ollama: 'Local',
+};
+
+export function getModelProviderId(model: string, explicitProvider?: string, type?: string): ModelProviderId {
+    const provider = explicitProvider || type;
+    if (provider === 'teamsync' || provider === 'gemini' || provider === 'groq' || provider === 'openai' || provider === 'claude' || provider === 'bedrock' || provider === 'custom' || provider === 'ollama') {
+        return provider;
+    }
+    if (provider === 'local') return 'ollama';
+
+    const normalized = model.toLowerCase();
+    if (!normalized) return 'custom';
+    if (normalized === 'teamsync') return 'teamsync';
+    if (normalized.startsWith('ollama-')) return 'ollama';
+    if (normalized.startsWith('gemini-')) return 'gemini';
+    if (normalized.startsWith('gpt-') || normalized.startsWith('o1') || normalized.startsWith('o3') || normalized.startsWith('o4') || normalized.startsWith('o5')) return 'openai';
+    if (normalized.startsWith('claude-')) return 'claude';
+    if (normalized.includes('llama') || normalized.includes('mixtral') || normalized.includes('deepseek') || normalized.includes('qwen')) return 'groq';
+    if (/^(anthropic|amazon|meta|mistral|cohere|ai21|openai|us|eu|apac)\./.test(normalized) || normalized.startsWith('openai/gpt-oss-')) return 'bedrock';
+    return 'custom';
+}
+
 /** Short label for overlay model picker (matches v1 overlay). */
 export function getOverlayModelDisplayName(model: string): string {
     if (!model) return 'Model';

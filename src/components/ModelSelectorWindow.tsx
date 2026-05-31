@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Check, Loader2 } from 'lucide-react';
-import { STANDARD_CLOUD_MODELS, prettifyModelId } from '../utils/modelUtils';
+import {
+    MODEL_PROVIDER_LABELS,
+    MODEL_PROVIDER_SHORT_LABELS,
+    STANDARD_CLOUD_MODELS,
+    getModelProviderId,
+    prettifyModelId,
+} from '../utils/modelUtils';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 
 // Define Model Types
@@ -193,15 +199,15 @@ const ModelSelectorWindow = () => {
     const panelClass = isLight
         ? 'bg-[#F3F4F6]/92 border-black/10 shadow-black/10'
         : 'bg-[#1E1E1E]/80 border-white/10 shadow-black/40';
-    const providerLabels: Record<string, string> = {
-        teamsync: 'TeamSync',
-        gemini: 'Gemini',
-        groq: 'Groq',
-        openai: 'OpenAI',
-        claude: 'Claude',
-        bedrock: 'Amazon Bedrock',
-        custom: 'Custom Providers',
-        ollama: 'Ollama / Local',
+    const providerAccents: Record<string, { dot: string; header: string; rule: string; chip: string }> = {
+        teamsync: { dot: 'bg-cyan-400', header: 'text-cyan-300', rule: 'bg-cyan-400/30', chip: 'border-cyan-400/25 bg-cyan-400/10 text-cyan-200' },
+        gemini: { dot: 'bg-sky-400', header: 'text-sky-300', rule: 'bg-sky-400/30', chip: 'border-sky-400/25 bg-sky-400/10 text-sky-200' },
+        groq: { dot: 'bg-amber-400', header: 'text-amber-300', rule: 'bg-amber-400/30', chip: 'border-amber-400/25 bg-amber-400/10 text-amber-200' },
+        openai: { dot: 'bg-emerald-400', header: 'text-emerald-300', rule: 'bg-emerald-400/30', chip: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200' },
+        claude: { dot: 'bg-orange-300', header: 'text-orange-200', rule: 'bg-orange-300/30', chip: 'border-orange-300/25 bg-orange-300/10 text-orange-100' },
+        bedrock: { dot: 'bg-rose-400', header: 'text-rose-300', rule: 'bg-rose-400/30', chip: 'border-rose-400/25 bg-rose-400/10 text-rose-200' },
+        custom: { dot: 'bg-violet-400', header: 'text-violet-300', rule: 'bg-violet-400/30', chip: 'border-violet-400/25 bg-violet-400/10 text-violet-200' },
+        ollama: { dot: 'bg-lime-400', header: 'text-lime-300', rule: 'bg-lime-400/30', chip: 'border-lime-400/25 bg-lime-400/10 text-lime-200' },
     };
 
     return (
@@ -222,14 +228,22 @@ const ModelSelectorWindow = () => {
                         ) : (
                             availableModels.map((model, index) => {
                                 const isSelected = currentModel === model.id;
-                                const provider = model.provider || model.type;
-                                const previousProvider = availableModels[index - 1]?.provider || availableModels[index - 1]?.type;
+                                const provider = getModelProviderId(model.id, model.provider, model.type);
+                                const previousModel = availableModels[index - 1];
+                                const previousProvider = previousModel
+                                    ? getModelProviderId(previousModel.id, previousModel.provider, previousModel.type)
+                                    : undefined;
                                 const showProviderHeader = provider && provider !== previousProvider;
+                                const accent = providerAccents[provider];
                                 return (
                                     <React.Fragment key={model.id}>
                                         {showProviderHeader && (
-                                            <div className={`px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide ${isLight ? 'text-slate-400' : 'text-[#FDE68A]/35'}`}>
-                                                {providerLabels[provider] || provider}
+                                            <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+                                                <span className={`h-px w-4 ${accent?.rule || 'bg-white/10'}`} />
+                                                <span className={`h-1.5 w-1.5 rounded-full ${accent?.dot || 'bg-slate-400'}`} />
+                                                <span className={`text-[10px] font-semibold uppercase tracking-wide ${isLight ? 'text-slate-400' : (accent?.header || 'text-[#FDE68A]/35')}`}>
+                                                    {MODEL_PROVIDER_LABELS[provider]}
+                                                </span>
                                             </div>
                                         )}
                                         <button
@@ -243,8 +257,16 @@ const ModelSelectorWindow = () => {
                                                 }
                                             `}
                                         >
-                                            <span className="text-[12px] font-medium whitespace-normal break-words [overflow-wrap:anywhere] leading-snug flex-1 min-w-0">{model.name}</span>
-                                            {isSelected && <Check className={`w-3.5 h-3.5 shrink-0 ml-2 ${isLight ? 'text-emerald-600' : 'text-[#FDE68A]'}`} />}
+                                            <span className="flex min-w-0 flex-1 items-start gap-2 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug pr-2">
+                                                <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${accent?.dot || 'bg-slate-400'}`} />
+                                                <span className="min-w-0 flex-1 text-[12px] font-medium">{model.name}</span>
+                                            </span>
+                                            <span className="ml-2 flex shrink-0 items-center gap-1.5">
+                                                <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${isLight ? 'border-black/10 bg-black/[0.035] text-slate-500' : (accent?.chip || 'border-white/10 bg-white/5 text-white/60')}`}>
+                                                    {MODEL_PROVIDER_SHORT_LABELS[provider]}
+                                                </span>
+                                                {isSelected && <Check className={`w-3.5 h-3.5 shrink-0 ${isLight ? 'text-emerald-600' : 'text-[#FDE68A]'}`} />}
+                                            </span>
                                         </button>
                                     </React.Fragment>
                                 );

@@ -74,14 +74,23 @@ test('Pro V2 model selector has enough width for long dynamic model names', () =
     const selector = read('src/components/ModelSelectorWindow.tsx');
     const controlStrip = read('src/components/pro-v2/ProOverlayControlStrip.tsx');
     const css = read('src/components/pro-v2/pro-v2.css');
+    const modelUtils = read('src/utils/modelUtils.ts');
 
     assert.match(helper, /MODEL_SELECTOR_WINDOW_WIDTH = 380/);
     assert.match(helper, /MODEL_SELECTOR_WINDOW_HEIGHT = 340/);
     assert.match(selector, /w-\[360px\]/);
     assert.match(selector, /\[overflow-wrap:anywhere\]/);
+    assert.match(selector, /MODEL_PROVIDER_SHORT_LABELS/);
+    assert.match(selector, /getModelProviderId\(model\.id, model\.provider, model\.type\)/);
     assert.match(controlStrip, /const modelDisplayName = getOverlayModelDisplayName\(currentModel\)/);
-    assert.match(controlStrip, /title=\{modelDisplayName\}/);
+    assert.match(controlStrip, /const modelProvider = getModelProviderId\(currentModel\)/);
+    assert.match(controlStrip, /data-provider=\{modelProvider\}/);
+    assert.match(controlStrip, /title=\{`\$\{modelProviderLabel\} · \$\{modelDisplayName\}`\}/);
     assert.match(css, /max-width: none/);
+    assert.match(css, /\.v2-overlay-model-provider\[data-provider='openai'\]/);
+    assert.match(css, /\.v2-overlay-model-provider-dot/);
+    assert.match(modelUtils, /export const MODEL_PROVIDER_LABELS/);
+    assert.match(modelUtils, /export function getModelProviderId/);
 });
 
 test('Pro V2 architecture diagrams expose working pan, zoom, and inner controls', () => {
@@ -114,6 +123,20 @@ test('Pro V2 architecture diagrams expose working pan, zoom, and inner controls'
     assert.doesNotMatch(architectureCss, /drop-shadow/);
     assert.doesNotMatch(architectureCss, /will-change: transform/);
     assert.doesNotMatch(architectureCss, /backdrop-filter/);
+});
+
+test('Pro V2 overlay utility controls use dedicated premium icon states', () => {
+    const controlStrip = read('src/components/pro-v2/ProOverlayControlStrip.tsx');
+    const css = read('src/components/pro-v2/pro-v2.css');
+
+    assert.match(controlStrip, /v2-overlay-icon-btn--settings/);
+    assert.match(controlStrip, /aria-pressed=\{isSettingsOpen\}/);
+    assert.match(controlStrip, /aria-pressed=\{isMousePassthrough\}/);
+    assert.match(controlStrip, /aria-pressed=\{customNotesEnabled\}/);
+    assert.match(css, /\.v2-panel-btn\.v2-overlay-icon-btn/);
+    assert.match(css, /\.v2-panel-btn\.v2-overlay-icon-btn--active::after/);
+    assert.match(css, /\.v2-panel-btn\.v2-overlay-icon-btn--passthrough/);
+    assert.match(css, /\.v2-panel-btn\.v2-overlay-icon-btn--context/);
 });
 
 test('Pro V2 streaming responses do not trigger resize bursts for every token', () => {

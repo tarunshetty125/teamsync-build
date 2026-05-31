@@ -6,7 +6,12 @@
 import React, { memo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown, SlidersHorizontal, PointerOff, FileText } from 'lucide-react';
-import { getOverlayModelDisplayName } from '../../utils/modelUtils';
+import {
+    MODEL_PROVIDER_LABELS,
+    MODEL_PROVIDER_SHORT_LABELS,
+    getModelProviderId,
+    getOverlayModelDisplayName,
+} from '../../utils/modelUtils';
 
 const POPUP_GAP = 8;
 
@@ -42,6 +47,8 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
     }, [panelRef]);
 
     const handleModelClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
         const pos = openPopupBelowPanel(e.currentTarget.getBoundingClientRect());
         if (pos) {
             window.electronAPI?.toggleModelSelector?.(pos);
@@ -60,16 +67,25 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
     }, [isSettingsOpen, openPopupBelowPanel]);
 
     const modelDisplayName = getOverlayModelDisplayName(currentModel);
+    const modelProvider = getModelProviderId(currentModel);
+    const modelProviderLabel = MODEL_PROVIDER_LABELS[modelProvider];
+    const modelProviderShortLabel = MODEL_PROVIDER_SHORT_LABELS[modelProvider];
 
     return (
         <div className="v2-overlay-controls v2-no-drag">
             <button
                 type="button"
-                className="v2-overlay-model-btn"
+                className="v2-overlay-model-btn v2-no-drag"
                 onClick={handleModelClick}
-                title={modelDisplayName}
-                aria-label={`Change model, current model ${modelDisplayName}`}
+                title={`${modelProviderLabel} · ${modelDisplayName}`}
+                aria-label={`Change model, current model ${modelDisplayName} from ${modelProviderLabel}`}
             >
+                <span className="v2-overlay-model-provider" data-provider={modelProvider} aria-hidden="true">
+                    <span className="v2-overlay-model-provider-dot" />
+                    <span className="v2-overlay-model-provider-text">
+                        {modelProviderShortLabel}
+                    </span>
+                </span>
                 <span className="v2-overlay-model-label">
                     {modelDisplayName}
                 </span>
@@ -78,11 +94,13 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
 
             <div className="v2-overlay-controls-divider" />
 
-            <div className="relative group">
+            <div className="relative group v2-overlay-control-wrap">
                 <button
                     type="button"
-                    className={`v2-panel-btn v2-overlay-icon-btn ${isSettingsOpen ? 'v2-overlay-icon-btn--active' : ''}`}
+                    className={`v2-panel-btn v2-overlay-icon-btn v2-overlay-icon-btn--settings ${isSettingsOpen ? 'v2-overlay-icon-btn--active' : ''}`}
                     onClick={handleSettingsClick}
+                    aria-pressed={isSettingsOpen}
+                    aria-label="Open overlay settings"
                 >
                     <SlidersHorizontal size={14} />
                 </button>
@@ -91,11 +109,13 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
                 </div>
             </div>
 
-            <div className="relative group">
+            <div className="relative group v2-overlay-control-wrap">
                 <button
                     type="button"
                     className={`v2-panel-btn v2-overlay-icon-btn ${isMousePassthrough ? 'v2-overlay-icon-btn--passthrough' : ''}`}
                     onClick={onToggleMousePassthrough}
+                    aria-pressed={isMousePassthrough}
+                    aria-label={`Mouse passthrough ${isMousePassthrough ? 'on' : 'off'}`}
                 >
                     <PointerOff size={14} className={isMousePassthrough ? 'animate-flame-blue' : ''} />
                 </button>
@@ -105,11 +125,13 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
             </div>
 
             {hasProContextAccess && (
-                <div className="relative group">
+                <div className="relative group v2-overlay-control-wrap">
                     <button
                         type="button"
                         className={`v2-panel-btn v2-overlay-icon-btn ${customNotesEnabled ? 'v2-overlay-icon-btn--context' : ''}`}
                         onClick={onToggleCustomContext}
+                        aria-pressed={customNotesEnabled}
+                        aria-label={`Custom context ${customNotesEnabled ? 'on' : 'off'}`}
                     >
                         <FileText size={14} className={customNotesEnabled ? 'animate-flame-yellow' : ''} />
                     </button>
