@@ -2977,6 +2977,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     requestId?: string;
     profilePreference?: 'default' | 'force_on' | 'force_off';
     modelOverride?: string;
+    transcriptOverride?: string;
+    actionContract?: 'default' | 'hint_only' | 'complexity_only' | 'edge_cases_only' | 'debugging_only' | 'bruteforce_only' | 'optimal_solution' | 'followup_questions_only';
+    actionId?: string;
+    contextTarget?: 'latest_turn' | 'active_context' | 'transcript';
   }) => {
     const intelligenceManager = appState.getIntelligenceManager();
     const result = await intelligenceManager.handleAction(payload.intent, {
@@ -2986,6 +2990,10 @@ export function initializeIpcHandlers(appState: AppState): void {
       requestId: payload.requestId,
       profilePreference: payload.profilePreference,
       modelOverride: payload.modelOverride,
+      transcriptOverride: payload.transcriptOverride,
+      actionContract: payload.actionContract,
+      actionId: payload.actionId,
+      contextTarget: payload.contextTarget,
     });
     return { success: true, result };
   });

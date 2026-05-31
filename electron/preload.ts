@@ -59,6 +59,31 @@ type BedrockCredentials = {
   preferredModel?: string;
 }
 
+type BridgeContextTarget = 'latest_turn' | 'active_context' | 'transcript'
+type BridgeActionContract =
+  | 'default'
+  | 'hint_only'
+  | 'complexity_only'
+  | 'edge_cases_only'
+  | 'debugging_only'
+  | 'bruteforce_only'
+  | 'optimal_solution'
+  | 'followup_questions_only'
+
+type GenerateActionPayload = {
+  intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'
+  message?: string
+  additionalContext?: string
+  transcriptOverride?: string
+  actionContract?: BridgeActionContract
+  actionId?: string
+  contextTarget?: BridgeContextTarget
+  imagePaths?: string[]
+  requestId?: string
+  profilePreference?: 'default' | 'force_on' | 'force_off'
+  modelOverride?: string
+}
+
 // Types for the exposed Electron API
 interface ElectronAPI {
   updateContentDimensions: (dimensions: {
@@ -196,7 +221,7 @@ interface ElectronAPI {
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
-  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; additionalContext?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off'; modelOverride?: string }) => Promise<{ success: boolean; result: string | null }>
+  generateAction: (payload: GenerateActionPayload) => Promise<{ success: boolean; result: string | null }>
   generateWhatToSay: (question?: string, imagePaths?: string[], mode?: string, requestId?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
   generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
@@ -936,7 +961,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Intelligence Mode IPC
   generateAssist: () => ipcRenderer.invoke("generate-assist"),
-  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; additionalContext?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off'; modelOverride?: string }) => ipcRenderer.invoke("generate-action", payload),
+  generateAction: (payload: GenerateActionPayload) => ipcRenderer.invoke("generate-action", payload),
   generateWhatToSay: (question?: string, imagePaths?: string[], mode?: string, requestId?: string) => ipcRenderer.invoke("generate-what-to-say", question, imagePaths, mode, requestId),
   generateClarify: (requestId?: string) => ipcRenderer.invoke("generate-clarify", requestId),
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => ipcRenderer.invoke("generate-code-hint", imagePaths, problemStatement, requestId),

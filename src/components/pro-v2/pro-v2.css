@@ -795,7 +795,7 @@
 
 .v2-action-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
@@ -807,7 +807,7 @@
   position: relative;
   user-select: none;
   background: transparent;
-  min-height: 36px;
+  min-height: 50px;
 }
 
 .v2-action-row:hover {
@@ -849,18 +849,44 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-top: 1px;
+}
+
+.v2-action-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .v2-action-label {
   font-size: 13px;
   font-weight: 400;
   letter-spacing: 0.015em;
-  line-height: 1.45;
+  line-height: 1.25;
   color: rgba(255, 255, 255, 1);
 }
 
 .v2-action-row--recommended .v2-action-label {
   color: rgba(255, 255, 255, 1);
+}
+
+.v2-action-context-preview {
+  max-width: 100%;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v2-action-row--recommended .v2-action-context-preview {
+  color: rgba(255, 255, 255, 0.56);
 }
 
 /* ── Section Header ───────────────────────────────────────── */

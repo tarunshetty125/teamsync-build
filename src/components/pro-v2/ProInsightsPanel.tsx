@@ -123,6 +123,7 @@ interface ProInsightsPanelProps {
     rollingTranscriptSpeakerLabel: string;
     isInterviewerSpeaking: boolean;
     showTranscript: boolean;
+    contextPreviewByActionId: Partial<Record<OverlayQuickActionId, string>>;
     onToggleTranscript: () => void;
     getQuickActionHandler: (action: OverlayQuickActionDef) => () => void | Promise<void>;
 }
@@ -137,6 +138,7 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
     rollingTranscriptSpeakerLabel: _rollingTranscriptSpeakerLabel,
     isInterviewerSpeaking: _isInterviewerSpeaking,
     showTranscript,
+    contextPreviewByActionId,
     onToggleTranscript,
     getQuickActionHandler,
     currentModel,
@@ -254,7 +256,12 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
                             <span className="v2-action-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px' }}>
                                 {getActionIcon(action)}
                             </span>
-                            <span className="v2-action-label">{action.label}</span>
+                            <span className="v2-action-copy">
+                                <span className="v2-action-label">{action.label}</span>
+                                <span className="v2-action-context-preview">
+                                    Using: {contextPreviewByActionId[action.id] ?? 'Latest Question'}
+                                </span>
+                            </span>
                         </motion.button>
                     ))}
                 </div>

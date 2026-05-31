@@ -18,6 +18,7 @@ import type { ScreenContentMode } from './llm';
 import { looksLikeCodingInterviewQuestion } from './intelligence/codingQuestionHeuristics';
 import { looksLikeSystemDesignInterviewQuestion } from './intelligence/systemDesignQuestionHeuristics';
 import { normalizeSystemDesignEntityTypos } from '../src/lib/overlay/systemDesignEntityNormalizer';
+import type { ActionContract, ContextTarget } from '../src/lib/overlay/actionContextTypes';
 
 export type UnifiedActionIntent =
     | 'what_to_answer'
@@ -68,6 +69,10 @@ export interface BuildContextArgs {
     imagePaths?: string[];
     profilePreference?: ProfilePreference;
     additionalContext?: string;
+    transcriptOverride?: string;
+    actionContract?: ActionContract;
+    contextTarget?: ContextTarget;
+    actionId?: string;
     rag?: ActionRagContext | null;
     includeModeCustomContext?: boolean;
     screenScanMode?: ScreenContentMode;
@@ -575,8 +580,19 @@ export function buildTranscriptContext(
     session: SessionTracker,
     intent: UnifiedActionIntent,
     question: string,
-    mode: SessionActionMode
+    mode: SessionActionMode,
+    options?: { transcriptOverride?: string }
 ): PromptTranscriptSection {
+    if (options?.transcriptOverride !== undefined) {
+        const content = options.transcriptOverride.trim() || '[NO TRANSCRIPT AVAILABLE]';
+        return {
+            title: 'TRANSCRIPT',
+            content,
+            strategy: intent === 'recap' ? 'capped_full' : 'rolling_window',
+            approxTokens: session.estimateTokenCount(content),
+        };
+    }
+
     const profile = getQuestionResponseProfile(question, mode, intent);
 
     if (intent === 'recap') {
@@ -825,17 +841,106 @@ function sessionTokenEstimate(text: string): number {
     return Math.ceil(text.length / 3.5);
 }
 
+function buildActionContractInstruction(
+    actionContract: ActionContract | undefined,
+    responseProfile: QuestionResponseProfile,
+    modeAwareRules: string[]
+): PromptInstruction | null {
+    switch (actionContract) {
+        case 'hint_only':
+            return createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                'Return hints only.',
+                'Use 2 to 4 concise bullets that nudge the user toward the next step.',
+                'Do NOT provide a full solution, full algorithm walkthrough, final answer, or complete implementation.',
+                'Do NOT include a solution section or any fenced code block.',
+                'For coding questions, mention the key invariant, data structure, or debugging direction only.',
+            ].join('\n'));
+        case 'complexity_only':
+            return createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                'Return complexity analysis only.',
+                'State time complexity and space complexity with one-line reasoning for each.',
+                'Do NOT provide the full answer, algorithm walkthrough, implementation, code block, or solution section.',
+                'If multiple approaches are relevant, compare only their complexity tradeoff.',
+            ].join('\n'));
+        case 'edge_cases_only':
+            return createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                'Return edge cases and test cases only.',
+                'Use compact bullets covering empty/null inputs, boundaries, duplicates, scale, invalid states, and failure modes when relevant.',
+                'Do NOT provide a full solution, algorithm walkthrough, implementation, code block, or solution section.',
+                'Keep each edge case actionable for an interview answer.',
+            ].join('\n'));
+        case 'debugging_only':
+            return createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                'Return debugging guidance only.',
+                'Identify likely failure points, what to inspect, and the next diagnostic step.',
+                'Do NOT provide a full rewrite, full solution, or complete implementation.',
+            ].join('\n'));
+        case 'bruteforce_only':
+            return createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                'Return the brute-force approach only.',
+                'Explain the naive algorithm and its time/space complexity.',
+                'Do NOT provide the optimal solution or full implementation unless explicitly requested.',
+            ].join('\n'));
+        case 'followup_questions_only':
+            return createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                'Return follow-up questions only.',
+                'Use 3 to 5 concise bullets, each containing exactly one question.',
+                'No explanations, answers, or commentary outside the list.',
+            ].join('\n'));
+        case 'optimal_solution':
+            if (responseProfile === 'system_design') {
+                return createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                    buildSystemDesignInterviewOutputContract(),
+                    ...modeAwareRules,
+                ].join('\n'));
+            }
+            if (responseProfile === 'coding') {
+                return createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                    buildCodingInterviewOutputContract(),
+                    'Emphasize why this is the optimal approach and call out the key tradeoff.',
+                    ...modeAwareRules,
+                ].join('\n'));
+            }
+            return createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                'Return the strongest complete answer for the current question.',
+                'Lead with the best recommendation or answer.',
+                'Keep it concise, direct, and ready to say aloud.',
+                ...modeAwareRules,
+            ].join('\n'));
+        case 'default':
+        case undefined:
+        default:
+            return null;
+    }
+}
+
 export function buildIntentPrompt(
     intent: UnifiedActionIntent,
     mode: SessionActionMode,
     screenScanMode?: ScreenContentMode,
     question?: string,
-    profileApplied: boolean = false
+    profileApplied: boolean = false,
+    actionContract?: ActionContract
 ): PromptInstruction[] {
     const basePrompt = getIntentPromptBase(intent).trim();
     const modeAwareRules = buildModeAwareIntentRules(intent, mode);
     const responseProfile = getQuestionResponseProfile(question?.trim() || '', mode, intent);
     const contextPriorityRules = buildContextPriorityRules(profileApplied, intent);
+    const contractInstruction = buildActionContractInstruction(actionContract, responseProfile, modeAwareRules);
+
+    if (contractInstruction) {
+        return [
+            createInstruction(
+                'intent',
+                'INTENT',
+                actionContract === 'optimal_solution' && responseProfile === 'system_design'
+                    ? SYSTEM_DESIGN_COPILOT_PROMPT
+                    : basePrompt
+            ),
+            createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
+            contractInstruction,
+        ];
+    }
 
     switch (intent) {
         case 'clarify':
@@ -1191,10 +1296,10 @@ function buildRagContext(rag?: ActionRagContext | null): PromptContextSection | 
     const content = rag?.content?.trim();
     if (!content) return null;
 
-    const title = rag.title?.trim()
-        || (rag.scope === 'global'
+    const title = rag?.title?.trim()
+        || (rag?.scope === 'global'
             ? 'RAG MEMORY (GLOBAL)'
-            : rag.scope === 'live'
+            : rag?.scope === 'live'
                 ? 'RAG MEMORY (LIVE)'
                 : 'RAG MEMORY (MEETING)');
 
@@ -1213,6 +1318,8 @@ export async function buildContextLayers({
     message,
     profilePreference = 'default',
     additionalContext,
+    transcriptOverride,
+    actionContract,
     rag,
     includeModeCustomContext = true,
     screenScanMode,
@@ -1242,12 +1349,12 @@ export async function buildContextLayers({
         return (message || defaultQuestion).trim();
     })();
     const question = normalizeActionQuestion(rawQuestion, mode, intent);
-    const transcript = buildTranscriptContext(session, intent, question, mode);
+    const transcript = buildTranscriptContext(session, intent, question, mode, { transcriptOverride });
     const modeInstructions = intent === 'screen_scan'
         ? []
         : buildModeContext(mode, { includeModeCustomContext: resolvedPolicy.includeModeCustomContext });
     const profileResult = await buildProfileContext(intent, profile, question, resolvedPolicy.resolvedProfilePreference);
-    const intentInstructions = buildIntentPrompt(intent, mode, screenScanMode, question, profileResult.profile?.used === true);
+    const intentInstructions = buildIntentPrompt(intent, mode, screenScanMode, question, profileResult.profile?.used === true, actionContract);
     const profileInstruction = profileResult.profile?.instruction?.trim()
         ? [createInstruction('profile_instruction', 'PROFILE INTELLIGENCE', profileResult.profile.instruction.trim())]
         : [];

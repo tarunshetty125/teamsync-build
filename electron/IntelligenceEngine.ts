@@ -59,6 +59,7 @@ import { buildProviderPrompt } from './llm/ProviderPromptBuilder';
 import { BenchmarkManager, countHallucinationIndicators, hasConfidenceSignal } from './intelligence/BenchmarkManager';
 import { ModesManager } from './services/ModesManager';
 import type { ModeTemplateId } from '../src/lib/modes/types';
+import type { ActionContract, ContextTarget } from '../src/lib/overlay/actionContextTypes';
 import { ModePredictor } from './intelligence/adaptive/ModePredictor';
 import {
     emitActionComplete,
@@ -733,6 +734,10 @@ export class IntelligenceEngine extends EventEmitter {
         requestId?: string;
         profilePreference?: ProfilePreference;
         additionalContext?: string;
+        transcriptOverride?: string;
+        actionContract?: ActionContract;
+        actionId?: string;
+        contextTarget?: ContextTarget;
         rag?: ActionRagContext | null;
         modeOverride?: UserControlledMode;
         screenScanMode?: ScreenContentMode;
@@ -785,6 +790,10 @@ export class IntelligenceEngine extends EventEmitter {
                         imagePaths: params.imagePaths,
                         profilePreference: params.profilePreference,
                         additionalContext: params.additionalContext,
+                        transcriptOverride: params.transcriptOverride,
+                        actionContract: params.actionContract,
+                        actionId: params.actionId,
+                        contextTarget: params.contextTarget,
                         rag: params.rag,
                         includeModeCustomContext: this.llmHelper.getCustomNotesEnabled?.() ?? true,
                         screenScanMode: params.screenScanMode,

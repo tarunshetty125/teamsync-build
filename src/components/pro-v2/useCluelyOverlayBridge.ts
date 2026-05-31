@@ -30,6 +30,12 @@ import {
 } from '../../lib/overlay/overlayIntent';
 import { deriveContextSummary } from '../../lib/overlay/overlayContextSummary';
 import { generateResponseChips } from '../../lib/overlay/responseChips';
+import {
+    resolveActionContext,
+    type ActionContextTranscriptSnapshot,
+    type ResolvedActionContext,
+} from '../../lib/overlay/actionContextResolver';
+import type { ActionContract, ContextTarget, ResponseOwnership } from '../../lib/overlay/actionContextTypes';
 import { useOverlayIpcStreams } from './useOverlayIpcStreams';
 
 export interface V2Message {
@@ -48,6 +54,7 @@ export interface V2Message {
     provider?: string;
     model?: string;
     question?: string;
+    ownership?: ResponseOwnership;
     chips?: Array<{ label: string; variant: string }>;
     isNegotiationCoaching?: boolean;
     negotiationCoachingData?: any;
@@ -60,10 +67,15 @@ type ScreenshotAttachment = { path: string; preview: string };
 type SessionMode = DetectedQuestionType;
 type ActionIntent = 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now';
 type ContextSummary = { label: string; detail: string };
+type ContextPreviewByActionId = Partial<Record<OverlayQuickActionId, string>>;
 type FrozenTranscriptUiSnapshot = {
     rollingTranscript: string;
     rollingTranscriptSpeakerLabel: string;
     lastFinalSentence: string;
+    currentTurnText: string;
+    finalizedTranscript: string;
+    questionTurnId: string | null;
+    transcriptVersion: number;
     isInterviewerSpeaking: boolean;
     overlayCopilotMode: ReturnType<typeof resolveOverlayCopilotMode>;
     activeQuickActions: OverlayQuickActionDef[];
@@ -237,6 +249,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const finalizedTranscriptRef = useRef('');
     const rollingTranscriptRef = useRef('');
     const rollingTranscriptSpeakerLabelRef = useRef('');
+    const transcriptVersionRef = useRef(0);
     const isInterviewerSpeakingRef = useRef(false);
     const isTranscriptPausedRef = useRef(false);
     const lastInterviewerFinalTimestampRef = useRef(0);
@@ -465,6 +478,10 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             rollingTranscript,
             rollingTranscriptSpeakerLabel,
             lastFinalSentence,
+            currentTurnText: currentTurnTextRef.current,
+            finalizedTranscript: finalizedTranscriptRef.current,
+            questionTurnId: currentQuestionTurnIdRef.current,
+            transcriptVersion: transcriptVersionRef.current,
             isInterviewerSpeaking,
             overlayCopilotMode: liveOverlayCopilotMode,
             activeQuickActions: liveActiveQuickActions,
@@ -485,6 +502,23 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         liveContextSummary,
     ]);
 
+    const startNewQuestionTurn = useCallback(() => {
+        const questionTurnId = nextRequestId('question-turn');
+        currentQuestionTurnIdRef.current = questionTurnId;
+        transcriptVersionRef.current = 0;
+        setCurrentQuestionTurnId(questionTurnId);
+        return questionTurnId;
+    }, []);
+
+    const ensureQuestionTurn = useCallback(() => {
+        return currentQuestionTurnIdRef.current || startNewQuestionTurn();
+    }, [startNewQuestionTurn]);
+
+    const bumpTranscriptVersion = useCallback(() => {
+        transcriptVersionRef.current += 1;
+        return transcriptVersionRef.current;
+    }, []);
+
     const markCurrentTurnFromText = useCallback((text: string, source: 'manual_input' | 'transcript' = 'transcript') => {
         const nextText = text.trim();
         if (nextText.length < 3) return;
@@ -492,9 +526,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         unlockRecommendationForTurn();
         currentTurnTextRef.current = nextText;
         const previousMode = intentState.detectedType;
-        const questionTurnId = nextRequestId('question-turn');
-        currentQuestionTurnIdRef.current = questionTurnId;
-        setCurrentQuestionTurnId(questionTurnId);
+        const questionTurnId = startNewQuestionTurn();
+        bumpTranscriptVersion();
         const seq = ++seqRef.current;
         console.log('[MODE_PIPELINE]', JSON.stringify({
             source,
@@ -509,7 +542,20 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             now: performance.now(),
             seq,
         });
-    }, [intentState.detectedType, unlockRecommendationForTurn]);
+    }, [bumpTranscriptVersion, intentState.detectedType, startNewQuestionTurn, unlockRecommendationForTurn]);
+
+    const getVisibleTranscriptSnapshot = useCallback((): ActionContextTranscriptSnapshot => {
+        const frozen = isTranscriptPausedRef.current ? frozenTranscriptUiSnapshotRef.current : null;
+        return {
+            questionTurnId: frozen?.questionTurnId ?? currentQuestionTurnIdRef.current,
+            transcriptVersion: frozen?.transcriptVersion ?? transcriptVersionRef.current,
+            currentTurnText: frozen?.currentTurnText ?? currentTurnTextRef.current,
+            lastFinalSentence: frozen?.lastFinalSentence ?? lastFinalSentenceRef.current,
+            finalizedTranscript: frozen?.finalizedTranscript ?? finalizedTranscriptRef.current,
+            rollingTranscript: frozen?.rollingTranscript ?? rollingTranscriptRef.current,
+            mode: frozen?.overlayCopilotMode ?? liveOverlayCopilotMode,
+        };
+    }, [liveOverlayCopilotMode]);
 
     const onSessionReset = useCallback(() => {
         void window.electronAPI.cancelGeminiChatStream?.().catch(() => {});
@@ -529,6 +575,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         finalizedTranscriptRef.current = '';
         rollingTranscriptRef.current = '';
         rollingTranscriptSpeakerLabelRef.current = '';
+        transcriptVersionRef.current = 0;
         isInterviewerSpeakingRef.current = false;
         isTranscriptPausedRef.current = false;
         setLastFinalSentence('');
@@ -686,9 +733,9 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         const latestFinal = lastFinalSentenceRef.current.trim();
         if (latestFinal.length < 3) return;
 
-        const questionTurnId = nextRequestId('question-turn');
+        const questionTurnId = currentQuestionTurnIdRef.current || startNewQuestionTurn();
         recomputeIntentFromFinalTranscript(questionTurnId);
-    }, [isTranscriptPaused, recomputeIntentFromFinalTranscript, syncTranscriptUiFromRefs]);
+    }, [isTranscriptPaused, recomputeIntentFromFinalTranscript, startNewQuestionTurn, syncTranscriptUiFromRefs]);
 
     const finishStreamingMessage = useCallback((requestId: string, intent?: string) => {
         setIsProcessing(false);
@@ -797,6 +844,9 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             finalizedTranscriptRef.current = '';
             currentTurnTextRef.current = '';
             lastFinalSentenceRef.current = '';
+            currentQuestionTurnIdRef.current = null;
+            transcriptVersionRef.current = 0;
+            setCurrentQuestionTurnId('');
         });
         return () => unsub?.();
     }, [persistManualSessionMode]);
@@ -901,6 +951,16 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
                 if (transcript.final) {
                     const now = Date.now();
+                    const gapSinceLastFinal = now - lastInterviewerFinalTimestampRef.current;
+                    const isSameTurn =
+                        lastInterviewerFinalTimestampRef.current > 0 &&
+                        gapSinceLastFinal <= INTERVIEWER_TURN_GAP_MS &&
+                        Boolean(currentQuestionTurnIdRef.current);
+                    const questionTurnId = isSameTurn
+                        ? ensureQuestionTurn()
+                        : startNewQuestionTurn();
+                    bumpTranscriptVersion();
+
                     finalizedTranscriptRef.current +=
                         (finalizedTranscriptRef.current ? '  ·  ' : '') + transcript.text;
                     if (finalizedTranscriptRef.current.length > 5000) {
@@ -911,10 +971,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                         setRollingTranscript(finalizedTranscriptRef.current);
                     }
 
-                    const gapSinceLastFinal = now - lastInterviewerFinalTimestampRef.current;
                     if (
-                        lastInterviewerFinalTimestampRef.current > 0 &&
-                        gapSinceLastFinal <= INTERVIEWER_TURN_GAP_MS
+                        isSameTurn
                     ) {
                         lastFinalSentenceRef.current =
                             lastFinalSentenceRef.current + ' ' + transcript.text;
@@ -926,7 +984,6 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
                     if (!isPaused) {
                         setLastFinalSentence(lastFinalSentenceRef.current);
-                        const questionTurnId = nextRequestId('question-turn');
                         recomputeIntentFromFinalTranscript(questionTurnId);
                     }
 
@@ -938,6 +995,23 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                         }
                     }, 3000);
                 } else {
+                    const now = Date.now();
+                    const shouldStartTurn =
+                        !currentQuestionTurnIdRef.current ||
+                        (
+                            lastInterviewerFinalTimestampRef.current > 0 &&
+                            (now - lastInterviewerFinalTimestampRef.current) > INTERVIEWER_TURN_GAP_MS
+                        );
+                    if (shouldStartTurn) {
+                        startNewQuestionTurn();
+                    } else {
+                        ensureQuestionTurn();
+                    }
+                    bumpTranscriptVersion();
+                    currentTurnTextRef.current = [
+                        shouldStartTurn ? '' : lastFinalSentenceRef.current,
+                        transcript.text,
+                    ].filter(Boolean).join(' ').trim();
                     rollingTranscriptRef.current =
                         finalizedTranscriptRef.current +
                         (finalizedTranscriptRef.current ? '  ·  ' : '') +
@@ -951,7 +1025,14 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         );
 
         return () => cleanups.forEach((fn) => fn());
-    }, [adoptSessionIdFromPayload, isStalePayload, recomputeIntentFromFinalTranscript]);
+    }, [
+        adoptSessionIdFromPayload,
+        bumpTranscriptVersion,
+        ensureQuestionTurn,
+        isStalePayload,
+        recomputeIntentFromFinalTranscript,
+        startNewQuestionTurn,
+    ]);
 
     useEffect(() => {
         currentModelRef.current = currentModel;
@@ -1046,6 +1127,10 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 analyticsKey?: string;
                 message?: string;
                 additionalContext?: string;
+                resolvedContext?: ResolvedActionContext;
+                actionId?: OverlayQuickActionId;
+                actionContract?: ActionContract;
+                contextTarget?: ContextTarget;
                 imagePaths?: string[];
                 profilePreference?: string;
                 userBubbleText?: string;
@@ -1064,30 +1149,35 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             requestStartTimeRef.current = Date.now();
             currentSourceRef.current = options?.source;
 
-            const activeResponse = activeResponseRef.current;
-            const activeResponseQuestion = activeResponse?.question?.trim() || '';
-            const activeResponseText = activeResponse?.text?.trim() || '';
-            const currentTurnText = currentTurnTextRef.current.trim();
-            const latestFinalQuestion =
-                activeResponseQuestion ||
-                currentTurnText ||
-                lastFinalSentenceRef.current.trim() ||
-                finalizedTranscriptRef.current.split('  ·  ').pop()?.trim() ||
-                '';
-            const resolvedMessage =
-                options?.message?.trim() || (intent === 'recap' ? '' : latestFinalQuestion);
-            const activeResponseContext = activeResponse
-                ? [
-                    'ACTIVE RESPONSE CONTEXT:',
-                    activeResponseQuestion ? `Original user question: ${activeResponseQuestion}` : '',
-                    activeResponseText ? `Current answer excerpt: ${activeResponseText.slice(0, 1200)}` : '',
-                    'Apply this action to the active response above, not to unrelated transcript text.',
-                ].filter(Boolean).join('\n')
-                : '';
-            const mergedAdditionalContext = [
-                options?.additionalContext,
-                activeResponseContext,
-            ].filter(Boolean).join('\n\n') || undefined;
+            const resolvedContext = options?.resolvedContext ?? resolveActionContext({
+                action: {
+                    id: options?.actionId,
+                    intent,
+                    contextTarget: options?.contextTarget ?? (intent === 'recap' ? 'transcript' : 'latest_turn'),
+                    actionContract: options?.actionContract,
+                    additionalContext: options?.additionalContext,
+                    message: options?.message,
+                },
+                latestTurn: getVisibleTranscriptSnapshot(),
+                activeResponse: activeResponseRef.current,
+            });
+            const resolvedMessage = resolvedContext.message?.trim() || '';
+            const mergedAdditionalContext = resolvedContext.additionalContext?.trim() || undefined;
+            const responseId = nextMsgId();
+            const sourceModel = currentModelRef.current;
+            const sourceProvider = detectProviderType(sourceModel);
+            const ownership: ResponseOwnership = {
+                responseId,
+                questionTurnId: resolvedContext.questionTurnId,
+                transcriptVersion: resolvedContext.transcriptVersion,
+                contextTarget: resolvedContext.contextTarget,
+                actionId: options?.actionId,
+                parentResponseId: resolvedContext.parentResponseId,
+                mode: getVisibleTranscriptSnapshot().mode,
+                createdAt: Date.now(),
+                sourceProvider,
+                sourceModel,
+            };
 
             if (options?.userBubbleText || options?.screenshotPreview) {
                 setMessages((prev) => [
@@ -1106,16 +1196,18 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             setMessages((prev) => [
                 ...prev,
                 {
-                    id: nextMsgId(),
+                    id: responseId,
                     timestamp: Date.now(),
                     requestId,
                     role: 'system',
                     text: '',
                     intent,
                     source: options?.source,
-                    model: currentModelRef.current,
-                    provider: detectProviderType(currentModelRef.current),
+                    model: sourceModel,
+                    provider: sourceProvider,
                     question: resolvedMessage || options?.userBubbleText || mergedAdditionalContext,
+                    questionTurnId: ownership.questionTurnId,
+                    ownership,
                     isStreaming: true,
                 },
             ]);
@@ -1125,6 +1217,10 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     intent: intent as ActionIntent,
                     message: resolvedMessage || undefined,
                     additionalContext: mergedAdditionalContext,
+                    transcriptOverride: resolvedContext.transcriptOverride,
+                    actionContract: options?.actionContract ?? resolvedContext.actionContract,
+                    actionId: options?.actionId,
+                    contextTarget: resolvedContext.contextTarget,
                     imagePaths: options?.imagePaths,
                     requestId,
                     profilePreference: options?.profilePreference as any,
@@ -1142,28 +1238,37 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 });
             }
         },
-        [cancelInFlightOverlayRequests, rememberIntentRequest],
+        [cancelInFlightOverlayRequests, getVisibleTranscriptSnapshot, rememberIntentRequest],
     );
 
     const executeQuickAction = useCallback(
         async (action: OverlayQuickActionDef) => {
+            const resolvedContext = resolveActionContext({
+                action,
+                latestTurn: getVisibleTranscriptSnapshot(),
+                activeResponse: activeResponseRef.current,
+            });
             if (!isTranscriptPausedRef.current) {
                 pinRecommendationForTurn(action.id, currentQuestionTurnIdRef.current);
-                setActionContextSummaryOverride({
-                    label: derivedContextSummary.label,
-                    detail:
-                        ACTION_CONTEXT_MESSAGES[action.label] ?? `${action.label} in progress…`,
-                });
             }
+            setActionContextSummaryOverride({
+                label: `Using: ${resolvedContext.previewLabel}`,
+                detail:
+                    ACTION_CONTEXT_MESSAGES[action.label] ?? `${action.label} in progress…`,
+            });
             await runAction(action.intent as string, {
                 source: action.source,
                 analyticsKey: action.analyticsKey,
                 message: action.message,
                 additionalContext: action.additionalContext,
+                resolvedContext,
+                actionId: action.id,
+                actionContract: action.actionContract,
+                contextTarget: action.contextTarget,
                 profilePreference: action.profilePreference,
             });
         },
-        [derivedContextSummary.label, pinRecommendationForTurn, runAction],
+        [getVisibleTranscriptSnapshot, pinRecommendationForTurn, runAction],
     );
 
     const getQuickActionHandler = useCallback(
@@ -1449,6 +1554,27 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const visibleContextSummary = isTranscriptPaused
         ? frozenTranscriptUiSnapshot?.contextSummary ?? liveContextSummary
         : liveContextSummary;
+    const contextPreviewByActionId = useMemo<ContextPreviewByActionId>(() => {
+        const snapshot = getVisibleTranscriptSnapshot();
+        return visibleActiveQuickActions.reduce<ContextPreviewByActionId>((acc, action) => {
+            acc[action.id] = resolveActionContext({
+                action,
+                latestTurn: snapshot,
+                activeResponse,
+            }).previewLabel;
+            return acc;
+        }, {});
+    }, [
+        activeResponse?.id,
+        activeResponse?.ownership?.questionTurnId,
+        activeResponse?.questionTurnId,
+        getVisibleTranscriptSnapshot,
+        isTranscriptPaused,
+        visibleActiveQuickActions,
+        visibleLastFinalSentence,
+        visibleOverlayCopilotMode,
+        visibleRollingTranscript,
+    ]);
 
     return {
         messages,
@@ -1463,6 +1589,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         recommendedButton: visibleRecommendedButton,
         detectedQuestionType: visibleDetectedQuestionType,
         contextSummary: visibleContextSummary,
+        contextPreviewByActionId,
         responseHistory,
         activeResponse,
         activeResponseIndex: responseNavigation.activeIndex,

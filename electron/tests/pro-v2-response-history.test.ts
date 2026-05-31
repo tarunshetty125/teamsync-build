@@ -21,6 +21,22 @@ test('Pro V2 keeps a bounded response history instead of replacing the latest an
     assert.match(bridge, /const activeResponse = activeResponseIndex >= 0/);
 });
 
+test('Pro V2 action routing reuses selected response history state', () => {
+    const bridge = read('src/components/pro-v2/useCluelyOverlayBridge.ts');
+    const panel = read('src/components/pro-v2/ProInsightsPanel.tsx');
+    const shell = read('src/components/pro-v2/TeamSyncCluelyOverlay.tsx');
+
+    assert.match(bridge, /resolveActionContext\(\{/);
+    assert.match(bridge, /activeResponse: activeResponseRef\.current/);
+    assert.match(bridge, /contextPreviewByActionId/);
+    assert.match(bridge, /ownership/);
+    assert.match(bridge, /parentResponseId: resolvedContext\.parentResponseId/);
+    assert.doesNotMatch(bridge, /selectedResponseIndex/);
+    assert.doesNotMatch(bridge, /selectedResponseRef/);
+    assert.match(panel, /Using: \{contextPreviewByActionId\[action\.id\]/);
+    assert.match(shell, /contextPreviewByActionId=\{bridge\.contextPreviewByActionId\}/);
+});
+
 test('Pro V2 auto-selects new responses and exposes previous/next navigation state', () => {
     const bridge = read('src/components/pro-v2/useCluelyOverlayBridge.ts');
 

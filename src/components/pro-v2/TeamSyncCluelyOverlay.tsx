@@ -305,6 +305,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                             rollingTranscriptSpeakerLabel={bridge.rollingTranscriptSpeakerLabel}
                             isInterviewerSpeaking={bridge.isInterviewerSpeaking}
                             showTranscript={bridge.showTranscript}
+                            contextPreviewByActionId={bridge.contextPreviewByActionId}
                             onToggleTranscript={handleToggleTranscript}
                             getQuickActionHandler={bridge.getQuickActionHandler}
                             currentModel={bridge.currentModel}

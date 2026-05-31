@@ -14,6 +14,7 @@ import { IntelligenceEngine } from './IntelligenceEngine';
 import { MeetingPersistence } from './MeetingPersistence';
 import type { ConversationIntent, ScreenContentMode } from './llm';
 import type { ActionRagContext, UnifiedActionIntent } from './ActionContextBuilder';
+import type { ActionContract, ContextTarget } from '../src/lib/overlay/actionContextTypes';
 
 type UserControlledMode = 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design';
 
@@ -182,6 +183,10 @@ export class IntelligenceManager extends EventEmitter {
         requestId?: string;
         profilePreference?: 'default' | 'force_on' | 'force_off';
         additionalContext?: string;
+        transcriptOverride?: string;
+        actionContract?: ActionContract;
+        actionId?: string;
+        contextTarget?: ContextTarget;
 	        rag?: ActionRagContext | null;
 	        modeOverride?: UserControlledMode;
 	        screenScanMode?: ScreenContentMode;
@@ -198,6 +203,10 @@ export class IntelligenceManager extends EventEmitter {
             requestId?: string;
             profilePreference?: 'default' | 'force_on' | 'force_off';
             additionalContext?: string;
+            transcriptOverride?: string;
+            actionContract?: ActionContract;
+            actionId?: string;
+            contextTarget?: ContextTarget;
 	            rag?: ActionRagContext | null;
 	            modeOverride?: UserControlledMode;
 	            screenScanMode?: ScreenContentMode;
@@ -211,6 +220,10 @@ export class IntelligenceManager extends EventEmitter {
             requestId: options.requestId,
             profilePreference: options.profilePreference,
             additionalContext: options.additionalContext,
+            transcriptOverride: options.transcriptOverride,
+            actionContract: options.actionContract,
+            actionId: options.actionId,
+            contextTarget: options.contextTarget,
 	            rag: options.rag,
 	            modeOverride: options.modeOverride,
 	            screenScanMode: options.screenScanMode,
