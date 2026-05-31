@@ -114,7 +114,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ code, language = 'text', isLightT
                         padding: '14px 16px',
                         fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
                     }}
-                    wrapLongLines={false}
+                    wrapLongLines={true}
                     showLineNumbers={true}
                     lineNumberStyle={{
                         minWidth: '2.2em',

@@ -98,7 +98,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             <div className={`v2-recording-dot ${!isMeetingActive ? 'v2-recording-dot--paused' : ''}`} />
 
             {/* Waveform */}
-            <div className={`v2-waveform v2-no-drag ${!isMeetingActive ? 'v2-waveform-paused' : ''}`}>
+            <div className={`v2-waveform ${!isMeetingActive ? 'v2-waveform-paused' : ''}`}>
                 <div className="v2-waveform-bar" />
                 <div className="v2-waveform-bar" />
                 <div className="v2-waveform-bar" />
@@ -107,7 +107,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             </div>
 
             {/* Timer */}
-            <span className="v2-no-drag v2-bar-timer">
+            <span className="v2-bar-timer">
                 {formatTime(elapsed)}
             </span>
 

@@ -49,11 +49,11 @@ test('Pro V2 renderer follows the selected history entry, including system desig
     assert.match(surface, /key=\{`response-\$\{renderedResponse\.id\}`\}/);
     assert.match(surface, /<ArchitectureRenderer/);
     assert.match(css, /\.v2-response-scroll--system-design/);
-    assert.match(css, /max-height: min\(64vh, 540px\)/);
+    assert.match(css, /max-height: min\(76vh, 700px\)/);
     assert.match(css, /padding: 10px 16px 24px 30px/);
-    assert.match(layout, /V2_RESPONSE_MAX_WIDTH = 760/);
+    assert.match(layout, /V2_RESPONSE_MAX_WIDTH = 880/);
     assert.match(layout, /looksLikeWideSystemDesignResponse/);
-    assert.match(layout, /V2_OVERLAY_WINDOW_MAX_HEIGHT = 680/);
+    assert.match(layout, /V2_OVERLAY_WINDOW_MAX_HEIGHT = 860/);
     assert.doesNotMatch(surface, /latestResponse: V2Message \| null/);
 });
 
@@ -81,7 +81,7 @@ test('Pro V2 model selector has enough width for long dynamic model names', () =
     assert.match(selector, /\[overflow-wrap:anywhere\]/);
     assert.match(controlStrip, /const modelDisplayName = getOverlayModelDisplayName\(currentModel\)/);
     assert.match(controlStrip, /title=\{modelDisplayName\}/);
-    assert.match(css, /max-width: 240px/);
+    assert.match(css, /max-width: none/);
 });
 
 test('Pro V2 architecture diagrams expose working pan, zoom, and inner controls', () => {
