@@ -178,9 +178,10 @@ export class IntelligenceManager extends EventEmitter {
         requestId?: string;
         profilePreference?: 'default' | 'force_on' | 'force_off';
         additionalContext?: string;
-        rag?: ActionRagContext | null;
-        modeOverride?: UserControlledMode;
-        screenScanMode?: ScreenContentMode;
+	        rag?: ActionRagContext | null;
+	        modeOverride?: UserControlledMode;
+	        screenScanMode?: ScreenContentMode;
+	        modelOverride?: string;
     }): Promise<string | null> {
         return this.engine.runAction(params);
     }
@@ -193,9 +194,10 @@ export class IntelligenceManager extends EventEmitter {
             requestId?: string;
             profilePreference?: 'default' | 'force_on' | 'force_off';
             additionalContext?: string;
-            rag?: ActionRagContext | null;
-            modeOverride?: UserControlledMode;
-            screenScanMode?: ScreenContentMode;
+	            rag?: ActionRagContext | null;
+	            modeOverride?: UserControlledMode;
+	            screenScanMode?: ScreenContentMode;
+	            modelOverride?: string;
         } = {}
     ): Promise<string | null> {
         return this.runAction({
@@ -205,10 +207,11 @@ export class IntelligenceManager extends EventEmitter {
             requestId: options.requestId,
             profilePreference: options.profilePreference,
             additionalContext: options.additionalContext,
-            rag: options.rag,
-            modeOverride: options.modeOverride,
-            screenScanMode: options.screenScanMode,
-        });
+	            rag: options.rag,
+	            modeOverride: options.modeOverride,
+	            screenScanMode: options.screenScanMode,
+	            modelOverride: options.modelOverride,
+	        });
     }
 
     async runWhatShouldISay(question?: string, confidence?: number, imagePaths?: string[], mode?: UserControlledMode, requestId?: string): Promise<string | null> {

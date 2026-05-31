@@ -115,29 +115,7 @@ function buildManualStreamContext(text: string, detectedMode: SessionMode, final
     const transcriptContext = standaloneManualInput ? '' : finalizedTranscript.slice(-transcriptWindow);
 
     return [
-        transcriptContext,
-        [
-            'MANUAL INPUT CONTRACT:',
-            '- The typed manual input is the authoritative latest user question.',
-            '- Answer the USER QUESTION directly before considering any context.',
-            '- If transcript/context conflicts with the typed question, ignore the transcript/context.',
-            standaloneManualInput
-                ? '- Treat this as a standalone typed request. Do not use transcript memory.'
-                : '- Use transcript only when the typed question explicitly asks to continue or relate to prior discussion.',
-        ].join('\n'),
-        [
-            'RESPONSE RULES:',
-            '- Coding / DSA: Problem, Approach, Complexity, Solution with one fenced code block.',
-            '- Coding fence rules: opening line ```c or detected language, code on following lines, closing line ```; never two backticks or inline solution code.',
-            '- System design: concise 10-section architecture answer with exactly one ```architecture_json``` block; never Mermaid.',
-            '- architecture_json rules: valid JSON only, no comments, no trailing commas, exact opening fence ```architecture_json and exact closing fence ```.',
-            '- architecture_json node schema: {"id":"","label":"","kind":"","technology":"","purpose":"","layer":"","latency":"","failureMode":""}. Edge schema: {"source":"","target":"","label":"","protocol":"","latency":""}.',
-            '- Minimum diagram quality: simple systems 12+ nodes, medium production 20+ nodes, FAANG-scale 35-60+ nodes. Include clients, edge/gateway, core services, async, data, cache, observability, and security layers.',
-            '- Allowed node kinds: client, gateway, service, database, cache, queue, storage, external.',
-            '- Reuse the exact same lowercase node ID every time. Do not rename the same component with different IDs later in the diagram.',
-            '- Other questions: concise answer under 120 words.',
-            '- No preamble.',
-        ].join('\n'),
+        transcriptContext ? `RECENT OVERLAY TRANSCRIPT:\n${transcriptContext}` : '',
     ]
         .filter(Boolean)
         .join('\n\n') || undefined;

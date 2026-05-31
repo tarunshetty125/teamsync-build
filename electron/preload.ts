@@ -196,7 +196,7 @@ interface ElectronAPI {
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
-  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; additionalContext?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off' }) => Promise<{ success: boolean; result: string | null }>
+  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; additionalContext?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off'; modelOverride?: string }) => Promise<{ success: boolean; result: string | null }>
   generateWhatToSay: (question?: string, imagePaths?: string[], mode?: string, requestId?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
   generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
@@ -245,7 +245,7 @@ interface ElectronAPI {
   onIntelligenceManualStarted: (callback: (data?: { requestId?: string }) => void) => () => void
   onIntelligenceManualResult: (callback: (data: { answer: string; question: string; requestId?: string }) => void) => () => void
   onIntelligenceActionToken: (callback: (data: { intent: string; token: string; requestId?: string; mode: string; profileApplied?: boolean }) => void) => () => void
-  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; requestId?: string; mode: string; profileApplied?: boolean }) => void) => () => void
+  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; requestId?: string; mode: string; profileApplied?: boolean; debugMetadata?: any }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
   onIntelligenceError: (callback: (data: { error: string; mode: string; requestId?: string }) => void) => () => void
   onScreenshotCaptureBlocked: (callback: (data: { error: string }) => void) => () => void
@@ -936,7 +936,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Intelligence Mode IPC
   generateAssist: () => ipcRenderer.invoke("generate-assist"),
-  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; additionalContext?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off' }) => ipcRenderer.invoke("generate-action", payload),
+  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; additionalContext?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off'; modelOverride?: string }) => ipcRenderer.invoke("generate-action", payload),
   generateWhatToSay: (question?: string, imagePaths?: string[], mode?: string, requestId?: string) => ipcRenderer.invoke("generate-what-to-say", question, imagePaths, mode, requestId),
   generateClarify: (requestId?: string) => ipcRenderer.invoke("generate-clarify", requestId),
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => ipcRenderer.invoke("generate-code-hint", imagePaths, problemStatement, requestId),
@@ -1129,7 +1129,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("intelligence-action-token", subscription)
     }
   },
-  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; requestId?: string; mode: string; profileApplied?: boolean; _sessionId?: string; _intelligence?: any }) => void) => {
+  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; requestId?: string; mode: string; profileApplied?: boolean; _sessionId?: string; _intelligence?: any; debugMetadata?: any }) => void) => {
     const subscription = (_: any, data: any) => callback(data)
     ipcRenderer.on("intelligence-action-result", subscription)
     return () => {

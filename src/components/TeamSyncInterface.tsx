@@ -2926,7 +2926,11 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             currentSourceRef.current = 'Answer Now';
 
             // Send manual finalization signal to STT Providers
-            window.electronAPI.finalizeMicSTT().catch(err => console.error('[TeamSyncInterface] Failed to send finalizeMicSTT:', err));
+            try {
+                await window.electronAPI.finalizeMicSTT();
+            } catch (err) {
+                console.error('[TeamSyncInterface] Failed to send finalizeMicSTT:', err);
+            }
 
             const currentAttachments = attachedContextRef.current;
             setAttachedContext([]); // Clear context immediately on send
@@ -3069,20 +3073,10 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                     ((manualDetectedMode === 'coding' || manualDetectedMode === 'system_design') && manualWordCount <= 18)
                     || (manualDetectedMode === 'general' && manualWordCount <= 14)
                 );
-            const streamContext = [
-                conversationContext.trim(),
-                standaloneManualInput ? '' : finalizedTranscriptRef.current.slice(-transcriptWindow),
-                [
-                    'MANUAL INPUT CONTRACT:',
-                    '- The typed manual input is the authoritative latest user question.',
-                    '- Answer the USER QUESTION directly before considering any context.',
-                    '- If transcript/context conflicts with the typed question, ignore the transcript/context.',
-                    standaloneManualInput
-                        ? '- Treat this as a standalone typed request. Do not use transcript memory.'
-                        : '- Use transcript only when the typed question explicitly asks to continue or relate to prior discussion.',
-                ].join('\n'),
-                'RESPONSE RULES:\n- Coding / DSA: Problem, Approach, Complexity, Solution with one fenced code block.\n- Coding fence rules: opening line ```c or detected language, code on following lines, closing line ```; never two backticks or inline solution code.\n- System design: concise 10-section architecture answer with exactly one ```architecture_json``` block; never Mermaid.\n- Other: under 120 words; 3-5 bullets when listing.\n- No preamble.'
-            ].filter(Boolean).join('\n') || undefined;
+	            const streamContext = [
+	                conversationContext.trim(),
+	                standaloneManualInput ? '' : `RECENT OVERLAY TRANSCRIPT:\n${finalizedTranscriptRef.current.slice(-transcriptWindow)}`,
+	            ].filter(Boolean).join('\n') || undefined;
             await window.electronAPI.streamGeminiChat(
                 userText || 'Analyze this screenshot',
                 currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,

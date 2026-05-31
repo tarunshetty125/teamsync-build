@@ -222,7 +222,7 @@ export interface ElectronAPI {
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
-  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; additionalContext?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off' }) => Promise<{ success: boolean; result: string | null }>
+  generateAction: (payload: { intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'; message?: string; additionalContext?: string; imagePaths?: string[]; requestId?: string; profilePreference?: 'default' | 'force_on' | 'force_off'; modelOverride?: string }) => Promise<{ success: boolean; result: string | null }>
   generateWhatToSay: (question?: string, imagePaths?: string[], mode?: string, requestId?: string) => Promise<{ answer: string | null; question?: string; error?: string }>
   generateClarify: (requestId?: string) => Promise<{ clarification: string | null }>
   generateCodeHint: (imagePaths?: string[], problemStatement?: string, requestId?: string) => Promise<{ hint: string | null }>
@@ -303,7 +303,7 @@ export interface ElectronAPI {
   onIntelligenceManualStarted: (callback: (data?: { _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceManualResult: (callback: (data: { answer: string; question: string; _sessionId?: string; requestId?: string }) => void) => () => void
   onIntelligenceActionToken: (callback: (data: { intent: string; token: string; mode: string; profileApplied?: boolean; _sessionId?: string; requestId?: string }) => void) => () => void
-  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; mode: string; profileApplied?: boolean; _sessionId?: string; requestId?: string; _intelligence?: any }) => void) => () => void
+  onIntelligenceActionResult: (callback: (data: { intent: string; content: string; mode: string; profileApplied?: boolean; _sessionId?: string; requestId?: string; _intelligence?: any; debugMetadata?: any }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
   onIntelligenceError: (callback: (data: { error: string, mode: string; _sessionId?: string; requestId?: string }) => void) => () => void;
   onScreenshotCaptureBlocked: (callback: (data: { error: string }) => void) => () => void;

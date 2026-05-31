@@ -5,7 +5,7 @@ import {
 } from '../ActionContextBuilder';
 import { isBedrockModelId } from './BedrockModelIds';
 
-export type RuntimeProvider = 'ollama' | 'gemini' | 'custom' | 'bedrock';
+export type RuntimeProvider = 'ollama' | 'gemini' | 'custom' | 'bedrock' | 'openai' | 'claude' | 'groq' | 'teamsync' | string;
 export type ProviderPromptFamily = 'groq' | 'bedrock' | 'claude' | 'gemini' | 'ollama' | 'openai' | 'custom';
 
 export interface ProviderPromptBuildArgs {

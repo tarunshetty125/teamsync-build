@@ -152,14 +152,15 @@ test('Manual typed questions are treated as authoritative standalone inputs', ()
 
     assert.match(bridge, /function isStandaloneManualInput/);
     assert.match(bridge, /function buildManualStreamContext/);
-    assert.match(bridge, /MANUAL INPUT CONTRACT/);
     assert.match(bridge, /standaloneManualInput \? '' : finalizedTranscript\.slice\(-transcriptWindow\)/);
-    assert.match(bridge, /The typed manual input is the authoritative latest user question/);
-    assert.match(bridge, /Do not use transcript memory/);
+    assert.match(bridge, /RECENT OVERLAY TRANSCRIPT/);
+    assert.doesNotMatch(bridge, /RESPONSE RULES:/);
 
     assert.match(v1, /const standaloneManualInput = currentAttachments\.length === 0/);
-    assert.match(v1, /standaloneManualInput \? '' : finalizedTranscriptRef\.current\.slice\(-transcriptWindow\)/);
-    assert.match(v1, /MANUAL INPUT CONTRACT/);
+    assert.match(v1, /RECENT OVERLAY TRANSCRIPT/);
+    assert.doesNotMatch(v1, /RESPONSE RULES:/);
+
+    assert.match(contextBuilder, /The typed USER QUESTION is authoritative over transcript/);
 
     assert.match(contextBuilder, /profile === 'fresh_general' && wordCount <= 14/);
     assert.match(contextBuilder, /profile === 'coding' \|\| profile === 'system_design'/);

@@ -23,6 +23,7 @@ import { CustomProvider, CurlProvider, type BedrockCredentials } from './service
 import { isBedrockModelId } from './llm/BedrockModelIds';
 import { resolveBedrockRuntimeRoute } from './llm/BedrockVisionAdapter';
 import { formatVisionUnsupportedMessage, getModelCapabilities, type ModelCapabilities } from './llm/ModelCapabilities';
+import type { RoutingDecision } from './ActionTelemetry';
 import { exec, spawn } from 'child_process';
 import { getPythonPath, getOCRScriptPath, getPythonEnv } from './utils/pythonRuntime';
 import { promisify } from 'util';
@@ -42,6 +43,7 @@ const GEMINI_PRO_MODEL = "gemini-3.1-pro-preview"
 const GROQ_MODEL = "llama-3.3-70b-versatile"
 const OPENAI_MODEL = "gpt-5.4"
 const CLAUDE_MODEL = "claude-sonnet-4-6"
+const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 const MAX_OUTPUT_TOKENS = 65536
 const CLAUDE_MAX_OUTPUT_TOKENS = 64000
 const BEDROCK_MAX_OUTPUT_TOKENS = 4096
@@ -733,6 +735,99 @@ export class LLMHelper {
     return isBedrockModelId(modelId, this.bedrockCredentials?.preferredModel);
   }
 
+  public normalizeModelId(modelId: string): string {
+    if (modelId === 'gemini') return GEMINI_FLASH_MODEL;
+    if (modelId === 'gemini-pro') return GEMINI_PRO_MODEL;
+    if (modelId === 'claude') return CLAUDE_MODEL;
+    if (modelId === 'llama') return GROQ_MODEL;
+    return modelId;
+  }
+
+  public getProviderForModel(modelId: string): string {
+    const normalized = this.normalizeModelId(modelId);
+    if (normalized.startsWith('ollama-')) return 'ollama';
+    if (this.isBedrockModel(normalized)) return 'bedrock';
+    if (this.isOpenAiModel(normalized)) return 'openai';
+    if (this.isClaudeModel(normalized)) return 'claude';
+    if (this.isGroqModel(normalized)) return 'groq';
+    if (this.isGeminiModel(normalized)) return 'gemini';
+    if (this.customProvider && (this.customProvider.name === modelId || this.customProvider.id === modelId)) return 'custom';
+    if (this.activeCurlProvider && (this.activeCurlProvider.name === modelId || this.activeCurlProvider.id === modelId)) return 'custom';
+    if (normalized === 'teamsync') return 'teamsync';
+    return detectProviderLabel(normalized);
+  }
+
+  public modelSupportsVision(modelId: string): boolean {
+    return getModelCapabilities(this.normalizeModelId(modelId)).vision;
+  }
+
+  public async resolveRoutingDecision(args: {
+    requestedModel: string;
+    imagePaths?: string[];
+  }): Promise<RoutingDecision> {
+    const requestedModel = this.normalizeModelId(args.requestedModel);
+    const requestedProvider = this.getProviderForModel(requestedModel);
+    const hasImages = Boolean(args.imagePaths?.length);
+
+    if (!hasImages || this.modelSupportsVision(requestedModel)) {
+      return {
+        requestedModel,
+        requestedProvider,
+        actualModel: requestedModel,
+        actualProvider: requestedProvider,
+        reason: 'requested_model',
+      };
+    }
+
+    if (this.isBedrockModel(requestedModel) && this.bedrockClient) {
+      const route = await resolveBedrockRuntimeRoute({
+        client: this.bedrockClient,
+        requestedModel,
+        preferredModel: this.bedrockCredentials?.preferredModel,
+        imagePaths: args.imagePaths,
+      });
+      return {
+        requestedModel,
+        requestedProvider,
+        actualModel: route.modelId,
+        actualProvider: 'bedrock',
+        reason: route.modelId === requestedModel ? 'requested_bedrock_vision_model' : 'vision_required',
+      };
+    }
+
+    if (this.isGroqModel(requestedModel) && this.groqClient) {
+      return {
+        requestedModel,
+        requestedProvider,
+        actualModel: GROQ_VISION_MODEL,
+        actualProvider: 'groq',
+        reason: 'vision_required',
+      };
+    }
+
+    if (this.claudeClient) {
+      return {
+        requestedModel,
+        requestedProvider,
+        actualModel: CLAUDE_MODEL,
+        actualProvider: 'claude',
+        reason: 'vision_required',
+      };
+    }
+
+    if (this.openaiClient && this.modelSupportsVision(OPENAI_MODEL)) {
+      return {
+        requestedModel,
+        requestedProvider,
+        actualModel: OPENAI_MODEL,
+        actualProvider: 'openai',
+        reason: 'vision_required',
+      };
+    }
+
+    throw new Error(formatVisionUnsupportedMessage(requestedModel));
+  }
+
   public getCurrentModelCapabilities(): ModelCapabilities {
     return getModelCapabilities(this.getCurrentModel());
   }
@@ -756,11 +851,7 @@ export class LLMHelper {
 
   public setModel(modelId: string, customProviders: (CustomProvider | CurlProvider)[] = []) {
     // Map UI short codes to internal Model IDs
-    let targetModelId = modelId;
-    if (modelId === 'gemini') targetModelId = GEMINI_FLASH_MODEL;
-    if (modelId === 'gemini-pro') targetModelId = GEMINI_PRO_MODEL;
-    if (modelId === 'claude') targetModelId = CLAUDE_MODEL;
-    if (modelId === 'llama') targetModelId = GROQ_MODEL;
+    let targetModelId = this.normalizeModelId(modelId);
 
     if (targetModelId.startsWith('ollama-')) {
       this.useOllama = true;
@@ -2581,7 +2672,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 
     // Non-streaming multimodal call with automatic key rotation
     const response = await this.groqRotatingClient.chatCompletion({
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+	      model: GROQ_VISION_MODEL,
       messages,
       temperature: 1,
       max_completion_tokens: 28672,
@@ -3012,19 +3103,39 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     context?: string,
     systemPromptOverride?: string, // Optional override (defaults to HARD_SYSTEM_PROMPT)
     ignoreKnowledgeMode: boolean = false,
-    runtimeOptions?: {
-      skipKnowledgeInjection?: boolean;
-      skipModeInjection?: boolean;
-      skipCustomNotesInjection?: boolean;
-      maxOutputTokens?: number;
-    }
-  ): AsyncGenerator<string, void, unknown> {
-
-    // Preparation
-    const isMultimodal = !!(imagePaths?.length);
-    if (isMultimodal) {
-      this.assertCurrentModelSupportsVision();
-    }
+	    runtimeOptions?: {
+	      skipKnowledgeInjection?: boolean;
+	      skipModeInjection?: boolean;
+	      skipCustomNotesInjection?: boolean;
+	      maxOutputTokens?: number;
+	      modelOverride?: string;
+	      providerOverride?: string;
+	      requestContext?: {
+	        requestId?: string | null;
+	        actionType?: string;
+	      };
+	      disableProviderFallbacks?: boolean;
+	    }
+	  ): AsyncGenerator<string, void, unknown> {
+	  
+	    // Preparation
+	    const isMultimodal = !!(imagePaths?.length);
+	    const explicitModelOverride = runtimeOptions?.modelOverride?.trim();
+	    const routeModelId = explicitModelOverride
+	      ? this.normalizeModelId(explicitModelOverride)
+	      : this.currentModelId;
+	    const routeProvider = runtimeOptions?.providerOverride || this.getProviderForModel(routeModelId);
+	    const routeUseOllama = routeProvider === 'ollama' || (!explicitModelOverride && this.useOllama);
+	    const routeOllamaModel = routeModelId.startsWith('ollama-')
+	      ? routeModelId.replace('ollama-', '')
+	      : this.ollamaModel;
+	    const routeCustomProvider = explicitModelOverride ? null : this.customProvider;
+	    const routeCurlProvider = explicitModelOverride ? null : this.activeCurlProvider;
+	    const allowProviderFallbacks = runtimeOptions?.disableProviderFallbacks !== true;
+	    const allowGroqFastText = this.groqFastTextMode && !explicitModelOverride;
+	    if (isMultimodal && !this.modelSupportsVision(routeModelId)) {
+	      throw new Error(formatVisionUnsupportedMessage(routeModelId));
+	    }
     let isCodeHeavy = false;
     let hasExplicitSystemPromptOverride = systemPromptOverride !== undefined;
     const skipKnowledgeInjection = ignoreKnowledgeMode || runtimeOptions?.skipKnowledgeInjection === true;
@@ -3108,7 +3219,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       const codeChars = (totalText.match(/[{}[\]();=<>"'`:\/\\,\n]/g) || []).length;
       isCodeHeavy = totalText.length > 800 && (codeChars > 500 || (codeChars / totalText.length) > 0.05);
 
-      const willUseGroq = (!isMultimodal && this.groqFastTextMode) || this.isGroqModel(this.currentModelId);
+	      const willUseGroq = (!isMultimodal && allowGroqFastText) || this.isGroqModel(routeModelId);
 
       let COMBINED_CTX_CAP = 12_000;
       if (willUseGroq) {
@@ -3263,7 +3374,7 @@ Return only the final answer. No meta commentary.
     // Never allow overflow. No fallback bypass.
     // ============================================================
     userContent = enforceTokenCap(finalSystemPrompt, userContent, TOKEN_CAP);
-    if (!isMultimodal && (this.groqFastTextMode || this.isGroqModel(this.currentModelId) || this.currentModelId === 'teamsync')) {
+	    if (!isMultimodal && (allowGroqFastText || this.isGroqModel(routeModelId) || routeModelId === 'teamsync')) {
       const compacted = compactGroqTextPayload(finalSystemPrompt, userContent);
       if (compacted.changed) {
         finalSystemPrompt = compacted.systemPrompt;
@@ -3272,13 +3383,13 @@ Return only the final answer. No meta commentary.
     }
     const preflightTotalTokens = estimateTokens(finalSystemPrompt) + estimateTokens(userContent);
     console.log(`[TokenBudget] Pre-flight: system=${estimateTokens(finalSystemPrompt)} + user=${estimateTokens(userContent)} = ${preflightTotalTokens} tok (cap=${TOKEN_CAP})`);
-    const selectedProvider = this.isGroqModel(this.currentModelId) || this.groqFastTextMode
-      ? 'groq'
-      : this.isGeminiModel(this.currentModelId)
-        ? 'gemini'
-        : this.useOllama
-          ? 'local'
-          : detectProviderLabel(this.currentModelId);
+	    const selectedProvider = this.isGroqModel(routeModelId) || allowGroqFastText
+	      ? 'groq'
+	      : this.isGeminiModel(routeModelId)
+	        ? 'gemini'
+	        : routeUseOllama
+	          ? 'local'
+	          : detectProviderLabel(routeModelId);
     const selectedBudget = selectedProvider === 'groq'
       ? MODEL_BUDGETS.groq_llama_70b
       : selectedProvider === 'local'
@@ -3286,7 +3397,7 @@ Return only the final answer. No meta commentary.
         : MODEL_BUDGETS.gemini_flash;
     const requestSize = estimateModelRequestSize(
       selectedProvider,
-      this.currentModelId,
+	        routeModelId,
       finalSystemPrompt,
       userContent,
       'safeTPM' in selectedBudget ? selectedBudget.safeTPM : selectedBudget.target,
@@ -3297,14 +3408,14 @@ Return only the final answer. No meta commentary.
       const compacted = compactGroqPromptForBudget(
         finalSystemPrompt,
         userContent,
-        this.currentModelId,
+	        routeModelId,
         MODEL_BUDGETS.groq_llama_70b.safeTPM,
       );
       finalSystemPrompt = compacted.systemPrompt;
       userContent = compacted.userContent;
       const reducedRequestSize = estimateModelRequestSize(
         'groq',
-        this.currentModelId,
+	        routeModelId,
         finalSystemPrompt,
         userContent,
         MODEL_BUDGETS.groq_llama_70b.safeTPM,
@@ -3319,48 +3430,50 @@ Return only the final answer. No meta commentary.
     // GROQ FAST TEXT OVERRIDE (Text-Only)
     // Two paths: local Groq key → call Groq directly; TeamSync API only → send fast_mode:true
     // to the server so it routes to its internal Groq pool (llama-3.3-70b-versatile).
-    if (this.groqFastTextMode && !isMultimodal && !groqPromptStillOversized) {
-      if (this.groqClient) {
-        console.log(`[LLMHelper] ⚡️ Groq Fast Text Mode Active (Streaming). Routing to local Groq...`);
-        try {
-          const groqFullMessage = `${finalSystemPrompt}\n\n${userContent}`;
-          yield* this.streamWithGroq(groqFullMessage, this.currentModelId, maxOutputTokens);
-          return;
-        } catch (e: any) {
-          console.warn("[LLMHelper] Groq Fast Text streaming failed, falling back:", e.message);
-        }
-        // Local Groq failed — fall through to TeamSync if available
-      }
+	    if (allowGroqFastText && !isMultimodal && !groqPromptStillOversized) {
+	      if (this.groqClient) {
+	        console.log(`[LLMHelper] ⚡️ Groq Fast Text Mode Active (Streaming). Routing to local Groq...`);
+	        try {
+	          const groqFullMessage = `${finalSystemPrompt}\n\n${userContent}`;
+	          yield* this.streamWithGroq(groqFullMessage, routeModelId, maxOutputTokens);
+	          return;
+	        } catch (e: any) {
+	          console.warn("[LLMHelper] Groq Fast Text streaming failed, falling back:", e.message);
+	          if (!allowProviderFallbacks) throw e;
+	        }
+	        // Local Groq failed — fall through to TeamSync if available
+	      }
       if (this.hasTeamSync()) {
         // streamWithTeamSync → generateWithTeamSync → sends fast_mode:true → server Groq pool
         console.log(`[LLMHelper] ⚡️ Groq Fast Text Mode Active (Streaming). Routing to TeamSync server Groq pool...`);
-        try {
-          yield* this.streamWithTeamSync(userContent, finalSystemPrompt, undefined, maxOutputTokens);
-          return;
-        } catch (e: any) {
-          console.warn("[LLMHelper] TeamSync fast-mode failed, falling back:", e.message);
-        }
-      }
-    }
-
-    // 1. Ollama Streaming
-    if (this.useOllama) {
-      yield* this.streamWithOllama(message, context, finalSystemPrompt, imagePaths);
-      return;
-    }
-
-    // 2a. CustomProvider (switchToCustom path) — full SSE-capable streaming
-    if (this.customProvider) {
-      yield* this.streamWithCustom(message, context, imagePaths, finalSystemPrompt);
-      return;
-    }
-
-    // 2b. Custom Provider Streaming (via cURL - Non-streaming fallback for now)
-    if (this.activeCurlProvider) {
-      const response = await this.executeCustomProvider(
-        this.activeCurlProvider.curlCommand,
-        userContent,
-        finalSystemPrompt,
+	        try {
+	          yield* this.streamWithTeamSync(userContent, finalSystemPrompt, undefined, maxOutputTokens, allowGroqFastText);
+	          return;
+	        } catch (e: any) {
+	          console.warn("[LLMHelper] TeamSync fast-mode failed, falling back:", e.message);
+	          if (!allowProviderFallbacks) throw e;
+	        }
+	      }
+	    }
+	  
+	    // 1. Ollama Streaming
+	    if (routeUseOllama) {
+	      yield* this.streamWithOllama(message, context, finalSystemPrompt, imagePaths, routeOllamaModel);
+	      return;
+	    }
+	  
+	    // 2a. CustomProvider (switchToCustom path) — full SSE-capable streaming
+	    if (routeCustomProvider) {
+	      yield* this.streamWithCustom(message, context, imagePaths, finalSystemPrompt);
+	      return;
+	    }
+	  
+	    // 2b. Custom Provider Streaming (via cURL - Non-streaming fallback for now)
+	    if (routeCurlProvider) {
+	      const response = await this.executeCustomProvider(
+	        routeCurlProvider.curlCommand,
+	        userContent,
+	        finalSystemPrompt,
         message,
         context || "",
         imagePaths?.[0]
@@ -3372,69 +3485,70 @@ Return only the final answer. No meta commentary.
     // 3. Cloud Provider Routing
 
     // Bedrock
-    if (this.isBedrockModel(this.currentModelId) && this.bedrockClient) {
-      const bedrockSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
-      const finalBedrockSystem = this.injectLanguageInstruction(bedrockSystem);
-      yield* this.streamWithBedrock(userContent, finalBedrockSystem, imagePaths, undefined, maxOutputTokens);
-      return;
-    }
-
-    // OpenAI
-    if (this.isOpenAiModel(this.currentModelId) && this.openaiClient) {
-      const openAiSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
-      const finalOpenAiSystem = this.injectLanguageInstruction(openAiSystem);
-      if (isMultimodal && imagePaths) {
-        yield* this.streamWithOpenaiMultimodal(userContent, imagePaths, finalOpenAiSystem, undefined, maxOutputTokens);
-      } else {
-        yield* this.streamWithOpenai(userContent, finalOpenAiSystem, undefined, maxOutputTokens);
-      }
-      return;
-    }
-
-    // Claude
-    if (this.isClaudeModel(this.currentModelId) && this.claudeClient) {
-      const claudeSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : CLAUDE_SYSTEM_PROMPT;
-      const finalClaudeSystem = this.injectLanguageInstruction(claudeSystem);
-      if (isMultimodal && imagePaths) {
-        yield* this.streamWithClaudeMultimodal(userContent, imagePaths, finalClaudeSystem, undefined, maxOutputTokens);
-      } else {
-        yield* this.streamWithClaude(userContent, finalClaudeSystem, undefined, maxOutputTokens);
-      }
-      return;
-    }
-
-    // Groq (Text + Multimodal)
-    if (this.isGroqModel(this.currentModelId) && this.groqClient && !groqPromptStillOversized) {
-      if (isMultimodal && imagePaths) {
-        // Route multimodal to Groq Llama 4 Scout (vision-capable)
-        const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
-        const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
+	    if (this.isBedrockModel(routeModelId) && this.bedrockClient) {
+	      const bedrockSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
+	      const finalBedrockSystem = this.injectLanguageInstruction(bedrockSystem);
+	      yield* this.streamWithBedrock(userContent, finalBedrockSystem, imagePaths, routeModelId, maxOutputTokens);
+	      return;
+	    }
+	  
+	    // OpenAI
+	    if (this.isOpenAiModel(routeModelId) && this.openaiClient) {
+	      const openAiSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
+	      const finalOpenAiSystem = this.injectLanguageInstruction(openAiSystem);
+	      if (isMultimodal && imagePaths) {
+	        yield* this.streamWithOpenaiMultimodal(userContent, imagePaths, finalOpenAiSystem, routeModelId, maxOutputTokens);
+	      } else {
+	        yield* this.streamWithOpenai(userContent, finalOpenAiSystem, routeModelId, maxOutputTokens);
+	      }
+	      return;
+	    }
+	  
+	    // Claude
+	    if (this.isClaudeModel(routeModelId) && this.claudeClient) {
+	      const claudeSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : CLAUDE_SYSTEM_PROMPT;
+	      const finalClaudeSystem = this.injectLanguageInstruction(claudeSystem);
+	      if (isMultimodal && imagePaths) {
+	        yield* this.streamWithClaudeMultimodal(userContent, imagePaths, finalClaudeSystem, routeModelId, maxOutputTokens);
+	      } else {
+	        yield* this.streamWithClaude(userContent, finalClaudeSystem, routeModelId, maxOutputTokens);
+	      }
+	      return;
+	    }
+	  
+	    // Groq (Text + Multimodal)
+	    if (this.isGroqModel(routeModelId) && this.groqClient && !groqPromptStillOversized) {
+	      if (isMultimodal && imagePaths) {
+	        // Route multimodal to Groq Llama 4 Scout (vision-capable)
+	        const groqSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
+	        const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
         yield* this.streamWithGroqMultimodal(userContent, imagePaths, finalGroqSystem, maxOutputTokens);
         return;
       }
-      // Text-only Groq
-      const groqFullMessage = `${finalSystemPrompt}\n\n${userContent}`;
-      try {
-        yield* this.streamWithGroq(groqFullMessage, this.currentModelId, maxOutputTokens);
-        return;
-      } catch (groqTextErr: any) {
-        console.warn(`[LLMHelper] ⚠️ Groq text-only failed (${groqTextErr.message}), falling through to Gemini...`);
-        // Fall through to Gemini routing below
-      }
-    }
-
-    // 3b. TeamSync API
-    if (this.currentModelId === 'teamsync') {
+	      // Text-only Groq
+	      const groqFullMessage = `${finalSystemPrompt}\n\n${userContent}`;
+	      try {
+	        yield* this.streamWithGroq(groqFullMessage, routeModelId, maxOutputTokens);
+	        return;
+	      } catch (groqTextErr: any) {
+	        console.warn(`[LLMHelper] ⚠️ Groq text-only failed (${groqTextErr.message}), falling through to Gemini...`);
+	        if (!allowProviderFallbacks) throw groqTextErr;
+	        // Fall through to Gemini routing below
+	      }
+	    }
+	  
+	    // 3b. TeamSync API
+	    if (routeModelId === 'teamsync') {
       const { CredentialsManager } = require('./services/CredentialsManager');
       const teamsyncKey = CredentialsManager.getInstance().getTeamSyncApiKey();
       if (teamsyncKey) {
         try {
-          const response = await this.generateWithTeamSync(userContent, finalSystemPrompt, imagePaths, maxOutputTokens);
-          yield response;
+	          yield* this.streamWithTeamSync(userContent, finalSystemPrompt, imagePaths, maxOutputTokens, false);
           return;
-        } catch (err: any) {
-          console.warn('[LLMHelper] TeamSync API failed in streamChat, trying Groq fallback:', err.message);
-          // Try Groq before Gemini — Groq key is more commonly available
+	        } catch (err: any) {
+	          console.warn('[LLMHelper] TeamSync API failed in streamChat, trying Groq fallback:', err.message);
+	          if (!allowProviderFallbacks) throw err;
+	          // Try Groq before Gemini — Groq key is more commonly available
           if (this.groqClient) {
             try {
               if (isMultimodal && imagePaths) {
@@ -3447,40 +3561,45 @@ Return only the final answer. No meta commentary.
                 yield* this.streamWithGroq(`${finalGroqSystem}\n\n${userContent}`, GROQ_MODEL, maxOutputTokens); // intentional: emergency fallback waterfall — use stable GROQ_MODEL baseline, not currentModelId
               }
               return;
-            } catch (groqErr: any) {
-              console.warn('[LLMHelper] Groq fallback also failed, trying Gemini:', groqErr.message);
-            }
-          }
+	            } catch (groqErr: any) {
+	              console.warn('[LLMHelper] Groq fallback also failed, trying Gemini:', groqErr.message);
+	              if (!allowProviderFallbacks) throw groqErr;
+	            }
+	          }
           // Fall through to Gemini
         }
       }
       // No key or all fallbacks failed — fall through to Gemini
     }
 
-    // 4. Gemini Routing & Fallback
-    if (this.client) {
-      // Direct model use if specified
-      if (this.isGeminiModel(this.currentModelId)) {
-        const fullMsg = `${finalSystemPrompt}\n\n${userContent}`;
-        yield* this.streamWithGeminiModel(fullMsg, this.currentModelId, imagePaths, maxOutputTokens);
-        return;
-      }
-
-      // Race strategy (default)
+	    // 4. Gemini Routing & Fallback
+	    if (this.client) {
+	      // Direct model use if specified
+	      if (this.isGeminiModel(routeModelId)) {
+	        const fullMsg = `${finalSystemPrompt}\n\n${userContent}`;
+	        yield* this.streamWithGeminiModel(fullMsg, routeModelId, imagePaths, maxOutputTokens);
+	        return;
+	      }
+	      if (!allowProviderFallbacks) {
+	        throw new Error(`Provider fallback disabled for requested model ${routeModelId}`);
+	      }
+	  
+	      // Race strategy (default)
       const raceMsg = `${finalSystemPrompt}\n\n${userContent}`;
       yield* this.streamWithGeminiParallelRace(raceMsg, imagePaths);
       return;
     }
 
     // 5. Last-resort: TeamSync API (if user has a key but no cloud provider configured)
-    if (this.hasTeamSync()) {
-      try {
-        yield* this.streamWithTeamSync(userContent, finalSystemPrompt, imagePaths, maxOutputTokens);
-        return;
-      } catch (e: any) {
-        console.warn('[LLMHelper] TeamSync last-resort fallback failed:', e.message);
-      }
-    }
+	    if (this.hasTeamSync()) {
+	      try {
+	        yield* this.streamWithTeamSync(userContent, finalSystemPrompt, imagePaths, maxOutputTokens, allowGroqFastText);
+	        return;
+	      } catch (e: any) {
+	        console.warn('[LLMHelper] TeamSync last-resort fallback failed:', e.message);
+	        if (!allowProviderFallbacks) throw e;
+	      }
+	    }
 
     throw new Error("No AI provider configured. Please add at least one API key in Settings.");
   }
@@ -3488,14 +3607,21 @@ Return only the final answer. No meta commentary.
   public streamStructuredPrompt(
     prompt: { question: string; context?: string; systemPrompt?: string },
     imagePaths?: string[],
-    runtimeOptions?: {
-      ignoreKnowledgeMode?: boolean;
-      skipKnowledgeInjection?: boolean;
-      skipModeInjection?: boolean;
-      skipCustomNotesInjection?: boolean;
-      maxOutputTokens?: number;
-    }
-  ): AsyncGenerator<string, void, unknown> {
+	    runtimeOptions?: {
+	      ignoreKnowledgeMode?: boolean;
+	      skipKnowledgeInjection?: boolean;
+	      skipModeInjection?: boolean;
+	      skipCustomNotesInjection?: boolean;
+	      maxOutputTokens?: number;
+	      modelOverride?: string;
+	      providerOverride?: string;
+	      requestContext?: {
+	        requestId?: string | null;
+	        actionType?: string;
+	      };
+	      disableProviderFallbacks?: boolean;
+	    }
+	  ): AsyncGenerator<string, void, unknown> {
     return this.streamChat(
       prompt.question,
       imagePaths,
@@ -3503,10 +3629,48 @@ Return only the final answer. No meta commentary.
       prompt.systemPrompt,
       runtimeOptions?.ignoreKnowledgeMode ?? true,
       {
-        skipKnowledgeInjection: runtimeOptions?.skipKnowledgeInjection,
-        skipModeInjection: runtimeOptions?.skipModeInjection,
-        skipCustomNotesInjection: runtimeOptions?.skipCustomNotesInjection,
-        maxOutputTokens: runtimeOptions?.maxOutputTokens,
+	        skipKnowledgeInjection: runtimeOptions?.skipKnowledgeInjection,
+	        skipModeInjection: runtimeOptions?.skipModeInjection,
+	        skipCustomNotesInjection: runtimeOptions?.skipCustomNotesInjection,
+	        maxOutputTokens: runtimeOptions?.maxOutputTokens,
+	        modelOverride: runtimeOptions?.modelOverride,
+	        providerOverride: runtimeOptions?.providerOverride,
+	        requestContext: runtimeOptions?.requestContext,
+	        disableProviderFallbacks: runtimeOptions?.disableProviderFallbacks,
+	      }
+	    );
+	  }
+
+  public invoke(args: {
+    prompt: { question: string; context?: string; systemPrompt?: string };
+    imagePaths?: string[];
+    model: string;
+    provider: string;
+    requestContext?: {
+      requestId?: string | null;
+      actionType?: string;
+    };
+    runtimeOptions?: {
+      ignoreKnowledgeMode?: boolean;
+      skipKnowledgeInjection?: boolean;
+      skipModeInjection?: boolean;
+      skipCustomNotesInjection?: boolean;
+      maxOutputTokens?: number;
+    };
+  }): AsyncGenerator<string, void, unknown> {
+    return this.streamStructuredPrompt(
+      args.prompt,
+      args.imagePaths,
+      {
+        ignoreKnowledgeMode: args.runtimeOptions?.ignoreKnowledgeMode ?? true,
+        skipKnowledgeInjection: args.runtimeOptions?.skipKnowledgeInjection,
+        skipModeInjection: args.runtimeOptions?.skipModeInjection,
+        skipCustomNotesInjection: args.runtimeOptions?.skipCustomNotesInjection,
+        maxOutputTokens: args.runtimeOptions?.maxOutputTokens,
+        modelOverride: args.model,
+        providerOverride: args.provider,
+        requestContext: args.requestContext,
+        disableProviderFallbacks: true,
       }
     );
   }
@@ -3516,7 +3680,7 @@ Return only the final answer. No meta commentary.
    * Yields the full response in small word-batches so the UI typing effect still plays.
    * Throws on empty response so the fallback chain tries the next provider.
    */
-  private async * streamWithTeamSync(userContent: string, systemPrompt?: string, imagePaths?: string[], maxOutputTokens?: number): AsyncGenerator<string, void, unknown> {
+  private async * streamWithTeamSync(userContent: string, systemPrompt?: string, imagePaths?: string[], maxOutputTokens?: number, fastMode: boolean = this.groqFastTextMode): AsyncGenerator<string, void, unknown> {
     // ── REAL SSE STREAM (replaces the fake word-by-word simulation) ──────────
     // Previous implementation called generateWithTeamSync() (blocking, waited for
     // the full response), then drip-fed words with setTimeout delays — pure theater.
@@ -3534,7 +3698,7 @@ Return only the final answer. No meta commentary.
       stream: true,
     };
     if (maxOutputTokens) body.max_tokens = maxOutputTokens;
-    if (this.groqFastTextMode && (!imagePaths || imagePaths.length === 0)) body.fast_mode = true;
+    if (fastMode && (!imagePaths || imagePaths.length === 0)) body.fast_mode = true;
     if (systemPrompt) body.system = systemPrompt;
     if (this.aiResponseLanguage && this.aiResponseLanguage !== 'English') {
       body.language = this.aiResponseLanguage; // 'auto' is forwarded — server handles it
@@ -3678,7 +3842,7 @@ Return only the final answer. No meta commentary.
 
     // Streaming multimodal call with automatic key rotation
     yield* this.groqRotatingClient.chatCompletionStream({
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+	      model: GROQ_VISION_MODEL,
       messages,
       stream: true,
       max_tokens: maxOutputTokens,
@@ -3938,7 +4102,7 @@ Return only the final answer. No meta commentary.
   }
 
   // --- OLLAMA STREAMING ---
-  private async * streamWithOllama(message: string, context?: string, systemPrompt: string = UNIVERSAL_SYSTEM_PROMPT, imagePaths?: string[]): AsyncGenerator<string, void, unknown> {
+  private async * streamWithOllama(message: string, context?: string, systemPrompt: string = UNIVERSAL_SYSTEM_PROMPT, imagePaths?: string[], modelOverride?: string): AsyncGenerator<string, void, unknown> {
     const fullPrompt = context
       ? `SYSTEM: ${systemPrompt}\nCONTEXT: ${context}\nUSER: ${message}`
       : `SYSTEM: ${systemPrompt}\nUSER: ${message}`;
@@ -3963,7 +4127,7 @@ Return only the final answer. No meta commentary.
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: this.ollamaModel,
+	          model: modelOverride || this.ollamaModel,
           prompt: fullPrompt,
           stream: true,
           ...(images ? { images } : {}),
@@ -4204,10 +4368,11 @@ Return only the final answer. No meta commentary.
     }
   }
 
-  public getCurrentProvider(): "ollama" | "gemini" | "custom" | "bedrock" {
+  public getCurrentProvider(): string {
     if (this.customProvider) return "custom";
+    if (this.activeCurlProvider) return "custom";
     if (this.isBedrockModel(this.currentModelId)) return "bedrock";
-    return this.useOllama ? "ollama" : "gemini";
+    return this.useOllama ? "ollama" : this.getProviderForModel(this.currentModelId);
   }
 
   public getCurrentModel(): string {

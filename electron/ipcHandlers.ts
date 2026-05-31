@@ -598,6 +598,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("finalize-mic-stt", async () => {
     appState.finalizeMicSTT();
+    await new Promise((resolve) => setTimeout(resolve, 250));
   });
 
   // IPC handler for analyzing image from file path
@@ -2976,6 +2977,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     imagePaths?: string[];
     requestId?: string;
     profilePreference?: 'default' | 'force_on' | 'force_off';
+    modelOverride?: string;
   }) => {
     const intelligenceManager = appState.getIntelligenceManager();
     const result = await intelligenceManager.handleAction(payload.intent, {
@@ -2984,6 +2986,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       imagePaths: payload.imagePaths,
       requestId: payload.requestId,
       profilePreference: payload.profilePreference,
+      modelOverride: payload.modelOverride,
     });
     return { success: true, result };
   });

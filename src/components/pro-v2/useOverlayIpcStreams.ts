@@ -242,7 +242,7 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
                     if (!requestId) return;
                     const channel: OverlayRequestChannel = isScreenScan ? 'screen_scan' : 'intelligence';
                     if (!matchesRequestChannel(ctx, requestId, channel)) return;
-                    if (isScreenScan && typeof data.content === 'string') {
+                    if (typeof data.content === 'string') {
                         hydrateFinalMessage(ctx, requestId, data.content);
                     }
                     ctx.finishStreamingMessage(requestId, data.intent);

@@ -7,6 +7,8 @@ export interface ActionOutputValidationResult {
     correctedContent: string;
     autoCorrected: boolean;
     issues: string[];
+    warnings?: string[];
+    repairApplied?: boolean;
 }
 
 function cleanLines(content: string): string[] {
@@ -543,8 +545,8 @@ function validateCodingInterviewAnswer(content: string): ActionOutputValidationR
             autoCorrected: normalized.changed,
             issues: [
                 ...(normalized.changed ? ['normalized_coding_markdown_fences'] : []),
-                ...codeSyntaxIssues.map((issue) => `${issue}_warning_only`),
             ],
+            warnings: codeSyntaxIssues.map((issue) => `${issue}_warning_only`),
         };
     }
 
@@ -812,8 +814,8 @@ function validateCodingScreenScan(content: string): ActionOutputValidationResult
             autoCorrected: normalized.changed,
             issues: [
                 ...(normalized.changed ? ['normalized_coding_markdown_fences'] : []),
-                ...codeSyntaxIssues.map((issue) => `${issue}_ignored_for_screen_scan`),
             ],
+            warnings: codeSyntaxIssues.map((issue) => `${issue}_ignored_for_screen_scan`),
         };
     }
 

@@ -17,6 +17,23 @@ export async function resolveBedrockRuntimeRoute(args: {
 
     if (imageCount > 0) {
         const models = await args.client.fetchModels();
+        const requestedVisionModel = resolveBedrockModelId(args.requestedModel, args.preferredModel);
+        const requestedModelEntry = requestedVisionModel
+            ? models.find((model) => model.id === requestedVisionModel)
+            : undefined;
+        if (
+            requestedVisionModel
+            && requestedModelEntry
+            && (!requestedModelEntry.inputModalities?.length
+                || requestedModelEntry.inputModalities.some((modality) => modality.toUpperCase() === 'IMAGE'))
+        ) {
+            return {
+                modelId: requestedVisionModel,
+                hasImages: true,
+                imageCount,
+            };
+        }
+
         const visionModel = resolveBedrockVisionModel(models);
         if (!visionModel) {
             throw new Error('No Bedrock multimodal model available. Enable Claude Sonnet or Amazon Nova model access in Amazon Bedrock for this region/account.');

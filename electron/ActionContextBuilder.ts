@@ -504,12 +504,17 @@ function buildSystemDesignInterviewOutputContract(): string {
     ].join('\n');
 }
 
-function buildContextPriorityRules(profileApplied: boolean): string[] {
+function buildContextPriorityRules(profileApplied: boolean, intent?: UnifiedActionIntent): string[] {
     const rules = [
         'Answer the latest question first.',
         'Do not continue or repeat an older assistant answer unless the latest question explicitly asks for it.',
         'Prefer the freshest transcript turns over older context when they conflict.',
     ];
+
+    if (intent === 'manual_chat') {
+        rules.push('The typed USER QUESTION is authoritative over transcript, profile, RAG, and supplemental context.');
+        rules.push('Use transcript only when the typed USER QUESTION explicitly asks to continue or relate to prior discussion.');
+    }
 
     if (profileApplied) {
         rules.push('Use PROFILE INTELLIGENCE only when it is directly relevant to the latest question.');
@@ -830,7 +835,7 @@ export function buildIntentPrompt(
     const basePrompt = getIntentPromptBase(intent).trim();
     const modeAwareRules = buildModeAwareIntentRules(intent, mode);
     const responseProfile = getQuestionResponseProfile(question?.trim() || '', mode, intent);
-    const contextPriorityRules = buildContextPriorityRules(profileApplied);
+    const contextPriorityRules = buildContextPriorityRules(profileApplied, intent);
 
     switch (intent) {
         case 'clarify':
