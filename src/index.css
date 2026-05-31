@@ -1246,6 +1246,17 @@ html[data-platform="linux"] body {
   }
 }
 
+@keyframes launcher-bottom-lamp {
+  0%, 100% {
+    opacity: 0.56;
+    transform: translateX(-50%) translateY(16px) scaleX(0.9) scaleY(0.86);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateX(-50%) translateY(-8px) scaleX(1.08) scaleY(1.02);
+  }
+}
+
 .launcher-hero-studio-glow {
   animation: launcher-studio-glow 5.8s ease-in-out infinite;
   will-change: opacity, transform;
@@ -1276,13 +1287,20 @@ html[data-platform="linux"] body {
   will-change: opacity, transform;
 }
 
+.launcher-hero-bottom-lamp {
+  animation: launcher-bottom-lamp 5.4s ease-in-out infinite;
+  mix-blend-mode: screen;
+  will-change: opacity, transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .launcher-hero-studio-glow,
   .launcher-hero-studio-sweep,
   .launcher-hero-glow-rim,
   .launcher-hero-left-cosmic,
   .launcher-hero-top-cosmic,
-  .launcher-hero-top-right-cosmic {
+  .launcher-hero-top-right-cosmic,
+  .launcher-hero-bottom-lamp {
     animation: none;
   }
 }

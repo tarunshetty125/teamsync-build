@@ -913,19 +913,28 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 : 'linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.18) 24%, rgba(255,255,255,0.16) 50%, rgba(192,132,252,0.18) 78%, transparent 100%)',
                                         }}
                                     />
+	                                    <div
+	                                        aria-hidden="true"
+	                                        className="launcher-hero-top-right-cosmic pointer-events-none absolute right-[-10%] top-[-84px] h-[285px] w-[520px] rounded-full blur-[48px]"
+	                                        style={{
+	                                            background: isLight
+	                                                ? 'radial-gradient(circle at 42% 54%, rgba(255,255,255,0.42) 0%, rgba(216,180,254,0.30) 30%, rgba(253,186,116,0.24) 54%, rgba(125,211,252,0.18) 72%, transparent 84%)'
+	                                                : 'radial-gradient(circle at 42% 54%, rgba(255,255,255,0.14) 0%, rgba(168,85,247,0.24) 30%, rgba(251,146,60,0.20) 54%, rgba(34,211,238,0.12) 72%, transparent 84%)',
+	                                        }}
+	                                    />
                                     <div
                                         aria-hidden="true"
-                                        className="launcher-hero-top-right-cosmic pointer-events-none absolute right-[-10%] top-[-84px] h-[285px] w-[520px] rounded-full blur-[48px]"
+                                        className="launcher-hero-bottom-lamp pointer-events-none absolute left-1/2 bottom-[-148px] h-[310px] w-[min(920px,82vw)] -translate-x-1/2 rounded-full blur-[38px]"
                                         style={{
                                             background: isLight
-                                                ? 'radial-gradient(circle at 42% 54%, rgba(255,255,255,0.42) 0%, rgba(216,180,254,0.30) 30%, rgba(253,186,116,0.24) 54%, rgba(125,211,252,0.18) 72%, transparent 84%)'
-                                                : 'radial-gradient(circle at 42% 54%, rgba(255,255,255,0.14) 0%, rgba(168,85,247,0.24) 30%, rgba(251,146,60,0.20) 54%, rgba(34,211,238,0.12) 72%, transparent 84%)',
+                                                ? 'radial-gradient(ellipse at 50% 76%, rgba(255,255,255,0.72) 0%, rgba(255,214,165,0.42) 24%, rgba(251,146,60,0.26) 44%, rgba(125,211,252,0.13) 66%, transparent 82%)'
+                                                : 'radial-gradient(ellipse at 50% 76%, rgba(255,236,214,0.24) 0%, rgba(251,191,119,0.30) 26%, rgba(251,146,60,0.22) 48%, rgba(56,189,248,0.09) 68%, transparent 84%)',
                                         }}
                                     />
-                                    <div className={`absolute left-1/2 top-[90px] h-[360px] w-[min(1080px,92vw)] -translate-x-1/2 rounded-[56px] blur-[34px] ${
-                                        isLight
-                                            ? 'bg-[radial-gradient(ellipse_at_center,rgba(186,230,253,0.34),rgba(216,180,254,0.20)_42%,transparent_74%)]'
-                                            : 'bg-[radial-gradient(ellipse_at_center,rgba(56,189,248,0.20),rgba(168,85,247,0.18)_46%,transparent_76%)]'
+	                                    <div className={`absolute left-1/2 top-[90px] h-[360px] w-[min(1080px,92vw)] -translate-x-1/2 rounded-[56px] blur-[34px] ${
+	                                        isLight
+	                                            ? 'bg-[radial-gradient(ellipse_at_center,rgba(186,230,253,0.34),rgba(216,180,254,0.20)_42%,transparent_74%)]'
+	                                            : 'bg-[radial-gradient(ellipse_at_center,rgba(56,189,248,0.20),rgba(168,85,247,0.18)_46%,transparent_76%)]'
                                     }`} />
                                     <div className={`absolute left-[13%] top-[132px] h-[210px] w-[420px] rounded-full blur-[42px] ${
                                         isLight ? 'bg-cyan-200/28' : 'bg-cyan-300/16'

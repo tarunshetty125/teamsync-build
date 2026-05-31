@@ -618,22 +618,18 @@ function validateCodingScreenScan(content: string): ActionOutputValidationResult
     const hasSubstantialContent = trimmed.length > 100;
     const codeSyntaxIssues = hasCodeBlock ? validateFencedCodeSyntax(trimmed) : [];
 
-    if (codeSyntaxIssues.length > 0) {
-        return {
-            valid: false,
-            correctedContent: trimmed,
-            autoCorrected: normalized.changed,
-            issues: codeSyntaxIssues,
-        };
-    }
-
-    // Accept if it has a code block OR substantial content
+    // Screen scan OCR/model output is allowed to be imperfect. Do not replace a
+    // complete answer with a fallback just because the lightweight syntax
+    // heuristic thinks a code block may be truncated or unbalanced.
     if (hasCodeBlock || hasSubstantialContent) {
         return {
             valid: true,
             correctedContent: trimmed,
             autoCorrected: normalized.changed,
-            issues: normalized.changed ? ['normalized_coding_markdown_fences'] : [],
+            issues: [
+                ...(normalized.changed ? ['normalized_coding_markdown_fences'] : []),
+                ...codeSyntaxIssues.map((issue) => `${issue}_ignored_for_screen_scan`),
+            ],
         };
     }
 
@@ -766,7 +762,7 @@ export function buildSafeActionFallback(
             ].join('\n');
         case 'screen_scan':
             if (mode === 'coding') {
-                return 'I could not fully analyze the screen content. Please try capturing the screen again with the coding problem clearly visible.';
+                return 'The OCR was captured, but the selected model did not return a usable coding solution on this attempt.';
             }
         case 'manual_chat':
             return `I would answer this directly using the strongest available evidence about ${question}.`;

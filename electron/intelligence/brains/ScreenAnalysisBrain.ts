@@ -39,14 +39,19 @@ export class ScreenAnalysisBrain implements Brain {
                 'Focus on accurately interpreting the visible content.',
                 'Extract relevant details and ignore noise or UI chrome.',
                 'If the screen shows a coding problem, you MUST solve it completely.',
+                'For OCR text, treat partial noise as normal and recoverable.',
+                'When a LeetCode/HackerRank title, URL, number, examples, constraints, signature, or distinctive keywords are visible, treat the problem as identified.',
+                'If the editor language, starter function signature, or syntax pattern is visible, the final solution MUST use that language.',
+                'Do not default to Python when visible OCR shows JavaScript, TypeScript, Java, C++, Go, Rust, Kotlin, Swift, or another coding language.',
+                'Do not ask for another screenshot or say the screen could not be analyzed unless the extracted text is genuinely unusable.',
             ].join('\n'),
         });
 
         // Output contract: coding problem vs general screen content
         if (looksLikeCodingProblem) {
             instructions.push({
-                key: 'output_contract',
-                title: 'OUTPUT CONTRACT',
+                key: 'coding_contract',
+                title: 'CODING CONTRACT',
                 content: [
                     'You are looking at a coding problem on screen. Your job is to SOLVE it completely.',
                     '',
@@ -65,10 +70,23 @@ export class ScreenAnalysisBrain implements Brain {
                     'The code MUST be inside a fenced code block with the language tag.',
                     'The code must be COMPLETE — a real implementation that compiles and runs correctly.',
                     'Add inline comments on non-obvious lines explaining the logic.',
-                    'Use the programming language visible on screen, or Python by default.',
+                    'Use the programming language visible on screen. Default to Python only when no editor language, starter signature, or syntax pattern is visible.',
                     '',
                     'CRITICAL: Do NOT output placeholder text like "complete optimized solution".',
                     'You must write the REAL problem name, REAL algorithm, and REAL working code.',
+                ].join('\n'),
+            });
+            instructions.push({
+                key: 'ocr_reconstruction_rules',
+                title: 'OCR RECONSTRUCTION RULES',
+                content: [
+                    'A partially noisy OCR extraction is normal and recoverable.',
+                    'When OCR contains a recognizable LeetCode/HackerRank problem title, URL, number, examples, constraints, function signature, or distinctive keywords, treat the problem as identified and solve it.',
+                    'If a LeetCode number or title is visible, assume that problem and solve it.',
+                    'If OCR confidence is moderate but problem identity confidence is above 70%, proceed with best-effort reconstruction.',
+                    'Do NOT request another screenshot when enough evidence exists.',
+                    'Do NOT state that the screen could not be analyzed unless the extracted text is genuinely unusable.',
+                    'Never output "I could not fully analyze the screen content" when OCR length is above 500 characters, a known coding problem is recognized, or examples are present.',
                 ].join('\n'),
             });
         } else {

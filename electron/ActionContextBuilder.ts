@@ -12,7 +12,7 @@ import {
     UNIVERSAL_RECAP_PROMPT,
     UNIVERSAL_WHAT_TO_ANSWER_PROMPT,
     buildCodeHintMessage,
-    buildScreenScanMessage,
+    buildScreenScanQuestion,
 } from './llm/prompts';
 import type { ScreenContentMode } from './llm';
 import { looksLikeCodingInterviewQuestion } from './intelligence/codingQuestionHeuristics';
@@ -1079,53 +1079,10 @@ export function buildIntentPrompt(
                 ].join('\n')),
             ];
         case 'screen_scan':
-            if (screenScanMode === 'coding' || screenScanMode === 'interview_question') {
-                return [
-                    createInstruction('intent', 'INTENT', basePrompt),
-                    createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
-                    createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        'You are looking at a coding problem on screen. Your job is to SOLVE it completely.',
-                        '',
-                        'Your response MUST have exactly three sections in this order:',
-                        '',
-                        'SECTION 1 — Start with a bold header "Problem:" followed by the real problem name.',
-                        'Write the actual name like "Two Sum" or "Reverse Linked List" — include the LeetCode number or platform if you can see it.',
-                        'Then write 1-2 sentences explaining what the problem actually asks.',
-                        '',
-                        'SECTION 2 — Write a bold header "Approach:" then explain YOUR chosen algorithm.',
-                        'Use 3-5 bullet points describing the actual steps of the algorithm you will implement.',
-                        'Name the specific data structure (hash map, stack, two pointers, etc.) and explain why you chose it.',
-                        'State the actual time and space complexity with reasoning.',
-                        '',
-                        'SECTION 3 — Write a bold header "Solution:" then write the FULL working code.',
-                        'The code MUST be inside a fenced code block with the language tag.',
-                        'The code must be COMPLETE — a real implementation that compiles and runs correctly.',
-                        'Add inline comments on non-obvious lines explaining the logic.',
-                        'Use the programming language visible on screen, or Python/JavaScript by default.',
-                        '',
-                        'CRITICAL: Do NOT output placeholder text like "complete optimized solution" or "state the algorithm".',
-                        'You must write the REAL problem name, REAL algorithm explanation, and REAL working code.',
-                        'If you output template/placeholder text instead of real content, you have FAILED.',
-                    ].join('\n')),
-                ];
-            }
-            return [
-                createInstruction('intent', 'INTENT', basePrompt),
-                createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
-                createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                    'Analyze the screen content. If it contains a coding problem, you MUST solve it completely.',
-                    '',
-                    'For coding problems, respond with three sections:',
-                    '1. "Problem:" — the actual problem name/number and a 1-2 sentence description of what it asks.',
-                    '2. "Approach:" — your chosen algorithm with 3-5 bullets explaining the strategy and complexity.',
-                    '3. "Solution:" — the FULL working code in a fenced code block. Not pseudocode, not placeholders — real code.',
-                    '',
-                    'CRITICAL: Write REAL content — real problem names, real explanations, real working code.',
-                    'Never output template text or placeholders.',
-                    '',
-                    'If the screen is not code-related, answer directly in the most useful format.',
-                ].join('\n')),
-            ];
+            // Screen scan contracts are owned by ScreenAnalysisBrain. Returning no
+            // legacy instructions here keeps GPT-OSS from seeing the same contract
+            // in both the system prompt and the OCR/user-question payload.
+            return [];
         case 'what_to_answer':
         default:
             if (responseProfile === 'system_design') {
@@ -1256,13 +1213,15 @@ export async function buildContextLayers({
             ).trim();
         }
         if (intent === 'screen_scan') {
-            return buildScreenScanMessage(screenScanMode || 'ui_general', message?.trim() || null).trim();
+            return buildScreenScanQuestion(screenScanMode || 'ui_general', message?.trim() || null).trim();
         }
         return (message || defaultQuestion).trim();
     })();
     const question = normalizeActionQuestion(rawQuestion, mode, intent);
     const transcript = buildTranscriptContext(session, intent, question, mode);
-    const modeInstructions = buildModeContext(mode, { includeModeCustomContext: resolvedPolicy.includeModeCustomContext });
+    const modeInstructions = intent === 'screen_scan'
+        ? []
+        : buildModeContext(mode, { includeModeCustomContext: resolvedPolicy.includeModeCustomContext });
     const profileResult = await buildProfileContext(intent, profile, question, resolvedPolicy.resolvedProfilePreference);
     const intentInstructions = buildIntentPrompt(intent, mode, screenScanMode, question, profileResult.profile?.used === true);
     const profileInstruction = profileResult.profile?.instruction?.trim()

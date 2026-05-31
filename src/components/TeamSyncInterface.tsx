@@ -2247,6 +2247,17 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                 text: `❌ Error (${data.mode}): ${data.error}`
             }]);
         }));
+
+        if (window.electronAPI.onScreenshotCaptureBlocked) {
+            cleanups.push(window.electronAPI.onScreenshotCaptureBlocked((data) => {
+                setIsExpanded(true);
+                setMessages(prev => [...prev, {
+                    id: nextMsgId(),
+                    role: 'system',
+                    text: data.error
+                }]);
+            }));
+        }
         // Intelligence Surface Layer listeners (HIGH-001)
         cleanups.push(window.electronAPI.onAdaptiveModeSuggestion((data) => {
             intelligenceModeSuggestionRef.current = data;
@@ -3579,7 +3590,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         },
         takeScreenshot: async () => {
             try {
-                const data = await window.electronAPI.takeScreenshot();
+                const data = await window.electronAPI.takeScreenshot({ requireVision: true });
                 if (data && data.path) {
                     handleScreenshotAttach(data as { path: string; preview: string });
                 }
@@ -3589,7 +3600,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         },
         selectiveScreenshot: async () => {
             try {
-                const data = await window.electronAPI.takeSelectiveScreenshot();
+                const data = await window.electronAPI.takeSelectiveScreenshot({ requireVision: true });
                 if (data && !data.cancelled && data.path) {
                     handleScreenshotAttach(data as { path: string; preview: string });
                 }

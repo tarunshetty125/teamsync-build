@@ -19,6 +19,8 @@ export interface OverlayIpcStreamsContext {
     requestStartTimeRef: React.MutableRefObject<number | null>;
     setMessages: React.Dispatch<React.SetStateAction<V2Message[]>>;
     setIsProcessing: (value: boolean) => void;
+    setIsExpanded: (value: boolean) => void;
+    nextMsgId: () => string;
     finishStreamingMessage: (requestId: string, intent?: string) => void;
     rememberIntentRequest: (intent: string, requestId: string | null) => void;
     resolveIntentRequestId: (intent: string, requestId?: string | null) => string | null;
@@ -143,6 +145,26 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
                 });
             }),
         );
+
+        if (window.electronAPI.onScreenshotCaptureBlocked) {
+            cleanups.push(
+                window.electronAPI.onScreenshotCaptureBlocked((payload: { error: string }) => {
+                    ctx.setIsProcessing(false);
+                    ctx.setIsExpanded(true);
+                    ctx.setMessages((prev) => [
+                        ...prev,
+                        {
+                            id: ctx.nextMsgId(),
+                            timestamp: Date.now(),
+                            role: 'system',
+                            text: payload.error,
+                            source: 'Screen Capture',
+                            isStreaming: false,
+                        },
+                    ]);
+                }),
+            );
+        }
 
         if (window.electronAPI.onRAGStreamChunk) {
             cleanups.push(

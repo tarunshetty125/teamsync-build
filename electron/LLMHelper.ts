@@ -22,6 +22,7 @@ import curl2Json from "@bany/curl-to-json";
 import { CustomProvider, CurlProvider, type BedrockCredentials } from './services/CredentialsManager';
 import { isBedrockModelId } from './llm/BedrockModelIds';
 import { resolveBedrockRuntimeRoute } from './llm/BedrockVisionAdapter';
+import { formatVisionUnsupportedMessage, getModelCapabilities, type ModelCapabilities } from './llm/ModelCapabilities';
 import { exec, spawn } from 'child_process';
 import { getPythonPath, getOCRScriptPath, getPythonEnv } from './utils/pythonRuntime';
 import { promisify } from 'util';
@@ -730,6 +731,24 @@ export class LLMHelper {
 
   public isBedrockModel(modelId: string): boolean {
     return isBedrockModelId(modelId, this.bedrockCredentials?.preferredModel);
+  }
+
+  public getCurrentModelCapabilities(): ModelCapabilities {
+    return getModelCapabilities(this.getCurrentModel());
+  }
+
+  public currentModelSupportsVision(): boolean {
+    return this.getCurrentModelCapabilities().vision;
+  }
+
+  public getVisionUnsupportedMessage(): string {
+    return formatVisionUnsupportedMessage(this.getCurrentModel());
+  }
+
+  public assertCurrentModelSupportsVision(): void {
+    if (!this.currentModelSupportsVision()) {
+      throw new Error(this.getVisionUnsupportedMessage());
+    }
   }
   // ---------------------------
 
@@ -1657,6 +1676,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       }
 
       const isMultimodal = !!(imagePaths?.length);
+      if (isMultimodal) {
+        this.assertCurrentModelSupportsVision();
+      }
 
       // GLOBAL TOKEN GUARD: enforce cap on non-streaming path too
       if (context) {
@@ -2584,6 +2606,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
   private async generateWithVisionFallback(systemPrompt: string, userPrompt: string, imagePaths: string[] = []): Promise<string> {
     type ProviderAttempt = { name: string; execute: () => Promise<string> };
     const isMultimodal = imagePaths.length > 0;
+    if (isMultimodal) {
+      this.assertCurrentModelSupportsVision();
+    }
 
     // Helper: build a provider attempt for a given family + model ID
     const buildProviderForFamily = (family: ModelFamily, modelId: string): ProviderAttempt | null => {
@@ -2810,6 +2835,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     console.log(`[LLMHelper] streamChatWithGemini called with message:`, message.substring(0, 50));
 
     const isMultimodal = !!(imagePaths?.length);
+    if (isMultimodal) {
+      this.assertCurrentModelSupportsVision();
+    }
 
     // Build single-string messages for Groq/Gemini (which use combined prompts)
     const buildCombinedMessage = (systemPrompt: string) => {
@@ -2994,6 +3022,9 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 
     // Preparation
     const isMultimodal = !!(imagePaths?.length);
+    if (isMultimodal) {
+      this.assertCurrentModelSupportsVision();
+    }
     let isCodeHeavy = false;
     let hasExplicitSystemPromptOverride = systemPromptOverride !== undefined;
     const skipKnowledgeInjection = ignoreKnowledgeMode || runtimeOptions?.skipKnowledgeInjection === true;

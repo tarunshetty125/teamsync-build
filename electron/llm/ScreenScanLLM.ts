@@ -213,8 +213,8 @@ function extractSignal(text: string): string {
 
 /**
  * Heuristic to determine if OCR text is good enough to use.
- * If OCR is weak (too short, too garbled, low word density), we should
- * skip it and fall back to pure vision analysis.
+ * If OCR is weak (too short, too garbled, low word density), Analyze Screen
+ * should stop with a text warning instead of entering the vision route.
  */
 function isGoodOCR(text: string | undefined): boolean {
     if (!text || !text.trim()) return false;
@@ -295,7 +295,7 @@ export class ScreenScanLLM {
      * Three critical upgrades:
      * 1. SIGNAL EXTRACTION — sends clean top-30-lines / 800-char chunk instead of raw OCR dump
      * 2. STRONG CONTEXT PREFIX — coding/interview prefix boosts problem identification accuracy
-     * 3. VISION FALLBACK — if OCR is weak, bypasses text entirely and sends image to vision model
+     * 3. TEXT-ONLY ROUTING — once OCR succeeds, images are not sent to the LLM
      *
      * @param imagePaths    Screenshot image paths (required — at least 1)
      * @param extractedText Optional OCR / heuristic text extracted from the image
@@ -315,30 +315,13 @@ export class ScreenScanLLM {
             const behavior = MODE_BEHAVIOR[mode];
             console.log(`[ScreenScanLLM] Mode detected: ${mode} (${behavior.label})`);
 
-            // ── UPGRADE 3: VISION FALLBACK ──────────────────────────────
-            // If OCR text is weak/garbled, skip it entirely and send the
-            // image directly to the vision model with a focused prompt.
+            // Analyze Screen is OCR-first and text-only. Weak OCR must not
+            // route into the screenshot/vision workflow.
             const isCodingMode = mode === 'coding' || mode === 'interview_question';
 
             if (!isGoodOCR(extractedText)) {
-                console.log(`[ScreenScanLLM] ⚠️ OCR quality too low (${extractedText?.length ?? 0} chars) — falling back to pure vision`);
-
-                const visionPrompt = isCodingMode
-                    ? VISION_FALLBACK_PROMPT
-                    : SCREEN_SCAN_PROMPT;
-
-                const visionMessage = isCodingMode
-                    ? 'Analyze this coding problem screenshot and provide the full solution with explanation.'
-                    : buildScreenScanMessage(mode, null);
-
-                // Stream with image paths — vision model handles it
-                yield* this.llmHelper.streamChat(
-                    visionMessage,
-                    imagePaths,        // send images for vision
-                    undefined,
-                    visionPrompt,
-                    true               // ignore knowledge mode
-                );
+                console.log(`[ScreenScanLLM] OCR quality too low (${extractedText?.length ?? 0} chars) — not routing to vision`);
+                yield "I couldn't detect enough readable text on screen. Try capturing a clearer area.";
                 return;
             }
 
@@ -376,10 +359,10 @@ Identify the exact problem (name and number if possible), explain your algorithm
                     : baseMessage;
             }
 
-            // Stream from LLM with image + extracted text signal
+            // Stream from the selected model with OCR text only.
             yield* this.llmHelper.streamChat(
                 message,
-                imagePaths,        // always send images alongside text for best results
+                undefined,
                 undefined,
                 SCREEN_SCAN_PROMPT,
                 true               // ignore knowledge mode

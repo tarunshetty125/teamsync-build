@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import type { OverlayQuickActionDef, OverlayQuickActionId } from '../../lib/modes/overlayCopilotConfig';
 import ProOverlayControlStrip from './ProOverlayControlStrip';
+import { V2_INSIGHTS_WIDTH } from './v2Layout';
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
     // General / Core
@@ -170,7 +171,7 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
             transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1], delay: 0.04 }}
             className="v2-surface-insights v2-no-drag"
             style={{
-                width: '320px',
+                width: `${V2_INSIGHTS_WIDTH}px`,
                 display: 'flex',
                 flexDirection: 'column',
                 willChange: 'transform, opacity',

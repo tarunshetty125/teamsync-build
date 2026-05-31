@@ -138,6 +138,13 @@ const Queue: React.FC<QueueProps> = ({ setView }) => {
       setChatMessages((msgs) => [...msgs, { role: "gemini", text: "Error: " + String(error) }]);
     }));
 
+    if (window.electronAPI.onScreenshotCaptureBlocked) {
+      cleanups.push(window.electronAPI.onScreenshotCaptureBlocked((payload) => {
+        setChatLoading(false);
+        showToast("Vision model required", payload.error, "error");
+      }));
+    }
+
     return () => cleanups.forEach(fn => fn());
   }, []);
 

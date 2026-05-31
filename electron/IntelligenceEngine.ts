@@ -56,6 +56,7 @@ import type { QualityEvaluationResult } from './intelligence/evaluation';
 import { compileTinyPrompt } from './intelligence/TinyPromptCompiler';
 import { adaptPromptBudget } from './intelligence/AdaptivePromptBudgeter';
 import { buildProviderPrompt } from './llm/ProviderPromptBuilder';
+import { isBedrockGptOssModel } from './llm/BedrockModelIds';
 import { BenchmarkManager, countHallucinationIndicators, hasConfidenceSignal } from './intelligence/BenchmarkManager';
 import { ModesManager } from './services/ModesManager';
 import type { ModeTemplateId } from '../src/lib/modes/types';
@@ -666,10 +667,12 @@ export class IntelligenceEngine extends EventEmitter {
                                 contextLayers.promptObject.rag = null;
                             }
 
-                            contextLayers.promptObject.instructions = [
-                                buildContextPriorityInstruction(contextPriority),
-                                ...contextLayers.promptObject.instructions,
-                            ];
+                            if (params.intent !== 'screen_scan') {
+                                contextLayers.promptObject.instructions = [
+                                    buildContextPriorityInstruction(contextPriority),
+                                    ...contextLayers.promptObject.instructions,
+                                ];
+                            }
 
                             // Prepend brain instructions to the prompt object
                             if (brainOutput.instructions.length > 0) {
@@ -1209,6 +1212,9 @@ export class IntelligenceEngine extends EventEmitter {
     }): Promise<{ content: string; retryCount: number; fallbackUsed: boolean } | null> {
         const { prompt, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
         const primaryModel = this.llmHelper.getCurrentModel();
+        if (imagePaths?.length && !this.llmHelper.currentModelSupportsVision()) {
+            throw new Error(this.llmHelper.getVisionUnsupportedMessage());
+        }
         const fallbackModel = this.resolveFallbackModel(primaryModel);
         const attempts: Array<{ model: string; fallbackUsed: boolean }> = [];
 
@@ -1244,6 +1250,11 @@ export class IntelligenceEngine extends EventEmitter {
                     requestId,
                     sessionIdSnapshot,
                 });
+                if (isBedrockGptOssModel(attempt.model)) {
+                    console.log(`[GPT_OSS_RAW_OUTPUT] model=${attempt.model} intent=${prompt.intent} requestId=${requestId ?? 'none'} length=${content?.length ?? 0}`);
+                    console.log((content ?? '').slice(0, 2000));
+                    console.log('[GPT_OSS_RAW_OUTPUT_END]');
+                }
                 if (content && content.trim() && !isFailureResponseText(content)) {
                     return {
                         content: content.trim(),
@@ -1260,6 +1271,13 @@ export class IntelligenceEngine extends EventEmitter {
         }
 
         console.warn('[IntelligenceEngine] Action retries exhausted:', failureReasons.join(' | '));
+        console.log('[FALLBACK_REASON]', JSON.stringify({
+            stage: 'executeActionWithRetry',
+            intent: prompt.intent,
+            mode: prompt.mode,
+            reason: 'action_retries_exhausted',
+            failureReasons,
+        }));
         return {
             content: buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question),
             retryCount: Math.max(0, attempts.length - 1),
@@ -1279,13 +1297,33 @@ export class IntelligenceEngine extends EventEmitter {
         sessionIdSnapshot: string;
     }): Promise<string | null> {
         const { prompt, content, maxTokens, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
+        console.log('[RAW_LENGTH]', content.length);
         const validation = validateActionOutput(prompt.intent, prompt.mode, content, prompt.question);
+        console.log('[PARSED_LENGTH]', validation.correctedContent.length);
+        console.log('[VALIDATION_RESULT]', JSON.stringify({
+            stage: 'initial',
+            intent: prompt.intent,
+            mode: prompt.mode,
+            valid: validation.valid,
+            autoCorrected: validation.autoCorrected,
+            issues: validation.issues,
+            correctedLength: validation.correctedContent.length,
+        }));
         if (validation.valid) {
             return validation.correctedContent.trim();
         }
 
         if (validation.correctedContent.trim()) {
             const correctedValidation = validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent, prompt.question);
+            console.log('[VALIDATION_RESULT]', JSON.stringify({
+                stage: 'corrected',
+                intent: prompt.intent,
+                mode: prompt.mode,
+                valid: correctedValidation.valid,
+                autoCorrected: correctedValidation.autoCorrected,
+                issues: correctedValidation.issues,
+                correctedLength: correctedValidation.correctedContent.length,
+            }));
             if (correctedValidation.valid) {
                 return correctedValidation.correctedContent.trim();
             }
@@ -1319,19 +1357,54 @@ export class IntelligenceEngine extends EventEmitter {
             sessionIdSnapshot,
         });
         if (!repaired?.trim()) {
+            console.log('[FALLBACK_REASON]', JSON.stringify({
+                stage: 'ensureValidActionOutput',
+                intent: prompt.intent,
+                mode: prompt.mode,
+                reason: 'repair_empty',
+                initialIssues: validation.issues,
+            }));
             return buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question);
         }
 
         const repairedValidation = validateActionOutput(prompt.intent, prompt.mode, repaired, prompt.question);
+        console.log('[RAW_LENGTH]', repaired.length);
+        console.log('[PARSED_LENGTH]', repairedValidation.correctedContent.length);
+        console.log('[VALIDATION_RESULT]', JSON.stringify({
+            stage: 'repair',
+            intent: prompt.intent,
+            mode: prompt.mode,
+            valid: repairedValidation.valid,
+            autoCorrected: repairedValidation.autoCorrected,
+            issues: repairedValidation.issues,
+            correctedLength: repairedValidation.correctedContent.length,
+        }));
         if (repairedValidation.valid) {
             return repairedValidation.correctedContent.trim();
         }
         if (repairedValidation.correctedContent.trim()) {
             const correctedRepairValidation = validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent, prompt.question);
+            console.log('[VALIDATION_RESULT]', JSON.stringify({
+                stage: 'corrected_repair',
+                intent: prompt.intent,
+                mode: prompt.mode,
+                valid: correctedRepairValidation.valid,
+                autoCorrected: correctedRepairValidation.autoCorrected,
+                issues: correctedRepairValidation.issues,
+                correctedLength: correctedRepairValidation.correctedContent.length,
+            }));
             if (correctedRepairValidation.valid) {
                 return correctedRepairValidation.correctedContent.trim();
             }
         }
+        console.log('[FALLBACK_REASON]', JSON.stringify({
+            stage: 'ensureValidActionOutput',
+            intent: prompt.intent,
+            mode: prompt.mode,
+            reason: 'repair_validation_failed',
+            initialIssues: validation.issues,
+            repairIssues: repairedValidation.issues,
+        }));
         return buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question);
     }
 
@@ -2252,15 +2325,11 @@ export class IntelligenceEngine extends EventEmitter {
                     const fullResult = await this.runAction({
                         intent: 'screen_scan',
                         message: screenText,
-                        imagePaths,
+                        imagePaths: undefined,
                         requestId: activeRequestId ?? undefined,
                         modeOverride: (detectedMode === 'coding' || detectedMode === 'interview_question') ? 'coding' : this.session.getMode(),
                         profilePreference: 'force_off',
-                        additionalContext: [
-                            `SCREEN MODE: ${detectedMode}`,
-                            `OBJECTIVE: ${behavior.objective}`,
-                            `FORMAT: ${behavior.format}`,
-                        ].join('\n'),
+                        additionalContext: `SCREEN MODE: ${detectedMode}`,
                         screenScanMode: detectedMode,
                     });
 

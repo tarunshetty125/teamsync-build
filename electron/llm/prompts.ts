@@ -2412,6 +2412,16 @@ IMPORTANT — You must write REAL content in your response:
 
 Structure your response with three bold headers: "Problem:", "Approach:", and "Solution:"
 Under each header, write the actual real content — not instructions about what to write.
+
+OCR RECONSTRUCTION RULES — mandatory:
+- A partially noisy OCR extraction is normal and recoverable.
+- When OCR contains a recognizable LeetCode/HackerRank problem title, URL, number, examples, constraints, function signature, or distinctive keywords, treat the problem as identified and solve it.
+- If a LeetCode number or title is visible, assume that problem and solve it.
+- If OCR confidence is moderate but problem identity confidence is above 70%, proceed with best-effort reconstruction.
+- Do NOT request another screenshot when enough evidence exists.
+- Do NOT state that the screen could not be analyzed unless the extracted text is genuinely unusable.
+- Never output "I could not fully analyze the screen content" when OCR length is above 500 characters, a known coding problem is recognized, or examples are present.
+
 SMART PROBLEM DETECTION — use these patterns when screen text is partial or noisy:
 - "two sum", "target" = Two Sum (Hash Map)
 - "reverse", "linked list" = Reverse Linked List
@@ -2437,10 +2447,10 @@ function detectVisibleScreenLanguage(extractedText: string | null): { label: str
     const text = extractedText.toLowerCase();
 
     const explicitLanguageHints: Array<{ patterns: RegExp[]; label: string; fence: string }> = [
-        { patterns: [/\bjavascript\b/, /\bjs\b/], label: 'JavaScript', fence: 'javascript' },
-        { patterns: [/\btypescript\b/, /\bts\b/], label: 'TypeScript', fence: 'typescript' },
-        { patterns: [/\bpython\b/, /\bpython3\b/], label: 'Python', fence: 'python' },
-        { patterns: [/\bjava\b/], label: 'Java', fence: 'java' },
+        { patterns: [/\bjavascript\b/, /\bjs\b/, /\bvar\s+\w+\s*=\s*function\s*\(/], label: 'JavaScript', fence: 'javascript' },
+        { patterns: [/\btypescript\b/, /\bts\b/, /:\s*(?:string|number|boolean)\b|:\s*\w+\[\]|interface\s+\w+/], label: 'TypeScript', fence: 'typescript' },
+        { patterns: [/\bpython\b/, /\bpython3\b/, /\bdef\s+\w+\s*\(/, /\bclass\s+solution\s*:/], label: 'Python', fence: 'python' },
+        { patterns: [/\bjava\b/, /\bpublic\s+class\s+solution\b|\bpublic\s+\w+[\w<>\[\],\s]*\s+\w+\s*\(/], label: 'Java', fence: 'java' },
         { patterns: [/\bc\+\+\b/, /\bcpp\b/], label: 'C++', fence: 'cpp' },
         { patterns: [/\bgo\b/, /\bgolang\b/], label: 'Go', fence: 'go' },
         { patterns: [/\brust\b/], label: 'Rust', fence: 'rust' },
@@ -2499,7 +2509,12 @@ OBJECTIVE: You are solving a coding problem visible on screen. Your response mus
 
 INPUT HANDLING:
 - OCR text may be noisy — reconstruct the intended problem statement
+- A partially noisy OCR extraction is normal and should not prevent solving the problem
 - Ignore UI chrome (menus, tabs, bookmarks) and focus on the problem
+- If OCR contains a recognizable LeetCode/HackerRank problem title, URL, number, examples, constraints, function signature, or distinctive keywords, treat the problem as identified and solve it
+- If a LeetCode number or title is visible, assume that problem; if OCR confidence is moderate but identity confidence is above 70%, proceed with best-effort reconstruction
+- Do NOT request another screenshot, and do NOT say the screen could not be analyzed, unless the extracted text is genuinely unusable
+- Never output "I could not fully analyze the screen content" when OCR length is above 500 characters, a known coding problem is recognized, or examples are present
 - If you recognize the problem from LeetCode, HackerRank, etc., include the platform and problem number
 
 HOW TO RESPOND:
@@ -2593,7 +2608,37 @@ Instruction: The visible starter code/editor appears to use ${detectedLanguage.l
         parts.push(`<extracted_text>\n${trimmed}\n</extracted_text>`);
     }
 
-    parts.push(`Analyze the screenshot and any extracted text above. Respond ONLY in the format specified by the screen_mode. Provide a COMPLETE, well-structured answer — never shorten artificially.`);
+    parts.push(`Analyze the screen content and any extracted text above. Respond ONLY in the format specified by the screen_mode. Provide a COMPLETE, well-structured answer — never shorten artificially.`);
 
     return parts.join('\n\n');
+}
+
+export function buildScreenScanQuestion(
+    mode: string,
+    extractedText: string | null
+): string {
+    const trimmed = extractedText?.trim() || '';
+    const detectedLanguage = (mode === 'coding' || mode === 'interview_question')
+        ? detectVisibleScreenLanguage(trimmed)
+        : null;
+    const maxLen = (mode === 'coding' || mode === 'interview_question') ? 8000 : 6000;
+    const visibleText = trimmed.length > maxLen
+        ? trimmed.substring(0, maxLen) + '\n[…truncated]'
+        : trimmed;
+
+    return [
+        '<screen_scan_input>',
+        `Mode: ${mode || 'ui_general'}`,
+        `OCR length: ${trimmed.length}`,
+        detectedLanguage
+            ? `Visible editor language: ${detectedLanguage.label}`
+            : 'Visible editor language: unknown',
+        detectedLanguage
+            ? `Required solution code fence: \`\`\`${detectedLanguage.fence}`
+            : 'Required solution code fence: infer from visible starter code; use Python only if no language evidence is visible',
+        '<ocr_text>',
+        visibleText || '[NO_OCR_TEXT]',
+        '</ocr_text>',
+        '</screen_scan_input>',
+    ].join('\n');
 }

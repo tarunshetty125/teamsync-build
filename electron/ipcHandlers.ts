@@ -464,8 +464,11 @@ export function initializeIpcHandlers(appState: AppState): void {
     return appState.deleteScreenshot(resolved);
   })
 
-  safeHandle("take-screenshot", async () => {
+  safeHandle("take-screenshot", async (_event, options?: { requireVision?: boolean }) => {
     try {
+      if (options?.requireVision) {
+        appState.assertVisionCaptureSupported();
+      }
       const screenshotPath = await appState.takeScreenshot()
       const preview = await appState.getImagePreview(screenshotPath)
       return { path: screenshotPath, preview }
@@ -475,8 +478,11 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   })
 
-  safeHandle("take-selective-screenshot", async () => {
+  safeHandle("take-selective-screenshot", async (_event, options?: { requireVision?: boolean }) => {
     try {
+      if (options?.requireVision) {
+        appState.assertVisionCaptureSupported();
+      }
       const screenshotPath = await appState.takeSelectiveScreenshot()
       const preview = await appState.getImagePreview(screenshotPath)
       return { path: screenshotPath, preview }

@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 
 import { buildIntentPrompt } from '../ActionContextBuilder';
 import * as outputValidator from '../ActionOutputValidator';
+import { buildScreenScanQuestion } from '../llm/prompts';
 
 test('coding clarify prompt keeps full fenced code contract', () => {
     const instructions = buildIntentPrompt(
@@ -320,4 +321,60 @@ test('manual Dijkstra output rejects collapsed invalid Python solution', () => {
     assert.equal(result.autoCorrected, true);
     assert.deepEqual(result.issues, ['coding_likely_compile_error']);
     assert.match(result.correctedContent, /```python\s+import sys import heapq/);
+});
+
+test('coding screen scan preserves substantial answers even when code syntax heuristic flags code', () => {
+    const result = outputValidator.validateActionOutput(
+        'screen_scan',
+        'coding',
+        [
+            '**Problem:**',
+            'Text Justification (LeetCode 68). Format words so every line has exactly maxWidth characters.',
+            '',
+            '**Approach:**',
+            '- Greedily pack as many words as fit on each line.',
+            '- Distribute spaces across gaps for non-final lines.',
+            '- Left-justify the final line.',
+            '',
+            '**Solution:**',
+            '```python',
+            'class Solution:',
+            '    def fullJustify(self, words, maxWidth):',
+            '        result = []',
+            '        line = []',
+            '        line_len = 0',
+            '        for word in words:',
+            '            if line_len + len(word) + len(line) > maxWidth:',
+            '                result.append(" ".join(line)',
+            '                line = [word]',
+            '                line_len = len(word)',
+            '            else:',
+            '                line.append(word)',
+            '                line_len += len(word)',
+            '        result.append(" ".join(line).ljust(maxWidth))',
+            '        return result',
+            '```',
+        ].join('\n'),
+        'LeetCode 68 Text Justification',
+    );
+
+    assert.equal(result.valid, true);
+    assert.match(result.correctedContent, /Text Justification/);
+    assert.ok(result.issues.includes('coding_unbalanced_delimiters_ignored_for_screen_scan'));
+});
+
+test('screen scan OCR question preserves visible JavaScript editor language', () => {
+    const question = buildScreenScanQuestion(
+        'coding',
+        [
+            '68. Text Justification - LeetCode',
+            'JavaScript',
+            'var fullJustify = function(words, maxWidth) {',
+            '  // starter code',
+            '};',
+        ].join('\n'),
+    );
+
+    assert.match(question, /Visible editor language: JavaScript/);
+    assert.match(question, /Required solution code fence: ```javascript/);
 });

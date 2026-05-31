@@ -91,9 +91,9 @@ export interface ElectronAPI {
   onSolutionSuccess: (callback: (data: any) => void) => () => void
   onUnauthorized: (callback: () => void) => () => void
   onDebugError: (callback: (error: string) => void) => () => void
-  takeScreenshot: () => Promise<{ path: string; preview: string }>
+  takeScreenshot: (options?: { requireVision?: boolean }) => Promise<{ path: string; preview: string }>
   captureScreen: () => Promise<string>
-  takeSelectiveScreenshot: () => Promise<{ path: string; preview: string; cancelled?: boolean }>
+  takeSelectiveScreenshot: (options?: { requireVision?: boolean }) => Promise<{ path: string; preview: string; cancelled?: boolean }>
   moveWindowLeft: () => Promise<void>
   moveWindowRight: () => Promise<void>
   moveWindowUp: () => Promise<void>
@@ -306,6 +306,7 @@ export interface ElectronAPI {
   onIntelligenceActionResult: (callback: (data: { intent: string; content: string; mode: string; profileApplied?: boolean; _sessionId?: string; requestId?: string; _intelligence?: any }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
   onIntelligenceError: (callback: (data: { error: string, mode: string; _sessionId?: string; requestId?: string }) => void) => () => void;
+  onScreenshotCaptureBlocked: (callback: (data: { error: string }) => void) => () => void;
 
   // Intelligence Surface Layer (Phase 4)
   onAdaptiveModeSuggestion: (callback: (data: { predictedMode: string; predictedModeName: string; currentMode: string; confidence: number; timestamp: number }) => void) => () => void;

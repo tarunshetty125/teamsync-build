@@ -1,12 +1,12 @@
 /** Shared pro-v2 overlay layout constants. */
 
-export const V2_INSIGHTS_WIDTH = 320;
+export const V2_INSIGHTS_WIDTH = 380;
 export const V2_PANEL_GAP = 7;
-export const V2_CONTAINER_PADDING = 24;
+export const V2_CONTAINER_PADDING = 32;
 export const V2_BAR_ONLY_WIDTH = 600;
 
-export const V2_RESPONSE_MIN_WIDTH = 480;
-export const V2_RESPONSE_MAX_WIDTH = 760;
+export const V2_RESPONSE_MIN_WIDTH = 680;
+export const V2_RESPONSE_MAX_WIDTH = 1040;
 
 function looksLikeWideSystemDesignResponse(text: string): boolean {
     return /architecture_json/i.test(text)
@@ -21,14 +21,14 @@ export function resolveV2ResponseWidthPx(text?: string): number {
     const len = text.length;
     let width = V2_RESPONSE_MIN_WIDTH;
     if (len > 3000) width = V2_RESPONSE_MAX_WIDTH;
-    else if (len > 2000) width = 680;
-    else if (len > 1200) width = 620;
-    else if (len > 600) width = 540;
-    else if (len > 300) width = 510;
+    else if (len > 2000) width = 900;
+    else if (len > 1200) width = 820;
+    else if (len > 600) width = 740;
+    else if (len > 300) width = 700;
 
     const longestLine = text.split('\n').reduce((max, line) => Math.max(max, line.length), 0);
     if (longestLine > 72) {
-        const lineWidth = Math.min(V2_RESPONSE_MAX_WIDTH, 440 + Math.floor(longestLine * 4.2));
+        const lineWidth = Math.min(V2_RESPONSE_MAX_WIDTH, 520 + Math.floor(longestLine * 4.8));
         width = Math.max(width, lineWidth);
     }
 
@@ -47,4 +47,4 @@ export const V2_OVERLAY_WINDOW_MIN_WIDTH = V2_PANELS_WIDTH_MAX;
 
 /** Sensible initial height before the renderer measures content. */
 export const V2_OVERLAY_WINDOW_DEFAULT_HEIGHT = 520;
-export const V2_OVERLAY_WINDOW_MAX_HEIGHT = 680;
+export const V2_OVERLAY_WINDOW_MAX_HEIGHT = 860;

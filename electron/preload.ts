@@ -91,9 +91,9 @@ interface ElectronAPI {
 
   onUnauthorized: (callback: () => void) => () => void
   onDebugError: (callback: (error: string) => void) => () => void
-  takeScreenshot: () => Promise<void>
+  takeScreenshot: (options?: { requireVision?: boolean }) => Promise<{ path: string; preview: string }>
   captureScreen: () => Promise<string>
-  takeSelectiveScreenshot: () => Promise<{ path: string; preview: string; cancelled?: boolean }>
+  takeSelectiveScreenshot: (options?: { requireVision?: boolean }) => Promise<{ path: string; preview: string; cancelled?: boolean }>
   moveWindowLeft: () => Promise<void>
   moveWindowRight: () => Promise<void>
   moveWindowUp: () => Promise<void>
@@ -248,6 +248,7 @@ interface ElectronAPI {
   onIntelligenceActionResult: (callback: (data: { intent: string; content: string; requestId?: string; mode: string; profileApplied?: boolean }) => void) => () => void
   onIntelligenceModeChanged: (callback: (data: { mode: string }) => void) => () => void
   onIntelligenceError: (callback: (data: { error: string; mode: string; requestId?: string }) => void) => () => void
+  onScreenshotCaptureBlocked: (callback: (data: { error: string }) => void) => () => void
   onSessionModeChanged: (callback: (data: { mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design' }) => void) => () => void
 
   // Model Management
@@ -523,12 +524,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   updateContentDimensions: (dimensions: { width: number; height: number }) =>
     ipcRenderer.invoke("update-content-dimensions", dimensions),
   getRecognitionLanguages: () => ipcRenderer.invoke("get-recognition-languages"),
-  takeScreenshot: () => ipcRenderer.invoke("take-screenshot"),
+  takeScreenshot: (options?: { requireVision?: boolean }) => ipcRenderer.invoke("take-screenshot", options),
   captureScreen: async () => {
     const data = await ipcRenderer.invoke("take-screenshot");
     return data?.path ?? "";
   },
-  takeSelectiveScreenshot: () => ipcRenderer.invoke("take-selective-screenshot"),
+  takeSelectiveScreenshot: (options?: { requireVision?: boolean }) => ipcRenderer.invoke("take-selective-screenshot", options),
   getScreenshots: () => ipcRenderer.invoke("get-screenshots"),
   deleteScreenshot: (path: string) =>
     ipcRenderer.invoke("delete-screenshot", path),
@@ -1147,6 +1148,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("intelligence-error", subscription)
     return () => {
       ipcRenderer.removeListener("intelligence-error", subscription)
+    }
+  },
+  onScreenshotCaptureBlocked: (callback: (data: { error: string }) => void) => {
+    const subscription = (_: any, data: { error: string }) => callback(data)
+    ipcRenderer.on("screenshot-capture-blocked", subscription)
+    return () => {
+      ipcRenderer.removeListener("screenshot-capture-blocked", subscription)
     }
   },
   onSessionReset: (callback: (payload?: { sessionId: string }) => void) => {
