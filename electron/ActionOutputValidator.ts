@@ -729,6 +729,7 @@ export function validateActionOutput(
 export function buildRepairInstruction(intent: UnifiedActionIntent, issues: string[]): string {
     const architectureJsonRepair = issues.some((issue) => issue.startsWith('system_design_architecture_json') || issue === 'system_design_missing_fenced_architecture_json');
     const codingRepair = issues.some((issue) => issue === 'coding_missing_code_block' || issue === 'coding_unbalanced_delimiters' || issue === 'coding_likely_compile_error');
+    const screenScanLanguageRepair = issues.some((issue) => issue.startsWith('screen_scan_language_mismatch_expected_'));
     return [
         `The previous draft violated the output contract for intent "${intent}".`,
         `Fix these issues: ${issues.join(', ')}.`,
@@ -737,6 +738,9 @@ export function buildRepairInstruction(intent: UnifiedActionIntent, issues: stri
             : '',
         codingRepair
             ? 'For coding answers, include the complete runnable solution inside one fenced markdown code block. Use exactly three backticks: opening fence like ```python on its own line, code on following lines, closing fence ``` on its own line. Never use two backticks or inline code for the solution. The code must compile: balance all parentheses, braces, and brackets; fix typos in keywords and standard libraries; use valid loop increments such as i++; use valid Python indentation/imports when writing Python; keep prose like "Example usage" outside code or as comments; and for rectangular arrays, every row must have the same length.'
+            : '',
+        screenScanLanguageRepair
+            ? 'For screen scan coding answers, the detected editor language is authoritative. Rewrite the solution in the required detected language and use the required code fence. Do not default to Python when a non-Python editor language was detected.'
             : '',
         'Return only the corrected final answer.',
         'Do not explain the correction.',

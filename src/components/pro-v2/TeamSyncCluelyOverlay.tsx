@@ -12,6 +12,7 @@ import ProInsightsPanel from './ProInsightsPanel';
 import ProResponseSurface from './ProResponseSurface';
 import RollingTranscript from '../ui/RollingTranscript';
 import { useV2OverlayResize } from './useV2OverlayResize';
+import { Image as ImageIcon, X } from 'lucide-react';
 import './pro-v2.css';
 import {
     getV2PanelsWidth,
@@ -34,6 +35,75 @@ interface TeamSyncCluelyOverlayProps {
     overlayOpacity?: number;
     hasProContextAccess?: boolean;
 }
+
+interface ProAttachmentStripProps {
+    attachments: Array<{ path: string; preview: string }>;
+    mode: 'pending' | 'active';
+    onRemove?: (index: number) => void;
+    onClear?: () => void;
+}
+
+const ProAttachmentStrip: React.FC<ProAttachmentStripProps> = ({
+    attachments,
+    mode,
+    onRemove,
+    onClear,
+}) => {
+    if (attachments.length === 0) return null;
+    const isPending = mode === 'pending';
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: -4, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: 'auto' }}
+            exit={{ opacity: 0, y: -4, height: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="v2-attachment-strip v2-no-drag"
+        >
+            <div className="v2-attachment-strip__meta">
+                <ImageIcon size={12} strokeWidth={2} />
+                <span>
+                    {isPending
+                        ? `${attachments.length} screenshot${attachments.length > 1 ? 's' : ''} attached`
+                        : 'Screenshot analyzed'}
+                </span>
+            </div>
+            <div className="v2-attachment-strip__rail">
+                {attachments.map((attachment, index) => (
+                    <div key={`${attachment.path}-${index}`} className="v2-attachment-thumb">
+                        {attachment.preview ? (
+                            <img src={attachment.preview} alt={`Screenshot ${index + 1}`} />
+                        ) : (
+                            <div className="v2-attachment-thumb__empty">
+                                <ImageIcon size={15} strokeWidth={1.8} />
+                            </div>
+                        )}
+                        {isPending && onRemove && (
+                            <button
+                                type="button"
+                                className="v2-attachment-thumb__remove"
+                                onClick={() => onRemove(index)}
+                                aria-label="Remove screenshot"
+                                title="Remove screenshot"
+                            >
+                                <X size={10} strokeWidth={2.4} />
+                            </button>
+                        )}
+                    </div>
+                ))}
+            </div>
+            {isPending && attachments.length > 1 && onClear && (
+                <button
+                    type="button"
+                    className="v2-attachment-strip__clear"
+                    onClick={onClear}
+                >
+                    Clear
+                </button>
+            )}
+        </motion.div>
+    );
+};
 
 const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
     onEndMeeting,
@@ -80,6 +150,16 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
     const activeResponseContentRevision = bridge.activeResponse?.isStreaming
         ? 'streaming'
         : bridge.activeResponse?.text.length ?? 0;
+    const activeResponseAttachment = useMemo(
+        () => bridge.activeResponse?.screenshotPreview
+            ? [{ path: bridge.activeResponse.requestId ?? bridge.activeResponse.id, preview: bridge.activeResponse.screenshotPreview }]
+            : [],
+        [bridge.activeResponse?.id, bridge.activeResponse?.requestId, bridge.activeResponse?.screenshotPreview],
+    );
+    const attachmentStripItems = bridge.attachedContext.length > 0
+        ? bridge.attachedContext
+        : activeResponseAttachment;
+    const attachmentStripMode = bridge.attachedContext.length > 0 ? 'pending' : 'active';
 
     useV2OverlayResize({
         containerRef,
@@ -95,6 +175,8 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
             bridge.activeResponse?.id ?? 'none',
             activeResponseContentRevision,
             bridge.activeResponseIndex,
+            bridge.attachedContext.map((attachment) => attachment.path).join(','),
+            bridge.activeResponse?.screenshotPreview ? 'response-image' : 'no-response-image',
         ].join(':'),
     });
 
@@ -137,7 +219,19 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 onInputChange={bridge.setInputValue}
                 onScreenScan={bridge.handleScreenScan}
                 onToggleTranscriptPause={bridge.toggleTranscriptPause}
+                hasAttachments={bridge.attachedContext.length > 0}
             />
+
+            <AnimatePresence initial={false}>
+                {attachmentStripItems.length > 0 && (
+                    <ProAttachmentStrip
+                        attachments={attachmentStripItems}
+                        mode={attachmentStripMode}
+                        onRemove={bridge.removeAttachedContextAt}
+                        onClear={bridge.clearAttachedContext}
+                    />
+                )}
+            </AnimatePresence>
 
             {/* ── Rolling transcript strip — between bar and panels ── */}
             <AnimatePresence initial={false}>

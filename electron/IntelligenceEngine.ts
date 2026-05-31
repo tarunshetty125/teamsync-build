@@ -31,6 +31,7 @@ import {
     detectScreenContentMode, MODE_BEHAVIOR
 } from './llm';
 import type { ConversationIntent, ScreenContentMode } from './llm';
+import { detectVisibleScreenLanguage } from './llm/prompts';
 
 // Brain layer (Phase 4/5) — domain-specific intelligence
 import { createBrainLayer, type BrainLayer } from './intelligence/brains/createBrainLayer';
@@ -56,7 +57,6 @@ import type { QualityEvaluationResult } from './intelligence/evaluation';
 import { compileTinyPrompt } from './intelligence/TinyPromptCompiler';
 import { adaptPromptBudget } from './intelligence/AdaptivePromptBudgeter';
 import { buildProviderPrompt } from './llm/ProviderPromptBuilder';
-import { isBedrockGptOssModel } from './llm/BedrockModelIds';
 import { BenchmarkManager, countHallucinationIndicators, hasConfidenceSignal } from './intelligence/BenchmarkManager';
 import { ModesManager } from './services/ModesManager';
 import type { ModeTemplateId } from '../src/lib/modes/types';
@@ -202,6 +202,142 @@ function consolidateControlledPromptSections(instructions: PromptInstruction[]):
     }
 
     return output;
+}
+
+function normalizeCodeFenceLanguage(language: string | null | undefined): string | null {
+    if (!language) return null;
+    const normalized = language.trim().toLowerCase().replace(/\s+/g, '');
+    if (!normalized) return null;
+    if (['unknown', 'infer', 'inferred', 'visibleeditorlanguage:unknown'].includes(normalized)) return null;
+    if (normalized.startsWith('inferfromvisible')) return null;
+    if (['py', 'python3'].includes(normalized)) return 'python';
+    if (['js', 'node', 'node.js', 'nodejs'].includes(normalized)) return 'javascript';
+    if (['ts'].includes(normalized)) return 'typescript';
+    if (['c++', 'cpp', 'g++'].includes(normalized)) return 'cpp';
+    if (['c#', 'csharp'].includes(normalized)) return 'csharp';
+    if (['golang'].includes(normalized)) return 'go';
+    return normalized;
+}
+
+function extractRequiredScreenScanFence(prompt: PromptObject): string | null {
+    if (prompt.intent !== 'screen_scan') return null;
+    const sources = [
+        prompt.question,
+        prompt.supplemental?.content ?? '',
+        ...prompt.instructions.map((instruction) => instruction.content),
+    ].join('\n');
+
+    const fenceMatch = sources.match(/(?:REQUIRED CODE FENCE|Required solution code fence):\s*```([a-zA-Z0-9_+#.-]+)/i);
+    if (fenceMatch?.[1]) {
+        return normalizeCodeFenceLanguage(fenceMatch[1]);
+    }
+
+    const visibleLanguageMatch = sources.match(/(?:VISIBLE EDITOR LANGUAGE|Visible editor language|REQUIRED SOLUTION LANGUAGE):\s*([^\n]+)/i);
+    if (!visibleLanguageMatch?.[1]) return null;
+
+    const language = visibleLanguageMatch[1].trim();
+    if (/^(unknown|infer\b|inferred\b)/i.test(language)) return null;
+    const labelToFence: Record<string, string> = {
+        python: 'python',
+        python3: 'python',
+        javascript: 'javascript',
+        js: 'javascript',
+        typescript: 'typescript',
+        ts: 'typescript',
+        java: 'java',
+        'c++': 'cpp',
+        cpp: 'cpp',
+        'c#': 'csharp',
+        csharp: 'csharp',
+        c: 'c',
+        go: 'go',
+        golang: 'go',
+        rust: 'rust',
+        kotlin: 'kotlin',
+        swift: 'swift',
+        ruby: 'ruby',
+        scala: 'scala',
+        php: 'php',
+        dart: 'dart',
+        elixir: 'elixir',
+        erlang: 'erlang',
+        racket: 'racket',
+    };
+    return labelToFence[language.toLowerCase()] ?? normalizeCodeFenceLanguage(language);
+}
+
+function getFencedCodeLanguages(content: string): string[] {
+    return [...content.matchAll(/```([a-zA-Z0-9_+#.-]*)/g)]
+        .map((match) => normalizeCodeFenceLanguage(match[1]))
+        .filter((language): language is string => Boolean(language))
+        .filter((language) => !['mermaid', 'architecture_json', 'json', 'text', 'txt'].includes(language));
+}
+
+function buildScreenScanLanguageMismatchIssue(prompt: PromptObject, content: string): string | null {
+    const expectedFence = extractRequiredScreenScanFence(prompt);
+    if (!expectedFence) return null;
+    const actualFences = getFencedCodeLanguages(content);
+    if (actualFences.includes(expectedFence)) return null;
+    const actual = actualFences[0] ?? 'missing_code_fence';
+    return `screen_scan_language_mismatch_expected_${expectedFence}_actual_${actual}`;
+}
+
+async function detectEditorLanguageFromScreenCrop(imagePaths?: string[]): Promise<{ label: string; fence: string } | null> {
+    if (!imagePaths?.length) return null;
+    const sharp = require('sharp');
+    const Tesseract = require('tesseract.js');
+
+    for (const imagePath of imagePaths) {
+        try {
+            const metadata = await sharp(imagePath).metadata();
+            const width = Number(metadata?.width || 0);
+            const height = Number(metadata?.height || 0);
+            if (!width || !height) continue;
+
+            const crops = [
+                {
+                    label: 'leetcode_code_header',
+                    left: Math.round(width * 0.235),
+                    top: Math.round(height * 0.195),
+                    width: Math.round(width * 0.22),
+                    height: Math.round(height * 0.06),
+                },
+                {
+                    label: 'leetcode_code_top',
+                    left: Math.round(width * 0.235),
+                    top: Math.round(height * 0.195),
+                    width: Math.round(width * 0.42),
+                    height: Math.round(height * 0.20),
+                },
+            ];
+
+            for (const crop of crops) {
+                const safeCrop = {
+                    left: Math.max(0, Math.min(crop.left, width - 1)),
+                    top: Math.max(0, Math.min(crop.top, height - 1)),
+                    width: Math.max(1, Math.min(crop.width, width - crop.left)),
+                    height: Math.max(1, Math.min(crop.height, height - crop.top)),
+                };
+                const buffer = await sharp(imagePath)
+                    .extract(safeCrop)
+                    .resize({ width: safeCrop.width * 3 })
+                    .grayscale()
+                    .normalize()
+                    .png()
+                    .toBuffer();
+                const result = await Tesseract.recognize(buffer, 'eng', {
+                    logger: (): any => undefined,
+                });
+                const text = result?.data?.text ?? '';
+                const detected = detectVisibleScreenLanguage(text);
+                if (detected) return detected;
+            }
+        } catch (error: any) {
+            // Best-effort OCR crop fallback; whole-screen OCR remains the primary path.
+        }
+    }
+
+    return null;
 }
 
 function formatContextPriorityLabel(source: ContextPrioritySource): string {
@@ -872,7 +1008,6 @@ export class IntelligenceEngine extends EventEmitter {
                         return null;
                     }
 
-                    console.log('[FINAL_LENGTH]', finalContent.length);
                     this.persistActionResult(params.intent, budgeted.prompt.question, finalContent);
                     if (!isFailureResponseText(finalContent)) {
                         this.actionResponseCache.set(budgeted.prompt, sessionIdSnapshot, finalContent);
@@ -963,25 +1098,6 @@ export class IntelligenceEngine extends EventEmitter {
                         sessionMode,
                         params.message || this.session.getLastInterviewerTurn() || 'the latest question'
                     );
-                    console.log('[FALLBACK_REASON]', JSON.stringify({
-                        stage: 'runAction',
-                        intent: params.intent,
-                        mode: sessionMode,
-                        reason: 'action_pipeline_failed_hard',
-                        error: error?.message || String(error),
-                    }));
-                    console.log('[RAW_LENGTH]', 0);
-                    console.log('[PARSED_LENGTH]', safeFallback.length);
-                    console.log('[VALIDATION_RESULT]', JSON.stringify({
-                        stage: 'hard_fallback',
-                        intent: params.intent,
-                        mode: sessionMode,
-                        valid: false,
-                        autoCorrected: false,
-                        issues: ['action_pipeline_failed_hard'],
-                        correctedLength: safeFallback.length,
-                    }));
-                    console.log('[FINAL_LENGTH]', safeFallback.length);
                     this.persistActionResult(params.intent, params.message || 'safe fallback', safeFallback);
                     await this.emitBufferedActionContent(
                         signal,
@@ -1180,7 +1296,7 @@ export class IntelligenceEngine extends EventEmitter {
         requestId: string | null;
         sessionIdSnapshot: string;
     }): Promise<string | null> {
-        const { prompt, imagePaths, modelOverride, fallbackUsed = false, fallbackReason = null, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
+        const { prompt, imagePaths, modelOverride, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
         const originalModel = this.llmHelper.getCurrentModel();
         const isSystemDesignOutput = getQuestionResponseProfile(prompt.question, prompt.mode, prompt.intent) === 'system_design';
 
@@ -1191,13 +1307,6 @@ export class IntelligenceEngine extends EventEmitter {
             if (modelOverride && modelOverride !== originalModel) {
                 this.llmHelper.setModel(modelOverride);
             }
-            console.log('[MODEL_SELECTION]', JSON.stringify({
-                requestedModel: originalModel,
-                actualInvokedModel: this.llmHelper.getCurrentModel(),
-                fallbackUsed,
-                fallbackReason,
-            }));
-
             const providerPrompt = buildProviderPrompt({
                 prompt,
                 model: this.llmHelper.getCurrentModel(),
@@ -1294,13 +1403,6 @@ export class IntelligenceEngine extends EventEmitter {
             }
 
             try {
-                if (attempt.fallbackUsed) {
-                    console.log('FALLBACK_MODEL_USED', JSON.stringify({
-                        requestedModel: primaryModel,
-                        fallbackModel: attempt.model,
-                        reason: failureReasons.join(' | ') || 'primary_model_failed',
-                    }));
-                }
                 const content = await this.collectStreamResponseForPrompt({
                     prompt,
                     imagePaths,
@@ -1313,11 +1415,6 @@ export class IntelligenceEngine extends EventEmitter {
                     requestId,
                     sessionIdSnapshot,
                 });
-                if (isBedrockGptOssModel(attempt.model)) {
-                    console.log(`[GPT_OSS_RAW_OUTPUT] model=${attempt.model} intent=${prompt.intent} requestId=${requestId ?? 'none'} length=${content?.length ?? 0}`);
-                    console.log((content ?? '').slice(0, 2000));
-                    console.log('[GPT_OSS_RAW_OUTPUT_END]');
-                }
                 if (content && content.trim() && !isFailureResponseText(content)) {
                     return {
                         content: content.trim(),
@@ -1326,35 +1423,14 @@ export class IntelligenceEngine extends EventEmitter {
                     };
                 }
                 failureReasons.push(`attempt_${attemptIndex + 1}:invalid_or_empty_response(${attempt.model})`);
-                if (!attempt.fallbackUsed) {
-                    console.log('PRIMARY_MODEL_FAILED', JSON.stringify({
-                        requestedModel: primaryModel,
-                        actualInvokedModel: attempt.model,
-                        reason: 'invalid_or_empty_response',
-                    }));
-                }
             } catch (error: any) {
                 const reason = error?.message || String(error);
                 failureReasons.push(`attempt_${attemptIndex + 1}:${attempt.model}:${reason}`);
                 console.warn('[IntelligenceEngine] Action attempt failed:', reason);
-                if (!attempt.fallbackUsed) {
-                    console.log('PRIMARY_MODEL_FAILED', JSON.stringify({
-                        requestedModel: primaryModel,
-                        actualInvokedModel: attempt.model,
-                        reason,
-                    }));
-                }
             }
         }
 
         console.warn('[IntelligenceEngine] Action retries exhausted:', failureReasons.join(' | '));
-        console.log('[FALLBACK_REASON]', JSON.stringify({
-            stage: 'executeActionWithRetry',
-            intent: prompt.intent,
-            mode: prompt.mode,
-            reason: 'action_retries_exhausted',
-            failureReasons,
-        }));
         return {
             content: buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question),
             retryCount: Math.max(0, attempts.length - 1),
@@ -1374,33 +1450,21 @@ export class IntelligenceEngine extends EventEmitter {
         sessionIdSnapshot: string;
     }): Promise<string | null> {
         const { prompt, content, maxTokens, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
-        console.log('[RAW_LENGTH]', content.length);
-        const validation = validateActionOutput(prompt.intent, prompt.mode, content, prompt.question);
-        console.log('[PARSED_LENGTH]', validation.correctedContent.length);
-        console.log('[VALIDATION_RESULT]', JSON.stringify({
-            stage: 'initial',
-            intent: prompt.intent,
-            mode: prompt.mode,
-            valid: validation.valid,
-            autoCorrected: validation.autoCorrected,
-            issues: validation.issues,
-            correctedLength: validation.correctedContent.length,
-        }));
+        const validation = this.enforceScreenScanLanguageCompliance(
+            prompt,
+            content,
+            validateActionOutput(prompt.intent, prompt.mode, content, prompt.question)
+        );
         if (validation.valid) {
             return validation.correctedContent.trim();
         }
 
         if (validation.correctedContent.trim()) {
-            const correctedValidation = validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent, prompt.question);
-            console.log('[VALIDATION_RESULT]', JSON.stringify({
-                stage: 'corrected',
-                intent: prompt.intent,
-                mode: prompt.mode,
-                valid: correctedValidation.valid,
-                autoCorrected: correctedValidation.autoCorrected,
-                issues: correctedValidation.issues,
-                correctedLength: correctedValidation.correctedContent.length,
-            }));
+            const correctedValidation = this.enforceScreenScanLanguageCompliance(
+                prompt,
+                validation.correctedContent,
+                validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent, prompt.question)
+            );
             if (correctedValidation.valid) {
                 return correctedValidation.correctedContent.trim();
             }
@@ -1414,7 +1478,11 @@ export class IntelligenceEngine extends EventEmitter {
                 {
                     key: 'output_repair',
                     title: 'OUTPUT REPAIR',
-                    content: `${buildRepairInstruction(prompt.intent, validation.issues)}\n\nINVALID DRAFT EXCERPT:\n${invalidDraftForRepair}`,
+                    content: [
+                        buildRepairInstruction(prompt.intent, validation.issues),
+                        this.buildScreenScanLanguageRepairInstruction(prompt),
+                        `INVALID DRAFT EXCERPT:\n${invalidDraftForRepair}`,
+                    ].filter(Boolean).join('\n\n'),
                 },
             ],
         };
@@ -1434,55 +1502,54 @@ export class IntelligenceEngine extends EventEmitter {
             sessionIdSnapshot,
         });
         if (!repaired?.trim()) {
-            console.log('[FALLBACK_REASON]', JSON.stringify({
-                stage: 'ensureValidActionOutput',
-                intent: prompt.intent,
-                mode: prompt.mode,
-                reason: 'repair_empty',
-                initialIssues: validation.issues,
-            }));
             return buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question);
         }
 
-        const repairedValidation = validateActionOutput(prompt.intent, prompt.mode, repaired, prompt.question);
-        console.log('[RAW_LENGTH]', repaired.length);
-        console.log('[PARSED_LENGTH]', repairedValidation.correctedContent.length);
-        console.log('[VALIDATION_RESULT]', JSON.stringify({
-            stage: 'repair',
-            intent: prompt.intent,
-            mode: prompt.mode,
-            valid: repairedValidation.valid,
-            autoCorrected: repairedValidation.autoCorrected,
-            issues: repairedValidation.issues,
-            correctedLength: repairedValidation.correctedContent.length,
-        }));
+        const repairedValidation = this.enforceScreenScanLanguageCompliance(
+            prompt,
+            repaired,
+            validateActionOutput(prompt.intent, prompt.mode, repaired, prompt.question)
+        );
         if (repairedValidation.valid) {
             return repairedValidation.correctedContent.trim();
         }
         if (repairedValidation.correctedContent.trim()) {
-            const correctedRepairValidation = validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent, prompt.question);
-            console.log('[VALIDATION_RESULT]', JSON.stringify({
-                stage: 'corrected_repair',
-                intent: prompt.intent,
-                mode: prompt.mode,
-                valid: correctedRepairValidation.valid,
-                autoCorrected: correctedRepairValidation.autoCorrected,
-                issues: correctedRepairValidation.issues,
-                correctedLength: correctedRepairValidation.correctedContent.length,
-            }));
+            const correctedRepairValidation = this.enforceScreenScanLanguageCompliance(
+                prompt,
+                repairedValidation.correctedContent,
+                validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent, prompt.question)
+            );
             if (correctedRepairValidation.valid) {
                 return correctedRepairValidation.correctedContent.trim();
             }
         }
-        console.log('[FALLBACK_REASON]', JSON.stringify({
-            stage: 'ensureValidActionOutput',
-            intent: prompt.intent,
-            mode: prompt.mode,
-            reason: 'repair_validation_failed',
-            initialIssues: validation.issues,
-            repairIssues: repairedValidation.issues,
-        }));
         return buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question);
+    }
+
+    private enforceScreenScanLanguageCompliance(
+        prompt: PromptObject,
+        content: string,
+        validation: ActionOutputValidationResult
+    ): ActionOutputValidationResult {
+        const issue = buildScreenScanLanguageMismatchIssue(prompt, validation.correctedContent || content);
+        if (!issue) return validation;
+        return {
+            ...validation,
+            valid: false,
+            correctedContent: validation.correctedContent || content,
+            issues: [...validation.issues, issue],
+        };
+    }
+
+    private buildScreenScanLanguageRepairInstruction(prompt: PromptObject): string {
+        const expectedFence = extractRequiredScreenScanFence(prompt);
+        if (!expectedFence) return '';
+        return [
+            'SCREEN SCAN LANGUAGE REPAIR:',
+            `The visible editor language requires the final solution to use the \`\`\`${expectedFence} code fence.`,
+            'Rewrite the Solution code in that exact language. Do not return Python unless the required fence is ```python.',
+            'Keep the same Problem and Approach content unless it needs language-specific adjustment.',
+        ].join('\n');
     }
 
     private compactRepairDraft(content: string, maxChars = 2800): string {
@@ -1517,39 +1584,11 @@ export class IntelligenceEngine extends EventEmitter {
         validatorResult?: ActionOutputValidationResult;
         fallbackReason?: string;
     }): void {
-        console.log('[RAW_LENGTH]', args.raw.length);
-        console.log('[PARSED_LENGTH]', args.validatorResult?.correctedContent.length ?? args.final.length);
-        console.log('[VALIDATION_RESULT]', JSON.stringify({
-            stage: args.validatorResult ? 'direct_validated' : 'direct_unvalidated',
-            pipeline: args.pipeline,
-            intent: args.intent,
-            mode: args.mode,
-            valid: args.validatorResult?.valid ?? true,
-            autoCorrected: args.validatorResult?.autoCorrected ?? false,
-            issues: args.validatorResult?.issues ?? [],
-            correctedLength: args.validatorResult?.correctedContent.length ?? args.final.length,
-        }));
-        if (args.fallbackReason) {
-            console.log('[FALLBACK_REASON]', JSON.stringify({
-                stage: 'direct_pipeline',
-                pipeline: args.pipeline,
-                intent: args.intent,
-                mode: args.mode,
-                reason: args.fallbackReason,
-            }));
-        }
-        console.log('[FINAL_LENGTH]', args.final.length);
+        void args;
     }
 
     private logDirectModelSelection(pipeline: string): void {
-        const model = this.llmHelper.getCurrentModel();
-        console.log('[MODEL_SELECTION]', JSON.stringify({
-            pipeline,
-            requestedModel: model,
-            actualInvokedModel: model,
-            fallbackUsed: false,
-            fallbackReason: null,
-        }));
+        void pipeline;
     }
 
     private recordBenchmark(args: {
@@ -2423,6 +2462,17 @@ export class IntelligenceEngine extends EventEmitter {
                 const detectedMode: ScreenContentMode = heuristicMode !== 'ui_general'
                     ? heuristicMode          // heuristic found something specific — trust it
                     : (forcedMode || 'ui_general');  // heuristic inconclusive — fall back to frontend hint
+                const detectedEditorLanguage = (detectedMode === 'coding' || detectedMode === 'interview_question')
+                    ? (detectVisibleScreenLanguage(screenText) ?? await detectEditorLanguageFromScreenCrop(imagePaths))
+                    : null;
+                const screenTextForPrompt = detectedEditorLanguage
+                    ? [
+                        `VISIBLE EDITOR LANGUAGE: ${detectedEditorLanguage.label}`,
+                        `REQUIRED SOLUTION LANGUAGE: ${detectedEditorLanguage.label}`,
+                        `REQUIRED CODE FENCE: \`\`\`${detectedEditorLanguage.fence}`,
+                        screenText,
+                    ].join('\n')
+                    : screenText;
 
                 const behavior = MODE_BEHAVIOR[detectedMode];
                 console.log(
@@ -2443,12 +2493,22 @@ export class IntelligenceEngine extends EventEmitter {
                 try {
                     const fullResult = await this.runAction({
                         intent: 'screen_scan',
-                        message: screenText,
+                        message: screenTextForPrompt,
                         imagePaths: undefined,
                         requestId: activeRequestId ?? undefined,
                         modeOverride: (detectedMode === 'coding' || detectedMode === 'interview_question') ? 'coding' : this.session.getMode(),
                         profilePreference: 'force_off',
-                        additionalContext: `SCREEN MODE: ${detectedMode}`,
+                        additionalContext: [
+                            `SCREEN MODE: ${detectedMode}`,
+                            detectedEditorLanguage
+                                ? [
+                                    `VISIBLE EDITOR LANGUAGE: ${detectedEditorLanguage.label}`,
+                                    `REQUIRED SOLUTION LANGUAGE: ${detectedEditorLanguage.label}`,
+                                    `REQUIRED CODE FENCE: \`\`\`${detectedEditorLanguage.fence}`,
+                                    'Use this detected LeetCode/editor language for the final solution. Do not default to Python while this language evidence is present.',
+                                ].join('\n')
+                                : null,
+                        ].filter(Boolean).join('\n\n'),
                         screenScanMode: detectedMode,
                     });
 

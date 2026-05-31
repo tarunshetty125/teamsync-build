@@ -41,8 +41,9 @@ export class ScreenAnalysisBrain implements Brain {
                 'If the screen shows a coding problem, you MUST solve it completely.',
                 'For OCR text, treat partial noise as normal and recoverable.',
                 'When a LeetCode/HackerRank title, URL, number, examples, constraints, signature, or distinctive keywords are visible, treat the problem as identified.',
+                'If context includes VISIBLE EDITOR LANGUAGE or REQUIRED SOLUTION LANGUAGE, that detected language is authoritative.',
                 'If the editor language, starter function signature, or syntax pattern is visible, the final solution MUST use that language.',
-                'Do not default to Python when visible OCR shows JavaScript, TypeScript, Java, C++, Go, Rust, Kotlin, Swift, or another coding language.',
+                'Do not default to Python when visible OCR shows C++, Java, Python3, Python, JavaScript, TypeScript, C#, C, Go, Kotlin, Swift, Rust, Ruby, PHP, Dart, Scala, Elixir, Erlang, Racket, or another coding language.',
                 'Do not ask for another screenshot or say the screen could not be analyzed unless the extracted text is genuinely unusable.',
             ].join('\n'),
         });
@@ -70,6 +71,7 @@ export class ScreenAnalysisBrain implements Brain {
                     'The code MUST be inside a fenced code block with the language tag.',
                     'The code must be COMPLETE — a real implementation that compiles and runs correctly.',
                     'Add inline comments on non-obvious lines explaining the logic.',
+                    'If VISIBLE EDITOR LANGUAGE or REQUIRED CODE FENCE is present in context, use that exact language and fence.',
                     'Use the programming language visible on screen. Default to Python only when no editor language, starter signature, or syntax pattern is visible.',
                     '',
                     'CRITICAL: Do NOT output placeholder text like "complete optimized solution".',

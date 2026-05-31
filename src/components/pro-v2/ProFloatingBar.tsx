@@ -14,6 +14,7 @@ interface ProFloatingBarProps {
     isProcessing: boolean;
     isMeetingActive: boolean;
     isTranscriptPaused: boolean;
+    hasAttachments?: boolean;
     meetingStartTime: number;
     inputValue: string;
     onToggleExpanded: () => void;
@@ -30,6 +31,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
     isProcessing: _isProcessing,
     isMeetingActive,
     isTranscriptPaused,
+    hasAttachments = false,
     meetingStartTime,
     inputValue,
     onToggleExpanded,
@@ -62,22 +64,22 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
         // acting on keystrokes while the user is typing in the input.
         e.stopPropagation();
 
-        if (e.key === 'Enter' && inputValue.trim()) {
+        if (e.key === 'Enter' && (inputValue.trim() || hasAttachments)) {
             e.preventDefault();
             onSubmit(inputValue);
         } else if (e.key === 'Escape') {
             onInputChange('');
             inputRef.current?.blur();
         }
-    }, [inputValue, onSubmit, onInputChange]);
+    }, [hasAttachments, inputValue, onSubmit, onInputChange]);
 
     const handleSendClick = useCallback(() => {
-        if (inputValue.trim()) {
+        if (inputValue.trim() || hasAttachments) {
             onSubmit(inputValue);
         } else {
             inputRef.current?.focus();
         }
-    }, [inputValue, onSubmit]);
+    }, [hasAttachments, inputValue, onSubmit]);
 
     return (
         <motion.div
@@ -172,7 +174,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                 />
 
                 {/* Send button */}
-                {inputValue.trim() && (
+                {(inputValue.trim() || hasAttachments) && (
                     <button
                         onClick={handleSendClick}
                         style={{

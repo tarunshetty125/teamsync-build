@@ -56,6 +56,7 @@ export interface V2Message {
     metadata?: unknown;
 }
 
+type ScreenshotAttachment = { path: string; preview: string };
 type SessionMode = DetectedQuestionType;
 type ActionIntent = 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now';
 type ContextSummary = { label: string; detail: string };
@@ -209,6 +210,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             return capOverlayMessages(next);
         });
     }, []);
+    const [attachedContext, setAttachedContext] = useState<ScreenshotAttachment[]>([]);
+    const attachedContextRef = useRef<ScreenshotAttachment[]>([]);
     const [activeResponseIndex, setActiveResponseIndex] = useState(-1);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isExpanded, setIsExpanded] = useState(true);
@@ -535,6 +538,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         void window.electronAPI.ragCancelQuery?.({ meetingId: LIVE_MEETING_RAG_ID }).catch(() => {});
 
         setMessages([]);
+        setAttachedContext([]);
         setActiveResponseIndex(-1);
         setInputValue('');
         setIsProcessing(false);
@@ -631,6 +635,37 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         }
         requestStartTimeRef.current = null;
         currentSourceRef.current = undefined;
+    }, []);
+
+    useEffect(() => {
+        attachedContextRef.current = attachedContext;
+    }, [attachedContext]);
+
+    const appendScreenshotAttachment = useCallback((data: ScreenshotAttachment) => {
+        if (!data?.path) return;
+        setIsExpanded(true);
+        setAttachedContext((prev) => {
+            if (prev.some((s) => s.path === data.path)) {
+                attachedContextRef.current = prev;
+                return prev;
+            }
+            const next = [...prev, data].slice(-5);
+            attachedContextRef.current = next;
+            return next;
+        });
+    }, []);
+
+    const clearAttachedContext = useCallback(() => {
+        attachedContextRef.current = [];
+        setAttachedContext([]);
+    }, []);
+
+    const removeAttachedContextAt = useCallback((index: number) => {
+        setAttachedContext((prev) => {
+            const next = prev.filter((_, i) => i !== index);
+            attachedContextRef.current = next;
+            return next;
+        });
     }, []);
 
     const recomputeIntentFromFinalTranscript = useCallback(
@@ -1144,10 +1179,13 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const handleManualSubmit = useCallback(
         async (text: string) => {
             const userText = text.trim();
-            if (!userText) return;
+            const currentAttachments = attachedContextRef.current;
+            const hasAttachments = currentAttachments.length > 0;
+            if (!userText && !hasAttachments) return;
+            const promptText = userText || 'Analyze this screenshot';
 
             await cancelInFlightOverlayRequests();
-            if (!isTranscriptPausedRef.current) {
+            if (!isTranscriptPausedRef.current && userText) {
                 markCurrentTurnFromText(userText, 'manual_input');
             }
 
@@ -1162,6 +1200,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             }
 
             setInputValue('');
+            clearAttachedContext();
             setIsExpanded(true);
             analytics.trackCommandExecuted('manual_input');
             currentSourceRef.current = 'Manual Input';
@@ -1174,7 +1213,14 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
             setMessages((prev) => [
                 ...prev,
-                { id: nextMsgId(), timestamp: Date.now(), role: 'user', text: userText },
+                {
+                    id: nextMsgId(),
+                    timestamp: Date.now(),
+                    role: 'user',
+                    text: promptText,
+                    hasScreenshot: hasAttachments,
+                    screenshotPreview: currentAttachments[0]?.preview,
+                },
                 {
                     id: nextMsgId(),
                     timestamp: Date.now(),
@@ -1185,19 +1231,21 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     source: 'Manual Input',
                     model: currentModelRef.current,
                     provider: detectProviderType(currentModelRef.current),
-                    question: userText,
+                    question: promptText,
                     isStreaming: true,
+                    hasScreenshot: hasAttachments,
+                    screenshotPreview: currentAttachments[0]?.preview,
                 },
             ]);
 
-            const manualDetectedMode = detectRealtimeMode(userText, 'general', 'general').nextType;
-            const streamContext = buildManualStreamContext(userText, manualDetectedMode, finalizedTranscriptRef.current);
+            const manualDetectedMode = detectRealtimeMode(promptText, 'general', 'general').nextType;
+            const streamContext = buildManualStreamContext(promptText, manualDetectedMode, finalizedTranscriptRef.current);
 
             try {
                 activeRagRequestIdRef.current = null;
                 await window.electronAPI.streamGeminiChat(
-                    userText,
-                    undefined,
+                    promptText,
+                    hasAttachments ? currentAttachments.map((attachment) => attachment.path) : undefined,
                     streamContext,
                     { requestId },
                 );
@@ -1216,6 +1264,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         },
         [
             cancelInFlightOverlayRequests,
+            clearAttachedContext,
             handleToggleNegotiationContext,
             hasNegotiationScript,
             hasProContextAccess,
@@ -1232,8 +1281,13 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         try {
             await cancelInFlightOverlayRequests();
 
-            const data = await window.electronAPI.takeScreenshot();
+            const attached = attachedContextRef.current;
+            const existingAttachment = attached[attached.length - 1] ?? null;
+            const data = existingAttachment ?? await window.electronAPI.takeScreenshot();
             if (!data?.path) return;
+            if (existingAttachment) {
+                clearAttachedContext();
+            }
 
             const requestId = nextRequestId('screen_scan');
             activeScreenScanRequestIdRef.current = requestId;
@@ -1278,7 +1332,26 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             activeScreenScanRequestIdRef.current = null;
             rememberIntentRequest('screen_scan', null);
         }
-    }, [cancelInFlightOverlayRequests, rememberIntentRequest, session.currentMode]);
+    }, [cancelInFlightOverlayRequests, clearAttachedContext, rememberIntentRequest, session.currentMode]);
+
+    useEffect(() => {
+        const cleanupTaken = window.electronAPI.onScreenshotTaken?.(appendScreenshotAttachment);
+        const cleanupAttached = window.electronAPI.onScreenshotAttached?.(appendScreenshotAttachment);
+        return () => {
+            cleanupTaken?.();
+            cleanupAttached?.();
+        };
+    }, [appendScreenshotAttachment]);
+
+    useEffect(() => {
+        if (!window.electronAPI.onCaptureAndProcess) return;
+        return window.electronAPI.onCaptureAndProcess((data) => {
+            appendScreenshotAttachment(data);
+            requestAnimationFrame(() => {
+                void handleScreenScan();
+            });
+        });
+    }, [appendScreenshotAttachment, handleScreenScan]);
 
     const toggleExpanded = useCallback(() => {
         setIsExpanded((prev) => !prev);
@@ -1396,6 +1469,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         canGoPreviousResponse: responseNavigation.canGoPrevious,
         canGoNextResponse: responseNavigation.canGoNext,
         latestResponse,
+        attachedContext,
         activeModeLabel,
         isMeetingActive,
         isTranscriptPaused,
@@ -1416,6 +1490,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         setInputValue,
         setShowTranscript,
         setIsExpanded,
+        clearAttachedContext,
+        removeAttachedContextAt,
         runAction,
         executeQuickAction,
         getQuickActionHandler,
