@@ -980,6 +980,7 @@ export class IntelligenceEngine extends EventEmitter {
                             requestedModel: this.llmHelper.getCurrentModel(),
                             actualInvokedModel: 'direct_response',
                             fallbackReason: null,
+                            previewStreamed: false,
                         }
                         : await this.executeActionWithRetry({
                             prompt: budgeted.prompt,
@@ -989,6 +990,13 @@ export class IntelligenceEngine extends EventEmitter {
                             generationId,
                             requestId: activeRequestId,
                             sessionIdSnapshot,
+                            previewStream: getQuestionResponseProfile(budgeted.prompt.question, budgeted.prompt.mode, budgeted.prompt.intent) === 'system_design'
+                                ? {
+                                    intent: params.intent,
+                                    mode: sessionMode,
+                                    profileApplied: contextLayers.profileApplied,
+                                }
+                                : undefined,
                         });
 
                     if (!executionResult || !isOwnedRequest()) {
@@ -1045,16 +1053,18 @@ export class IntelligenceEngine extends EventEmitter {
                     }
                     // ──── End Response Quality Evaluation ────
 
-                    await this.emitBufferedActionContent(
-                        signal,
-                        activeRequestId,
-                        generationId,
-                        params.intent,
-                        sessionMode,
-                        contextLayers.profileApplied,
-                        finalContent,
-                        sessionIdSnapshot
-                    );
+                    if (!executionResult.previewStreamed) {
+                        await this.emitBufferedActionContent(
+                            signal,
+                            activeRequestId,
+                            generationId,
+                            params.intent,
+                            sessionMode,
+                            contextLayers.profileApplied,
+                            finalContent,
+                            sessionIdSnapshot
+                        );
+                    }
                     logActionMetrics({
                         intent: params.intent,
                         mode: sessionMode,
@@ -1306,8 +1316,13 @@ export class IntelligenceEngine extends EventEmitter {
         generationId: number;
         requestId: string | null;
         sessionIdSnapshot: string;
+        previewStream?: {
+            intent: UnifiedActionIntent;
+            mode: UserControlledMode;
+            profileApplied: boolean;
+        };
     }): Promise<string | null> {
-        const { prompt, imagePaths, modelOverride, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
+        const { prompt, imagePaths, modelOverride, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot, previewStream } = args;
         const originalModel = this.llmHelper.getCurrentModel();
         const isSystemDesignOutput = getQuestionResponseProfile(prompt.question, prompt.mode, prompt.intent) === 'system_design';
 
@@ -1364,7 +1379,17 @@ export class IntelligenceEngine extends EventEmitter {
                     break;
                 }
 
-                fullResponse += nextChunk.value || '';
+                const token = nextChunk.value || '';
+                fullResponse += token;
+                if (previewStream && token) {
+                    this.safeEmitAction(signal, requestId, generationId, 'action_token', {
+                        intent: previewStream.intent,
+                        requestId,
+                        token,
+                        mode: previewStream.mode,
+                        profileApplied: previewStream.profileApplied,
+                    }, sessionIdSnapshot);
+                }
             }
 
             return fullResponse.trim();
@@ -1383,6 +1408,11 @@ export class IntelligenceEngine extends EventEmitter {
         generationId: number;
         requestId: string | null;
         sessionIdSnapshot: string;
+        previewStream?: {
+            intent: UnifiedActionIntent;
+            mode: UserControlledMode;
+            profileApplied: boolean;
+        };
     }): Promise<{
         content: string;
         retryCount: number;
@@ -1390,8 +1420,9 @@ export class IntelligenceEngine extends EventEmitter {
         requestedModel: string;
         actualInvokedModel: string;
         fallbackReason: string | null;
+        previewStreamed: boolean;
     } | null> {
-        const { prompt, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
+        const { prompt, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot, previewStream } = args;
         const primaryModel = this.llmHelper.getCurrentModel();
         if (imagePaths?.length && !this.llmHelper.currentModelSupportsVision()) {
             throw new Error(this.llmHelper.getVisionUnsupportedMessage());
@@ -1432,6 +1463,7 @@ export class IntelligenceEngine extends EventEmitter {
                     generationId,
                     requestId,
                     sessionIdSnapshot,
+                    previewStream,
                 });
                 if (content && content.trim() && !isFailureResponseText(content)) {
                     return {
@@ -1441,6 +1473,7 @@ export class IntelligenceEngine extends EventEmitter {
                         requestedModel: primaryModel,
                         actualInvokedModel: attempt.model,
                         fallbackReason: attempt.fallbackUsed ? (failureReasons.join(' | ') || 'primary_model_failed') : null,
+                        previewStreamed: Boolean(previewStream),
                     };
                 }
                 failureReasons.push(`attempt_${attemptIndex + 1}:invalid_or_empty_response(${attempt.model})`);
@@ -1459,6 +1492,7 @@ export class IntelligenceEngine extends EventEmitter {
             requestedModel: primaryModel,
             actualInvokedModel: 'safe_action_fallback',
             fallbackReason: failureReasons.join(' | ') || 'all_attempts_failed',
+            previewStreamed: false,
         };
     }
 

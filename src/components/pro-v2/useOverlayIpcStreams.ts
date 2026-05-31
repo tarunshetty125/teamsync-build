@@ -120,6 +120,9 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
                 if (ctx.isStalePayload(payload?._sessionId)) return;
                 const requestId = payload?.requestId || ctx.activeChatRequestIdRef.current;
                 if (!requestId || !matchesRequestChannel(ctx, requestId, 'chat')) return;
+                if (typeof payload?.content === 'string' && payload.content.trim()) {
+                    hydrateFinalMessage(ctx, requestId, payload.content);
+                }
                 ctx.finishStreamingMessage(requestId);
             }),
         );

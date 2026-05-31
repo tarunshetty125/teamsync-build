@@ -783,7 +783,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         const onResult = (payload: any) => {
           if (payload?.requestId !== requestId || payload?.intent !== 'manual_chat') return;
           if (activeChatStreams.get(senderId)?.streamId === myStreamId) {
-            event.sender.send("gemini-stream-done", { requestId });
+            event.sender.send("gemini-stream-done", { requestId, content: payload.content });
           }
         };
         const onError = (error: any, mode: string, failedRequestId?: string | null) => {
