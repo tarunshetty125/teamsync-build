@@ -277,6 +277,33 @@ test('system design catches retry follow-up after backend discussion', () => {
     assert.equal(nextType, 'system_design');
 });
 
+test('behavioral interview prompts bypass generic concept explanation guard', () => {
+    for (const text of [
+        'Tell me about a time you handled conflict',
+        'Tell me about a time when you had to lead',
+        'Tell me about a time where you missed a deadline',
+        'Describe a situation where you led a team',
+        'Describe a situation when you had to prioritize',
+        'Walk me through your resume',
+        'Walk me through your background',
+    ]) {
+        assert.equal(detectQuestionType(text, 'system_design', 'system_design').nextType, 'behavioral', text);
+    }
+});
+
+test('generic explanation prompts retain general classification', () => {
+    for (const text of [
+        'Tell me about Redis',
+        'Tell me about CAP theorem',
+        'Tell me about time complexity',
+        'Compare BFS and DFS',
+        'Describe binary tree traversal',
+        'Explain reverse linked list',
+    ]) {
+        assert.equal(detectQuestionType(text, 'system_design', 'system_design').nextType, 'general', text);
+    }
+});
+
 test('intent reducer switches rapidly coding to system design to behavioral', () => {
     let state = reduceRolling(['implement binary search on an array']);
     assert.equal(state.detectedType, 'coding');

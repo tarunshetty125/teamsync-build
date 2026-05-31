@@ -36,6 +36,7 @@ const REGEX_SYSTEM_FRAMING = /\b(suppose|imagine|let s say|lets say|what if|cons
 const REGEX_SYSTEM_REASONING = /\b(tradeoff|trade-?off|pros? and cons|optimiz|handle|redesign|architecture|improv|fail(?:ed|ure|s)?|failure|fallback|retry|retries|recover|recovery|failover|avoid downtime|downtime|single point of failure|consistency|availability|durability|reliability|fault toleran|resilien|degrad|graceful|circuit breaker|rate limit|idempotent|backoff|queueing|bottleneck)\b/;
 const REGEX_NON_SYSTEM_DESIGN = /\b(singleton|factory|observer|strategy|decorator|adapter|prototype|builder|solid|oop|object oriented|design patterns?|class diagram|uml|inheritance|polymorphism|encapsulation|bfs|dfs|binary tree|tree traversal|traversal|dynamic programming|dp\b|algorithm|leetcode|database normalization|normalization|normal forms?|1nf|2nf|3nf)\b/;
 const REGEX_BEHAVIORAL_CORE = /(tell me about a time|describe a situation|give me an example|share an experience|tell me about yourself|introduce yourself|walk me through (?:your )?(?:background|resume)|background|resume|personal experience|worked on|built|developed|impact|result|outcome)/;
+const REGEX_BEHAVIORAL_INTERVIEW_PROMPT = /^(?:tell me about a time (?:you|when|where)\b|describe a situation (?:where|when)\b|walk me through your (?:resume|background)\b)/;
 const REGEX_CODING_STRONG = /(algorithm|dsa|data structures? and algorithms?|debug this|snippet|boilerplate|optimize|refactor|array|linked list|tree|graph|stack|queue|hash ?map|binary search|dynamic programming|recursion|time complexity|space complexity|merge sort|quick sort|heap sort|insertion sort|bubble sort|parentheses?|brackets?|segment tree|fenwick|bit manipulation|line sweep|game theory|reservoir sampling|computational geometry)/;
 const REGEX_BEHAVIORAL_STRONG = /(when have you|biggest challenge|how did you handle|conflict with|leadership|teamwork|failure|mistake|difficult decision|star method|tell me about|tell me about yourself|experience|challenge|conflict|pressure|strength|strengths|weakness|weaknesses|mentor|disagree|feedback|prioriti[zs]e|deadline|collaborate|accomplishment|introduce yourself|background|resume|project|projects|worked on|built|developed|owned|ownership|impact|result|results|outcome|outcomes|personal)/;
 const REGEX_FOLLOW_UP_CORE = /(what happened next|then what|and after that|what.s next|how did that go|can you elaborate|tell me more|go deeper|expand on)/;
@@ -143,6 +144,10 @@ export function detectQuestionType(
     }
 
     const t = normalizeTranscript(text);
+    if (REGEX_BEHAVIORAL_INTERVIEW_PROMPT.test(t)) {
+        return { nextType: 'behavioral', nextStrong: 'behavioral' };
+    }
+
     if (
         REGEX_CONCEPT_EXPLANATION.test(t)
         && !REGEX_CODING_CORE.test(t)

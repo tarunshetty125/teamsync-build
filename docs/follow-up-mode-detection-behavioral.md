@@ -1,8 +1,12 @@
 # Follow-Up Ticket: Mode Detection Hardening
 
+Status: Closed
+
 ## Summary
 
 Harden the Pro V2 intent reducer transition from coding to system design to behavioral.
+
+Resolved by adding a narrow high-confidence behavioral interview prompt guard before the generic concept-explanation shortcut, while preserving the existing classifier precedence.
 
 ## Failing Scenario
 
