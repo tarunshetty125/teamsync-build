@@ -37,6 +37,8 @@ interface OllamaResponse {
   done: boolean
 }
 
+export type RouteDecision = Readonly<RoutingDecision>;
+
 // Model constant for Gemini 3 Flash
 const GEMINI_FLASH_MODEL = "gemini-3.1-flash-lite-preview"
 const GEMINI_PRO_MODEL = "gemini-3.1-pro-preview"
@@ -459,12 +461,10 @@ export class LLMHelper {
   private teamsyncKey: string | null = null;
   private bedrockCredentials: BedrockCredentials | null = null;
   private bedrockClient: BedrockClient | null = null;
-  private lastOCRCache = new Map<string, string>();
   private ocrWorker: any = null;
   private ocrWorkerBuffer: string = '';
   private ocrWorkerResolvers = new Map<string, (value: string) => void>();
   private ocrWorkerRequestSeq = 0;
-  private lastScreenHash: string = '';
 
   // Rate limiters per provider to prevent 429 errors on free tiers
   private rateLimiters: ReturnType<typeof createProviderRateLimiters>;
@@ -745,7 +745,7 @@ export class LLMHelper {
 
   public getProviderForModel(modelId: string): string {
     const normalized = this.normalizeModelId(modelId);
-    if (normalized.startsWith('ollama-')) return 'ollama';
+    if (normalized.startsWith('ollama-') || (this.useOllama && normalized === this.normalizeModelId(this.ollamaModel))) return 'ollama';
     if (this.isBedrockModel(normalized)) return 'bedrock';
     if (this.isOpenAiModel(normalized)) return 'openai';
     if (this.isClaudeModel(normalized)) return 'claude';
@@ -757,6 +757,12 @@ export class LLMHelper {
     return detectProviderLabel(normalized);
   }
 
+  private makeRouteDecision(route: RoutingDecision): RouteDecision {
+    const frozen = Object.freeze({ ...route });
+    console.log(`[ROUTE_DECISION] requestedProvider=${frozen.requestedProvider} requestedModel=${frozen.requestedModel} actualProvider=${frozen.actualProvider} actualModel=${frozen.actualModel} reason=${frozen.reason}`);
+    return frozen;
+  }
+
   public modelSupportsVision(modelId: string): boolean {
     return getModelCapabilities(this.normalizeModelId(modelId)).vision;
   }
@@ -764,19 +770,19 @@ export class LLMHelper {
   public async resolveRoutingDecision(args: {
     requestedModel: string;
     imagePaths?: string[];
-  }): Promise<RoutingDecision> {
+  }): Promise<RouteDecision> {
     const requestedModel = this.normalizeModelId(args.requestedModel);
     const requestedProvider = this.getProviderForModel(requestedModel);
     const hasImages = Boolean(args.imagePaths?.length);
 
     if (!hasImages || this.modelSupportsVision(requestedModel)) {
-      return {
+      return this.makeRouteDecision({
         requestedModel,
         requestedProvider,
         actualModel: requestedModel,
         actualProvider: requestedProvider,
         reason: 'requested_model',
-      };
+      });
     }
 
     if (this.isBedrockModel(requestedModel) && this.bedrockClient) {
@@ -786,43 +792,43 @@ export class LLMHelper {
         preferredModel: this.bedrockCredentials?.preferredModel,
         imagePaths: args.imagePaths,
       });
-      return {
+      return this.makeRouteDecision({
         requestedModel,
         requestedProvider,
         actualModel: route.modelId,
         actualProvider: 'bedrock',
-        reason: route.modelId === requestedModel ? 'requested_bedrock_vision_model' : 'vision_required',
-      };
+        reason: route.modelId === requestedModel ? 'requested_bedrock_vision_model' : 'vision_required_model_remap',
+      });
     }
 
     if (this.isGroqModel(requestedModel) && this.groqClient) {
-      return {
+      return this.makeRouteDecision({
         requestedModel,
         requestedProvider,
         actualModel: GROQ_VISION_MODEL,
         actualProvider: 'groq',
-        reason: 'vision_required',
-      };
+        reason: 'vision_required_model_remap',
+      });
     }
 
     if (this.claudeClient) {
-      return {
+      return this.makeRouteDecision({
         requestedModel,
         requestedProvider,
         actualModel: CLAUDE_MODEL,
         actualProvider: 'claude',
-        reason: 'vision_required',
-      };
+        reason: 'vision_required_provider_remap',
+      });
     }
 
     if (this.openaiClient && this.modelSupportsVision(OPENAI_MODEL)) {
-      return {
+      return this.makeRouteDecision({
         requestedModel,
         requestedProvider,
         actualModel: OPENAI_MODEL,
         actualProvider: 'openai',
-        reason: 'vision_required',
-      };
+        reason: 'vision_required_provider_remap',
+      });
     }
 
     throw new Error(formatVisionUnsupportedMessage(requestedModel));
@@ -1100,7 +1106,7 @@ export class LLMHelper {
       const candidate = response.candidates?.[0];
       if (!candidate) {
         console.error("[LLMHelper] No candidates returned!");
-        console.error("[LLMHelper] Full response:", JSON.stringify(response, null, 2).substring(0, 1000));
+        console.error(`[LLMHelper] Full response omitted from logs length=${JSON.stringify(response).length} redacted=true`);
         return "";
       }
 
@@ -1484,16 +1490,7 @@ CRITICAL RULES:
 
       const imageBuffers = await Promise.all(resizedPaths.map((p) => fs.promises.readFile(p)));
       const key = this.hashText(imageBuffers.map((buffer) => this.hashBuffer(buffer)).join('|'));
-
-      if (key === this.lastScreenHash) {
-        return '__NO_CHANGE__';
-      }
-
-      if (this.lastOCRCache.has(key)) {
-        const cached = this.lastOCRCache.get(key)!;
-        this.lastScreenHash = key;
-        return cached;
-      }
+      console.log(`[OCR] requestKey=${key} cache=disabled isolation=per_request`);
       const Tesseract = require('tesseract.js');
 
       const fastTexts = await Promise.all(
@@ -1507,8 +1504,6 @@ CRITICAL RULES:
 
       let text = fastTexts.join('\n');
       console.log(`[OCR] Tesseract extraction complete. Length: ${text.length}`);
-      this.lastOCRCache.set(key, text);
-
       if (this.isLowQualityScreenText(text)) {
         console.log('[OCR] Low quality text detected, running fallback OCR worker...');
         const fallback = await this.runOCRWorker(resizedPaths);
@@ -1523,11 +1518,6 @@ CRITICAL RULES:
         }
       }
 
-      this.lastScreenHash = key;
-      if (this.lastOCRCache.size > 100) {
-        this.lastOCRCache.clear();
-      }
-      this.lastOCRCache.set(key, text);
       return text;
     } catch (error: any) {
       console.warn('[LLMHelper] Hybrid screen text extraction failed:', error?.message || error);
@@ -1717,7 +1707,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 
   public async chatWithGemini(message: string, imagePaths?: string[], context?: string, skipSystemPrompt: boolean = false, alternateGroqMessage?: string): Promise<string> {
     try {
-      console.log(`[LLMHelper] chatWithGemini called with message:`, message.substring(0, 50))
+      console.log(`[LLMHelper] chatWithGemini called messageLength=${message.length} redacted=true`)
 
       // ============================================================
       // KNOWLEDGE MODE INTERCEPT
@@ -2529,10 +2519,10 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       clearTimeout(customTimeout);
 
       const data = await response.json();
-      console.log(`[LLMHelper] Custom Provider raw response:`, JSON.stringify(data).substring(0, 1000));
+      console.log(`[LLMHelper] Custom Provider raw response length=${JSON.stringify(data).length} redacted=true`);
 
       if (!response.ok) {
-        throw new Error(`Custom Provider HTTP ${response.status}: ${JSON.stringify(data).substring(0, 200)}`);
+        throw new Error(`Custom Provider HTTP ${response.status}: response redacted`);
       }
 
       // 6. Extract Answer - try common response formats
@@ -2923,7 +2913,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
    * MULTIMODAL: Gemini-only (existing logic)
    */
   public async * streamChatWithGemini(message: string, imagePaths?: string[], context?: string, skipSystemPrompt: boolean = false): AsyncGenerator<string, void, unknown> {
-    console.log(`[LLMHelper] streamChatWithGemini called with message:`, message.substring(0, 50));
+    console.log(`[LLMHelper] streamChatWithGemini called messageLength=${message.length} redacted=true`);
 
     const isMultimodal = !!(imagePaths?.length);
     if (isMultimodal) {
@@ -3128,9 +3118,19 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 	    const routeUseOllama = routeProvider === 'ollama' || (!explicitModelOverride && this.useOllama);
 	    const routeOllamaModel = routeModelId.startsWith('ollama-')
 	      ? routeModelId.replace('ollama-', '')
-	      : this.ollamaModel;
-	    const routeCustomProvider = explicitModelOverride ? null : this.customProvider;
-	    const routeCurlProvider = explicitModelOverride ? null : this.activeCurlProvider;
+	      : routeProvider === 'ollama'
+	        ? routeModelId
+	        : this.ollamaModel;
+	    const routeCustomProvider = routeProvider === 'custom'
+	      && this.customProvider
+	      && [this.customProvider.id, this.customProvider.name].some((id) => this.normalizeModelId(id) === routeModelId)
+	        ? this.customProvider
+	        : (!explicitModelOverride ? this.customProvider : null);
+	    const routeCurlProvider = routeProvider === 'custom'
+	      && this.activeCurlProvider
+	      && [this.activeCurlProvider.id, this.activeCurlProvider.name].some((id) => this.normalizeModelId(id) === routeModelId)
+	        ? this.activeCurlProvider
+	        : (!explicitModelOverride && !routeCustomProvider ? this.activeCurlProvider : null);
 	    const allowProviderFallbacks = runtimeOptions?.disableProviderFallbacks !== true;
 	    const allowGroqFastText = this.groqFastTextMode && !explicitModelOverride;
 	    if (isMultimodal && !this.modelSupportsVision(routeModelId)) {
@@ -3457,20 +3457,23 @@ Return only the final answer. No meta commentary.
 	    }
 	  
 	    // 1. Ollama Streaming
-	    if (routeUseOllama) {
-	      yield* this.streamWithOllama(message, context, finalSystemPrompt, imagePaths, routeOllamaModel);
-	      return;
-	    }
+		    if (routeUseOllama) {
+		      console.log(`[PROVIDER_INVOKE] provider=ollama model=${routeOllamaModel}`);
+		      yield* this.streamWithOllama(message, context, finalSystemPrompt, imagePaths, routeOllamaModel);
+		      return;
+		    }
 	  
 	    // 2a. CustomProvider (switchToCustom path) — full SSE-capable streaming
-	    if (routeCustomProvider) {
-	      yield* this.streamWithCustom(message, context, imagePaths, finalSystemPrompt);
-	      return;
-	    }
+		    if (routeCustomProvider) {
+		      console.log(`[PROVIDER_INVOKE] provider=custom model=${routeCustomProvider.id} name=${routeCustomProvider.name}`);
+		      yield* this.streamWithCustom(message, context, imagePaths, finalSystemPrompt);
+		      return;
+		    }
 	  
 	    // 2b. Custom Provider Streaming (via cURL - Non-streaming fallback for now)
-	    if (routeCurlProvider) {
-	      const response = await this.executeCustomProvider(
+		    if (routeCurlProvider) {
+		      console.log(`[PROVIDER_INVOKE] provider=custom_curl model=${routeCurlProvider.id} name=${routeCurlProvider.name}`);
+		      const response = await this.executeCustomProvider(
 	        routeCurlProvider.curlCommand,
 	        userContent,
 	        finalSystemPrompt,
@@ -4217,7 +4220,7 @@ Return only the final answer. No meta commentary.
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`Custom Provider HTTP ${response.status}: ${errorText.substring(0, 200)}`);
+        console.error(`Custom Provider HTTP ${response.status}: errorLength=${errorText.length} redacted=true`);
         yield `Error: Custom Provider returned HTTP ${response.status}`;
         return;
       }

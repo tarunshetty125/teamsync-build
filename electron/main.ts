@@ -2,6 +2,7 @@ import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, screen } f
 import path from "path"
 import fs from "fs"
 import { autoUpdater } from "electron-updater"
+import { redactForPersistentLog, stringifyForPersistentLog } from "./utils/safeLogging"
 if (!app.isPackaged) {
   require('dotenv').config();
 }
@@ -60,7 +61,7 @@ function logToFile(msg: string) {
     } catch {
       // statSync throws if the file doesn't exist yet — that's fine
     }
-    fs.appendFileSync(logFile, new Date().toISOString() + ' ' + msg + '\n');
+    fs.appendFileSync(logFile, new Date().toISOString() + ' ' + redactForPersistentLog(msg) + '\n');
   } catch (e) {
     // Ignore logging errors
   }
@@ -80,7 +81,7 @@ async function ensureMacMicrophoneAccess(context: string): Promise<boolean> {
 }
 
 console.log = (...args: any[]) => {
-  const msg = args.map(a => (a instanceof Error) ? a.stack || a.message : (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+  const msg = args.map(stringifyForPersistentLog).join(' ');
   logToFile('[LOG] ' + msg);
   try {
     originalLog.apply(console, args);
@@ -88,7 +89,7 @@ console.log = (...args: any[]) => {
 };
 
 console.warn = (...args: any[]) => {
-  const msg = args.map(a => (a instanceof Error) ? a.stack || a.message : (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+  const msg = args.map(stringifyForPersistentLog).join(' ');
   logToFile('[WARN] ' + msg);
   try {
     originalWarn.apply(console, args);
@@ -96,7 +97,7 @@ console.warn = (...args: any[]) => {
 };
 
 console.error = (...args: any[]) => {
-  const msg = args.map(a => (a instanceof Error) ? a.stack || a.message : (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+  const msg = args.map(stringifyForPersistentLog).join(' ');
   logToFile('[ERROR] ' + msg);
   try {
     originalError.apply(console, args);
@@ -1221,7 +1222,7 @@ export class AppState {
     stt.on('transcript', (segment: { text: string, isFinal: boolean, confidence: number }) => {
       if (this.isSttDebugEnabled()) {
         console.log(
-          `[STT_DEBUG][Main/${speaker}] provider=${(segment as any).provider || getBroadcastProvider()} final=${segment.isFinal} text="${segment.text.slice(0, 80)}"`
+          `[STT_DEBUG][Main/${speaker}] provider=${(segment as any).provider || getBroadcastProvider()} final=${segment.isFinal} textLength=${segment.text.length} redacted=true`
         );
       }
       if (!this.isMeetingActive) {
@@ -1636,6 +1637,10 @@ export class AppState {
    */
   public async reconfigureSttProvider(): Promise<void> {
     console.log('[Main] Reconfiguring STT Provider...');
+    const flushedFragments = this.intelligenceManager.flushPendingTranscriptFragments();
+    if (flushedFragments > 0) {
+      console.log(`[STT_FRAGMENT_PRESERVED] scenario=reconfigure count=${flushedFragments}`);
+    }
 
     // RC-01 fix: pause audio captures FIRST so their EventEmitter queues drain
     // before we null-out the STT instances. Without this, buffered 'data' events
@@ -1842,11 +1847,16 @@ export class AppState {
     }
   }
 
-  public finalizeMicSTT(): void {
+  public async finalizeMicSTT(): Promise<void> {
     // We only want to finalize the user microphone, because the context is Manual Answer
     if (this.googleSTT_User?.finalize) {
       console.log('[Main] Finalizing STT');
       this.googleSTT_User.finalize();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const flushedFragments = this.intelligenceManager.flushPendingTranscriptFragments('user');
+    if (flushedFragments > 0) {
+      console.log(`[STT_FRAGMENT_PRESERVED] scenario=manual_finalize speaker=user count=${flushedFragments}`);
     }
   }
 

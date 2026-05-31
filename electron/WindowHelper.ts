@@ -2,6 +2,7 @@
 import { BrowserWindow, screen, app, Menu } from "electron"
 import { AppState } from "./main"
 import { KeybindManager } from "./services/KeybindManager"
+import { redactForPersistentLog } from "./utils/safeLogging"
 import path from "node:path"
 
 const isEnvDev = process.env.NODE_ENV === "development"
@@ -343,7 +344,7 @@ export class WindowHelper {
         level === 2 ? 'error' :
         level === 3 ? 'debug' :
         'info';
-      console.log(`[OverlayRenderer:${levelLabel}] ${message} (${sourceId}:${line})`);
+      console.log(`[OverlayRenderer:${levelLabel}] ${redactForPersistentLog(message)} (${sourceId}:${line})`);
     });
 
     if (process.platform === "darwin") {

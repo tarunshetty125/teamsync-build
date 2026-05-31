@@ -1084,10 +1084,29 @@ export function buildIntentPrompt(
                 ].join('\n')),
             ];
         case 'screen_scan':
-            // Screen scan contracts are owned by ScreenAnalysisBrain. Returning no
-            // legacy instructions here keeps GPT-OSS from seeing the same contract
-            // in both the system prompt and the OCR/user-question payload.
-            return [];
+            return [
+                createInstruction('intent', 'INTENT', basePrompt),
+                createInstruction('context_priority', 'CONTEXT PRIORITY', [
+                    'Screen OCR content is the primary source for this action.',
+                    'Use transcript or prior answers only when they directly clarify the visible screen task.',
+                    'Ignore unrelated earlier conversation.',
+                ].join('\n')),
+                createInstruction('output_contract', 'OUTPUT CONTRACT', [
+                    screenScanMode === 'coding' || screenScanMode === 'interview_question' || responseProfile === 'coding'
+                        ? [
+                            'Return only the final answer.',
+                            buildCodingInterviewOutputContract(),
+                            'Use the visible editor language or REQUIRED CODE FENCE when present.',
+                            'Default to Python only when no language signal is visible.',
+                        ].join('\n')
+                        : [
+                            'Analyze the visible screen content and answer directly.',
+                            'If the screen contains a question or problem, solve it.',
+                            'If the screen contains a UI, identify the relevant state and next action.',
+                            'Do not mention OCR or screenshot limitations unless the text is genuinely unusable.',
+                        ].join('\n'),
+                ].join('\n')),
+            ];
         case 'what_to_answer':
         default:
             if (responseProfile === 'system_design') {

@@ -1244,11 +1244,11 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         if (isSalary && !negotiationContextEnabled) {
             negotiationAutoEnabledRef.current = true;
             handleToggleNegotiationContext(true);
-            console.log('[Overlay] Auto-enabled negotiation context — salary keyword detected (transcript):', text);
+            console.log(`[Overlay] Auto-enabled negotiation context — salary keyword detected source=transcript textLength=${text.length} redacted=true`);
         } else if (!isSalary && negotiationAutoEnabledRef.current && negotiationContextEnabled) {
             negotiationAutoEnabledRef.current = false;
             handleToggleNegotiationContext(false);
-            console.log('[Overlay] Auto-disabled negotiation context — non-salary question (transcript):', text);
+            console.log(`[Overlay] Auto-disabled negotiation context — non-salary question source=transcript textLength=${text.length} redacted=true`);
         }
     }, [currentQuestionTurnId, hasProContextAccess, hasNegotiationScript, negotiationContextEnabled, handleToggleNegotiationContext]);
 
@@ -2970,11 +2970,11 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                 if (isSalaryRelatedText(question) && !negotiationContextEnabled) {
                     negotiationAutoEnabledRef.current = true;
                     handleToggleNegotiationContext(true);
-                    console.log('[Overlay] Auto-enabled negotiation context — salary keyword detected (voice):', question);
+                    console.log(`[Overlay] Auto-enabled negotiation context — salary keyword detected source=voice textLength=${question.length} redacted=true`);
                 } else if (!isSalaryRelatedText(question) && negotiationAutoEnabledRef.current && negotiationContextEnabled) {
                     negotiationAutoEnabledRef.current = false;
                     handleToggleNegotiationContext(false);
-                    console.log('[Overlay] Auto-disabled negotiation context — non-salary question (voice):', question);
+                    console.log(`[Overlay] Auto-disabled negotiation context — non-salary question source=voice textLength=${question.length} redacted=true`);
                 }
             }
 
@@ -3025,11 +3025,11 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             if (isSalaryRelatedText(userText) && !negotiationContextEnabled) {
                 negotiationAutoEnabledRef.current = true;
                 handleToggleNegotiationContext(true);
-                console.log('[Overlay] Auto-enabled negotiation context — salary keyword detected (manual):', userText);
+                console.log(`[Overlay] Auto-enabled negotiation context — salary keyword detected source=manual textLength=${userText.length} redacted=true`);
             } else if (!isSalaryRelatedText(userText) && negotiationAutoEnabledRef.current && negotiationContextEnabled) {
                 negotiationAutoEnabledRef.current = false;
                 handleToggleNegotiationContext(false);
-                console.log('[Overlay] Auto-disabled negotiation context — non-salary question (manual):', userText);
+                console.log(`[Overlay] Auto-disabled negotiation context — non-salary question source=manual textLength=${userText.length} redacted=true`);
             }
         }
 

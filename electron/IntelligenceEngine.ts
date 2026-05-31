@@ -215,16 +215,23 @@ const CONTROLLED_PROMPT_SECTION_TITLES = new Set([
 function consolidateControlledPromptSections(instructions: PromptInstruction[]): PromptInstruction[] {
     const claimed = new Set<string>();
     const output: PromptInstruction[] = [];
+    let removed = 0;
 
     for (const instruction of instructions) {
         const title = instruction.title.trim().toUpperCase();
         if (CONTROLLED_PROMPT_SECTION_TITLES.has(title)) {
-            if (claimed.has(title)) continue;
+            if (claimed.has(title)) {
+                removed += 1;
+                continue;
+            }
             claimed.add(title);
         }
         output.push(instruction);
     }
 
+    if (removed > 0) {
+        console.log(`[PROMPT_OWNERSHIP] removedDuplicateControlledSections=${removed}`);
+    }
     return output;
 }
 
@@ -730,6 +737,7 @@ export class IntelligenceEngine extends EventEmitter {
         modeOverride?: UserControlledMode;
         screenScanMode?: ScreenContentMode;
         modelOverride?: string;
+        reuseRequestLifecycle?: boolean;
 	    }): Promise<string | null> {
         const activeRequestId = params.requestId ?? null;
         const telemetryRequestId = createTelemetryRequestId(activeRequestId, params.intent);
@@ -890,12 +898,10 @@ export class IntelligenceEngine extends EventEmitter {
                             }
 
                             // Prepend brain instructions to the prompt object
-                            const ownedBrainInstructions = params.intent === 'screen_scan'
-                                ? brainOutput.instructions
-                                : brainOutput.instructions.filter((instruction) => {
-                                    const title = instruction.title.trim().toUpperCase();
-                                    return !CONTROLLED_PROMPT_SECTION_TITLES.has(title);
-                                });
+                            const ownedBrainInstructions = brainOutput.instructions.filter((instruction) => {
+                                const title = instruction.title.trim().toUpperCase();
+                                return !CONTROLLED_PROMPT_SECTION_TITLES.has(title);
+                            });
                             if (ownedBrainInstructions.length > 0) {
                                 const namespacedInstructions = namespaceBrainInstructions(brain.id, ownedBrainInstructions);
                                 contextLayers.promptObject.instructions = [
@@ -1389,7 +1395,8 @@ export class IntelligenceEngine extends EventEmitter {
 	                    }, sessionIdSnapshot);
                     return safeFallback;
                 }
-            }
+            },
+            { reuseExistingController: params.reuseRequestLifecycle === true }
         );
     }
 
@@ -1408,6 +1415,8 @@ export class IntelligenceEngine extends EventEmitter {
         if (controller) {
             controller.abort();
             this.requestAbortControllers.delete(requestId);
+            this.requestAbortRefCounts.delete(requestId);
+            this.activeActionRequestIds.delete(requestId);
             console.log(`[IntelligenceEngine] Cancelled request: ${requestId}`);
         }
         if (this.activeActionRequestId === requestId) {
@@ -1419,11 +1428,26 @@ export class IntelligenceEngine extends EventEmitter {
      * Create an AbortController for a request and register it.
      * Returns the AbortController for signal checking.
      */
-    private registerRequestAbort(requestId: string): AbortController {
-        // Clean up any existing controller for this request
-        this.requestAbortControllers.get(requestId)?.abort();
+    private requestAbortRefCounts = new Map<string, number>();
+
+    private registerRequestAbort(requestId: string, options?: { reuseExistingController?: boolean }): AbortController {
+        const existing = this.requestAbortControllers.get(requestId);
+        if (options?.reuseExistingController && existing && !existing.signal.aborted) {
+            const nextCount = (this.requestAbortRefCounts.get(requestId) ?? 1) + 1;
+            this.requestAbortRefCounts.set(requestId, nextCount);
+            console.log(`[REQUEST_LIFECYCLE] requestId=${requestId} action=reuse refCount=${nextCount}`);
+            return existing;
+        }
+
+        if (existing) {
+            existing.abort();
+            this.requestAbortRefCounts.delete(requestId);
+            console.log(`[REQUEST_LIFECYCLE] requestId=${requestId} action=replace`);
+        }
         const controller = new AbortController();
         this.requestAbortControllers.set(requestId, controller);
+        this.requestAbortRefCounts.set(requestId, 1);
+        console.log(`[REQUEST_LIFECYCLE] requestId=${requestId} action=create refCount=1`);
         return controller;
     }
 
@@ -1432,8 +1456,17 @@ export class IntelligenceEngine extends EventEmitter {
      */
     private cleanupRequestAbort(requestId: string | null): void {
         if (requestId) {
+            const currentCount = this.requestAbortRefCounts.get(requestId) ?? 1;
+            if (currentCount > 1) {
+                const nextCount = currentCount - 1;
+                this.requestAbortRefCounts.set(requestId, nextCount);
+                console.log(`[REQUEST_LIFECYCLE] requestId=${requestId} action=release refCount=${nextCount}`);
+                return;
+            }
             this.requestAbortControllers.delete(requestId);
+            this.requestAbortRefCounts.delete(requestId);
             this.activeActionRequestIds.delete(requestId);
+            console.log(`[REQUEST_LIFECYCLE] requestId=${requestId} action=cleanup refCount=0`);
         }
     }
 
@@ -1822,7 +1855,8 @@ export class IntelligenceEngine extends EventEmitter {
                 hasArchitectureJsonFence: /```[ \t]*architecture_json\b/i.test(draft),
                 hasDiagramKey: /"diagram"\s*:/i.test(draft),
                 hasMermaid: /```[ \t]*mermaid\b/i.test(draft),
-                question: prompt.question.slice(0, 120),
+                questionLength: prompt.question.length,
+                redacted: true,
             }));
         };
         const validation = this.enforceScreenScanLanguageCompliance(
@@ -1831,9 +1865,7 @@ export class IntelligenceEngine extends EventEmitter {
             validateActionOutput(prompt.intent, prompt.mode, content, prompt.question)
         );
         if (isSystemDesignPrompt) {
-            console.log(`[SYSTEM_DESIGN_RAW_OUTPUT] requestedModel=${args.requestedModel ?? 'unknown'} actualInvokedModel=${args.actualInvokedModel ?? this.llmHelper.getCurrentModel()} fallbackUsed=${args.fallbackUsed === true} fallbackReason=${args.fallbackReason ?? 'none'} intent=${prompt.intent} requestId=${requestId ?? 'none'} length=${content.length}`);
-            console.log(content);
-            console.log('[SYSTEM_DESIGN_RAW_OUTPUT_END]');
+            console.log(`[SYSTEM_DESIGN_RAW_OUTPUT] requestedModel=${args.requestedModel ?? 'unknown'} actualInvokedModel=${args.actualInvokedModel ?? this.llmHelper.getCurrentModel()} fallbackUsed=${args.fallbackUsed === true} fallbackReason=${args.fallbackReason ?? 'none'} intent=${prompt.intent} requestId=${requestId ?? 'none'} length=${content.length} redacted=true [SYSTEM_DESIGN_RAW_OUTPUT_END]`);
         }
 	        logSystemDesignDiagramAudit('initial', validation.correctedContent || content, validation);
 	        if (validation.valid) {
@@ -2238,12 +2270,13 @@ export class IntelligenceEngine extends EventEmitter {
     protected async runLLMGuarded<T>(
         requestId: string | null,
         mode: IntelligenceMode,
-        fn: (signal: AbortSignal | undefined, generationId: number) => Promise<T>
+        fn: (signal: AbortSignal | undefined, generationId: number) => Promise<T>,
+        options?: { reuseExistingController?: boolean }
     ): Promise<T | null> {
         this.currentClientRequestId = requestId;
         this.setMode(mode);
 
-        const controller = requestId ? this.registerRequestAbort(requestId) : null;
+        const controller = requestId ? this.registerRequestAbort(requestId, options) : null;
         const signal = controller?.signal;
         const generationId = ++this.currentGenerationId;
 
@@ -2583,7 +2616,6 @@ export class IntelligenceEngine extends EventEmitter {
         this.activeScreenScanRequestId = activeRequestId;
 
         return this.runLLMGuarded(activeRequestId, 'screen_scan', async (signal, generationId) => {
-            const previousKnowledgeOrchestrator = this.llmHelper.getKnowledgeOrchestrator();
             const MAX_SCREEN_CHARS = 6000;
             if (!this.screenScanLLM) {
                 const fallback = "Please configure your API Keys in Settings to use Screen Scan.";
@@ -2613,8 +2645,6 @@ export class IntelligenceEngine extends EventEmitter {
                 return fallback;
             }
 
-            this.llmHelper.setKnowledgeOrchestrator(null);
-
             try {
                 const rawText = extractedText?.trim()
                     ? extractedText.trim()
@@ -2638,7 +2668,7 @@ export class IntelligenceEngine extends EventEmitter {
                     .trim()
                     .slice(0, MAX_SCREEN_CHARS);
 
-                console.log(`[OCR_SCAN] Retrieved Text:\n${screenText}\n[OCR_SCAN_END]`);
+                console.log(`[OCR_SCAN] textLength=${screenText.length} redacted=true [OCR_SCAN_END]`);
 
                 if (screenText.length < 50) {
                     const fallback = "I couldn't detect enough readable text on screen. Try capturing a clearer area.";
@@ -2711,6 +2741,7 @@ export class IntelligenceEngine extends EventEmitter {
                                 : null,
                         ].filter(Boolean).join('\n\n'),
                         screenScanMode: detectedMode,
+                        reuseRequestLifecycle: true,
                     });
 
                     if (!fullResult || fullResult.trim().length < 5) {
@@ -2727,13 +2758,13 @@ export class IntelligenceEngine extends EventEmitter {
                         return fallback;
                     }
 
+                    console.log(`[SCREEN_SCAN_LIFECYCLE] requestId=${activeRequestId ?? 'none'} finalDelivered=true mode=${detectedMode} length=${fullResult.length}`);
                     return fullResult;
                 } finally {
                     this.off('action_token', actionTokenListener);
                     this.off('action_result', actionResultListener);
                 }
             } finally {
-                this.llmHelper.setKnowledgeOrchestrator(previousKnowledgeOrchestrator);
                 if (this.activeScreenScanRequestId === activeRequestId) {
                     this.activeScreenScanRequestId = null;
                 }

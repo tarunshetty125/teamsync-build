@@ -101,9 +101,11 @@
 
 "icon": "assets/icon.icns",
 
-"identity": null,
+"hardenedRuntime": true,
 
-"hardenedRuntime": false,
+"entitlements": "assets/entitlements.mac.plist",
+
+"entitlementsInherit": "assets/entitlements.mac.inherit.plist",
 
 "extraResources": [
   {

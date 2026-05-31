@@ -105,18 +105,6 @@ function normalizeMermaidSvg(
         opacity: 1 !important;
         font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     }
-    /* ── foreignObject (html labels) ── */
-    foreignObject {
-        overflow: visible !important;
-    }
-    foreignObject * {
-        color: ${nodeText} !important;
-        opacity: 1 !important;
-    }
-    foreignObject div, foreignObject span, foreignObject p {
-        color: ${nodeText} !important;
-        fill: ${nodeText} !important;
-    }
     /* ── Flowchart / Graph nodes ── */
     .node rect, .node polygon, .node ellipse, .node circle, .node path {
         fill: ${nodeFill};
@@ -231,6 +219,37 @@ function normalizeMermaidSvg(
     return out;
 }
 
+function sanitizeSvgMarkup(svg: string): string {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svg, 'image/svg+xml');
+    const svgEl = doc.documentElement;
+    if (!svgEl || svgEl.nodeName.toLowerCase() !== 'svg') {
+        throw new Error('Invalid SVG output');
+    }
+
+    doc.querySelectorAll('script, foreignObject, iframe, object, embed, link, meta').forEach((el) => el.remove());
+    const elements = Array.from(doc.querySelectorAll('*'));
+    for (const el of elements) {
+        for (const attr of Array.from(el.attributes)) {
+            const name = attr.name.toLowerCase();
+            const value = attr.value.trim();
+            const unsafeUrl = /(?:javascript|data:text\/html|vbscript):/i.test(value);
+            const externalHref = (name === 'href' || name === 'xlink:href') && value && !value.startsWith('#');
+            const unsafeStyle = name === 'style' && /(?:url\s*\(|expression\s*\()/i.test(value);
+
+            if (name.startsWith('on') || unsafeUrl || externalHref || unsafeStyle) {
+                el.removeAttribute(attr.name);
+            }
+        }
+    }
+
+    return new XMLSerializer().serializeToString(svgEl);
+}
+
+function toSvgDataUrl(svg: string): string {
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sanitizeSvgMarkup(svg))}`;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -261,13 +280,13 @@ function ensureMermaidInitialized(
 
     mermaid.initialize({
         startOnLoad: false,
-        securityLevel: 'loose',
+        securityLevel: 'strict',
         theme: mermaidTheme,
         suppressErrorRendering: true,
         fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         fontSize: 13,
         flowchart: {
-            htmlLabels: true,
+            htmlLabels: false,
             curve: 'basis',
             padding: 12,
             nodeSpacing: 50,
@@ -483,7 +502,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
         variant = 'default',
     }) {
         const containerRef = useRef<HTMLDivElement>(null);
-        const [svgHtml, setSvgHtml] = useState<string | null>(null);
+        const [svgDataUrl, setSvgDataUrl] = useState<string | null>(null);
         const [error, setError] = useState<string | null>(null);
         const [isRendering, setIsRendering] = useState(true);
         const renderIdRef = useRef<string>('');
@@ -510,7 +529,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
 
             // Deduplicate — don't re-render same chart that already succeeded
             const renderFingerprint = `${renderPhase}:${trimmedChart}`;
-            if (renderFingerprint === lastChartRef.current && svgHtml) return;
+            if (renderFingerprint === lastChartRef.current && svgDataUrl) return;
 
             // If this is the same chart that previously failed, allow a retry
             // (the chart prop changed → stream completed → re-render attempt)
@@ -541,7 +560,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                     // Only update if this is still the latest render
                     if (!mountedRef.current || renderIdRef.current !== currentRenderId) return;
 
-                    setSvgHtml(normalizeMermaidSvg(svg, isLightTheme, variant));
+                    setSvgDataUrl(toSvgDataUrl(normalizeMermaidSvg(svg, isLightTheme, variant)));
                     setIsRendering(false);
                     setError(null);
                     lastFailedChartRef.current = '';
@@ -573,7 +592,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                 const staleEl = document.getElementById(currentRenderId);
                 staleEl?.remove();
             };
-        }, [chart, isLightTheme, renderPhase, variant]);
+        }, [chart, isLightTheme, renderPhase, variant, svgDataUrl]);
 
         // Error state
         if (error) {
@@ -584,7 +603,7 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
         }
 
         // Loading state
-        if (isRendering || !svgHtml) {
+        if (isRendering || !svgDataUrl) {
             return (
                 <div
                     className="my-2.5 rounded-2xl overflow-hidden flex items-center justify-center"
@@ -698,8 +717,20 @@ const MermaidRenderer: React.FC<MermaidRendererProps> = memo(
                         animation: 'mermaidFadeIn 0.4s cubic-bezier(0.22,1,0.36,1) both',
                         opacity: 1,
                     }}
-                    dangerouslySetInnerHTML={{ __html: svgHtml }}
-                />
+                >
+                    <img
+                        src={svgDataUrl}
+                        alt="Architecture diagram"
+                        draggable={false}
+                        style={{
+                            display: 'block',
+                            maxWidth: '100%',
+                            width: '100%',
+                            height: 'auto',
+                            objectFit: 'contain',
+                        }}
+                    />
+                </div>
 
                 {/* Inline keyframes */}
                 <style>{`

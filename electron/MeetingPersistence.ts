@@ -235,7 +235,7 @@ Return ONLY valid JSON (no markdown code blocks):
                     // Strip markdown fences if present
                     const jsonMatch = generatedSummary.match(/```(?:json)?\n?([\s\S]*?)\n?```/) || [null, generatedSummary];
                     const jsonStr = (jsonMatch[1] || generatedSummary).trim();
-                    console.log('[MeetingPersistence] Raw LLM summary response (first 500 chars):', jsonStr.substring(0, 500));
+                    console.log(`[MeetingPersistence] Raw LLM summary response length=${jsonStr.length} redacted=true`);
                     try {
                         const parsed = JSON.parse(jsonStr);
                         if (modeNoteSections.length > 0 && parsed.sections && typeof parsed.sections === 'object') {
@@ -259,7 +259,7 @@ Return ONLY valid JSON (no markdown code blocks):
                             summaryData = parsed;
                         }
                     } catch (e) {
-                        console.error('[MeetingPersistence] Failed to parse summary JSON. Raw response:', jsonStr.substring(0, 800), e);
+                        console.error(`[MeetingPersistence] Failed to parse summary JSON. responseLength=${jsonStr.length} redacted=true`, e);
                     }
                 }
             } else {

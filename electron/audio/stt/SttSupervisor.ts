@@ -503,7 +503,7 @@ export class SttSupervisor extends EventEmitter {
         && typeof crossProviderSeenAt === "number"
         && now - crossProviderSeenAt <= this.recentFinalTranscriptRetentionMs
       ) {
-        this.logDebug(`dedupe_drop provider=${providerName} text="${normalized.slice(0, 80)}"`);
+        this.logDebug(`dedupe_drop provider=${providerName} textLength=${normalized.length} redacted=true`);
         return;
       }
       this.resetProviderHealth(adapterIndex);
@@ -520,7 +520,7 @@ export class SttSupervisor extends EventEmitter {
     }
 
     this.logDebug(
-      `transcript provider=${providerName} final=${event.isFinal} latency=${event.latencyMs ?? "n/a"}ms text="${event.text.slice(0, 80)}"`
+      `transcript provider=${providerName} final=${event.isFinal} latency=${event.latencyMs ?? "n/a"}ms textLength=${event.text.length} redacted=true`
     );
     
     const emitGenerationId = this.currentGenerationId;

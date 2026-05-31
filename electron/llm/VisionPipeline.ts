@@ -20,12 +20,10 @@ import { getPythonPath, getOCRScriptPath, getPythonEnv } from '../utils/pythonRu
 // ---------------------------------------------------------------------------
 
 export class VisionPipeline {
-    private lastOCRCache = new Map<string, string>();
     private ocrWorker: any = null;
     private ocrWorkerBuffer: string = '';
     private ocrWorkerResolvers = new Map<string, (value: string) => void>();
     private ocrWorkerRequestSeq = 0;
-    private lastScreenHash: string = '';
 
     // -----------------------------------------------------------------------
     // Image Processing
@@ -115,9 +113,8 @@ export class VisionPipeline {
     }
 
     /**
-     * Hybrid screen text extraction with caching and dedup.
+     * Hybrid screen text extraction.
      * Uses Tesseract as primary, falls back to OCR worker for low-quality text.
-     * Returns '__NO_CHANGE__' if the screen content hasn't changed.
      */
     async extractScreenTextHybrid(imagePaths: string[]): Promise<string> {
         console.log(`[OCR] Starting hybrid screen text extraction for ${imagePaths?.length || 0} images...`);
@@ -142,16 +139,7 @@ export class VisionPipeline {
 
             const imageBuffers = await Promise.all(resizedPaths.map((p) => fs.promises.readFile(p)));
             const key = this.hashText(imageBuffers.map((buffer) => this.hashBuffer(buffer)).join('|'));
-
-            if (key === this.lastScreenHash) {
-                return '__NO_CHANGE__';
-            }
-
-            if (this.lastOCRCache.has(key)) {
-                const cached = this.lastOCRCache.get(key)!;
-                this.lastScreenHash = key;
-                return cached;
-            }
+            console.log(`[OCR] requestKey=${key} cache=disabled isolation=per_request`);
 
             const Tesseract = require('tesseract.js');
             const fastTexts = await Promise.all(
@@ -165,7 +153,6 @@ export class VisionPipeline {
 
             let text = fastTexts.join('\n');
             console.log(`[OCR] Tesseract extraction complete. Length: ${text.length}`);
-            this.lastOCRCache.set(key, text);
 
             if (this.isLowQualityScreenText(text)) {
                 console.log('[OCR] Low quality text detected, running fallback OCR worker...');
@@ -181,11 +168,6 @@ export class VisionPipeline {
                 }
             }
 
-            this.lastScreenHash = key;
-            if (this.lastOCRCache.size > 100) {
-                this.lastOCRCache.clear();
-            }
-            this.lastOCRCache.set(key, text);
             return text;
         } catch (error: any) {
             console.warn('[VisionPipeline] Hybrid screen text extraction failed:', error?.message || error);

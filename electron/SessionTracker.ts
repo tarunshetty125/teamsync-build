@@ -75,8 +75,9 @@ export class SessionTracker {
     private transcriptEpochSummaries: string[] = [];
 
 
-    // Track interim interviewer segment
+    // Track interim transcript fragments so stop/reconfigure/failover paths do not lose final words.
     private lastInterimInterviewer: TranscriptSegment | null = null;
+    private pendingInterimBySpeaker = new Map<string, TranscriptSegment>();
 
     // Detected coding question from transcript or screenshot extraction
     private detectedCodingQuestion: string | null = null;
@@ -139,7 +140,7 @@ export class SessionTracker {
             this.detectedCodingQuestion = trimmed;
             this.codingQuestionSource = source;
             this.codingQuestionSetAt = now;
-            console.log(`[SessionTracker] Coding question stored (source: ${source}): "${trimmed.substring(0, 80)}..."`);
+            console.log(`[SessionTracker] Coding question stored source=${source} textLength=${trimmed.length} redacted=true`);
             return;
         }
 
@@ -148,7 +149,7 @@ export class SessionTracker {
             this.detectedCodingQuestion = trimmed;
             this.codingQuestionSource = source;
             this.codingQuestionSetAt = now;
-            console.log(`[SessionTracker] Coding question updated via screenshot: "${trimmed.substring(0, 80)}..."`);
+            console.log(`[SessionTracker] Coding question updated via screenshot textLength=${trimmed.length} redacted=true`);
             return;
         }
 
@@ -161,7 +162,7 @@ export class SessionTracker {
             this.detectedCodingQuestion = trimmed;
             this.codingQuestionSource = source;
             this.codingQuestionSetAt = now;
-            console.log(`[SessionTracker] Coding question updated via transcript (prev was ${this.codingQuestionSource}, stale=${isStale}): "${trimmed.substring(0, 80)}..."`);
+            console.log(`[SessionTracker] Coding question updated via transcript stale=${isStale} textLength=${trimmed.length} redacted=true`);
         } else {
             console.log(`[SessionTracker] Transcript question ignored — screenshot question is recent (< ${SessionTracker.SCREENSHOT_STALE_MS / 1000}s)`);
         }
@@ -283,7 +284,7 @@ export class SessionTracker {
      * Add assistant-generated message to context
      */
     addAssistantMessage(text: string, options?: { trackAsLastMessage?: boolean }): void {
-        console.log(`[SessionTracker] addAssistantMessage called with:`, text.substring(0, 50));
+            console.log(`[SessionTracker] addAssistantMessage called length=${text.length}`);
 
         // TeamSync-style filtering
         if (!text) return;
@@ -349,15 +350,22 @@ export class SessionTracker {
             return null;
         }
 
+        const pendingKey = this.pendingInterimKey(segment);
+        if (!segment.final) {
+            this.pendingInterimBySpeaker.set(pendingKey, segment);
+        } else {
+            this.pendingInterimBySpeaker.delete(pendingKey);
+        }
+
         // Track interim segments for interviewer to prevent data loss on stop
         if (segment.speaker === 'user') {
             if (isVerboseLogging() && (Math.random() < 0.05 || segment.final)) {
-                console.log(`[SessionTracker] RX User Segment: Final=${segment.final} Text="${segment.text.substring(0, 50)}..."`);
+                console.log(`[SessionTracker] RX User Segment: Final=${segment.final} textLength=${segment.text.length} redacted=true`);
             }
         }
         if (segment.speaker === 'interviewer') {
             if (isVerboseLogging() && (Math.random() < 0.05 || segment.final)) {
-                console.log(`[SessionTracker] RX Interviewer Segment: Final=${segment.final} Text="${segment.text.substring(0, 50)}..."`);
+                console.log(`[SessionTracker] RX Interviewer Segment: Final=${segment.final} textLength=${segment.text.length} redacted=true`);
             }
 
             if (!segment.final) {
@@ -690,13 +698,28 @@ export class SessionTracker {
     /**
      * Force-save any pending interim transcript (called on meeting stop)
      */
-    flushInterimTranscript(): void {
-        if (this.lastInterimInterviewer) {
-            console.log('[SessionTracker] Force-saving pending interim transcript:', this.lastInterimInterviewer.text);
-            const finalSegment = { ...this.lastInterimInterviewer, final: true };
-            this.addTranscript(finalSegment);
+    flushInterimTranscript(speaker?: 'user' | 'interviewer'): number {
+        const pending = [...this.pendingInterimBySpeaker.entries()]
+            .filter(([, segment]) => !speaker || segment.speaker === speaker);
+        let saved = 0;
+
+        for (const [key, segment] of pending) {
+            console.log(`[STT_FRAGMENT_PRESERVED] speaker=${segment.speaker} textLength=${segment.text.length} redacted=true`);
+            const finalSegment = { ...segment, final: true };
+            if (this.addTranscript(finalSegment)) {
+                saved += 1;
+            }
+            this.pendingInterimBySpeaker.delete(key);
+            if (segment.speaker === 'interviewer' && this.lastInterimInterviewer === segment) {
+                this.lastInterimInterviewer = null;
+            }
+        }
+
+        if (!speaker && this.lastInterimInterviewer) {
             this.lastInterimInterviewer = null;
         }
+
+        return saved;
     }
 
     // ============================================
@@ -721,6 +744,7 @@ export class SessionTracker {
         this.lastAssistantMessage = null;
         this.assistantResponseHistory = [];
         this.lastInterimInterviewer = null;
+        this.pendingInterimBySpeaker.clear();
         this.detectedCodingQuestion = null;
         this.codingQuestionSource = null;
         this.codingQuestionSetAt = null;
@@ -729,6 +753,14 @@ export class SessionTracker {
         // FIX §3.4: Clear the compaction lock so the new session is never blocked
         // by an in-flight epoch summarization that was running when reset() fired.
         this.isCompacting = false;
+    }
+
+    private pendingInterimKey(segment: TranscriptSegment): string {
+        return [
+            segment.speaker,
+            segment.speakerId?.trim() || '',
+            segment.speakerLabel?.trim() || '',
+        ].join(':');
     }
 
     // ============================================

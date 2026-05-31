@@ -69,7 +69,11 @@ exports.default = async function (context) {
         // Non-fatal: continue to signing
     }
 
-    // ── Step 2: Ad-hoc sign the application ──
+    const signingIdentity = process.env.TEAMSYNC_CODESIGN_IDENTITY || process.env.CSC_NAME || '-';
+    const signingMode = signingIdentity === '-' ? 'adhoc' : 'developer_id';
+    console.log(`[Code Signing] mode=${signingMode} hardenedRuntime=true`);
+
+    // ── Step 2: Sign the application ──
     // Resolve the path to the entitlements file so V8 gets JIT memory permissions
     const entitlementsPath = path.join(context.packager.info.projectDir, 'assets', 'entitlements.mac.plist');
     
@@ -84,8 +88,8 @@ exports.default = async function (context) {
         // --force: replace existing signature
         // --deep: sign nested code (frameworks, helpers, .dylib, .node)
         // --entitlements: attach entitlements to the top-level app bundle
-        // --sign -: ad-hoc signature
-        execSync(`codesign --force --deep --entitlements "${entitlementsPath}" --sign - "${appPath}"`, { stdio: 'inherit' });
+        // --sign: Developer ID in production, ad-hoc only for explicitly unsigned local builds
+        execSync(`codesign --force --deep --options runtime --entitlements "${entitlementsPath}" --sign "${signingIdentity}" "${appPath}"`, { stdio: 'inherit' });
         console.log('[Ad-Hoc Signing] Successfully signed the application with entitlements.');
     } catch (error) {
         console.error('[Ad-Hoc Signing] Failed to sign the application:', error);
@@ -105,7 +109,7 @@ exports.default = async function (context) {
                 const nodePath = path.join(unpackedNativeDir, file);
                 console.log(`[Ad-Hoc Signing] Re-signing ${file} with entitlements (post --deep)...`);
                 try {
-                    execSync(`codesign --force --entitlements "${entitlementsPath}" --sign - "${nodePath}"`, { stdio: 'inherit' });
+                    execSync(`codesign --force --options runtime --entitlements "${entitlementsPath}" --sign "${signingIdentity}" "${nodePath}"`, { stdio: 'inherit' });
                 } catch (error) {
                     console.error(`[Ad-Hoc Signing] Failed to sign ${file}:`, error);
                 }
@@ -123,7 +127,7 @@ exports.default = async function (context) {
         if (fs.existsSync(pythonBin)) {
             console.log('[Ad-Hoc Signing] Signing bundled Python binary...');
             try {
-                execSync(`codesign --force --sign - "${pythonBin}"`, { stdio: 'inherit' });
+                execSync(`codesign --force --options runtime --sign "${signingIdentity}" "${pythonBin}"`, { stdio: 'inherit' });
             } catch (error) {
                 console.error('[Ad-Hoc Signing] Failed to sign Python binary:', error);
             }
@@ -133,7 +137,7 @@ exports.default = async function (context) {
         // (paddlepaddle, numpy, opencv, etc. ship native shared libraries)
         console.log('[Ad-Hoc Signing] Signing Python native libraries (.so, .dylib)...');
         try {
-            execSync(`find "${pythonDir}" \\( -name "*.so" -o -name "*.dylib" \\) -exec codesign --force --sign - {} \\;`, { stdio: 'inherit' });
+            execSync(`find "${pythonDir}" \\( -name "*.so" -o -name "*.dylib" \\) -exec codesign --force --options runtime --sign "${signingIdentity}" {} \\;`, { stdio: 'inherit' });
             console.log('[Ad-Hoc Signing] Python native libraries signed successfully.');
         } catch (error) {
             console.warn('[Ad-Hoc Signing] Warning signing Python libs:', error.message);
@@ -142,7 +146,8 @@ exports.default = async function (context) {
 
     console.log('[Ad-Hoc Signing] Re-sealing application bundle...');
     try {
-        execSync(`codesign --force --entitlements "${entitlementsPath}" --sign - "${appPath}"`, { stdio: 'inherit' });
+        execSync(`codesign --force --options runtime --entitlements "${entitlementsPath}" --sign "${signingIdentity}" "${appPath}"`, { stdio: 'inherit' });
+        execSync(`codesign --verify --strict --deep --verbose=2 "${appPath}"`, { stdio: 'inherit' });
         console.log('[Ad-Hoc Signing] Application bundle re-sealed successfully.');
     } catch (error) {
         console.error('[Ad-Hoc Signing] Failed to re-seal application bundle:', error);

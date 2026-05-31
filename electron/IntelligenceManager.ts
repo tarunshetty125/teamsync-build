@@ -159,6 +159,10 @@ export class IntelligenceManager extends EventEmitter {
         this.engine.handleTranscript(segment);
     }
 
+    flushPendingTranscriptFragments(speaker?: 'user' | 'interviewer'): number {
+        return this.session.flushInterimTranscript(speaker);
+    }
+
     async handleSuggestionTrigger(trigger: import('./SessionTracker').SuggestionTrigger): Promise<void> {
         return this.engine.handleSuggestionTrigger(trigger);
     }

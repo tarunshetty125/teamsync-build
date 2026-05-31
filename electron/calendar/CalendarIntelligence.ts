@@ -56,9 +56,9 @@ interface PersistedCalendarIntelligenceState {
 
 const STORE_NAME = 'teamsync-calendar-intelligence';
 const EVENT_LOOKAHEAD_MS = 24 * 60 * 60 * 1000;
-// Keep dismiss temporary to the current in-memory session only.
-// Refreshing upcoming events should allow the recommendation to appear again.
-const DISMISS_COOLDOWN_MS = 0;
+// Persist dismissals long enough that a dismissed meeting card does not
+// immediately reappear during the same day or app session.
+const DISMISS_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 const MINIMUM_SCORE = 30;
 
 const MODE_RULES: ModeRule[] = [
@@ -310,6 +310,7 @@ export class CalendarIntelligence extends EventEmitter {
         const dismissed = this.store.get('dismissedEventIds', {});
         dismissed[eventId] = Date.now();
         this.store.set('dismissedEventIds', dismissed);
+        console.log(`[CALENDAR_DISMISSAL] eventId=${eventId} persisted=true retentionMs=${DISMISS_RETENTION_MS}`);
 
         if (this.currentRecommendation?.eventId === eventId) {
             this.currentRecommendation = null;
@@ -361,13 +362,13 @@ export class CalendarIntelligence extends EventEmitter {
     private isDismissed(eventId: string, now: number): boolean {
         const dismissedAt = this.store.get('dismissedEventIds', {})[eventId];
         if (!dismissedAt) return false;
-        return now - dismissedAt < DISMISS_COOLDOWN_MS;
+        return now - dismissedAt < DISMISS_RETENTION_MS;
     }
 
     private pruneDismissals(): void {
         const dismissed = this.store.get('dismissedEventIds', {});
         const now = Date.now();
-        const nextEntries = Object.entries(dismissed).filter(([, dismissedAt]) => now - dismissedAt < DISMISS_COOLDOWN_MS);
+        const nextEntries = Object.entries(dismissed).filter(([, dismissedAt]) => now - dismissedAt < DISMISS_RETENTION_MS);
 
         if (nextEntries.length !== Object.keys(dismissed).length) {
             this.store.set('dismissedEventIds', Object.fromEntries(nextEntries));

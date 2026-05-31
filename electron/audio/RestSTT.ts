@@ -311,7 +311,7 @@ export class RestSTT extends EventEmitter {
             const transcript = await this.uploadAudio(wavBuffer);
 
             if (transcript && transcript.trim().length > 0) {
-                console.log(`[RestSTT] Transcript: "${transcript.substring(0, 60)}..."`);
+                console.log(`[RestSTT] Transcript: textLength=${transcript.length} redacted=true`);
                 this.emit('transcript', {
                     text: transcript.trim(),
                     isFinal: true,

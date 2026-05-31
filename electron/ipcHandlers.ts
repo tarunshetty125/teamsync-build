@@ -597,8 +597,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   })
 
   safeHandle("finalize-mic-stt", async () => {
-    appState.finalizeMicSTT();
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await appState.finalizeMicSTT();
   });
 
   // IPC handler for analyzing image from file path
@@ -622,7 +621,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const result = await appState.processingHelper.getLLMHelper().chatWithGemini(message, imagePaths, context, options?.skipSystemPrompt);
 
-      console.log(`[IPC] gemini - chat response: `, result ? result.substring(0, 50) : "(empty)");
+      console.log(`[IPC] gemini-chat responseLength=${result?.length ?? 0} redacted=true`);
 
       // Don't process empty responses
       if (!result || result.trim().length === 0) {
@@ -647,7 +646,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       // 2. Add assistant response and set as last message
       console.log(`[IPC] Updating IntelligenceManager with assistant message...`);
       intelligenceManager.addAssistantMessage(result);
-      console.log(`[IPC] Updated IntelligenceManager.Last message: `, intelligenceManager.getLastAssistantMessage()?.substring(0, 50));
+      console.log(`[IPC] Updated IntelligenceManager.Last message length=${intelligenceManager.getLastAssistantMessage()?.length ?? 0} redacted=true`);
 
       // Log Usage
       intelligenceManager.logUsage('chat', message, result);
