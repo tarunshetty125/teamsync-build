@@ -304,7 +304,7 @@ test('Sprint 8 Phase A IPC relay is memory-only and exposed through preload', ()
     const preload = read('electron/preload.ts');
     const electronTypes = read('src/types/electron.d.ts');
     const relayStart = ipcHandlers.indexOf('PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.set');
-    const relayEnd = ipcHandlers.indexOf('safeHandle("delete-screenshot"');
+    const relayEnd = ipcHandlers.indexOf('safeHandle(SESSION_EXPORT_DELIVERY_IPC.save', relayStart);
     const relayBody = ipcHandlers.slice(relayStart, relayEnd);
 
     assert.match(ipcHandlers, /let providerAnalyticsSessionSnapshot/);

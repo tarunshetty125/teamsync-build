@@ -708,6 +708,10 @@ export class LLMHelper {
     return !!this.teamsyncKey;
   }
 
+  public hasTeamSyncApi(): boolean {
+    return this.hasTeamSync();
+  }
+
   private hasBedrock(): boolean {
     return !!this.bedrockClient;
   }
@@ -4473,6 +4477,10 @@ Return only the final answer. No meta commentary.
    */
   public hasGroq(): boolean {
     return this.groqClient !== null;
+  }
+
+  public hasGemini(): boolean {
+    return this.client !== null;
   }
 
   /**

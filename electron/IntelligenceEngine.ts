@@ -75,6 +75,12 @@ import {
     type PreferredProvider,
     type ResolvedPersonalizationSnapshot,
 } from '../src/lib/personalization/preferences';
+import {
+    buildProviderFallbackCandidatePlan,
+    formatProviderFallbackCandidateSkipReason,
+    type ProviderFallbackCandidate,
+    type ProviderFallbackCandidateHealthInput,
+} from '../src/lib/providers/providerFallbackCandidatePolicy';
 import { ModePredictor } from './intelligence/adaptive/ModePredictor';
 import {
     emitActionComplete,
@@ -1627,17 +1633,118 @@ export class IntelligenceEngine extends EventEmitter {
         });
     }
 
-    private resolveFallbackModel(primaryModel: string): string | null {
+    private buildFallbackCandidateHealthSignals(): Record<string, ProviderFallbackCandidateHealthInput> {
+        const configured = (provider: string): ProviderFallbackCandidateHealthInput => ({
+            configured: true,
+            reachable: true,
+            authenticated: true,
+            degraded: false,
+            lastDiagnostic: {
+                category: 'configured',
+                message: `${provider} is configured for fallback.`,
+                source: 'fallback-candidate-policy',
+            },
+        });
+        const notConfigured = (provider: string): ProviderFallbackCandidateHealthInput => ({
+            configured: false,
+            reachable: false,
+            authenticated: false,
+            degraded: false,
+            lastDiagnostic: {
+                category: 'not_configured',
+                message: `${provider} is not configured for fallback.`,
+                source: 'fallback-candidate-policy',
+            },
+        });
+        const health: Record<string, ProviderFallbackCandidateHealthInput> = {
+            claude: this.llmHelper.hasClaude() ? configured('claude') : notConfigured('claude'),
+            openai: this.llmHelper.hasOpenai() ? configured('openai') : notConfigured('openai'),
+            gemini: this.llmHelper.hasGemini() ? configured('gemini') : notConfigured('gemini'),
+        };
+
+        try {
+            const groqHealth = this.llmHelper.getGroqKeyManager().getHealthReport();
+            if (groqHealth.totalKeys <= 0) {
+                health.groq = {
+                    ...notConfigured('groq'),
+                    lastDiagnostic: {
+                        category: 'not_configured',
+                        message: 'Groq has no configured fallback keys.',
+                        source: 'groq-key-manager',
+                    },
+                };
+            } else if (groqHealth.availableKeys <= 0) {
+                const allInvalid = groqHealth.invalidKeys >= groqHealth.totalKeys;
+                health.groq = {
+                    configured: true,
+                    reachable: false,
+                    authenticated: !allInvalid,
+                    degraded: true,
+                    lastDiagnostic: {
+                        category: allInvalid
+                            ? 'invalid_keys'
+                            : groqHealth.coolingDownKeys > 0
+                                ? 'cooldown'
+                                : 'no_available_keys',
+                        message: 'Groq has no fallback keys available.',
+                        source: 'groq-key-manager',
+                    },
+                };
+            } else {
+                health.groq = {
+                    configured: true,
+                    reachable: true,
+                    authenticated: true,
+                    degraded: groqHealth.invalidKeys > 0 || groqHealth.exhaustedKeys > 0 || groqHealth.coolingDownKeys > 0,
+                    lastDiagnostic: {
+                        category: groqHealth.invalidKeys > 0
+                            ? 'invalid_keys'
+                            : groqHealth.coolingDownKeys > 0
+                                ? 'cooldown'
+                                : 'ok',
+                        message: `Groq has ${groqHealth.availableKeys} fallback key(s) available.`,
+                        source: 'groq-key-manager',
+                    },
+                };
+            }
+        } catch {
+            health.groq = this.llmHelper.hasGroq() ? configured('groq') : notConfigured('groq');
+        }
+
+        let hasTeamSync = this.llmHelper.hasTeamSyncApi();
+        try {
+            hasTeamSync = hasTeamSync || Boolean(CredentialsManager.getInstance().getTeamSyncApiKey());
+        } catch {
+            // Keep the passive in-memory signal if credential lookup is unavailable.
+        }
+        health.teamsync = hasTeamSync ? configured('teamsync') : notConfigured('teamsync');
+
+        return health;
+    }
+
+    private resolveFallbackCandidates(primaryModel: string): ProviderFallbackCandidate[] {
         const candidates: string[] = [];
         const lower = primaryModel.toLowerCase();
 
-	        if (!lower.includes('claude') && this.llmHelper.hasClaude()) candidates.push(this.llmHelper.normalizeModelId('claude'));
-	        if (!lower.includes('gpt') && !lower.includes('openai') && this.llmHelper.hasOpenai()) candidates.push('gpt-4o-mini');
+	        if (!lower.includes('claude')) candidates.push(this.llmHelper.normalizeModelId('claude'));
+	        if (!lower.includes('gpt') && !lower.includes('openai')) candidates.push('gpt-4o-mini');
 	        if (!lower.includes('gemini')) candidates.push(this.llmHelper.normalizeModelId('gemini'));
-	        if (!lower.includes('llama') && !lower.includes('groq') && this.llmHelper.hasGroq()) candidates.push(this.llmHelper.normalizeModelId('llama'));
+	        if (!lower.includes('llama') && !lower.includes('groq')) candidates.push(this.llmHelper.normalizeModelId('llama'));
         candidates.push('teamsync');
 
-        return candidates.find((candidate) => candidate !== primaryModel) ?? null;
+        const uniqueCandidates = new Set<string>();
+        return candidates
+            .map((model) => this.llmHelper.normalizeModelId(model))
+            .filter((model) => model !== primaryModel)
+            .filter((model) => {
+                if (uniqueCandidates.has(model)) return false;
+                uniqueCandidates.add(model);
+                return true;
+            })
+            .map((model) => ({
+                model,
+                provider: this.llmHelper.getProviderForModel(model),
+            }));
     }
 
 	    private async collectStreamResponseForPrompt(args: {
@@ -1771,7 +1878,11 @@ export class IntelligenceEngine extends EventEmitter {
 	        const { prompt, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, telemetryRequestId, actionType, sessionIdSnapshot, previewStream } = args;
 	        const primaryModel = this.llmHelper.normalizeModelId(args.selectedModel);
 	        const primaryProvider = args.selectedProvider;
-	        const fallbackModel = this.resolveFallbackModel(primaryModel);
+	        const fallbackPlan = buildProviderFallbackCandidatePlan(
+	            this.resolveFallbackCandidates(primaryModel),
+	            this.buildFallbackCandidateHealthSignals(),
+	        );
+	        const fallbackModel = fallbackPlan.selectedCandidate?.model ?? null;
 	        const attempts: Array<{ model: string; fallbackUsed: boolean }> = [];
 
         for (let i = 0; i < ACTION_MAX_PRIMARY_ATTEMPTS; i++) {
@@ -1785,6 +1896,22 @@ export class IntelligenceEngine extends EventEmitter {
 	
 	        const failureReasons: string[] = [];
 	        const fallbackChain: FallbackChainEntry[] = [];
+	        let fallbackCandidateMetadataRecorded = false;
+	        const recordSkippedFallbackCandidates = () => {
+	            if (fallbackCandidateMetadataRecorded) return;
+	            fallbackCandidateMetadataRecorded = true;
+	            fallbackPlan.skippedCandidates.forEach((evaluation) => {
+	                const reason = formatProviderFallbackCandidateSkipReason(evaluation);
+	                fallbackChain.push({
+	                    model: evaluation.candidate.model,
+	                    provider: evaluation.candidate.provider,
+	                    result: 'skipped',
+	                    reason,
+	                    completedAt: Date.now(),
+	                });
+	                failureReasons.push(reason);
+	            });
+	        };
         let bedrockAuthExpiredDuringPrimary = false;
 	        for (let attemptIndex = 0; attemptIndex < attempts.length; attemptIndex++) {
 	            const attempt = attempts[attemptIndex];
@@ -1799,6 +1926,7 @@ export class IntelligenceEngine extends EventEmitter {
 	
 	            try {
 	                if (attempt.fallbackUsed) {
+	                    recordSkippedFallbackCandidates();
 	                    emitFallback({
 	                        requestId: telemetryRequestId,
 	                        actionType,
@@ -1892,7 +2020,7 @@ export class IntelligenceEngine extends EventEmitter {
 	                console.warn('[IntelligenceEngine] Action attempt failed:', reason);
 	            }
 	        }
-	
+	        recordSkippedFallbackCandidates();
 	        console.warn('[IntelligenceEngine] Action retries exhausted:', failureReasons.join(' | '));
 	        emitFallback({
 	            requestId: telemetryRequestId,

@@ -6,13 +6,17 @@ import path from 'node:path';
 import {
     SESSION_EXPORT_DELIVERY_IPC,
     SESSION_EXPORT_PDF_RUNTIME_BUDGETS,
+    buildSessionExportIpcBoundaryDiagnostic,
     buildSessionExportDefaultFileName,
     getSessionExportFileExtension,
+    sanitizeSessionExportDeliveryError,
     validateSessionExportClipboardRequest,
     validateSessionExportPdfBuffer,
     validateSessionExportPdfSaveRequest,
     validateSessionExportSaveRequest,
+    type SessionExportSaveResult,
 } from '../../src/lib/export/sessionExportDelivery.ts';
+import { buildRuntimeDiagnosticsReadModel } from '../../src/lib/diagnostics/runtimeDiagnosticsReadModel.ts';
 
 const root = process.cwd();
 
@@ -277,6 +281,111 @@ test('Sprint 12 Phase D keeps BrowserWindow cleanup on success, timeout, and exc
     assert.match(renderer, /clearTimeout\(timeoutHandle\)/);
     assert.match(renderer, /if \(!pdfWindow\.isDestroyed\(\)\) \{/);
     assert.match(renderer, /pdfWindow\.destroy\(\)/);
+});
+
+test('Sprint 14 Phase C normalizes export IPC failures into diagnostics-ready metadata', () => {
+    const invalid = validateSessionExportSaveRequest({
+        format: 'markdown',
+        content: '# blocked',
+        guardrailStatus: 'valid',
+        blocked: true,
+    });
+    const invalidDiagnostic = buildSessionExportIpcBoundaryDiagnostic({
+        channel: SESSION_EXPORT_DELIVERY_IPC.save,
+        operation: 'validate_request',
+        code: 'export_save_request_invalid',
+        valid: invalid.valid,
+        error: invalid.error,
+        message: invalid.error,
+        timestamp: 14000,
+    });
+    const writeDiagnostic = buildSessionExportIpcBoundaryDiagnostic({
+        channel: SESSION_EXPORT_DELIVERY_IPC.save,
+        operation: 'write_file',
+        code: 'export_save_failed',
+        success: false,
+        error: new Error('EACCES: permission denied, open /Users/tarunshetty/private/report.md'),
+        timestamp: 14001,
+    });
+    const pdfDiagnostic = buildSessionExportIpcBoundaryDiagnostic({
+        channel: SESSION_EXPORT_DELIVERY_IPC.savePdf,
+        operation: 'save_pdf_report',
+        code: 'export_pdf_save_failed',
+        success: false,
+        error: 'PDF render timed out after 30000ms while writing C:\\Users\\tarun\\private\\report.pdf',
+        timestamp: 14002,
+    });
+    const model = buildRuntimeDiagnosticsReadModel({
+        ipcBoundary: [invalidDiagnostic, writeDiagnostic, pdfDiagnostic],
+        generatedAt: 14003,
+    });
+    const serialized = JSON.stringify(model);
+
+    assert.equal(model.byDomain['ipc.boundary'].length, 3);
+    assert.equal(model.events.some((event) => event.code === 'export_save_request_invalid'), true);
+    assert.equal(model.events.some((event) => event.code === 'export_save_failed'), true);
+    assert.equal(model.events.some((event) => event.code === 'export_pdf_save_failed'), true);
+    assert.equal(model.events.every((event) => event.domain !== 'ipc.boundary' || event.userVisible), true);
+    assert.doesNotMatch(serialized, /\/Users\/tarunshetty\/private|C:\\Users\\tarun\\private/);
+    assert.match(serialized, /\[local-path-redacted\]/);
+});
+
+test('Sprint 14 Phase C keeps save dialog cancellation structured and non-diagnostic', () => {
+    const canceled: SessionExportSaveResult = { success: false, canceled: true };
+    const model = buildRuntimeDiagnosticsReadModel({
+        ipcBoundary: canceled.diagnostic ? [canceled.diagnostic] : [],
+        generatedAt: 14010,
+    });
+
+    assert.equal(canceled.canceled, true);
+    assert.equal(model.events.length, 0);
+});
+
+test('Sprint 14 Phase C redacts local paths from export delivery errors', () => {
+    const sanitized = sanitizeSessionExportDeliveryError(
+        new Error('EPERM: operation not permitted, open /Users/tarunshetty/private/report.html'),
+        'Unable to save report.',
+    );
+
+    assert.doesNotMatch(sanitized, /\/Users\/tarunshetty\/private/);
+    assert.match(sanitized, /\[local-path-redacted\]/);
+});
+
+test('Sprint 14 Phase C normalizes Markdown and HTML save failures without changing IPC channels', () => {
+    const ipc = read('electron/ipcHandlers.ts');
+    const handler = extractBetween(
+        ipc,
+        'safeHandle(SESSION_EXPORT_DELIVERY_IPC.save,',
+        'safeHandle(SESSION_EXPORT_DELIVERY_IPC.savePdf',
+    );
+
+    assert.match(handler, /buildSessionExportIpcBoundaryDiagnostic/);
+    assert.match(handler, /export_save_request_invalid/);
+    assert.match(handler, /export_save_failed/);
+    assert.match(handler, /sanitizeSessionExportDeliveryError/);
+    assert.match(handler, /catch \(error\)/);
+    assert.match(handler, /return \{ success: false, error: message, diagnostic \}/);
+    assert.match(handler, /return \{ success: false, canceled: true \}/);
+    assert.match(ipc, /SESSION_EXPORT_DELIVERY_IPC\.save/);
+    assert.doesNotMatch(handler, /throw error|throw new Error/);
+});
+
+test('Sprint 14 Phase C keeps PDF failure handling aligned with export IPC diagnostics', () => {
+    const ipc = read('electron/ipcHandlers.ts');
+    const handler = extractBetween(
+        ipc,
+        'safeHandle(SESSION_EXPORT_DELIVERY_IPC.savePdf',
+        'safeHandle("delete-screenshot"',
+    );
+
+    assert.match(handler, /buildSessionExportIpcBoundaryDiagnostic/);
+    assert.match(handler, /export_pdf_save_request_invalid/);
+    assert.match(handler, /export_pdf_save_failed/);
+    assert.match(handler, /sanitizeSessionExportDeliveryError/);
+    assert.match(handler, /return \{ success: false, error: diagnostic\.error \?\? 'Invalid PDF export save request\.', diagnostic \}/);
+    assert.match(handler, /return \{ success: false, error: message, diagnostic \}/);
+    assert.match(handler, /return \{ success: false, canceled: true \}/);
+    assert.match(ipc, /SESSION_EXPORT_DELIVERY_IPC\.savePdf/);
 });
 
 test('Sprint 11 Phase D wires Save-As into the preview surface only', () => {

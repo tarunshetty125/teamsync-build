@@ -37,11 +37,38 @@ export interface SessionExportPdfSaveRequest {
     blocked: false;
 }
 
+export type SessionExportDeliveryIpcChannel =
+    (typeof SESSION_EXPORT_DELIVERY_IPC)[keyof typeof SESSION_EXPORT_DELIVERY_IPC];
+
+export type SessionExportDeliveryIpcOperation =
+    | 'validate_request'
+    | 'show_save_dialog'
+    | 'write_file'
+    | 'render_pdf'
+    | 'validate_pdf_buffer'
+    | 'save_report'
+    | 'save_pdf_report';
+
+export interface SessionExportDeliveryIpcDiagnostic {
+    channel: SessionExportDeliveryIpcChannel;
+    operation: SessionExportDeliveryIpcOperation;
+    code: string;
+    valid?: boolean;
+    success?: boolean;
+    error?: string;
+    message: string;
+    source: 'session_export_delivery';
+    timestamp: number;
+    recoverable: boolean;
+    userVisible: boolean;
+}
+
 export interface SessionExportSaveResult {
     success: boolean;
     canceled?: boolean;
     filePath?: string;
     error?: string;
+    diagnostic?: SessionExportDeliveryIpcDiagnostic;
 }
 
 export type SessionExportPdfSaveResult = SessionExportSaveResult;
@@ -91,6 +118,52 @@ export function buildSessionExportDefaultFileName(
 
 function serializedByteLength(value: string): number {
     return new TextEncoder().encode(value).length;
+}
+
+const SESSION_EXPORT_LOCAL_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp|Applications|Volumes)\/[^\s"'<>]+)|(?:[A-Za-z]:\\[^\s"'<>]+)/g;
+
+export function sanitizeSessionExportDeliveryError(error: unknown, fallback: string): string {
+    const raw = error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+            ? error
+            : fallback;
+    const sanitized = raw
+        .replace(SESSION_EXPORT_LOCAL_PATH_PATTERN, '[local-path-redacted]')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return sanitized || fallback;
+}
+
+export function buildSessionExportIpcBoundaryDiagnostic(args: {
+    channel: SessionExportDeliveryIpcChannel;
+    operation: SessionExportDeliveryIpcOperation;
+    code: string;
+    valid?: boolean;
+    success?: boolean;
+    error?: unknown;
+    message?: string;
+    timestamp?: number;
+    recoverable?: boolean;
+    userVisible?: boolean;
+}): SessionExportDeliveryIpcDiagnostic {
+    const fallbackMessage = args.message ?? 'Export delivery IPC boundary failed.';
+    const error = args.error === undefined
+        ? undefined
+        : sanitizeSessionExportDeliveryError(args.error, fallbackMessage);
+    return {
+        channel: args.channel,
+        operation: args.operation,
+        code: args.code,
+        ...(args.valid !== undefined ? { valid: args.valid } : {}),
+        ...(args.success !== undefined ? { success: args.success } : {}),
+        ...(error ? { error } : {}),
+        message: sanitizeSessionExportDeliveryError(args.message ?? error ?? fallbackMessage, fallbackMessage),
+        source: 'session_export_delivery',
+        timestamp: args.timestamp ?? Date.now(),
+        recoverable: args.recoverable ?? true,
+        userVisible: args.userVisible ?? true,
+    };
 }
 
 export function validateSessionExportSaveRequest(request: unknown): SessionExportDeliveryRequestValidation {

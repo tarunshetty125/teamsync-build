@@ -48,10 +48,14 @@ test('Sprint 8 Phase F shares provider analytics bridge types across preload and
 test('Sprint 8 Phase F keeps provider analytics IPC memory-only and side-effect free', () => {
     const ipcHandlers = read('electron/ipcHandlers.ts');
     const relayStart = ipcHandlers.indexOf('PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.set');
-    const relayEnd = ipcHandlers.indexOf('safeHandle("delete-screenshot"');
+    const relayEnd = ipcHandlers.indexOf('safeHandle(SESSION_EXPORT_DELIVERY_IPC.save');
+    assert.notEqual(relayStart, -1);
+    assert.notEqual(relayEnd, -1);
     const relayBody = ipcHandlers.slice(relayStart, relayEnd);
 
-    assert.match(relayBody, /providerAnalyticsSessionSnapshot = snapshot \?\? null/);
+    assert.match(relayBody, /applyProviderAnalyticsSessionSnapshotQuarantine/);
+    assert.match(relayBody, /providerAnalyticsSessionSnapshot = quarantine\.currentSnapshot/);
+    assert.match(relayBody, /if \(quarantine\.shouldBroadcast\)/);
     assert.match(relayBody, /broadcastProviderAnalyticsSessionSnapshot/);
     assert.doesNotMatch(relayBody, /CredentialsManager|DatabaseManager|BenchmarkManager|writeFile|localStorage|sessionStorage|indexedDB/);
     assert.doesNotMatch(relayBody, /resolveRoutingDecision|setDefaultModel|setProviderPreferredModel|setModel/);

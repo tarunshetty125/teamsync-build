@@ -24,6 +24,7 @@ import type {
     ProviderPersonalizationReadModel,
     ProviderPersonalizationStatus,
 } from '../providers/providerPersonalizationReadModel';
+import { deriveValidationRepairPolicy } from './validationRepairPolicy';
 
 export type RuntimeDiagnosticSeverity = 'info' | 'warning' | 'error' | 'critical';
 
@@ -546,6 +547,48 @@ function normalizeValidationMetadata(
         const issues = entry.issues ?? [];
 
         warnings.forEach((warning, warningIndex) => {
+            const repairPolicy = deriveValidationRepairPolicy({
+                valid: entry.valid,
+                repairApplied: entry.repairApplied,
+                status: entry.status,
+                sourceCode: warning,
+                warnings: [warning],
+            });
+            if (repairPolicy) {
+                events.push({
+                    id: buildEventId([
+                        'runtime',
+                        'validation.repair',
+                        entry.responseId ?? entryIndex,
+                        'warning',
+                        warningIndex,
+                        repairPolicy.outcome,
+                        repairPolicy.sourceCode,
+                    ]),
+                    timestamp: entry.timestamp ?? generatedAt,
+                    domain: 'validation.repair',
+                    code: repairPolicy.outcome,
+                    severity: repairPolicy.severity,
+                    source: entry.source ?? 'validation_metadata',
+                    message: repairPolicy.message,
+                    responseId: entry.responseId,
+                    requestId: entry.requestId,
+                    questionTurnId: entry.questionTurnId,
+                    actionId: entry.actionId,
+                    recoverable: repairPolicy.recoverable,
+                    userVisible: repairPolicy.userVisible,
+                    sourceCode: repairPolicy.sourceCode,
+                    status: repairPolicy.classification,
+                    redactedContext: withContext({
+                        repairOutcome: repairPolicy.outcome,
+                        repairClassification: repairPolicy.classification,
+                        validationStatus: entry.status,
+                        validationValid: entry.valid,
+                    }),
+                });
+                return;
+            }
+
             events.push({
                 id: buildEventId(['runtime', 'validation.contract', entry.responseId ?? entryIndex, 'warning', warningIndex, warning]),
                 timestamp: entry.timestamp ?? generatedAt,
@@ -566,38 +609,92 @@ function normalizeValidationMetadata(
         });
 
         if (entry.repairApplied && entry.valid === true) {
+            const repairPolicy = deriveValidationRepairPolicy({
+                valid: entry.valid,
+                repairApplied: entry.repairApplied,
+                status: entry.status,
+                sourceCode: 'repair_applied',
+            });
+            if (!repairPolicy) return;
             events.push({
-                id: buildEventId(['runtime', 'validation.repair', entry.responseId ?? entryIndex, 'repair_applied']),
+                id: buildEventId(['runtime', 'validation.repair', entry.responseId ?? entryIndex, repairPolicy.outcome, repairPolicy.sourceCode]),
                 timestamp: entry.timestamp ?? generatedAt,
                 domain: 'validation.repair',
-                code: 'repair_applied',
-                severity: 'warning',
+                code: repairPolicy.outcome,
+                severity: repairPolicy.severity,
                 source: entry.source ?? 'validation_metadata',
-                message: 'Validation repair was applied before producing a compliant response.',
+                message: repairPolicy.message,
                 responseId: entry.responseId,
                 requestId: entry.requestId,
                 questionTurnId: entry.questionTurnId,
                 actionId: entry.actionId,
-                recoverable: true,
-                userVisible: false,
-                sourceCode: 'repair_applied',
-                status: entry.status ?? 'valid',
+                recoverable: repairPolicy.recoverable,
+                userVisible: repairPolicy.userVisible,
+                sourceCode: repairPolicy.sourceCode,
+                status: repairPolicy.classification,
+                redactedContext: withContext({
+                    repairOutcome: repairPolicy.outcome,
+                    repairClassification: repairPolicy.classification,
+                    validationStatus: entry.status,
+                    validationValid: entry.valid,
+                }),
             });
         }
 
         if (entry.valid !== false) return;
 
+        let emittedRepairIssue = false;
         issues.forEach((issue, issueIndex) => {
-            const repairIssue = issue === 'repair_empty' || issue === 'repair_invalid';
-            const domain: RuntimeDiagnosticDomain = repairIssue ? 'validation.repair' : 'validation.contract';
+            const repairPolicy = deriveValidationRepairPolicy({
+                valid: entry.valid,
+                repairApplied: entry.repairApplied,
+                status: entry.status,
+                sourceCode: issue,
+                issues: [issue],
+            });
+            if (repairPolicy) {
+                emittedRepairIssue = true;
+                events.push({
+                    id: buildEventId([
+                        'runtime',
+                        'validation.repair',
+                        entry.responseId ?? entryIndex,
+                        issueIndex,
+                        repairPolicy.outcome,
+                        repairPolicy.sourceCode,
+                    ]),
+                    timestamp: entry.timestamp ?? generatedAt,
+                    domain: 'validation.repair',
+                    code: repairPolicy.outcome,
+                    severity: repairPolicy.severity,
+                    source: entry.source ?? 'validation_metadata',
+                    message: repairPolicy.message,
+                    responseId: entry.responseId,
+                    requestId: entry.requestId,
+                    questionTurnId: entry.questionTurnId,
+                    actionId: entry.actionId,
+                    recoverable: repairPolicy.recoverable,
+                    userVisible: repairPolicy.userVisible,
+                    sourceCode: repairPolicy.sourceCode,
+                    status: repairPolicy.classification,
+                    redactedContext: withContext({
+                        repairApplied: entry.repairApplied,
+                        repairOutcome: repairPolicy.outcome,
+                        repairClassification: repairPolicy.classification,
+                        validationStatus: entry.status,
+                    }),
+                });
+                return;
+            }
+
             events.push({
-                id: buildEventId(['runtime', domain, entry.responseId ?? entryIndex, issueIndex, issue]),
+                id: buildEventId(['runtime', 'validation.contract', entry.responseId ?? entryIndex, issueIndex, issue]),
                 timestamp: entry.timestamp ?? generatedAt,
-                domain,
+                domain: 'validation.contract',
                 code: issue,
                 severity: 'error',
                 source: entry.source ?? 'validation_metadata',
-                message: compactMessage(repairIssue ? 'Validation repair failed' : 'Validation contract failed', issue),
+                message: compactMessage('Validation contract failed', issue),
                 responseId: entry.responseId,
                 requestId: entry.requestId,
                 questionTurnId: entry.questionTurnId,
@@ -611,6 +708,38 @@ function normalizeValidationMetadata(
                 }),
             });
         });
+
+        if (entry.repairApplied && !emittedRepairIssue) {
+            const repairPolicy = deriveValidationRepairPolicy({
+                valid: entry.valid,
+                repairApplied: entry.repairApplied,
+                status: entry.status,
+            });
+            if (!repairPolicy) return;
+            events.push({
+                id: buildEventId(['runtime', 'validation.repair', entry.responseId ?? entryIndex, 'entry', repairPolicy.outcome, repairPolicy.sourceCode]),
+                timestamp: entry.timestamp ?? generatedAt,
+                domain: 'validation.repair',
+                code: repairPolicy.outcome,
+                severity: repairPolicy.severity,
+                source: entry.source ?? 'validation_metadata',
+                message: repairPolicy.message,
+                responseId: entry.responseId,
+                requestId: entry.requestId,
+                questionTurnId: entry.questionTurnId,
+                actionId: entry.actionId,
+                recoverable: repairPolicy.recoverable,
+                userVisible: repairPolicy.userVisible,
+                sourceCode: repairPolicy.sourceCode,
+                status: repairPolicy.classification,
+                redactedContext: withContext({
+                    repairApplied: entry.repairApplied,
+                    repairOutcome: repairPolicy.outcome,
+                    repairClassification: repairPolicy.classification,
+                    validationStatus: entry.status,
+                }),
+            });
+        }
     });
 
     return events;

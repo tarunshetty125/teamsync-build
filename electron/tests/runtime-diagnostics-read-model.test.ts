@@ -466,9 +466,8 @@ test('Sprint 13 Phase B normalizes validation metadata for contract and repair o
 
     assert.equal(model.byDomain['validation.contract'].length, 2);
     assert.equal(model.byDomain['validation.repair'].length, 3);
-    assert.equal(model.events.some((event) => event.code === 'repair_applied' && event.severity === 'warning'), true);
-    assert.equal(model.events.some((event) => event.code === 'repair_empty' && event.severity === 'error'), true);
-    assert.equal(model.events.some((event) => event.code === 'repair_invalid' && event.severity === 'error'), true);
+    assert.equal(model.events.some((event) => event.code === 'repaired' && event.status === 'success' && event.severity === 'info'), true);
+    assert.equal(model.events.filter((event) => event.code === 'repair_failed' && event.status === 'error' && event.severity === 'error').length, 2);
     assert.equal(model.byResponseId['validation-valid'], undefined);
     assert.equal(model.activeEvents.length, 3);
 });

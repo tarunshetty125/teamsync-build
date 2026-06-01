@@ -60,6 +60,41 @@ export interface ProviderAnalyticsSessionSnapshotValidationResult {
     budgets: typeof PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS;
 }
 
+export type ProviderAnalyticsSessionSnapshotRelayStatus =
+    | 'accepted'
+    | 'accepted_with_warning'
+    | 'quarantined';
+
+export interface ProviderAnalyticsSessionSnapshotRelayDiagnosticIssue {
+    severity: Exclude<ProviderAnalyticsSessionSnapshotValidationStatus, 'valid'>;
+    code: string;
+    path: string;
+    message: string;
+    budget?: number | string;
+}
+
+export interface ProviderAnalyticsSessionSnapshotRelayDiagnostic {
+    source: 'provider_analytics_snapshot_relay';
+    code: 'provider_analytics_snapshot_warning' | 'provider_analytics_snapshot_quarantined';
+    status: Exclude<ProviderAnalyticsSessionSnapshotValidationStatus, 'valid'>;
+    message: string;
+    timestamp: number;
+    responseCount: number;
+    ownershipEntryCount: number;
+    serializedBytes: number;
+    issueCount: number;
+    issues: ProviderAnalyticsSessionSnapshotRelayDiagnosticIssue[];
+    recoverable: boolean;
+    userVisible: false;
+}
+
+export interface ProviderAnalyticsSessionSnapshotQuarantineResult {
+    currentSnapshot: ProviderAnalyticsSessionSnapshot | null;
+    shouldBroadcast: boolean;
+    broadcastSnapshot: ProviderAnalyticsSessionSnapshot | null;
+    setResult: ProviderAnalyticsSessionSnapshotSetResult;
+}
+
 export const PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC = {
     set: 'provider-analytics:set-session-snapshot',
     get: 'provider-analytics:get-session-snapshot',
@@ -68,6 +103,10 @@ export const PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC = {
 
 export interface ProviderAnalyticsSessionSnapshotSetResult {
     success: true;
+    status: ProviderAnalyticsSessionSnapshotRelayStatus;
+    accepted: boolean;
+    quarantined: boolean;
+    diagnostic?: ProviderAnalyticsSessionSnapshotRelayDiagnostic;
 }
 
 export type ProviderAnalyticsSessionSnapshotChangeHandler = (
@@ -840,6 +879,78 @@ export function createEmptyProviderAnalyticsSessionSnapshot(
     return {
         ...EMPTY_SNAPSHOT,
         generatedAt,
+    };
+}
+
+function buildProviderAnalyticsSessionSnapshotRelayDiagnostic(
+    validation: ProviderAnalyticsSessionSnapshotValidationResult,
+    timestamp: number = Date.now(),
+): ProviderAnalyticsSessionSnapshotRelayDiagnostic | undefined {
+    if (validation.status === 'valid') return undefined;
+
+    const quarantined = validation.status === 'invalid';
+    return {
+        source: 'provider_analytics_snapshot_relay',
+        code: quarantined
+            ? 'provider_analytics_snapshot_quarantined'
+            : 'provider_analytics_snapshot_warning',
+        status: validation.status,
+        message: quarantined
+            ? 'Provider analytics session snapshot was quarantined and the last valid snapshot was preserved.'
+            : 'Provider analytics session snapshot was accepted with guardrail warnings.',
+        timestamp,
+        responseCount: validation.responseCount,
+        ownershipEntryCount: validation.ownershipEntryCount,
+        serializedBytes: validation.serializedBytes,
+        issueCount: validation.issues.length,
+        issues: validation.issues.map((issue) => ({
+            severity: issue.severity,
+            code: issue.code,
+            path: issue.path,
+            message: issue.message,
+            ...(issue.budget !== undefined ? { budget: issue.budget } : {}),
+        })),
+        recoverable: true,
+        userVisible: false,
+    };
+}
+
+export function applyProviderAnalyticsSessionSnapshotQuarantine(args: {
+    currentSnapshot: ProviderAnalyticsSessionSnapshot | null;
+    incomingSnapshot: ProviderAnalyticsSessionSnapshot | null;
+    validation?: ProviderAnalyticsSessionSnapshotValidationResult;
+    timestamp?: number;
+}): ProviderAnalyticsSessionSnapshotQuarantineResult {
+    const validation = args.validation ?? validateProviderAnalyticsSessionSnapshot(args.incomingSnapshot);
+    const diagnostic = buildProviderAnalyticsSessionSnapshotRelayDiagnostic(validation, args.timestamp);
+
+    if (validation.status === 'invalid') {
+        const currentSnapshot = args.currentSnapshot ?? createEmptyProviderAnalyticsSessionSnapshot(0);
+        return {
+            currentSnapshot,
+            shouldBroadcast: false,
+            broadcastSnapshot: currentSnapshot,
+            setResult: {
+                success: true,
+                status: 'quarantined',
+                accepted: false,
+                quarantined: true,
+                ...(diagnostic ? { diagnostic } : {}),
+            },
+        };
+    }
+
+    return {
+        currentSnapshot: args.incomingSnapshot ?? null,
+        shouldBroadcast: true,
+        broadcastSnapshot: args.incomingSnapshot ?? null,
+        setResult: {
+            success: true,
+            status: validation.status === 'warning' ? 'accepted_with_warning' : 'accepted',
+            accepted: true,
+            quarantined: false,
+            ...(diagnostic ? { diagnostic } : {}),
+        },
     };
 }
 

@@ -13,6 +13,7 @@ import { PermissionManager } from "./services/PermissionManager";
 import type { PermissionKind } from "../src/lib/permissions/types";
 import {
   PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC,
+  applyProviderAnalyticsSessionSnapshotQuarantine,
   validateProviderAnalyticsSessionSnapshot,
   type ProviderAnalyticsSessionSnapshot,
   type ProviderAnalyticsSessionSnapshotSetResult,
@@ -20,8 +21,10 @@ import {
 import {
   SESSION_EXPORT_DELIVERY_IPC,
   SESSION_EXPORT_PDF_RUNTIME_BUDGETS,
+  buildSessionExportIpcBoundaryDiagnostic,
   buildSessionExportDefaultFileName,
   getSessionExportFileExtension,
+  sanitizeSessionExportDeliveryError,
   validateSessionExportPdfBuffer,
   validateSessionExportPdfSaveRequest,
   validateSessionExportSaveRequest,
@@ -543,18 +546,26 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.set, async (_, snapshot: ProviderAnalyticsSessionSnapshot | null): Promise<ProviderAnalyticsSessionSnapshotSetResult> => {
     const validation = validateProviderAnalyticsSessionSnapshot(snapshot);
+    const quarantine = applyProviderAnalyticsSessionSnapshotQuarantine({
+      currentSnapshot: providerAnalyticsSessionSnapshot,
+      incomingSnapshot: snapshot,
+      validation,
+    });
     if (validation.status !== 'valid') {
       console.warn('[ProviderAnalytics] session snapshot guardrail', {
         status: validation.status,
+        quarantined: quarantine.setResult.quarantined,
         responseCount: validation.responseCount,
         ownershipEntryCount: validation.ownershipEntryCount,
         serializedBytes: validation.serializedBytes,
         issues: validation.issues,
       });
     }
-    providerAnalyticsSessionSnapshot = snapshot ?? null;
-    broadcastProviderAnalyticsSessionSnapshot(providerAnalyticsSessionSnapshot);
-    return { success: true };
+    providerAnalyticsSessionSnapshot = quarantine.currentSnapshot;
+    if (quarantine.shouldBroadcast) {
+      broadcastProviderAnalyticsSessionSnapshot(quarantine.broadcastSnapshot);
+    }
+    return quarantine.setResult;
   })
 
   safeHandle(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.get, async (): Promise<ProviderAnalyticsSessionSnapshot | null> => {
@@ -564,8 +575,16 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle(SESSION_EXPORT_DELIVERY_IPC.save, async (event, request: unknown): Promise<SessionExportSaveResult> => {
     const validation = validateSessionExportSaveRequest(request);
     if (!validation.valid) {
-      console.warn('[SessionExport] save request rejected:', validation.error);
-      return { success: false, error: validation.error ?? 'Invalid export save request.' };
+      const diagnostic = buildSessionExportIpcBoundaryDiagnostic({
+        channel: SESSION_EXPORT_DELIVERY_IPC.save,
+        operation: 'validate_request',
+        code: 'export_save_request_invalid',
+        valid: false,
+        error: validation.error,
+        message: validation.error ?? 'Invalid export save request.',
+      });
+      console.warn('[SessionExport] save request rejected:', diagnostic.error);
+      return { success: false, error: diagnostic.error ?? 'Invalid export save request.', diagnostic };
     }
 
     const saveRequest = request as SessionExportSaveRequest;
@@ -582,33 +601,55 @@ export function initializeIpcHandlers(appState: AppState): void {
       filters: buildSessionExportSaveFilters(saveRequest.format),
       properties: ['createDirectory'] as Array<'createDirectory'>,
     };
-    const rawResult = parentWindow && !parentWindow.isDestroyed()
-      ? await dialog.showSaveDialog(parentWindow, options)
-      : await dialog.showSaveDialog(options);
-    const result = typeof rawResult === 'string'
-      ? { canceled: rawResult.length === 0, filePath: rawResult }
-      : rawResult;
+    try {
+      const rawResult = parentWindow && !parentWindow.isDestroyed()
+        ? await dialog.showSaveDialog(parentWindow, options)
+        : await dialog.showSaveDialog(options);
+      const result = typeof rawResult === 'string'
+        ? { canceled: rawResult.length === 0, filePath: rawResult }
+        : rawResult;
 
-    if (result.canceled || !result.filePath) {
-      return { success: false, canceled: true };
+      if (result.canceled || !result.filePath) {
+        return { success: false, canceled: true };
+      }
+
+      const selectedPath = path.extname(result.filePath)
+        ? result.filePath
+        : `${result.filePath}.${extension}`;
+      await fs.promises.writeFile(selectedPath, saveRequest.content, 'utf8');
+
+      return {
+        success: true,
+        filePath: selectedPath,
+      };
+    } catch (error) {
+      const message = sanitizeSessionExportDeliveryError(error, 'Unable to save report.');
+      const diagnostic = buildSessionExportIpcBoundaryDiagnostic({
+        channel: SESSION_EXPORT_DELIVERY_IPC.save,
+        operation: 'write_file',
+        code: 'export_save_failed',
+        success: false,
+        error: message,
+        message,
+      });
+      console.warn('[SessionExport] save failed:', message);
+      return { success: false, error: message, diagnostic };
     }
-
-    const selectedPath = path.extname(result.filePath)
-      ? result.filePath
-      : `${result.filePath}.${extension}`;
-    await fs.promises.writeFile(selectedPath, saveRequest.content, 'utf8');
-
-    return {
-      success: true,
-      filePath: selectedPath,
-    };
   })
 
   safeHandle(SESSION_EXPORT_DELIVERY_IPC.savePdf, async (event, request: unknown): Promise<SessionExportPdfSaveResult> => {
     const validation = validateSessionExportPdfSaveRequest(request);
     if (!validation.valid) {
-      console.warn('[SessionExport] PDF save request rejected:', validation.error);
-      return { success: false, error: validation.error ?? 'Invalid PDF export save request.' };
+      const diagnostic = buildSessionExportIpcBoundaryDiagnostic({
+        channel: SESSION_EXPORT_DELIVERY_IPC.savePdf,
+        operation: 'validate_request',
+        code: 'export_pdf_save_request_invalid',
+        valid: false,
+        error: validation.error,
+        message: validation.error ?? 'Invalid PDF export save request.',
+      });
+      console.warn('[SessionExport] PDF save request rejected:', diagnostic.error);
+      return { success: false, error: diagnostic.error ?? 'Invalid PDF export save request.', diagnostic };
     }
 
     const pdfRequest = request as SessionExportPdfSaveRequest;
@@ -659,9 +700,17 @@ export function initializeIpcHandlers(appState: AppState): void {
         filePath: selectedPath,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save PDF report.';
+      const message = sanitizeSessionExportDeliveryError(error, 'Unable to save PDF report.');
+      const diagnostic = buildSessionExportIpcBoundaryDiagnostic({
+        channel: SESSION_EXPORT_DELIVERY_IPC.savePdf,
+        operation: 'save_pdf_report',
+        code: 'export_pdf_save_failed',
+        success: false,
+        error: message,
+        message,
+      });
       console.warn('[SessionExport] PDF save failed:', message);
-      return { success: false, error: message };
+      return { success: false, error: message, diagnostic };
     }
   })
 
