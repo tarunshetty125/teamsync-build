@@ -1,22 +1,10 @@
-import { app, safeStorage, shell, net } from 'electron';
+import { app, safeStorage } from 'electron';
 import axios from 'axios';
-import http from 'http';
-import url from 'url';
 import fs from 'fs';
 import path from 'path';
 import { EventEmitter } from 'events';
 
-// Configuration
-// In a real app, these should be in environment variables or build configs
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "YOUR_CLIENT_ID_HERE";
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "YOUR_CLIENT_SECRET_HERE";
-const REDIRECT_URI = "http://localhost:11111/auth/callback";
-const SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
 const TOKEN_PATH = path.join(app.getPath('userData'), 'calendar_tokens.enc');
-
-if (GOOGLE_CLIENT_ID === "YOUR_CLIENT_ID_HERE" || GOOGLE_CLIENT_SECRET === "YOUR_CLIENT_SECRET_HERE") {
-    console.warn('[CalendarManager] Google OAuth credentials are using defaults. Calendar features will not work until valid credentials are provided via env vars.');
-}
 
 export interface CalendarEvent {
     id: string;
@@ -31,7 +19,6 @@ export interface CalendarEvent {
 export class CalendarManager extends EventEmitter {
     private static instance: CalendarManager;
     private accessToken: string | null = null;
-    private refreshToken: string | null = null;
     private expiryDate: number | null = null;
     private isConnected: boolean = false;
     private updateInterval: NodeJS.Timeout | null = null;
@@ -57,58 +44,11 @@ export class CalendarManager extends EventEmitter {
     // =========================================================================
 
     public async startAuthFlow(): Promise<void> {
-        return new Promise((resolve, reject) => {
-            // 1. Create Loopback Server
-            const server = http.createServer(async (req, res) => {
-                try {
-                    if (req.url?.startsWith('/auth/callback')) {
-                        const qs = new url.URL(req.url, 'http://localhost:11111').searchParams;
-                        const code = qs.get('code');
-                        const error = qs.get('error');
-
-                        if (error) {
-                            res.setHeader('Content-Type', 'text/html');
-                            res.end(this.getCallbackHTML(false, error));
-
-                            server.close();
-                            reject(new Error(error));
-                            return;
-                        }
-
-                        if (code) {
-                            res.setHeader('Content-Type', 'text/html');
-                            res.end(this.getCallbackHTML(true));
-
-                            server.close();
-
-                            // 2. Exchange code for tokens
-                            await this.exchangeCodeForToken(code);
-                            resolve();
-                        }
-                    }
-                } catch (err: any) {
-                    res.setHeader('Content-Type', 'text/html');
-                    res.end(this.getCallbackHTML(false, err.message || 'Error occurred'));
-                    server.close();
-                    reject(err);
-                }
-            });
-
-            server.listen(11111, () => {
-                // 3. Open Browser
-                const authUrl = this.getAuthUrl();
-                shell.openExternal(authUrl);
-            });
-
-            server.on('error', (err) => {
-                reject(err);
-            });
-        });
+        throw new Error('Legacy Electron calendar OAuth is disabled. Use the backend Google OAuth flow.');
     }
 
     public async disconnect(): Promise<void> {
         this.accessToken = null;
-        this.refreshToken = null;
         this.expiryDate = null;
         this.isConnected = false;
 
@@ -123,35 +63,6 @@ export class CalendarManager extends EventEmitter {
         // We don't store email in tokens usually, but we could fetch it.
         // For now, simpler boolean.
         return { connected: this.isConnected };
-    }
-
-    private getAuthUrl(): string {
-        const params = new URLSearchParams({
-            client_id: GOOGLE_CLIENT_ID,
-            redirect_uri: REDIRECT_URI,
-            response_type: 'code',
-            scope: SCOPES.join(' '),
-            access_type: 'offline', // For refresh token
-            prompt: 'consent' // Force prompts to ensure we get refresh token
-        });
-        return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-    }
-
-    private async exchangeCodeForToken(code: string) {
-        try {
-            const response = await axios.post('https://oauth2.googleapis.com/token', {
-                code,
-                client_id: GOOGLE_CLIENT_ID,
-                client_secret: GOOGLE_CLIENT_SECRET,
-                redirect_uri: REDIRECT_URI,
-                grant_type: 'authorization_code'
-            });
-
-            this.handleTokenResponse(response.data);
-        } catch (error) {
-            console.error('[CalendarManager] Token exchange failed:', error);
-            throw error;
-        }
     }
 
     // =========================================================================
@@ -182,61 +93,9 @@ export class CalendarManager extends EventEmitter {
         this.emit('events-updated');
     }
 
-    private handleTokenResponse(data: any) {
-        this.accessToken = data.access_token;
-        if (data.refresh_token) {
-            this.refreshToken = data.refresh_token; // Only returned on first consent
-        }
-        this.expiryDate = Date.now() + (data.expires_in * 1000);
-        this.isConnected = true;
-        this.saveTokens();
-        this.emit('connection-changed', true);
-
-        // Initial fetch
-        this.fetchUpcomingEvents();
-    }
-
     private async refreshAccessToken() {
-        if (!this.refreshToken) {
-            throw new Error('No refresh token available');
-        }
-
-        try {
-            const response = await axios.post('https://oauth2.googleapis.com/token', {
-                client_id: GOOGLE_CLIENT_ID,
-                client_secret: GOOGLE_CLIENT_SECRET,
-                refresh_token: this.refreshToken,
-                grant_type: 'refresh_token'
-            });
-
-            this.handleTokenResponse(response.data);
-        } catch (error) {
-            console.error('[CalendarManager] Token refresh failed:', error);
-            // If refresh fails (e.g. revoked), disconnect
-            this.disconnect();
-        }
-    }
-
-    // =========================================================================
-    // Token Storage (Encrypted)
-    // =========================================================================
-
-    private saveTokens() {
-        if (!safeStorage.isEncryptionAvailable()) {
-            console.warn('[CalendarManager] Encryption not available, skipping token save');
-            return;
-        }
-
-        const data = JSON.stringify({
-            accessToken: this.accessToken,
-            refreshToken: this.refreshToken,
-            expiryDate: this.expiryDate
-        });
-
-        const encrypted = safeStorage.encryptString(data);
-        const tmpPath = TOKEN_PATH + '.tmp';
-        fs.writeFileSync(tmpPath, encrypted);
-        fs.renameSync(tmpPath, TOKEN_PATH);
+        console.warn('[CalendarManager] Legacy Electron calendar token refresh is disabled. Disconnecting stale local calendar state.');
+        await this.disconnect();
     }
 
     private loadTokens() {
@@ -250,14 +109,13 @@ export class CalendarManager extends EventEmitter {
             const data = JSON.parse(decrypted);
 
             this.accessToken = data.accessToken;
-            this.refreshToken = data.refreshToken;
             this.expiryDate = data.expiryDate;
 
-            if (this.accessToken && this.refreshToken) {
+            if (this.accessToken) {
                 this.isConnected = true;
                 // Check expiry
                 if (this.expiryDate && Date.now() >= this.expiryDate) {
-                    this.refreshAccessToken();
+                    void this.refreshAccessToken();
                 }
             }
         } catch (error) {

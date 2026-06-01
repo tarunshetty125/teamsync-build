@@ -1,6 +1,7 @@
 import { google, Auth } from 'googleapis';
 import { getUsersCollection, UserDocument } from '../db/mongodb';
 import jwt from 'jsonwebtoken';
+import { getBackendConfig } from '../config/env';
 
 const SCOPES_BASIC = [
   'openid',
@@ -13,10 +14,11 @@ const SCOPES_CALENDAR = [
 ];
 
 function createOAuth2Client(): Auth.OAuth2Client {
+  const config = getBackendConfig();
   return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.REDIRECT_URI
+    config.googleClientId,
+    config.googleClientSecret,
+    config.redirectUri
   );
 }
 
@@ -133,7 +135,7 @@ export async function handleGoogleCallback(code: string): Promise<{
       name: user.name,
       picture: user.picture,
     },
-    process.env.JWT_SECRET || 'fallback_secret',
+    getBackendConfig().jwtSecret,
     { expiresIn: '30d' }
   );
 
@@ -145,7 +147,7 @@ export async function handleGoogleCallback(code: string): Promise<{
  */
 export async function verifyAndGetUser(token: string): Promise<UserDocument | null> {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as any;
+    const decoded = jwt.verify(token, getBackendConfig().jwtSecret) as any;
     const usersCollection = getUsersCollection();
     return await usersCollection.findOne({ googleId: decoded.googleId });
   } catch {

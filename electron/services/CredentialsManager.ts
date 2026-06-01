@@ -99,13 +99,6 @@ export interface StoredCredentials {
     trialExpiresAt?: string;   // ISO timestamp — local copy for startup check
     trialStartedAt?: string;   // ISO timestamp
     trialClaimed?:   boolean;  // set true on first claim, never cleared — hides start card permanently
-    // Backend server credentials (production packaged app only)
-    backendMongodbUri?: string;
-    backendMongodbDbName?: string;
-    backendGoogleClientId?: string;
-    backendGoogleClientSecret?: string;
-    backendJwtSecret?: string;
-    backendRedirectUri?: string;
 }
 
 export class CredentialsManager {
@@ -692,111 +685,6 @@ export class CredentialsManager {
         console.log('[CredentialsManager] Trial token cleared');
     }
 
-    // ── Backend Server Credentials (Production Only) ───────────
-
-    public getBackendMongodbUri(): string | undefined {
-        return this.credentials.backendMongodbUri;
-    }
-
-    public setBackendMongodbUri(uri: string): void {
-        this.credentials.backendMongodbUri = uri;
-        this.saveCredentials();
-        console.log('[CredentialsManager] Backend MongoDB URI updated');
-    }
-
-    public getBackendMongodbDbName(): string | undefined {
-        return this.credentials.backendMongodbDbName;
-    }
-
-    public setBackendMongodbDbName(name: string): void {
-        this.credentials.backendMongodbDbName = name;
-        this.saveCredentials();
-        console.log('[CredentialsManager] Backend MongoDB DB name updated');
-    }
-
-    public getBackendGoogleClientId(): string | undefined {
-        return this.credentials.backendGoogleClientId;
-    }
-
-    public setBackendGoogleClientId(id: string): void {
-        this.credentials.backendGoogleClientId = id;
-        this.saveCredentials();
-        console.log('[CredentialsManager] Backend Google Client ID updated');
-    }
-
-    public getBackendGoogleClientSecret(): string | undefined {
-        return this.credentials.backendGoogleClientSecret;
-    }
-
-    public setBackendGoogleClientSecret(secret: string): void {
-        this.credentials.backendGoogleClientSecret = secret;
-        this.saveCredentials();
-        console.log('[CredentialsManager] Backend Google Client Secret updated');
-    }
-
-    public getBackendJwtSecret(): string | undefined {
-        return this.credentials.backendJwtSecret;
-    }
-
-    public setBackendJwtSecret(secret: string): void {
-        this.credentials.backendJwtSecret = secret;
-        this.saveCredentials();
-        console.log('[CredentialsManager] Backend JWT Secret updated');
-    }
-
-    public getBackendRedirectUri(): string | undefined {
-        return this.credentials.backendRedirectUri;
-    }
-
-    public setBackendRedirectUri(uri: string): void {
-        this.credentials.backendRedirectUri = uri;
-        this.saveCredentials();
-        console.log('[CredentialsManager] Backend Redirect URI updated');
-    }
-
-    /**
-     * Returns true if ALL required backend credentials are present.
-     */
-    public hasBackendCredentials(): boolean {
-        return !!(
-            this.credentials.backendMongodbUri &&
-            this.credentials.backendMongodbDbName &&
-            this.credentials.backendGoogleClientId &&
-            this.credentials.backendGoogleClientSecret &&
-            this.credentials.backendJwtSecret &&
-            this.credentials.backendRedirectUri
-        );
-    }
-
-    /**
-     * Seed backend credentials from compile-time defaults.
-     * Called ONLY on first packaged launch when no backend credentials exist.
-     * If credentials are already stored, this is a no-op — stored credentials
-     * always take precedence over defaults.
-     */
-    public seedBackendCredentials(): boolean {
-        if (this.hasBackendCredentials()) {
-            console.log('[CredentialsManager] Backend credentials already present, skipping seed');
-            return false;
-        }
-
-        try {
-            const { BACKEND_DEFAULTS } = require('../config/backendDefaults');
-            this.credentials.backendMongodbUri = BACKEND_DEFAULTS.MONGODB_URI;
-            this.credentials.backendMongodbDbName = BACKEND_DEFAULTS.MONGODB_DB_NAME;
-            this.credentials.backendGoogleClientId = BACKEND_DEFAULTS.GOOGLE_CLIENT_ID;
-            this.credentials.backendGoogleClientSecret = BACKEND_DEFAULTS.GOOGLE_CLIENT_SECRET;
-            this.credentials.backendJwtSecret = BACKEND_DEFAULTS.JWT_SECRET;
-            this.credentials.backendRedirectUri = BACKEND_DEFAULTS.REDIRECT_URI;
-            this.saveCredentials();
-            console.log('[CredentialsManager] Backend credentials seeded from defaults');
-            return true;
-        } catch (error) {
-            console.error('[CredentialsManager] Failed to seed backend credentials:', error);
-            return false;
-        }
-    }
-
     public clearAll(): void {
         this.scrubMemory();
         if (fs.existsSync(CREDENTIALS_PATH)) {
@@ -831,6 +719,8 @@ export class CredentialsManager {
 
     private saveCredentials(): void {
         try {
+            this.stripLegacyBackendCredentials();
+
             if (!safeStorage.isEncryptionAvailable()) {
                 console.warn('[CredentialsManager] Encryption not available, falling back to plaintext');
                 // Fallback: save as plaintext (less secure, but functional)
@@ -866,7 +756,11 @@ export class CredentialsManager {
                     const parsed = JSON.parse(decrypted);
                     if (typeof parsed === 'object' && parsed !== null) {
                         this.credentials = parsed;
+                        const removedLegacyBackendCredentials = this.stripLegacyBackendCredentials();
                         console.log('[CredentialsManager] Loaded encrypted credentials');
+                        if (removedLegacyBackendCredentials) {
+                            this.saveCredentials();
+                        }
                     } else {
                         throw new Error('Decrypted credentials is not a valid object');
                     }
@@ -896,7 +790,11 @@ export class CredentialsManager {
                     const parsed = JSON.parse(data);
                     if (typeof parsed === 'object' && parsed !== null) {
                         this.credentials = parsed;
+                        const removedLegacyBackendCredentials = this.stripLegacyBackendCredentials();
                         console.log('[CredentialsManager] Loaded plaintext credentials');
+                        if (removedLegacyBackendCredentials) {
+                            this.saveCredentials();
+                        }
                     } else {
                         throw new Error('Plaintext credentials is not a valid object');
                     }
@@ -912,5 +810,31 @@ export class CredentialsManager {
             console.error('[CredentialsManager] Failed to load credentials:', error);
             this.credentials = {};
         }
+    }
+
+    private stripLegacyBackendCredentials(): boolean {
+        const legacyKeys = [
+            'backendMongodbUri',
+            'backendMongodbDbName',
+            'backendGoogleClientId',
+            'backendGoogleClientSecret',
+            'backendJwtSecret',
+            'backendRedirectUri',
+        ];
+        let removed = false;
+        const credentials = this.credentials as Record<string, unknown>;
+
+        for (const key of legacyKeys) {
+            if (Object.prototype.hasOwnProperty.call(credentials, key)) {
+                delete credentials[key];
+                removed = true;
+            }
+        }
+
+        if (removed) {
+            console.log('[CredentialsManager] Removed legacy backend credentials from Electron storage');
+        }
+
+        return removed;
     }
 }

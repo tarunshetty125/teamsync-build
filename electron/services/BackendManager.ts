@@ -2,10 +2,9 @@
  * BackendManager — Production backend lifecycle manager.
  *
  * Responsible for:
- * 1. Seeding backend credentials on first launch (via CredentialsManager)
- * 2. Spawning the backend server as a child process
- * 3. Health-checking localhost:3456
- * 4. Killing the backend on app quit
+ * 1. Spawning the backend server as a child process
+ * 2. Health-checking localhost:3456
+ * 3. Killing the backend on app quit
  *
  * ONLY active when app.isPackaged === true.
  * In development, all methods are no-ops — dev workflow is unchanged.
@@ -39,10 +38,8 @@ export class BackendManager {
      * No-op in development mode (app.isPackaged === false).
      *
      * Flow:
-     * 1. Seed credentials if missing (first launch only)
-     * 2. Build env vars from CredentialsManager
-     * 3. Fork the backend server process
-     * 4. Wait for health check to pass
+     * 1. Fork the backend server process
+     * 2. Wait for health check to pass
      *
      * Throws if backend fails to start or health check times out.
      */
@@ -59,20 +56,14 @@ export class BackendManager {
 
         console.log('[BackendManager] Starting production backend...');
 
-        // 1. Ensure credentials exist (seed on first launch)
-        this.ensureCredentials();
-
-        // 2. Build environment variables from secure storage
-        const backendEnv = this.buildBackendEnv();
-
-        // 3. Locate the bundled backend server
+        // 1. Locate the bundled backend server
         const serverPath = this.resolveServerPath();
         console.log(`[BackendManager] Server path: ${serverPath}`);
 
-        // 4. Spawn the backend process
-        this.spawnBackend(serverPath, backendEnv);
+        // 2. Spawn the backend process
+        this.spawnBackend(serverPath);
 
-        // 5. Wait for health check
+        // 3. Wait for health check
         await this.waitForHealthy();
 
         this.started = true;
@@ -125,62 +116,6 @@ export class BackendManager {
     // ─── Private Methods ─────────────────────────────────────────
 
     /**
-     * Seed credentials from compile-time defaults if this is a first launch.
-     * If credentials already exist, this is a no-op.
-     */
-    private ensureCredentials(): void {
-        const { CredentialsManager } = require('./CredentialsManager');
-        const cm = CredentialsManager.getInstance();
-
-        if (!cm.hasBackendCredentials()) {
-            console.log('[BackendManager] First launch detected — seeding backend credentials');
-            const seeded = cm.seedBackendCredentials();
-            if (!seeded) {
-                throw new Error(
-                    'Failed to seed backend credentials. ' +
-                    'The application cannot start without backend server access.'
-                );
-            }
-        } else {
-            console.log('[BackendManager] Backend credentials found in secure storage');
-        }
-    }
-
-    /**
-     * Build the env var map for the backend process from CredentialsManager.
-     * These are injected into the child process environment — no .env file needed.
-     */
-    private buildBackendEnv(): Record<string, string> {
-        const { CredentialsManager } = require('./CredentialsManager');
-        const cm = CredentialsManager.getInstance();
-
-        const env: Record<string, string> = {
-            MONGODB_URI: cm.getBackendMongodbUri() || '',
-            MONGODB_DB_NAME: cm.getBackendMongodbDbName() || '',
-            GOOGLE_CLIENT_ID: cm.getBackendGoogleClientId() || '',
-            GOOGLE_CLIENT_SECRET: cm.getBackendGoogleClientSecret() || '',
-            JWT_SECRET: cm.getBackendJwtSecret() || '',
-            REDIRECT_URI: cm.getBackendRedirectUri() || '',
-            PORT: String(BACKEND_PORT),
-            NODE_ENV: 'production',
-        };
-
-        // Validate all required env vars are present
-        const missing = Object.entries(env)
-            .filter(([key, val]) => key !== 'PORT' && key !== 'NODE_ENV' && !val)
-            .map(([key]) => key);
-
-        if (missing.length > 0) {
-            throw new Error(
-                `Missing backend credentials: ${missing.join(', ')}. ` +
-                'Please re-install the application or contact support.'
-            );
-        }
-
-        return env;
-    }
-
-    /**
      * Resolve the path to the bundled backend server.js.
      * In packaged mode, it's in process.resourcesPath/backend/dist/server.js.
      */
@@ -199,17 +134,18 @@ export class BackendManager {
     }
 
     /**
-     * Fork the backend as a child process with injected environment.
+     * Fork the backend as a child process.
+     * Backend secrets are loaded by the backend from dotenv/process.env.
      * Uses fork() which inherits the Node.js runtime from Electron.
      */
-    private spawnBackend(serverPath: string, backendEnv: Record<string, string>): void {
+    private spawnBackend(serverPath: string): void {
         // Determine the node_modules path for the backend
         const backendNodeModules = path.join(process.resourcesPath, 'backend', 'node_modules');
 
         this.backendProcess = fork(serverPath, [], {
             env: {
-                ...process.env,
-                ...backendEnv,
+                PORT: String(BACKEND_PORT),
+                NODE_ENV: 'production',
                 // Ensure the backend can find its own node_modules
                 NODE_PATH: backendNodeModules,
             },

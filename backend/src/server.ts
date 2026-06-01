@@ -1,13 +1,13 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { connectToMongoDB, disconnectFromMongoDB } from './db/mongodb';
 import authRoutes from './routes/auth';
+import { getBackendConfig } from './config/env';
 
-dotenv.config();
+const backendConfig = getBackendConfig();
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3456', 10);
+const PORT = backendConfig.port;
 
 // ─────────────────────────────────────────────────────────────
 // Middleware

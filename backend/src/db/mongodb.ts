@@ -1,4 +1,5 @@
 import { MongoClient, Db, Collection, ObjectId } from 'mongodb';
+import { getBackendConfig } from '../config/env';
 
 // ═══════════════════════════════════════════════════════
 // User Documents (Google Auth)
@@ -50,18 +51,12 @@ let db: Db | null = null;
 export async function connectToMongoDB(): Promise<Db> {
   if (db) return db;
 
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    throw new Error('MONGODB_URI environment variable is not set');
-  }
-
-  // DB name: natively (matching user's MongoDB Atlas)
-  const dbName = process.env.MONGODB_DB_NAME || 'natively';
+  const config = getBackendConfig();
 
   try {
-    client = new MongoClient(uri);
+    client = new MongoClient(config.mongodbUri);
     await client.connect();
-    db = client.db(dbName);
+    db = client.db(config.mongodbDbName);
 
     // Create indexes (skip if already exist with different options)
     const safeCreateIndex = async (col: string, keys: any, opts?: any) => {
