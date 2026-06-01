@@ -11,6 +11,10 @@ import {
   type ProviderAnalyticsSessionSnapshot,
   type ProviderAnalyticsSessionSnapshotBridge,
 } from "../src/lib/providers/providerAnalyticsSessionSnapshot";
+import {
+  SESSION_EXPORT_DELIVERY_IPC,
+  type SessionExportSaveRequest,
+} from "../src/lib/export/sessionExportDelivery";
 
 interface PermissionsBridge {
   getStatus: () => Promise<PermissionStatusSnapshot>
@@ -554,6 +558,8 @@ function toLegacyPermissionStatus(status: PermissionStatusSnapshot["microphone"]
 contextBridge.exposeInMainWorld("electronAPI", {
   updateContentDimensions: (dimensions: { width: number; height: number }) =>
     ipcRenderer.invoke("update-content-dimensions", dimensions),
+  saveSessionExportReport: (request: SessionExportSaveRequest) =>
+    ipcRenderer.invoke(SESSION_EXPORT_DELIVERY_IPC.save, request),
   getRecognitionLanguages: () => ipcRenderer.invoke("get-recognition-languages"),
   takeScreenshot: (options?: { requireVision?: boolean }) => ipcRenderer.invoke("take-screenshot", options),
   captureScreen: async () => {

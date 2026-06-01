@@ -24,16 +24,16 @@ test('Sprint 10 Phase F exposes a Pro V2 export entry point from retained respon
     assert.match(surface, /diagramGuardrails/);
 });
 
-test('Sprint 10 Phase F export entry point generates Markdown and HTML reports only on user action', () => {
+test('Sprint 11 Phase B export entry point opens Markdown and HTML preview only on user action', () => {
     const surface = read('src/components/pro-v2/ProResponseSurface.tsx');
 
-    assert.match(surface, /generateSessionExportMarkdownReport\(exportModel\)/);
-    assert.match(surface, /generateSessionExportHtmlReport\(exportModel\)/);
-    assert.match(surface, /navigator\.clipboard\.writeText\(report\.content\)/);
-    assert.match(surface, /Copy Markdown session report/);
-    assert.match(surface, /Copy HTML session report/);
-    assert.match(surface, /onClick=\{\(\) => handleCopyExportReport\('markdown'\)\}/);
-    assert.match(surface, /onClick=\{\(\) => handleCopyExportReport\('html'\)\}/);
+    assert.match(surface, /ExportPreviewSurface/);
+    assert.match(surface, /buildCurrentSessionExportReadModel\(\)/);
+    assert.match(surface, /Preview Markdown session report/);
+    assert.match(surface, /Preview HTML session report/);
+    assert.match(surface, /onClick=\{\(\) => handleOpenExportPreview\('markdown'\)\}/);
+    assert.match(surface, /onClick=\{\(\) => handleOpenExportPreview\('html'\)\}/);
+    assert.doesNotMatch(surface, /navigator\.clipboard\.writeText\(report\.content\)/);
 });
 
 test('Sprint 10 Phase F preserves provider and diagram read-model boundaries', () => {

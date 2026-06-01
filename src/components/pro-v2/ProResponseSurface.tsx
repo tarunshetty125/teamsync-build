@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, ChevronLeft, ChevronRight, ChevronsRight, Code2, FileText, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsRight, Code2, FileText, X } from 'lucide-react';
 import { SkeletonLoader, EmptyListeningState } from '../ui/PremiumStates';
 import CodeBlock from '../ui/CodeBlock';
 import MermaidRenderer from '../ui/MermaidRenderer';
@@ -56,16 +56,13 @@ import {
     normalizeV2MermaidMarkdown,
 } from '../../lib/overlay/v2Mermaid';
 import { buildSessionExportReadModel } from '../../lib/export/sessionExportReadModel';
-import {
-    generateSessionExportHtmlReport,
-    generateSessionExportMarkdownReport,
-    type SessionExportReportFormat,
-} from '../../lib/export/sessionExportReportGenerator';
 import { buildProviderRoutingReadModel } from '../../lib/providers/providerRoutingReadModel';
 import { buildProviderFallbackReadModel } from '../../lib/providers/providerFallbackReadModel';
 import { buildProviderTelemetryReadModel } from '../../lib/providers/providerTelemetryReadModel';
 import { buildProviderDiagnosticsReadModel } from '../../lib/providers/providerDiagnosticsReadModel';
 import { buildProviderPersonalizationReadModel } from '../../lib/providers/providerPersonalizationReadModel';
+import { ExportPreviewSurface } from './ExportPreviewSurface';
+import type { ExportPreviewFormat } from './exportPreviewModel';
 
 interface ProResponseSurfaceProps {
     activeResponse: V2Message | null;
@@ -120,7 +117,8 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
     scrollContainerRef,
 }) {
     const [copied, setCopied] = useState(false);
-    const [exportCopiedFormat, setExportCopiedFormat] = useState<SessionExportReportFormat | null>(null);
+    const [isExportPreviewOpen, setIsExportPreviewOpen] = useState(false);
+    const [exportPreviewFormat, setExportPreviewFormat] = useState<ExportPreviewFormat>('markdown');
     const [selectedDiagramNodeId, setSelectedDiagramNodeId] = useState<string | null>(null);
     const [diagramComparisonMode, setDiagramComparisonMode] = useState<DiagramComparisonMode>('parent_current');
     const [comparisonFromVersion, setComparisonFromVersion] = useState(1);
@@ -187,7 +185,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         : diagramComparisonMode === 'version_pair'
             ? versionPairDiagramComparison
             : parentDiagramComparison;
-    const canExportSessionReport = responseHistory.length > 0;
+    const canPreviewSessionReport = responseHistory.length > 0;
     const selectedDiagramNode = diagramNodeIntelligence.selectedNode;
     const shouldShowDiagramTimeline = diagramTimeline.items.length >= 2 && Boolean(diagramTimeline.activeItem);
     const shouldShowEvolutionSummary = Boolean(
@@ -283,20 +281,22 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         versionPairDiagramComparison,
     ]);
 
-    const handleCopyExportReport = useCallback((format: SessionExportReportFormat) => {
-        if (!canExportSessionReport) return;
-        const exportModel = buildCurrentSessionExportReadModel();
-        const report = format === 'html'
-            ? generateSessionExportHtmlReport(exportModel)
-            : generateSessionExportMarkdownReport(exportModel);
+    const currentSessionExportReadModel = useMemo(
+        () => (isExportPreviewOpen && canPreviewSessionReport ? buildCurrentSessionExportReadModel() : null),
+        [buildCurrentSessionExportReadModel, canPreviewSessionReport, isExportPreviewOpen],
+    );
 
-        void navigator.clipboard.writeText(report.content)
-            .then(() => {
-                setExportCopiedFormat(format);
-                window.setTimeout(() => setExportCopiedFormat(null), 1800);
-            })
-            .catch(() => {});
-    }, [buildCurrentSessionExportReadModel, canExportSessionReport]);
+    const handleOpenExportPreview = useCallback((format: ExportPreviewFormat) => {
+        if (!canPreviewSessionReport) return;
+        setExportPreviewFormat(format);
+        setIsExportPreviewOpen(true);
+    }, [canPreviewSessionReport]);
+
+    useEffect(() => {
+        if (!canPreviewSessionReport) {
+            setIsExportPreviewOpen(false);
+        }
+    }, [canPreviewSessionReport]);
 
     const isSystemDesignResponse = useMemo(() => {
         const text = renderedResponse?.text ?? '';
@@ -352,27 +352,29 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                             )}
                         </div>
                     )}
-                    {/* Copy */}
-                    {canExportSessionReport && (
-                        <div className="v2-export-actions" aria-label="Export session report">
+                    {/* Export preview */}
+                    {canPreviewSessionReport && (
+                        <div className="v2-export-actions" aria-label="Preview session export">
                             <button
                                 type="button"
-                                className={`v2-panel-btn v2-export-btn${exportCopiedFormat === 'markdown' ? ' v2-export-btn--copied' : ''}`}
-                                onClick={() => handleCopyExportReport('markdown')}
-                                title="Copy Markdown session report"
-                                aria-label="Copy Markdown session report"
+                                className={`v2-panel-btn v2-export-btn${isExportPreviewOpen && exportPreviewFormat === 'markdown' ? ' v2-export-btn--active' : ''}`}
+                                onClick={() => handleOpenExportPreview('markdown')}
+                                title="Preview Markdown session report"
+                                aria-label="Preview Markdown session report"
+                                aria-expanded={isExportPreviewOpen && exportPreviewFormat === 'markdown'}
                             >
-                                {exportCopiedFormat === 'markdown' ? <Check size={13} strokeWidth={2.4} aria-hidden /> : <FileText size={13} strokeWidth={2} aria-hidden />}
+                                <FileText size={13} strokeWidth={2} aria-hidden />
                                 <span>MD</span>
                             </button>
                             <button
                                 type="button"
-                                className={`v2-panel-btn v2-export-btn${exportCopiedFormat === 'html' ? ' v2-export-btn--copied' : ''}`}
-                                onClick={() => handleCopyExportReport('html')}
-                                title="Copy HTML session report"
-                                aria-label="Copy HTML session report"
+                                className={`v2-panel-btn v2-export-btn${isExportPreviewOpen && exportPreviewFormat === 'html' ? ' v2-export-btn--active' : ''}`}
+                                onClick={() => handleOpenExportPreview('html')}
+                                title="Preview HTML session report"
+                                aria-label="Preview HTML session report"
+                                aria-expanded={isExportPreviewOpen && exportPreviewFormat === 'html'}
                             >
-                                {exportCopiedFormat === 'html' ? <Check size={13} strokeWidth={2.4} aria-hidden /> : <Code2 size={13} strokeWidth={2} aria-hidden />}
+                                <Code2 size={13} strokeWidth={2} aria-hidden />
                                 <span>HTML</span>
                             </button>
                         </div>
@@ -407,6 +409,15 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
 
             <div className="v2-response-drag-rail v2-response-drag-rail--left" aria-hidden="true" />
             <div className="v2-response-drag-rail v2-response-drag-rail--right" aria-hidden="true" />
+
+            {currentSessionExportReadModel && (
+                <ExportPreviewSurface
+                    model={currentSessionExportReadModel}
+                    format={exportPreviewFormat}
+                    onFormatChange={setExportPreviewFormat}
+                    onClose={() => setIsExportPreviewOpen(false)}
+                />
+            )}
 
             {shouldShowDiagramTimeline && (
                 <DiagramTimelinePanel

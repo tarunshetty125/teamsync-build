@@ -1,6 +1,6 @@
 // ipcHandlers.ts
 
-import { app, ipcMain, shell, dialog, desktopCapturer, systemPreferences, BrowserWindow, screen, type OpenDialogOptions, type OpenDialogReturnValue } from "electron"
+import { app, ipcMain, shell, dialog, desktopCapturer, systemPreferences, BrowserWindow, screen, type FileFilter, type OpenDialogOptions, type OpenDialogReturnValue } from "electron"
 import { AppState } from "./main"
 import { GEMINI_FLASH_MODEL } from "./IntelligenceManager"
 import { DatabaseManager } from "./db/DatabaseManager"; // Import Database Manager
@@ -17,6 +17,14 @@ import {
   type ProviderAnalyticsSessionSnapshot,
   type ProviderAnalyticsSessionSnapshotSetResult,
 } from "../src/lib/providers/providerAnalyticsSessionSnapshot";
+import {
+  SESSION_EXPORT_DELIVERY_IPC,
+  buildSessionExportDefaultFileName,
+  getSessionExportFileExtension,
+  validateSessionExportSaveRequest,
+  type SessionExportSaveRequest,
+  type SessionExportSaveResult,
+} from "../src/lib/export/sessionExportDelivery";
 
 
 import { RECOGNITION_LANGUAGES, AI_RESPONSE_LANGUAGES } from "./config/languages"
@@ -47,6 +55,20 @@ export function initializeIpcHandlers(appState: AppState): void {
       };
     }
     return result;
+  };
+
+  const buildSessionExportSaveFilters = (format: SessionExportSaveRequest['format']): FileFilter[] => {
+    if (format === 'html') {
+      return [
+        { name: 'HTML Report', extensions: ['html'] },
+        { name: 'All Files', extensions: ['*'] },
+      ];
+    }
+
+    return [
+      { name: 'Markdown Report', extensions: ['md'] },
+      { name: 'All Files', extensions: ['*'] },
+    ];
   };
 
   /**
@@ -484,6 +506,49 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.get, async (): Promise<ProviderAnalyticsSessionSnapshot | null> => {
     return providerAnalyticsSessionSnapshot;
+  })
+
+  safeHandle(SESSION_EXPORT_DELIVERY_IPC.save, async (event, request: unknown): Promise<SessionExportSaveResult> => {
+    const validation = validateSessionExportSaveRequest(request);
+    if (!validation.valid) {
+      console.warn('[SessionExport] save request rejected:', validation.error);
+      return { success: false, error: validation.error ?? 'Invalid export save request.' };
+    }
+
+    const saveRequest = request as SessionExportSaveRequest;
+    const extension = getSessionExportFileExtension(saveRequest.format);
+    const fallbackName = buildSessionExportDefaultFileName(saveRequest.format, saveRequest.generatedAt);
+    const requestedName = saveRequest.suggestedFileName?.trim()
+      ? saveRequest.suggestedFileName.trim().split(/[\\/]/).pop()
+      : undefined;
+    const defaultPath = requestedName || fallbackName;
+    const parentWindow = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: `Save ${saveRequest.format === 'html' ? 'HTML' : 'Markdown'} Session Report`,
+      defaultPath,
+      filters: buildSessionExportSaveFilters(saveRequest.format),
+      properties: ['createDirectory'] as Array<'createDirectory'>,
+    };
+    const rawResult = parentWindow && !parentWindow.isDestroyed()
+      ? await dialog.showSaveDialog(parentWindow, options)
+      : await dialog.showSaveDialog(options);
+    const result = typeof rawResult === 'string'
+      ? { canceled: rawResult.length === 0, filePath: rawResult }
+      : rawResult;
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, canceled: true };
+    }
+
+    const selectedPath = path.extname(result.filePath)
+      ? result.filePath
+      : `${result.filePath}.${extension}`;
+    await fs.promises.writeFile(selectedPath, saveRequest.content, 'utf8');
+
+    return {
+      success: true,
+      filePath: selectedPath,
+    };
   })
 
 

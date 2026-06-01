@@ -7,6 +7,10 @@ import type {
 } from '../lib/permissions/types';
 import type { PersonalizationPreferences } from '../lib/personalization/preferences';
 import type { ProviderAnalyticsSessionSnapshotBridge } from '../lib/providers/providerAnalyticsSessionSnapshot';
+import type {
+  SessionExportSaveRequest,
+  SessionExportSaveResult,
+} from '../lib/export/sessionExportDelivery';
 
 interface PermissionsBridge {
   getStatus: () => Promise<PermissionStatusSnapshot>
@@ -88,6 +92,7 @@ type GenerateActionPayload = {
 }
 
 export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
+  saveSessionExportReport: (request: SessionExportSaveRequest) => Promise<SessionExportSaveResult>
   updateContentDimensions: (dimensions: {
     width: number
     height: number
