@@ -3,7 +3,7 @@
 // Extracted from IntelligenceManager to decouple LLM logic from state management.
 
 import { EventEmitter } from 'events';
-import { LLMHelper } from './LLMHelper';
+import { isBedrockReauthenticationError, LLMHelper } from './LLMHelper';
 import { SessionTracker, TranscriptSegment, SuggestionTrigger, ContextItem, type SessionMode } from './SessionTracker';
 import {
     type ActionRagContext,
@@ -58,6 +58,9 @@ import { adaptPromptBudget } from './intelligence/AdaptivePromptBudgeter';
 import { buildProviderPrompt } from './llm/ProviderPromptBuilder';
 import { BenchmarkManager, countHallucinationIndicators, hasConfidenceSignal } from './intelligence/BenchmarkManager';
 import { ModesManager } from './services/ModesManager';
+import { SettingsManager } from './services/SettingsManager';
+import { CredentialsManager } from './services/CredentialsManager';
+import { resolveModelForPreferredProvider } from './personalization/ProviderPreferenceResolver';
 import type { ModeTemplateId } from '../src/lib/modes/types';
 import {
     actionContractAllowsCode,
@@ -65,6 +68,13 @@ import {
     type ActionContract,
     type ContextTarget,
 } from '../src/lib/overlay/actionContextTypes';
+import {
+    DEFAULT_PERSONALIZATION_PREFERENCES,
+    normalizePersonalizationPreferences,
+    type PersonalizationPreferences,
+    type PreferredProvider,
+    type ResolvedPersonalizationSnapshot,
+} from '../src/lib/personalization/preferences';
 import { ModePredictor } from './intelligence/adaptive/ModePredictor';
 import {
     emitActionComplete,
@@ -78,6 +88,7 @@ import {
 } from './ActionTelemetry';
 
 type UserControlledMode = 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design';
+const BEDROCK_AUTH_EXPIRED_ROUTING_REASON = 'bedrock_auth_expired_fallback';
 
 // Mode types
 export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm' | 'system_design_tradeoffs' | 'screen_scan' | 'answer_now';
@@ -106,6 +117,7 @@ interface ActionDebugMetadata {
     routing: RoutingDecision;
     fallbackChain: FallbackChainEntry[];
     validation: ValidationOutcome;
+    personalization?: ResolvedPersonalizationSnapshot;
 }
 
 interface FinalizedActionOutput {
@@ -582,6 +594,30 @@ export class IntelligenceEngine extends EventEmitter {
         return this.currentClientRequestId;
     }
 
+    private getPersonalizationPreferences(): PersonalizationPreferences {
+        try {
+            return SettingsManager.getInstance().getPersonalizationPreferences();
+        } catch (error: any) {
+            if (process.env.NODE_ENV === 'development') {
+                console.warn('[IntelligenceEngine] Falling back to default personalization preferences:', error?.message || error);
+            }
+            return DEFAULT_PERSONALIZATION_PREFERENCES;
+        }
+    }
+
+    private getPreferredModelForProvider(provider: PreferredProvider): string | null {
+        if (!['gemini', 'groq', 'openai', 'claude', 'bedrock'].includes(provider)) {
+            return null;
+        }
+
+        try {
+            const credentials = CredentialsManager.getInstance();
+            return credentials.getPreferredModel(provider as 'gemini' | 'groq' | 'openai' | 'claude' | 'bedrock') || null;
+        } catch {
+            return null;
+        }
+    }
+
     private buildBrainAnalysis(params: {
         intent: UnifiedActionIntent;
         mode: UserControlledMode;
@@ -753,10 +789,25 @@ export class IntelligenceEngine extends EventEmitter {
         const telemetryRequestId = createTelemetryRequestId(activeRequestId, params.intent);
         const sessionMode = params.modeOverride ?? this.session.getMode();
         const actionStartedAt = Date.now();
-        const selectedModel = this.llmHelper.normalizeModelId(params.modelOverride ?? this.llmHelper.getCurrentModel());
+        const personalizationPreferences = normalizePersonalizationPreferences(this.getPersonalizationPreferences());
+        const requestedModel = this.llmHelper.normalizeModelId(params.modelOverride ?? this.llmHelper.getCurrentModel());
+        const providerPreferenceResolution = resolveModelForPreferredProvider({
+            currentModel: requestedModel,
+            currentProvider: this.llmHelper.getProviderForModel(requestedModel),
+            preferredProvider: personalizationPreferences.preferredProvider,
+            explicitModelOverride: Boolean(params.modelOverride),
+            getPreferredModel: (provider) => this.getPreferredModelForProvider(provider),
+        });
+        const selectedModel = this.llmHelper.normalizeModelId(providerPreferenceResolution.model);
         const selectedProvider = this.llmHelper.getProviderForModel(selectedModel);
         const fingerprint = `${params.intent}::${(params.message || '').trim()}`;
         const sessionIdSnapshot = this.session.sessionId;
+        let personalizationSnapshot: ResolvedPersonalizationSnapshot = {
+            personalizationVersion: personalizationPreferences.personalizationVersion,
+            providerPreference: personalizationPreferences.preferredProvider,
+            responseStyle: personalizationPreferences.responseStyle,
+            interviewFocus: personalizationPreferences.interviewFocus,
+        };
 
         const debounceDelayMs = this.getDebounceDelay(actionStartedAt, fingerprint);
         if (debounceDelayMs > 0) {
@@ -802,7 +853,9 @@ export class IntelligenceEngine extends EventEmitter {
                         rag: params.rag,
                         includeModeCustomContext: this.llmHelper.getCustomNotesEnabled?.() ?? true,
                         screenScanMode: params.screenScanMode,
+                        personalization: personalizationPreferences,
                     });
+                    personalizationSnapshot = builtContext.layers.personalization ?? personalizationSnapshot;
                     contextLayers = builtContext.layers;
 
                     if (!isOwnedRequest()) {
@@ -1096,6 +1149,7 @@ export class IntelligenceEngine extends EventEmitter {
 	                                routing,
 	                                fallbackChain: [],
 	                                validation,
+	                                personalization: personalizationSnapshot,
 	                            },
 	                        }, sessionIdSnapshot);
                         return cachedContent;
@@ -1295,6 +1349,7 @@ export class IntelligenceEngine extends EventEmitter {
 	                            routing: executionResult.routing,
 	                            fallbackChain: executionResult.fallbackChain,
 	                            validation: finalizedOutput.validation,
+	                            personalization: personalizationSnapshot,
 	                        },
 	                    }, sessionIdSnapshot);
                     return finalContent;
@@ -1416,6 +1471,7 @@ export class IntelligenceEngine extends EventEmitter {
 	                                reason: fallbackReason,
 	                            }],
 	                            validation: fallbackValidation,
+	                            personalization: personalizationSnapshot,
 	                        },
 	                    }, sessionIdSnapshot);
                     return safeFallback;
@@ -1729,6 +1785,7 @@ export class IntelligenceEngine extends EventEmitter {
 	
 	        const failureReasons: string[] = [];
 	        const fallbackChain: FallbackChainEntry[] = [];
+        let bedrockAuthExpiredDuringPrimary = false;
 	        for (let attemptIndex = 0; attemptIndex < attempts.length; attemptIndex++) {
 	            const attempt = attempts[attemptIndex];
             if (!this.isOwnedActionRequest(requestId, generationId, signal, sessionIdSnapshot)) {
@@ -1770,6 +1827,20 @@ export class IntelligenceEngine extends EventEmitter {
 	                    previewStream,
 	                });
 	                if (content && content.trim() && !isFailureResponseText(content)) {
+                    const routingForOwnership: RoutingDecision = attempt.fallbackUsed && bedrockAuthExpiredDuringPrimary
+                        ? {
+                            requestedModel: primaryModel,
+                            requestedProvider: primaryProvider,
+                            actualModel: routing.actualModel,
+                            actualProvider: routing.actualProvider,
+                            reason: BEDROCK_AUTH_EXPIRED_ROUTING_REASON,
+                        }
+                        : routing;
+                    const fallbackReason = attempt.fallbackUsed
+                        ? bedrockAuthExpiredDuringPrimary
+                            ? BEDROCK_AUTH_EXPIRED_ROUTING_REASON
+                            : (failureReasons.join(' | ') || 'primary_model_failed')
+                        : null;
 	                    fallbackChain.push({
 	                        model: routing.actualModel,
 	                        provider: routing.actualProvider,
@@ -1785,9 +1856,9 @@ export class IntelligenceEngine extends EventEmitter {
 	                        requestedModel: primaryModel,
 	                        actualInvokedModel: routing.actualModel,
 	                        actualInvokedProvider: routing.actualProvider,
-	                        fallbackReason: attempt.fallbackUsed ? (failureReasons.join(' | ') || 'primary_model_failed') : null,
+	                        fallbackReason,
 	                        previewStreamed: Boolean(previewStream),
-	                        routing,
+	                        routing: routingForOwnership,
 	                        fallbackChain,
 	                    };
 	                }
@@ -1802,10 +1873,17 @@ export class IntelligenceEngine extends EventEmitter {
 	                });
 	                failureReasons.push(failureReason);
 	            } catch (error: any) {
-	                const reason = error?.message || String(error);
+	                const provider = this.llmHelper.getProviderForModel(attempt.model);
+	                const isBedrockAuthExpired = provider === 'bedrock' && isBedrockReauthenticationError(error);
+	                if (!attempt.fallbackUsed && isBedrockAuthExpired) {
+	                    bedrockAuthExpiredDuringPrimary = true;
+	                }
+	                const reason = isBedrockAuthExpired
+	                    ? BEDROCK_AUTH_EXPIRED_ROUTING_REASON
+	                    : error?.message || String(error);
 	                fallbackChain.push({
 	                    model: attempt.model,
-	                    provider: this.llmHelper.getProviderForModel(attempt.model),
+	                    provider,
 	                    result: 'failure',
 	                    reason,
 	                    completedAt: Date.now(),
@@ -1827,7 +1905,7 @@ export class IntelligenceEngine extends EventEmitter {
 	            requestedProvider: primaryProvider,
 	            actualModel: 'safe_action_fallback',
 	            actualProvider: 'local',
-	            reason: 'all_attempts_failed',
+	            reason: bedrockAuthExpiredDuringPrimary ? BEDROCK_AUTH_EXPIRED_ROUTING_REASON : 'all_attempts_failed',
 	        };
 	        return {
 	            content: buildSafeActionFallback(prompt.intent, prompt.mode, prompt.question, prompt.actionContract),
@@ -1836,7 +1914,7 @@ export class IntelligenceEngine extends EventEmitter {
 	            requestedModel: primaryModel,
 	            actualInvokedModel: 'safe_action_fallback',
 	            actualInvokedProvider: 'local',
-	            fallbackReason: failureReasons.join(' | ') || 'all_attempts_failed',
+	            fallbackReason: bedrockAuthExpiredDuringPrimary ? BEDROCK_AUTH_EXPIRED_ROUTING_REASON : (failureReasons.join(' | ') || 'all_attempts_failed'),
 	            previewStreamed: false,
 	            routing: safeRouting,
 	            fallbackChain,

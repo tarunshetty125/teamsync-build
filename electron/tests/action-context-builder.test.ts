@@ -8,6 +8,9 @@ const {
     buildTranscriptContext,
     serializePromptObject,
 } = require(path.join(process.cwd(), 'electron/ActionContextBuilder')) as typeof import('../ActionContextBuilder');
+const {
+    DEFAULT_PERSONALIZATION_PREFERENCES,
+} = require(path.join(process.cwd(), 'src/lib/personalization/preferences')) as typeof import('../../src/lib/personalization/preferences');
 
 export {};
 
@@ -134,4 +137,25 @@ test('buildContextLayers applies action contract before prompt serialization', a
     assert.doesNotMatch(serialized.systemPrompt, /FULL working code in one fenced markdown block/i);
     assert.match(serialized.context, /\[INTERVIEWER\]: solve two sum/);
     assert.doesNotMatch(serialized.context, /hidden session transcript/);
+});
+
+test('response style preference cannot override restrictive action contract', async () => {
+    const session = createSession('[INTERVIEWER]: solve two sum');
+    const layers = await buildContextLayers({
+        session,
+        intent: 'screen_scan',
+        mode: 'coding',
+        message: 'solve two sum',
+        actionContract: 'hint_only',
+        personalization: {
+            ...DEFAULT_PERSONALIZATION_PREFERENCES,
+            responseStyle: 'detailed',
+        },
+    });
+    const serialized = serializePromptObject(layers.promptObject);
+
+    assert.equal(layers.personalization.responseStyle, 'detailed');
+    assert.match(serialized.systemPrompt, /Return hints only/);
+    assert.match(serialized.systemPrompt, /must not override ActionContract requirements/i);
+    assert.doesNotMatch(serialized.systemPrompt, /FULL working code in one fenced markdown block/i);
 });

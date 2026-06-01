@@ -1,17 +1,29 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { buildIntentPrompt } from '../ActionContextBuilder';
+import {
+    buildIntentPrompt,
+    getQuestionResponseProfile,
+    resolveActionContractForResponseProfile,
+} from '../ActionContextBuilder';
 import * as outputValidator from '../ActionOutputValidator';
 import { buildScreenScanQuestion } from '../llm/prompts';
+import {
+    DEFAULT_PERSONALIZATION_PREFERENCES,
+    type PreferredCodingLanguage,
+} from '../../src/lib/personalization/preferences';
 
-function codingContractFor(question: string): string {
+function codingContractFor(question: string, preferredCodingLanguage?: PreferredCodingLanguage): string {
     const instructions = buildIntentPrompt(
         'manual_chat',
         'coding',
         undefined,
         question,
         false,
+        undefined,
+        preferredCodingLanguage
+            ? { ...DEFAULT_PERSONALIZATION_PREFERENCES, preferredCodingLanguage }
+            : undefined,
     );
 
     const contract = instructions.find((instruction) => instruction.key === 'output_contract');
@@ -74,6 +86,106 @@ test('manual coding prompt uses explicit Python request over JavaScript default'
     assert.match(contract, /Required solution language for this prompt: Python/i);
     assert.match(contract, /opening line ```python/i);
     assert.doesNotMatch(contract, /opening line ```javascript/i);
+});
+
+test('manual coding prompt uses preferred language when no language is requested', () => {
+    const contract = codingContractFor('solve two sum', 'typescript');
+
+    assert.match(contract, /Required solution language for this prompt: TypeScript/i);
+    assert.match(contract, /from the user preferred coding language setting/i);
+    assert.match(contract, /opening line ```typescript/i);
+    assert.doesNotMatch(contract, /opening line ```javascript/i);
+});
+
+test('manual coding prompt keeps explicit language above preferred language', () => {
+    const contract = codingContractFor('solve two sum in Go', 'python');
+
+    assert.match(contract, /Required solution language for this prompt: Go/i);
+    assert.match(contract, /opening line ```go/i);
+    assert.doesNotMatch(contract, /opening line ```python/i);
+});
+
+test('manual coding input resolves to optimal solution contract', () => {
+    const profile = getQuestionResponseProfile('solve two sum', 'general', 'manual_chat');
+    const contract = resolveActionContractForResponseProfile({
+        intent: 'manual_chat',
+        responseProfile: profile,
+    });
+
+    assert.equal(profile, 'coding');
+    assert.equal(contract, 'optimal_solution');
+});
+
+test('manual coding validation receives optimal solution contract', () => {
+    const profile = getQuestionResponseProfile('solve two sum', 'general', 'manual_chat');
+    const contract = resolveActionContractForResponseProfile({
+        intent: 'manual_chat',
+        responseProfile: profile,
+    });
+    const content = [
+        '**Problem:**',
+        'Return indices of two numbers that add up to the target.',
+        '**Approach:**',
+        '- Use a hash map from value to index.',
+        '- For each number, check whether its complement was seen.',
+        '**Complexity:**',
+        'Time: O(n), because each number is visited once.',
+        'Space: O(n), for the hash map.',
+        '**Solution:**',
+        '```javascript',
+        'function twoSum(nums, target) {',
+        '  const seen = new Map();',
+        '  for (let i = 0; i < nums.length; i++) {',
+        '    const need = target - nums[i];',
+        '    if (seen.has(need)) return [seen.get(need), i];',
+        '    seen.set(nums[i], i);',
+        '  }',
+        '  return [];',
+        '}',
+        '```',
+    ].join('\n');
+
+    const result = outputValidator.validateActionOutput(
+        'manual_chat',
+        'general',
+        content,
+        'solve two sum',
+        contract,
+    );
+
+    assert.equal(contract, 'optimal_solution');
+    assert.equal(result.valid, true);
+});
+
+test('manual coding fallback uses coding-specific contract fallback', () => {
+    const fallback = outputValidator.buildSafeActionFallback(
+        'manual_chat',
+        'general',
+        'solve two sum',
+        'optimal_solution',
+    );
+
+    assert.match(fallback, /contract-compliant coding solution/i);
+    assert.match(fallback, /Problem, Approach, Complexity, and Solution/i);
+    assert.doesNotMatch(fallback, /couldn't generate a reliable response/i);
+});
+
+test('normal manual chat remains without an action contract', () => {
+    const profile = getQuestionResponseProfile('what is the capital of France', 'general', 'manual_chat');
+    const contract = resolveActionContractForResponseProfile({
+        intent: 'manual_chat',
+        responseProfile: profile,
+    });
+    const fallback = outputValidator.buildSafeActionFallback(
+        'manual_chat',
+        'general',
+        'what is the capital of France',
+        contract,
+    );
+
+    assert.notEqual(profile, 'coding');
+    assert.equal(contract, undefined);
+    assert.match(fallback, /couldn't generate a reliable response/i);
 });
 
 test('manual chat fallback does not leak interview evidence template for greetings', () => {

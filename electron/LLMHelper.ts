@@ -50,6 +50,7 @@ const MAX_OUTPUT_TOKENS = 65536
 const CLAUDE_MAX_OUTPUT_TOKENS = 64000
 const BEDROCK_MAX_OUTPUT_TOKENS = 4096
 const GROQ_TEXT_REQUEST_CHAR_CAP = 24_000
+const BEDROCK_AUTH_WARNING_DEDUPE_MS = 45_000
 
 const MODEL_BUDGETS = {
   groq_llama_70b: {
@@ -429,6 +430,30 @@ function detectProviderLabel(modelId: string): string {
   return 'gemini';
 }
 
+export function isBedrockReauthenticationError(error: any): boolean {
+  const raw = [
+    error?.name,
+    error?.Code,
+    error?.code,
+    error?.message,
+    error?.Message,
+    typeof error === 'string' ? error : '',
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  return [
+    'expiredtoken',
+    'expired token',
+    'token has expired',
+    'credentials expired',
+    'session expired',
+    'sso session',
+    'security token included in the request is expired',
+    'security token included in the request is invalid',
+    'invalidclienttoken',
+    'unrecognizedclient',
+  ].some(signal => raw.includes(signal));
+}
+
 export class LLMHelper {
   private client: GoogleGenAI | null = null
   private groqClient: Groq | null = null
@@ -460,6 +485,7 @@ export class LLMHelper {
   private sttLanguage: string = 'english-us';
   private teamsyncKey: string | null = null;
   private bedrockCredentials: BedrockCredentials | null = null;
+  private lastBedrockAuthWarningAt: number = 0;
   private bedrockClient: BedrockClient | null = null;
   private ocrWorker: any = null;
   private ocrWorkerBuffer: string = '';
@@ -647,6 +673,35 @@ export class LLMHelper {
       region: credentials?.region,
       configured: !!credentials,
     });
+  }
+
+  private notifyBedrockReauthenticationRequired(error: any, model?: string): void {
+    if (!isBedrockReauthenticationError(error)) return;
+
+    const now = Date.now();
+    if (now - this.lastBedrockAuthWarningAt < BEDROCK_AUTH_WARNING_DEDUPE_MS) return;
+    this.lastBedrockAuthWarningAt = now;
+
+    const normalizedError = BedrockClient.normalizeError(error);
+    console.warn('[LLMHelper] Bedrock credentials need re-authentication before fallback:', normalizedError);
+
+    try {
+      const { BrowserWindow } = require('electron');
+      BrowserWindow.getAllWindows().forEach((win: any) => {
+        if (!win.isDestroyed()) {
+          win.webContents.send('bedrock:reauthentication-required', {
+            title: 'AWS session expired',
+            message: 'Re-authenticate AWS Bedrock to keep using the selected model. TeamSync will try the configured fallback provider for this response.',
+            authMode: this.bedrockCredentials?.authMode,
+            region: this.bedrockCredentials?.region,
+            model: model || this.bedrockCredentials?.preferredModel || this.currentModelId,
+            error: normalizedError,
+          });
+        }
+      });
+    } catch {
+      // Non-fatal: provider fallback should continue even if no renderer is available.
+    }
   }
 
   private hasTeamSync(): boolean {
@@ -2339,14 +2394,20 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 
   public async generateWithBedrock(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string, maxOutputTokens: number = BEDROCK_MAX_OUTPUT_TOKENS): Promise<string> {
     if (!this.bedrockClient) throw new Error("Bedrock client not initialized");
-    const model = await this.resolveBedrockRuntimeModel(imagePaths, modelId || this.currentModelId);
-    console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model });
-    return await this.bedrockClient.generate(userMessage, {
-      modelId: model,
-      systemPrompt,
-      imagePaths,
-      maxOutputTokens,
-    });
+    let model = modelId || this.currentModelId;
+    try {
+      model = await this.resolveBedrockRuntimeModel(imagePaths, model);
+      console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model });
+      return await this.bedrockClient.generate(userMessage, {
+        modelId: model,
+        systemPrompt,
+        imagePaths,
+        maxOutputTokens,
+      });
+    } catch (error) {
+      this.notifyBedrockReauthenticationRequired(error, model);
+      throw error;
+    }
   }
 
   // The handler for cURL requests
@@ -3887,14 +3948,20 @@ Return only the final answer. No meta commentary.
 
   public async * streamWithBedrock(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string, maxOutputTokens: number = BEDROCK_MAX_OUTPUT_TOKENS): AsyncGenerator<string, void, unknown> {
     if (!this.bedrockClient) throw new Error("Bedrock client not initialized");
-    const model = await this.resolveBedrockRuntimeModel(imagePaths, modelId || this.currentModelId);
-    console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model });
-    yield* this.bedrockClient.stream(userMessage, {
-      modelId: model,
-      systemPrompt,
-      imagePaths,
-      maxOutputTokens,
-    });
+    let model = modelId || this.currentModelId;
+    try {
+      model = await this.resolveBedrockRuntimeModel(imagePaths, model);
+      console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model });
+      yield* this.bedrockClient.stream(userMessage, {
+        modelId: model,
+        systemPrompt,
+        imagePaths,
+        maxOutputTokens,
+      });
+    } catch (error) {
+      this.notifyBedrockReauthenticationRequired(error, model);
+      throw error;
+    }
   }
 
   /**

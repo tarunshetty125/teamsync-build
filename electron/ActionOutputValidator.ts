@@ -961,6 +961,7 @@ export function buildSafeActionFallback(
     actionContract?: ActionContract
 ): string {
     const effectiveActionContract = resolveEffectiveActionContract({ intent, actionContract });
+    const responseProfile = getQuestionResponseProfile(question, mode, intent);
     if (mode === 'coding' || effectiveActionContract) {
         switch (effectiveActionContract) {
             case 'hint_only':
@@ -1002,7 +1003,7 @@ export function buildSafeActionFallback(
             case 'optimal_solution':
             case undefined:
             default:
-                if (mode === 'coding') {
+                if (mode === 'coding' || (effectiveActionContract === 'optimal_solution' && responseProfile === 'coding')) {
                     return 'I could not generate a contract-compliant coding solution on this attempt. Please retry so I can return the full Problem, Approach, Complexity, and Solution sections with runnable code.';
                 }
         }

@@ -3,6 +3,7 @@ import type { OverlayCopilotModeId, OverlayQuickActionId } from '../modes/overla
 import { resolveRecommendedOverlayAction } from './overlayRecommendationResolver';
 import type { DetectedQuestionType } from './overlayIntent';
 import { normalizeTranscript } from './overlayIntent';
+import type { InterviewFocusPreference } from '../personalization/preferences';
 
 type UseOverlayRecommendationOptions = {
     overlayCopilotMode: OverlayCopilotModeId;
@@ -12,6 +13,7 @@ type UseOverlayRecommendationOptions = {
     finalizedTranscriptRef: React.RefObject<string>;
     currentQuestionTurnId: string;
     activeQuickActionIds: OverlayQuickActionId[];
+    interviewFocus?: InterviewFocusPreference;
     /** Bumps on each finalized transcript line so highlight updates without a new turn id. */
     transcriptRevision: string;
 };
@@ -29,6 +31,7 @@ export function useOverlayRecommendation({
     finalizedTranscriptRef,
     currentQuestionTurnId,
     activeQuickActionIds,
+    interviewFocus,
     transcriptRevision,
 }: UseOverlayRecommendationOptions) {
     const visibleIdsRef = useRef(activeQuickActionIds);
@@ -60,14 +63,14 @@ export function useOverlayRecommendation({
             overlayCopilotMode,
             combined,
             visible,
-            { detectedQuestionType },
+            { detectedQuestionType, interviewFocus },
         );
 
         if (nextRecommendation !== recommendedButtonRef.current) {
             recommendedButtonRef.current = nextRecommendation;
             setRecommendedButton(nextRecommendation);
         }
-    }, [overlayCopilotMode, detectedQuestionType, buildCombinedTranscript]);
+    }, [overlayCopilotMode, detectedQuestionType, interviewFocus, buildCombinedTranscript]);
 
     const resetRecommendation = useCallback(() => {
         if (recommendationTimerRef.current) {
@@ -79,10 +82,11 @@ export function useOverlayRecommendation({
         const visible = visibleIdsRef.current;
         const fallback = resolveRecommendedOverlayAction(overlayCopilotMode, '', visible, {
             detectedQuestionType: 'general',
+            interviewFocus,
         });
         recommendedButtonRef.current = fallback;
         setRecommendedButton(fallback);
-    }, [overlayCopilotMode]);
+    }, [overlayCopilotMode, interviewFocus]);
 
     useEffect(() => {
         if (!isMeetingActive) return;

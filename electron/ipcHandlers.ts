@@ -783,7 +783,11 @@ export function initializeIpcHandlers(appState: AppState): void {
         const onResult = (payload: any) => {
           if (payload?.requestId !== requestId || payload?.intent !== 'manual_chat') return;
           if (activeChatStreams.get(senderId)?.streamId === myStreamId) {
-            event.sender.send("gemini-stream-done", { requestId, content: payload.content });
+            event.sender.send("gemini-stream-done", {
+              requestId,
+              content: payload.content,
+              debugMetadata: payload.debugMetadata,
+            });
           }
         };
         const onError = (error: any, mode: string, failedRequestId?: string | null) => {
@@ -3145,6 +3149,24 @@ export function initializeIpcHandlers(appState: AppState): void {
     });
 
     return { success: true };
+  });
+
+  safeHandle("get-personalization-preferences", () => {
+    const { SettingsManager } = require('./services/SettingsManager');
+    return SettingsManager.getInstance().getPersonalizationPreferences();
+  });
+
+  safeHandle("set-personalization-preferences", (_, patch: unknown) => {
+    const { SettingsManager } = require('./services/SettingsManager');
+    const preferences = SettingsManager.getInstance().setPersonalizationPreferences(patch as any);
+
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('personalization-preferences-changed', preferences);
+      }
+    });
+
+    return { success: true, preferences };
   });
 
   // MODE 3: Follow-Up (Refinement)

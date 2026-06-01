@@ -5,6 +5,7 @@ import type {
   PermissionSettingsResult,
   PermissionStatusSnapshot,
 } from '../lib/permissions/types';
+import type { PersonalizationPreferences } from '../lib/personalization/preferences';
 
 interface PermissionsBridge {
   getStatus: () => Promise<PermissionStatusSnapshot>
@@ -228,6 +229,9 @@ export interface ElectronAPI {
   setAiResponseLanguage: (language: string) => Promise<{ success: boolean; error?: string }>
   getSttLanguage: () => Promise<string>
   getAiResponseLanguage: () => Promise<string>
+  getPersonalizationPreferences: () => Promise<PersonalizationPreferences>
+  setPersonalizationPreferences: (patch: Partial<PersonalizationPreferences>) => Promise<{ success: boolean; preferences: PersonalizationPreferences; error?: string }>
+  onPersonalizationPreferencesChanged: (callback: (preferences: PersonalizationPreferences) => void) => () => void
   onSttLanguageAutoDetected: (callback: (bcp47: string) => void) => () => void
   onSystemAudioPermissionDenied: (callback: (message: string) => void) => () => void
 
@@ -396,6 +400,7 @@ export interface ElectronAPI {
 
   onOllamaPullProgress: (callback: (data: { status: string; percent: number }) => void) => () => void;
   onOllamaPullComplete: (callback: () => void) => () => void;
+  onBedrockReauthenticationRequired: (callback: (data: { title?: string; message: string; authMode?: string; region?: string; model?: string; error?: string }) => void) => () => void;
 
   onMeetingsUpdated: (callback: () => void) => () => void
 

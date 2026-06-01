@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react" // forcing refresh
 import { QueryClient, QueryClientProvider } from "react-query"
-import { ToastProvider, ToastViewport } from "./components/ui/toast"
+import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "./components/ui/toast"
 import TeamSyncInterface from "./components/TeamSyncInterface"
 import SettingsPopup from "./components/SettingsPopup" // Keeping for legacy/specific window support if needed
 import Launcher from "./components/Launcher"
@@ -41,6 +41,15 @@ import { usePermissionsStore } from "./stores/usePermissionsStore"
 import { formatBlockingPermissions, isPermissionStatusOperational } from "./lib/permissions/utils"
 
 const queryClient = new QueryClient()
+
+type BedrockReauthenticationWarning = {
+  title?: string;
+  message: string;
+  authMode?: string;
+  region?: string;
+  model?: string;
+  error?: string;
+}
 
 const App: React.FC = () => {
   const isSettingsWindow = new URLSearchParams(window.location.search).get('window') === 'settings';
@@ -139,6 +148,8 @@ const App: React.FC = () => {
 
   // Re-index State
   const [incompatibleWarning, setIncompatibleWarning] = useState<{ count: number; oldProvider: string; newProvider: string } | null>(null);
+  const [bedrockAuthWarning, setBedrockAuthWarning] = useState<BedrockReauthenticationWarning | null>(null);
+  const [bedrockAuthWarningOpen, setBedrockAuthWarningOpen] = useState(false);
 
   // API check
   const [hasTeamSyncApi, setHasTeamSyncApi] = useState<boolean>(false);
@@ -348,6 +359,11 @@ const App: React.FC = () => {
       });
     }
 
+    const removeBedrockAuthWarning = window.electronAPI?.onBedrockReauthenticationRequired?.((data) => {
+      setBedrockAuthWarning(data);
+      setBedrockAuthWarningOpen(true);
+    });
+
     // Listen for real-time license status changes (activation, revocation, deactivation)
     const removeLicenseRestored = window.electronAPI?.onLicenseRestored?.(() => {
       void syncStartupState();
@@ -369,6 +385,7 @@ const App: React.FC = () => {
       if (removeProgress) removeProgress();
       if (removeComplete) removeComplete();
       if (removeWarning) removeWarning();
+      if (removeBedrockAuthWarning) removeBedrockAuthWarning();
       if (removeLicenseRestored) removeLicenseRestored();
       if (removeLicenseListener) removeLicenseListener();
       if (removeKnowledgeReady) removeKnowledgeReady();
@@ -509,6 +526,32 @@ const App: React.FC = () => {
     }
   };
 
+  const bedrockAuthToast = bedrockAuthWarning ? (
+    <Toast
+      open={bedrockAuthWarningOpen}
+      onOpenChange={(open) => {
+        setBedrockAuthWarningOpen(open);
+        if (!open) setBedrockAuthWarning(null);
+      }}
+      duration={9000}
+      variant="neutral"
+      className="border border-amber-300/35 bg-[#2a2112] px-4 py-3 text-amber-50 shadow-2xl"
+    >
+      <div className="pr-6">
+        <ToastTitle>{bedrockAuthWarning.title || 'AWS session expired'}</ToastTitle>
+        <ToastDescription className="mt-1 text-[12px] leading-relaxed text-amber-100/85">
+          {bedrockAuthWarning.message}
+          {(bedrockAuthWarning.model || bedrockAuthWarning.region) && (
+            <span className="mt-1 block text-amber-100/65">
+              {[bedrockAuthWarning.model, bedrockAuthWarning.region].filter(Boolean).join(' / ')}
+            </span>
+          )}
+        </ToastDescription>
+      </div>
+      <ToastClose />
+    </Toast>
+  ) : null;
+
   // Render Logic
   if (isSettingsWindow) {
     return (
@@ -517,6 +560,7 @@ const App: React.FC = () => {
           <QueryClientProvider client={queryClient}>
             <ToastProvider>
               <SettingsPopup />
+              {bedrockAuthToast}
               <ToastViewport />
             </ToastProvider>
           </QueryClientProvider>
@@ -532,6 +576,7 @@ const App: React.FC = () => {
           <QueryClientProvider client={queryClient}>
             <ToastProvider>
               <ModelSelectorWindow />
+              {bedrockAuthToast}
               <ToastViewport />
             </ToastProvider>
           </QueryClientProvider>
@@ -569,6 +614,7 @@ const App: React.FC = () => {
                   />
                 )}
               </div>
+              {bedrockAuthToast}
               <ToastViewport />
             </ToastProvider>
           </QueryClientProvider>
@@ -661,6 +707,7 @@ const App: React.FC = () => {
                     isPremiumActive={isPremiumActive}
                     isLicenseLoaded={hasLoadedLicense}
                   />
+                  {bedrockAuthToast}
                   <AnimatePresence>
                     {isModesOpen && (
                       <motion.div

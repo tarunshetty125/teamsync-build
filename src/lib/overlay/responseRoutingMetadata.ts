@@ -8,6 +8,14 @@ export interface ResponseRoutingOwnershipMetadata {
     routingReason?: string;
 }
 
+export interface ResponsePersonalizationOwnershipMetadata {
+    resolvedCodingLanguage?: string;
+    providerPreference?: string;
+    responseStyle?: string;
+    interviewFocus?: string;
+    personalizationVersion?: number;
+}
+
 type UnknownRecord = Record<string, unknown>;
 
 function asRecord(value: unknown): UnknownRecord | undefined {
@@ -17,6 +25,11 @@ function asRecord(value: unknown): UnknownRecord | undefined {
 function readString(record: UnknownRecord | undefined, key: string): string | undefined {
     const value = record?.[key];
     return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function readNumber(record: UnknownRecord | undefined, key: string): number | undefined {
+    const value = record?.[key];
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function valuesDiffer(a?: string, b?: string): boolean {
@@ -66,6 +79,46 @@ export function hasRoutingOwnershipMetadata(metadata: ResponseRoutingOwnershipMe
         || metadata.actualModel
         || metadata.routingReason
     );
+}
+
+export function extractPersonalizationOwnershipMetadata(debugMetadata?: unknown): ResponsePersonalizationOwnershipMetadata {
+    const debug = asRecord(debugMetadata);
+    const personalization = asRecord(debug?.personalization);
+
+    return {
+        resolvedCodingLanguage: readString(personalization, 'resolvedCodingLanguage'),
+        providerPreference: readString(personalization, 'providerPreference'),
+        responseStyle: readString(personalization, 'responseStyle'),
+        interviewFocus: readString(personalization, 'interviewFocus'),
+        personalizationVersion: readNumber(personalization, 'personalizationVersion'),
+    };
+}
+
+export function hasPersonalizationOwnershipMetadata(metadata: ResponsePersonalizationOwnershipMetadata): boolean {
+    return Boolean(
+        metadata.resolvedCodingLanguage
+        || metadata.providerPreference
+        || metadata.responseStyle
+        || metadata.interviewFocus
+        || metadata.personalizationVersion
+    );
+}
+
+export function applyPersonalizationMetadataToOwnership(
+    ownership: ResponseOwnership | undefined,
+    debugMetadata?: unknown,
+): ResponseOwnership | undefined {
+    const personalization = extractPersonalizationOwnershipMetadata(debugMetadata);
+    if (!ownership || !hasPersonalizationOwnershipMetadata(personalization)) return ownership;
+
+    return {
+        ...ownership,
+        resolvedCodingLanguage: personalization.resolvedCodingLanguage ?? ownership.resolvedCodingLanguage,
+        providerPreference: personalization.providerPreference ?? ownership.providerPreference,
+        responseStyle: personalization.responseStyle ?? ownership.responseStyle,
+        interviewFocus: personalization.interviewFocus ?? ownership.interviewFocus,
+        personalizationVersion: personalization.personalizationVersion ?? ownership.personalizationVersion,
+    };
 }
 
 export function applyRoutingMetadataToOwnership(

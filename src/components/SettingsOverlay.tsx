@@ -23,6 +23,14 @@ import {
     OVERLAY_OPACITY_MIN,
     getDefaultOverlayOpacity,
 } from '../lib/overlayAppearance';
+import {
+    DEFAULT_PERSONALIZATION_PREFERENCES,
+    type PersonalizationPreferences,
+    type PreferredCodingLanguage,
+    type PreferredProvider,
+    type ResponseStylePreference,
+    type InterviewFocusPreference,
+} from '../lib/personalization/preferences';
 import { KeyRecorder } from './ui/KeyRecorder';
 import { ProfileVisualizer, PremiumUpgradeModal, ResearchPanel } from '../premium';
 import icon from './icon.png';
@@ -132,6 +140,40 @@ const MockupTeamSyncInterface = ({ opacity }: { opacity: number }) => {
         </div>
     );
 };
+
+const CODING_LANGUAGE_OPTIONS: Array<{ value: PreferredCodingLanguage | 'auto'; label: string }> = [
+    { value: 'auto', label: 'Auto' },
+    { value: 'javascript', label: 'JavaScript' },
+    { value: 'typescript', label: 'TypeScript' },
+    { value: 'python', label: 'Python' },
+    { value: 'java', label: 'Java' },
+    { value: 'cpp', label: 'C++' },
+    { value: 'go', label: 'Go' },
+];
+
+const PROVIDER_PREFERENCE_OPTIONS: Array<{ value: PreferredProvider; label: string }> = [
+    { value: 'auto', label: 'Auto' },
+    { value: 'teamsync', label: 'TeamSync' },
+    { value: 'gemini', label: 'Gemini' },
+    { value: 'groq', label: 'Groq' },
+    { value: 'openai', label: 'OpenAI' },
+    { value: 'claude', label: 'Claude' },
+    { value: 'bedrock', label: 'Bedrock' },
+    { value: 'ollama', label: 'Ollama' },
+];
+
+const RESPONSE_STYLE_OPTIONS: Array<{ value: ResponseStylePreference; label: string }> = [
+    { value: 'concise', label: 'Concise' },
+    { value: 'balanced', label: 'Balanced' },
+    { value: 'detailed', label: 'Detailed' },
+];
+
+const INTERVIEW_FOCUS_OPTIONS: Array<{ value: InterviewFocusPreference; label: string }> = [
+    { value: 'mixed', label: 'Mixed' },
+    { value: 'coding', label: 'Coding' },
+    { value: 'system_design', label: 'System Design' },
+    { value: 'behavioral', label: 'Behavioral' },
+];
 
 interface CustomSelectProps {
     label: string;
@@ -817,6 +859,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     // AI Response Language
     const [aiResponseLanguage, setAiResponseLanguage] = useState('English');
     const [availableAiLanguages, setAvailableAiLanguages] = useState<any[]>([]);
+    const [personalizationPreferences, setPersonalizationPreferences] = useState<PersonalizationPreferences>(
+        DEFAULT_PERSONALIZATION_PREFERENCES,
+    );
 
     // Overlay Opacity state
     const [overlayOpacity, setOverlayOpacity] = useState<number>(() => {
@@ -1021,8 +1066,20 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 const storedAi = await window.electronAPI.getAiResponseLanguage();
                 setAiResponseLanguage(storedAi || 'auto');
             }
+
+            if (window.electronAPI?.getPersonalizationPreferences) {
+                const preferences = await window.electronAPI.getPersonalizationPreferences();
+                setPersonalizationPreferences(preferences);
+            }
         };
         loadLanguages();
+    }, []);
+
+    useEffect(() => {
+        if (!window.electronAPI?.onPersonalizationPreferencesChanged) return;
+        return window.electronAPI.onPersonalizationPreferencesChanged((preferences) => {
+            setPersonalizationPreferences(preferences);
+        });
     }, []);
 
     const handleLanguageChange = async (key: string) => {
@@ -1084,6 +1141,27 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             // Rollback on exception
             setAiResponseLanguage(previous);
             console.error('[Settings] Exception setting AI response language:', err);
+        }
+    };
+
+    const handlePersonalizationChange = async <K extends keyof PersonalizationPreferences>(
+        key: K,
+        value: PersonalizationPreferences[K],
+    ) => {
+        const previous = personalizationPreferences;
+        const next = { ...personalizationPreferences, [key]: value };
+        setPersonalizationPreferences(next);
+
+        try {
+            const result = await window.electronAPI?.setPersonalizationPreferences?.({ [key]: value });
+            if (result?.success && result.preferences) {
+                setPersonalizationPreferences(result.preferences);
+                return;
+            }
+            setPersonalizationPreferences(previous);
+        } catch (err) {
+            setPersonalizationPreferences(previous);
+            console.error('[Settings] Exception setting personalization preference:', err);
         }
     };
 
@@ -2251,6 +2329,78 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                         ))}
                                                                     </div>
                                                                 )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Personalization */}
+                                                        <div className="flex items-start justify-between gap-4 px-4 py-3 flex-wrap">
+                                                            <div className="flex items-start gap-4">
+                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
+                                                                    <SlidersHorizontal size={20} />
+                                                                </div>
+                                                                <div>
+                                                                    <h3 className="text-sm font-bold text-text-primary">Personalization</h3>
+                                                                    <p className="text-xs text-text-secondary mt-0.5">
+                                                                        Defaults for coding, routing, response depth, and interview focus
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-2 gap-2 w-full max-w-[360px] min-w-[260px]">
+                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
+                                                                    Code
+                                                                    <select
+                                                                        value={personalizationPreferences.preferredCodingLanguage ?? 'auto'}
+                                                                        onChange={(event) => handlePersonalizationChange(
+                                                                            'preferredCodingLanguage',
+                                                                            event.target.value === 'auto' ? null : event.target.value as PreferredCodingLanguage,
+                                                                        )}
+                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
+                                                                    >
+                                                                        {CODING_LANGUAGE_OPTIONS.map((option) => (
+                                                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </label>
+
+                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
+                                                                    Provider
+                                                                    <select
+                                                                        value={personalizationPreferences.preferredProvider}
+                                                                        onChange={(event) => handlePersonalizationChange('preferredProvider', event.target.value as PreferredProvider)}
+                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
+                                                                    >
+                                                                        {PROVIDER_PREFERENCE_OPTIONS.map((option) => (
+                                                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </label>
+
+                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
+                                                                    Style
+                                                                    <select
+                                                                        value={personalizationPreferences.responseStyle}
+                                                                        onChange={(event) => handlePersonalizationChange('responseStyle', event.target.value as ResponseStylePreference)}
+                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
+                                                                    >
+                                                                        {RESPONSE_STYLE_OPTIONS.map((option) => (
+                                                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </label>
+
+                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
+                                                                    Focus
+                                                                    <select
+                                                                        value={personalizationPreferences.interviewFocus}
+                                                                        onChange={(event) => handlePersonalizationChange('interviewFocus', event.target.value as InterviewFocusPreference)}
+                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
+                                                                    >
+                                                                        {INTERVIEW_FOCUS_OPTIONS.map((option) => (
+                                                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </label>
                                                             </div>
                                                         </div>
 

@@ -93,6 +93,28 @@ test('Bedrock is routed as a first-class LLMHelper provider without changing Gro
     assert.ok(textFallback.indexOf('Groq (${textGroq})') < textFallback.indexOf('Bedrock (${this.bedrockCredentials.preferredModel})'));
 });
 
+test('Bedrock auth expiry emits a reauthentication warning before fallback', () => {
+    const helper = read('electron/LLMHelper.ts');
+    const engine = read('electron/IntelligenceEngine.ts');
+    const preload = read('electron/preload.ts');
+    const app = read('src/App.tsx');
+    const electronTypes = read('src/types/electron.d.ts');
+
+    assert.match(helper, /isBedrockReauthenticationError/);
+    assert.match(helper, /BEDROCK_AUTH_WARNING_DEDUPE_MS = 45_000/);
+    assert.match(helper, /expiredtoken/);
+    assert.match(helper, /security token included in the request is expired/);
+    assert.match(helper, /notifyBedrockReauthenticationRequired\(error, model\)/);
+    assert.match(helper, /bedrock:reauthentication-required/);
+    assert.match(engine, /BEDROCK_AUTH_EXPIRED_ROUTING_REASON = 'bedrock_auth_expired_fallback'/);
+    assert.match(engine, /requestedProvider: primaryProvider/);
+    assert.match(engine, /reason: BEDROCK_AUTH_EXPIRED_ROUTING_REASON/);
+    assert.match(preload, /onBedrockReauthenticationRequired/);
+    assert.match(electronTypes, /onBedrockReauthenticationRequired/);
+    assert.match(app, /AWS session expired/);
+    assert.match(app, /bedrockAuthToast/);
+});
+
 test('Provider prompt builder preserves provider-specific prompts and gives Bedrock a moderate cap', () => {
     const builder = read('electron/llm/ProviderPromptBuilder.ts');
     const engine = read('electron/IntelligenceEngine.ts');

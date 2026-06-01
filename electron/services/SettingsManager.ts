@@ -1,6 +1,11 @@
 import { app } from 'electron';
 import fs from 'fs';
 import path from 'path';
+import {
+    mergePersonalizationPreferences,
+    normalizePersonalizationPreferences,
+    type PersonalizationPreferences,
+} from '../../src/lib/personalization/preferences';
 
 export interface AppSettings {
     // Only boot-critical or non-encrypted settings should live here.
@@ -12,6 +17,7 @@ export interface AppSettings {
     actionButtonMode?: 'recap' | 'brainstorm';
     groqFastTextMode?: boolean;
     knowledgeMode?: boolean;
+    personalization?: Partial<PersonalizationPreferences>;
     /** One-shot flag: true after .env keys have been imported into the Groq vault */
     groqVaultMigrated?: boolean;
     advancedStealth?: {
@@ -59,6 +65,17 @@ export class SettingsManager {
     public set<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
         this.settings[key] = value;
         this.saveSettings();
+    }
+
+    public getPersonalizationPreferences(): PersonalizationPreferences {
+        return normalizePersonalizationPreferences(this.settings.personalization);
+    }
+
+    public setPersonalizationPreferences(patch: Partial<PersonalizationPreferences>): PersonalizationPreferences {
+        const next = mergePersonalizationPreferences(this.settings.personalization, patch);
+        this.settings.personalization = next;
+        this.saveSettings();
+        return next;
     }
 
     private loadSettings(): void {

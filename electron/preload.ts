@@ -345,6 +345,7 @@ interface ElectronAPI {
   // Ollama
   onOllamaPullProgress: (callback: (data: { status: string; percent: number }) => void) => () => void
   onOllamaPullComplete: (callback: () => void) => () => void
+  onBedrockReauthenticationRequired: (callback: (data: { title?: string; message: string; authMode?: string; region?: string; model?: string; error?: string }) => void) => () => void
 
   // Theme API
   getThemeMode: () => Promise<{ mode: 'system' | 'light' | 'dark', resolved: 'light' | 'dark' }>
@@ -924,6 +925,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setAiResponseLanguage: (language: string) => ipcRenderer.invoke("set-ai-response-language", language),
   getSttLanguage: () => ipcRenderer.invoke("get-stt-language"),
   getAiResponseLanguage: () => ipcRenderer.invoke("get-ai-response-language"),
+  getPersonalizationPreferences: () => ipcRenderer.invoke("get-personalization-preferences"),
+  setPersonalizationPreferences: (patch: any) => ipcRenderer.invoke("set-personalization-preferences", patch),
+  onPersonalizationPreferencesChanged: (callback: (preferences: any) => void) => {
+    const subscription = (_: any, preferences: any) => callback(preferences);
+    ipcRenderer.on('personalization-preferences-changed', subscription);
+    return () => { ipcRenderer.removeListener('personalization-preferences-changed', subscription); };
+  },
   onSttLanguageAutoDetected: (callback: (bcp47: string) => void) => {
     const subscription = (_: any, bcp47: string) => callback(bcp47);
     ipcRenderer.on('stt-language-auto-detected', subscription);
@@ -1437,6 +1445,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on('embedding:incompatible-provider-warning', subscription)
     return () => {
       ipcRenderer.removeListener('embedding:incompatible-provider-warning', subscription)
+    }
+  },
+  onBedrockReauthenticationRequired: (callback: (data: { title?: string; message: string; authMode?: string; region?: string; model?: string; error?: string }) => void) => {
+    const subscription = (_: any, data: any) => callback(data)
+    ipcRenderer.on('bedrock:reauthentication-required', subscription)
+    return () => {
+      ipcRenderer.removeListener('bedrock:reauthentication-required', subscription)
     }
   },
   reindexIncompatibleMeetings: () => ipcRenderer.invoke('rag:reindex-incompatible-meetings'),

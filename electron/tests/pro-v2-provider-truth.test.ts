@@ -96,6 +96,49 @@ test('Pro V2 routing debug metadata persists requested and actual ownership trut
     assert.equal(updated?.sourceModel, 'openai.gpt-oss-120b-1:0');
 });
 
+test('Pro V2 routing metadata explains Bedrock auth-expired fallback transitions', () => {
+    const ownership: ResponseOwnership = {
+        responseId: 'response-reauth',
+        questionTurnId: 'turn-reauth',
+        transcriptVersion: 1,
+        contextTarget: 'latest_turn',
+        createdAt: 1000,
+        sourceProvider: 'bedrock',
+        sourceModel: 'openai.gpt-oss-120b-1:0',
+        requestedProvider: 'bedrock',
+        requestedModel: 'openai.gpt-oss-120b-1:0',
+        actualProvider: 'bedrock',
+        actualModel: 'openai.gpt-oss-120b-1:0',
+    };
+    const debugMetadata = {
+        routing: {
+            requestedProvider: 'bedrock',
+            requestedModel: 'openai.gpt-oss-120b-1:0',
+            actualProvider: 'groq',
+            actualModel: 'llama-3.3-70b-versatile',
+            reason: 'bedrock_auth_expired_fallback',
+        },
+        telemetry: {
+            fallbackUsed: true,
+            fallbackReason: 'bedrock_auth_expired_fallback',
+        },
+    };
+
+    const extracted = extractRoutingOwnershipMetadata(debugMetadata);
+    const updated = applyRoutingMetadataToOwnership(ownership, debugMetadata);
+
+    assert.equal(extracted.requestedProvider, 'bedrock');
+    assert.equal(extracted.requestedModel, 'openai.gpt-oss-120b-1:0');
+    assert.equal(extracted.actualProvider, 'groq');
+    assert.equal(extracted.actualModel, 'llama-3.3-70b-versatile');
+    assert.equal(extracted.routingReason, 'bedrock_auth_expired_fallback');
+    assert.equal(updated?.requestedProvider, 'bedrock');
+    assert.equal(updated?.requestedModel, 'openai.gpt-oss-120b-1:0');
+    assert.equal(updated?.actualProvider, 'groq');
+    assert.equal(updated?.actualModel, 'llama-3.3-70b-versatile');
+    assert.equal(updated?.routingReason, 'bedrock_auth_expired_fallback');
+});
+
 test('Pro V2 selector and overlay surfaces consume canonical provider metadata', () => {
     const selector = read('src/components/ModelSelectorWindow.tsx');
     const controlStrip = read('src/components/pro-v2/ProOverlayControlStrip.tsx');

@@ -6,6 +6,7 @@
 import { useEffect } from 'react';
 import { mergeStreamChunk } from '../../lib/overlay/mergeStreamChunk';
 import {
+    applyPersonalizationMetadataToOwnership,
     applyRoutingMetadataToOwnership,
     extractRoutingOwnershipMetadata,
     hasRoutingOwnershipMetadata,
@@ -98,7 +99,8 @@ function hydrateFinalMessage(
         const u = [...prev];
         const routingMetadata = extractRoutingOwnershipMetadata(debugMetadata);
         const hasRoutingMetadata = hasRoutingOwnershipMetadata(routingMetadata);
-        const ownership = applyRoutingMetadataToOwnership(u[idx].ownership, debugMetadata);
+        const ownershipWithRouting = applyRoutingMetadataToOwnership(u[idx].ownership, debugMetadata);
+        const ownership = applyPersonalizationMetadataToOwnership(ownershipWithRouting, debugMetadata);
         const hydratedMessage = {
             ...u[idx],
             text,
@@ -146,7 +148,7 @@ export function useOverlayIpcStreams(ctx: OverlayIpcStreamsContext) {
                 const requestId = payload?.requestId || ctx.activeChatRequestIdRef.current;
                 if (!requestId || !matchesRequestChannel(ctx, requestId, 'chat')) return;
                 if (typeof payload?.content === 'string' && payload.content.trim()) {
-                    hydrateFinalMessage(ctx, requestId, payload.content);
+                    hydrateFinalMessage(ctx, requestId, payload.content, payload.debugMetadata);
                 }
                 ctx.finishStreamingMessage(requestId);
             }),

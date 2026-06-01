@@ -8,9 +8,11 @@ import {
   getMatchedRecommendedOverlayAction,
   getRecommendedOverlayAction,
 } from '../modes/overlayCopilotConfig.ts';
+import type { InterviewFocusPreference } from '../personalization/preferences';
 
 export type ResolveRecommendationOptions = {
   detectedQuestionType?: SessionOverlayMode;
+  interviewFocus?: InterviewFocusPreference;
 };
 
 /** Cross-mode transcript signals — first visible candidate wins. */
@@ -294,6 +296,20 @@ function matchModeIntent(
   return null;
 }
 
+function interviewFocusToDetectedMode(focus?: InterviewFocusPreference): SessionOverlayMode | null {
+  switch (focus) {
+    case 'coding':
+      return 'coding';
+    case 'system_design':
+      return 'system_design';
+    case 'behavioral':
+      return 'behavioral';
+    case 'mixed':
+    default:
+      return null;
+  }
+}
+
 /**
  * Resolves auto-highlight for any copilot mode — always returns a visible quick-action id.
  */
@@ -318,6 +334,12 @@ export function resolveRecommendedOverlayAction(
 
   const fromIntent = matchModeIntent(modeId, options?.detectedQuestionType, visibleActionIds);
   if (fromIntent) return fromIntent;
+
+  if (!options?.detectedQuestionType || options.detectedQuestionType === 'general') {
+    const focusMode = interviewFocusToDetectedMode(options?.interviewFocus);
+    const fromFocus = matchModeIntent(modeId, focusMode ?? undefined, visibleActionIds);
+    if (fromFocus) return fromFocus;
+  }
 
   const configDefault = getRecommendedOverlayAction(modeId, '');
   const defaultClamped = clampRecommendation(configDefault, visibleActionIds);

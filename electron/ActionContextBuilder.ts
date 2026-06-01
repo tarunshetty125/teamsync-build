@@ -23,6 +23,14 @@ import {
     type ActionContract,
     type ContextTarget,
 } from '../src/lib/overlay/actionContextTypes';
+import {
+    PERSONALIZATION_VERSION,
+    formatPreferredCodingLanguage,
+    normalizePersonalizationPreferences,
+    type PersonalizationPreferences,
+    type ResolvedPersonalizationSnapshot,
+    type ResponseStylePreference,
+} from '../src/lib/personalization/preferences';
 
 export type UnifiedActionIntent =
     | 'what_to_answer'
@@ -80,6 +88,7 @@ export interface BuildContextArgs {
     rag?: ActionRagContext | null;
     includeModeCustomContext?: boolean;
     screenScanMode?: ScreenContentMode;
+    personalization?: PersonalizationPreferences;
 }
 
 interface BaseContextLayer {
@@ -87,7 +96,7 @@ interface BaseContextLayer {
     lastAssistantMessage: string | null;
 }
 
-type QuestionResponseProfile =
+export type QuestionResponseProfile =
     | 'coding'
     | 'system_design'
     | 'resume_or_jd'
@@ -136,10 +145,12 @@ export interface PromptObject {
     rag: PromptContextSection | null;
     instructions: PromptInstruction[];
     contextOrder?: PromptContextOrderKey[];
+    personalization?: ResolvedPersonalizationSnapshot;
 }
 
 export interface BuiltContextLayers {
     promptObject: PromptObject;
+    personalization?: ResolvedPersonalizationSnapshot;
     directResponse?: string;
     profileApplied: boolean;
     profilePolicy: ProfilePolicy;
@@ -447,7 +458,7 @@ export function getQuestionResponseProfile(
     return 'general';
 }
 
-interface CodingContractLanguage {
+export interface CodingContractLanguage {
     label: string;
     fence: string;
     source: 'explicit' | 'preference' | 'default';
@@ -477,7 +488,7 @@ function detectCodingContractLanguage(value?: string | null): Omit<CodingContrac
     )) ?? null;
 }
 
-function resolveCodingContractLanguage(
+export function resolveCodingContractLanguage(
     question?: string,
     preferredCodingLanguage?: string | null,
 ): CodingContractLanguage {
@@ -488,6 +499,26 @@ function resolveCodingContractLanguage(
     if (preferredLanguage) return { ...preferredLanguage, source: 'preference' };
 
     return { label: 'JavaScript', fence: 'javascript', source: 'default' };
+}
+
+export function resolveActionContractForResponseProfile(args: {
+    intent: UnifiedActionIntent;
+    actionId?: string;
+    actionContract?: ActionContract;
+    responseProfile: QuestionResponseProfile;
+}): ActionContract | undefined {
+    const effectiveActionContract = resolveEffectiveActionContract({
+        intent: args.intent,
+        actionId: args.actionId,
+        actionContract: args.actionContract,
+    });
+    if (effectiveActionContract) return effectiveActionContract;
+
+    if (args.intent === 'manual_chat' && args.responseProfile === 'coding') {
+        return 'optimal_solution';
+    }
+
+    return undefined;
 }
 
 function describeCodingContractLanguage(language: CodingContractLanguage): string {
@@ -532,6 +563,40 @@ function buildCodingInterviewOutputContract(question?: string, preferredCodingLa
         'CRITICAL: You MUST include the **Solution:** code block for EVERY coding/DSA problem (any title, any platform). Description-only answers are invalid.',
         'Word limits do not apply to the code block.',
     ].join('\n');
+}
+
+function buildResolvedPersonalizationSnapshot(
+    question: string,
+    responseProfile: QuestionResponseProfile,
+    preferences?: PersonalizationPreferences,
+): ResolvedPersonalizationSnapshot {
+    const normalized = normalizePersonalizationPreferences(preferences);
+    const preferredCodingLanguage = formatPreferredCodingLanguage(normalized.preferredCodingLanguage);
+    const language = responseProfile === 'coding'
+        ? resolveCodingContractLanguage(question, preferredCodingLanguage)
+        : null;
+
+    return {
+        personalizationVersion: PERSONALIZATION_VERSION,
+        resolvedCodingLanguage: language?.label,
+        providerPreference: normalized.preferredProvider,
+        responseStyle: normalized.responseStyle,
+        interviewFocus: normalized.interviewFocus,
+    };
+}
+
+function buildResponseStyleInstruction(style: ResponseStylePreference): PromptInstruction | null {
+    if (style === 'balanced') return null;
+
+    const styleLine = style === 'concise'
+        ? 'Prefer the shortest complete answer allowed by the active output contract.'
+        : 'Add useful reasoning, tradeoffs, and context when the active output contract allows it.';
+
+    return createInstruction('response_style_preference', 'RESPONSE STYLE PREFERENCE', [
+        `User response style preference: ${style}.`,
+        styleLine,
+        'This controls wording depth only. It must not override ActionContract requirements, required sections, hint-only restrictions, code-fence rules, provider routing, or validation constraints.',
+    ].join('\n'));
 }
 
 /** Full system-design interview shape for manual input and actions. */
@@ -908,7 +973,9 @@ function buildActionContractInstruction(
     responseProfile: QuestionResponseProfile,
     modeAwareRules: string[],
     question?: string,
+    personalization?: PersonalizationPreferences,
 ): PromptInstruction | null {
+    const preferredCodingLanguage = formatPreferredCodingLanguage(personalization?.preferredCodingLanguage ?? null);
     switch (actionContract) {
         case 'hint_only':
             return createInstruction('output_contract', 'OUTPUT CONTRACT', [
@@ -959,7 +1026,7 @@ function buildActionContractInstruction(
             }
             if (responseProfile === 'coding') {
                 return createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                    buildCodingInterviewOutputContract(question),
+                    buildCodingInterviewOutputContract(question, preferredCodingLanguage),
                     'Emphasize why this is the optimal approach and call out the key tradeoff.',
                     ...modeAwareRules,
                 ].join('\n'));
@@ -983,18 +1050,25 @@ export function buildIntentPrompt(
     screenScanMode?: ScreenContentMode,
     question?: string,
     profileApplied: boolean = false,
-    actionContract?: ActionContract
+    actionContract?: ActionContract,
+    personalization?: PersonalizationPreferences,
 ): PromptInstruction[] {
     const basePrompt = getIntentPromptBase(intent).trim();
     const modeAwareRules = buildModeAwareIntentRules(intent, mode);
     const responseProfile = getQuestionResponseProfile(question?.trim() || '', mode, intent);
     const contextPriorityRules = buildContextPriorityRules(profileApplied, intent);
-    const effectiveActionContract = resolveEffectiveActionContract({ intent, actionContract });
+    const effectiveActionContract = resolveActionContractForResponseProfile({
+        intent,
+        actionContract,
+        responseProfile,
+    });
+    const preferredCodingLanguage = formatPreferredCodingLanguage(personalization?.preferredCodingLanguage ?? null);
     const contractInstruction = buildActionContractInstruction(
         effectiveActionContract,
         responseProfile,
         modeAwareRules,
         question,
+        personalization,
     );
 
     if (contractInstruction) {
@@ -1019,7 +1093,7 @@ export function buildIntentPrompt(
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
                         'Return only the final answer.',
-                        buildCodingInterviewOutputContract(question),
+                        buildCodingInterviewOutputContract(question, preferredCodingLanguage),
                         'Focus the explanation on time/space complexity, dominant factors, and the key tradeoff.',
                         'Keep the full code block present even when the user asked about one aspect only.',
                         'No preamble or meta-commentary.',
@@ -1057,7 +1131,7 @@ export function buildIntentPrompt(
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
                         'Return only the final answer.',
-                        buildCodingInterviewOutputContract(question),
+                        buildCodingInterviewOutputContract(question, preferredCodingLanguage),
                         'Use the Approach and Edge Cases to surface 3 to 5 important edge cases, tradeoffs, or alternative branches.',
                         'Keep the full code block present so the implementation stays usable.',
                         'No preamble or meta-commentary.',
@@ -1103,7 +1177,7 @@ export function buildIntentPrompt(
                     createInstruction('intent', 'INTENT', basePrompt),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        buildCodingInterviewOutputContract(question),
+                        buildCodingInterviewOutputContract(question, preferredCodingLanguage),
                         'Keep prose sections concise; the code block is mandatory.',
                         ...modeAwareRules,
                     ].join('\n')),
@@ -1175,7 +1249,7 @@ export function buildIntentPrompt(
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
                         'Return only the final answer.',
-                        buildCodingInterviewOutputContract(question),
+                        buildCodingInterviewOutputContract(question, preferredCodingLanguage),
                         'No preamble or meta-commentary.',
                     ].join('\n')),
                 ];
@@ -1229,7 +1303,7 @@ export function buildIntentPrompt(
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
                         'Return only the final answer.',
-                        buildCodingInterviewOutputContract(question),
+                        buildCodingInterviewOutputContract(question, preferredCodingLanguage),
                         'Lead the Approach with the single most important hint or invariant.',
                         'Still include the full executable code solution in a valid fenced markdown block.',
                         'No preamble or meta-commentary.',
@@ -1269,7 +1343,7 @@ export function buildIntentPrompt(
                     screenScanMode === 'coding' || screenScanMode === 'interview_question' || responseProfile === 'coding'
                         ? [
                             'Return only the final answer.',
-                            buildCodingInterviewOutputContract(question),
+                            buildCodingInterviewOutputContract(question, preferredCodingLanguage),
                             'Use the visible editor language or REQUIRED CODE FENCE when present.',
                             'Default to JavaScript only when no language signal or user preferred coding language setting is visible.',
                         ].join('\n')
@@ -1299,7 +1373,7 @@ export function buildIntentPrompt(
                     createInstruction('intent', 'INTENT', basePrompt),
                     createInstruction('context_priority', 'CONTEXT PRIORITY', contextPriorityRules.join('\n')),
                     createInstruction('output_contract', 'OUTPUT CONTRACT', [
-                        buildCodingInterviewOutputContract(question),
+                        buildCodingInterviewOutputContract(question, preferredCodingLanguage),
                         'Keep prose sections interview-ready; the code block is mandatory.',
                         ...modeAwareRules,
                     ].join('\n')),
@@ -1393,6 +1467,7 @@ export async function buildContextLayers({
     rag,
     includeModeCustomContext = true,
     screenScanMode,
+    personalization,
 }: BuildContextArgs): Promise<BuiltContextLayers> {
     const resolvedPolicy = resolveActionContextPolicy({
         intent,
@@ -1420,12 +1495,20 @@ export async function buildContextLayers({
     })();
     const question = normalizeActionQuestion(rawQuestion, mode, intent);
     const transcript = buildTranscriptContext(session, intent, question, mode, { transcriptOverride });
+    const responseProfile = getQuestionResponseProfile(question, mode, intent);
+    const personalizationSnapshot = buildResolvedPersonalizationSnapshot(question, responseProfile, personalization);
     const modeInstructions = intent === 'screen_scan'
         ? []
         : buildModeContext(mode, { includeModeCustomContext: resolvedPolicy.includeModeCustomContext });
     const profileResult = await buildProfileContext(intent, profile, question, resolvedPolicy.resolvedProfilePreference);
-    const effectiveActionContract = resolveEffectiveActionContract({ intent, actionId, actionContract });
-    const intentInstructions = buildIntentPrompt(intent, mode, screenScanMode, question, profileResult.profile?.used === true, effectiveActionContract);
+    const effectiveActionContract = resolveActionContractForResponseProfile({
+        intent,
+        actionId,
+        actionContract,
+        responseProfile,
+    });
+    const intentInstructions = buildIntentPrompt(intent, mode, screenScanMode, question, profileResult.profile?.used === true, effectiveActionContract, personalization);
+    const responseStyleInstruction = buildResponseStyleInstruction(personalizationSnapshot.responseStyle);
     const profileInstruction = profileResult.profile?.instruction?.trim()
         ? [createInstruction('profile_instruction', 'PROFILE INTELLIGENCE', profileResult.profile.instruction.trim())]
         : [];
@@ -1448,8 +1531,10 @@ export async function buildContextLayers({
         profile: profileResult.profile ?? null,
         supplemental: supplementalContext,
         rag: ragContext,
+        personalization: personalizationSnapshot,
         instructions: [
             ...intentInstructions,
+            ...(responseStyleInstruction ? [responseStyleInstruction] : []),
             ...modeInstructions,
             ...profileInstruction,
             ...ragInstructions,
@@ -1461,6 +1546,7 @@ export async function buildContextLayers({
 
     return {
         promptObject,
+        personalization: personalizationSnapshot,
         directResponse: profileResult.directResponse,
         profileApplied: profileResult.profile?.used === true,
         profilePolicy: profileResult.profile?.policy ?? resolvedPolicy.profilePolicy,

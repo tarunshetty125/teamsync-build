@@ -60,4 +60,9 @@ export interface ResponseOwnership {
   actualProvider?: string;
   actualModel?: string;
   routingReason?: string;
+  resolvedCodingLanguage?: string;
+  providerPreference?: string;
+  responseStyle?: string;
+  interviewFocus?: string;
+  personalizationVersion?: number;
 }

@@ -43,6 +43,10 @@ import {
 import { capResponseHistoryMessages } from '../../lib/overlay/responseHistoryState';
 import type { V2ResponseArtifact } from '../../lib/overlay/responseArtifacts';
 import { getProviderModelMetadata } from '../../lib/providers/providerModelMetadata';
+import {
+    DEFAULT_PERSONALIZATION_PREFERENCES,
+    type PersonalizationPreferences,
+} from '../../lib/personalization/preferences';
 import { buildArchitectureResponseArtifacts } from './architecture/diagramArtifacts';
 import { useOverlayIpcStreams } from './useOverlayIpcStreams';
 
@@ -274,6 +278,9 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             return true;
         }
     });
+    const [personalizationPreferences, setPersonalizationPreferences] = useState<PersonalizationPreferences>(
+        DEFAULT_PERSONALIZATION_PREFERENCES,
+    );
 
     const [intentState, dispatchIntent] = useReducer(intentReducer, {
         detectedType: 'general',
@@ -498,6 +505,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             finalizedTranscriptRef,
             currentQuestionTurnId,
             activeQuickActionIds,
+            interviewFocus: personalizationPreferences.interviewFocus,
             transcriptRevision: lastFinalSentence,
         });
 
@@ -1116,6 +1124,27 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             setCurrentModel((prev) => (prev === modelId ? prev : modelId));
             currentModelRef.current = modelId;
         });
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        window.electronAPI?.getPersonalizationPreferences?.()
+            .then((preferences) => {
+                if (!cancelled && preferences) {
+                    setPersonalizationPreferences(preferences);
+                }
+            })
+            .catch(() => {});
+
+        const unsubscribe = window.electronAPI?.onPersonalizationPreferencesChanged?.((preferences) => {
+            setPersonalizationPreferences(preferences);
+        });
+
+        return () => {
+            cancelled = true;
+            unsubscribe?.();
+        };
     }, []);
 
     useEffect(() => {
