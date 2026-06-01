@@ -47,6 +47,10 @@ import {
     DEFAULT_PERSONALIZATION_PREFERENCES,
     type PersonalizationPreferences,
 } from '../../lib/personalization/preferences';
+import {
+    buildProviderAnalyticsSessionSnapshot,
+    buildProviderAnalyticsSessionSnapshotKey,
+} from '../../lib/providers/providerAnalyticsSessionSnapshot';
 import { buildArchitectureResponseArtifacts } from './architecture/diagramArtifacts';
 import { useOverlayIpcStreams } from './useOverlayIpcStreams';
 
@@ -1706,6 +1710,18 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             return rootId === activeRootResponseId;
         });
     }, [activeRootResponseId, responseHistory, responseRootIdById]);
+    const providerAnalyticsSnapshotKey = useMemo(
+        () => buildProviderAnalyticsSessionSnapshotKey(responseHistory, activeResponse?.id ?? null),
+        [activeResponse?.id, responseHistory],
+    );
+
+    useEffect(() => {
+        if (!window.electronAPI?.setProviderAnalyticsSessionSnapshot) return;
+        const snapshot = buildProviderAnalyticsSessionSnapshot(responseHistory, activeResponse?.id ?? null);
+        void window.electronAPI.setProviderAnalyticsSessionSnapshot(snapshot).catch(() => {});
+        // The snapshot key intentionally excludes response text so token streaming does not publish analytics.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [providerAnalyticsSnapshotKey]);
 
     const responseNavigation = useMemo(() => {
         const total = responseHistory.length;

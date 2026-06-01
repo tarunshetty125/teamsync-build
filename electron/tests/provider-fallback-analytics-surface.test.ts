@@ -203,7 +203,7 @@ test('Sprint 7 UI-D settings integration derives fallback read model without new
     assert.match(settings, /import \{ buildProviderFallbackReadModel \}/);
     assert.match(settings, /import \{ ProviderFallbackAnalyticsSurface \}/);
     assert.match(settings, /const providerFallbackReadModel = useMemo/);
-    assert.match(settings, /buildProviderFallbackReadModel\(\{ responses: \[\] \}\)/);
+    assert.match(settings, /buildProviderFallbackReadModel\(\{\s*responses: providerAnalyticsSnapshot\.responses,\s*activeResponseId: providerAnalyticsSnapshot\.activeResponseId,/s);
     assert.match(settings, /<ProviderFallbackAnalyticsSurface readModel=\{providerFallbackReadModel\} \/>/);
     assert.doesNotMatch(settings, /useState<[^>]*ProviderFallback|setProviderFallback|providerFallbackState/);
     assert.doesNotMatch(settings, /useState<[^>]*ProviderPersonalization|setProviderPersonalization|providerPersonalizationState/);

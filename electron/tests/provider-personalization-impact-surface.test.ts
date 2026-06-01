@@ -260,7 +260,7 @@ test('Sprint 7 UI-F settings integration derives personalization read model with
     assert.match(settings, /import \{ buildProviderPersonalizationReadModel \}/);
     assert.match(settings, /import \{ ProviderPersonalizationImpactSurface \}/);
     assert.match(settings, /const providerPersonalizationReadModel = useMemo/);
-    assert.match(settings, /buildProviderPersonalizationReadModel\(\{ responses: \[\] \}\)/);
+    assert.match(settings, /buildProviderPersonalizationReadModel\(\{\s*responses: providerAnalyticsSnapshot\.responses,\s*activeResponseId: providerAnalyticsSnapshot\.activeResponseId,/s);
     assert.match(settings, /<ProviderPersonalizationImpactSurface readModel=\{providerPersonalizationReadModel\} \/>/);
     assert.doesNotMatch(settings, /useState<[^>]*ProviderPersonalization|setProviderPersonalization|providerPersonalizationState/);
     assert.doesNotMatch(settings, /setPersonalizationPreference|setDefaultModel\(providerPersonalization|setProviderPreferredModel\(providerPersonalization/);

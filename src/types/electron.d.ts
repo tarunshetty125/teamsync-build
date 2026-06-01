@@ -6,6 +6,7 @@ import type {
   PermissionStatusSnapshot,
 } from '../lib/permissions/types';
 import type { PersonalizationPreferences } from '../lib/personalization/preferences';
+import type { ProviderAnalyticsSessionSnapshotBridge } from '../lib/providers/providerAnalyticsSessionSnapshot';
 
 interface PermissionsBridge {
   getStatus: () => Promise<PermissionStatusSnapshot>
@@ -86,7 +87,7 @@ type GenerateActionPayload = {
   modelOverride?: string
 }
 
-export interface ElectronAPI {
+export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   updateContentDimensions: (dimensions: {
     width: number
     height: number

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
 import type { ModeReferenceFile, ModesStateSnapshot, PublicModeTemplate } from "../src/lib/modes/types";
 import type {
   PermissionKind,
@@ -6,6 +6,11 @@ import type {
   PermissionSettingsResult,
   PermissionStatusSnapshot,
 } from "../src/lib/permissions/types";
+import {
+  PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC,
+  type ProviderAnalyticsSessionSnapshot,
+  type ProviderAnalyticsSessionSnapshotBridge,
+} from "../src/lib/providers/providerAnalyticsSessionSnapshot";
 
 interface PermissionsBridge {
   getStatus: () => Promise<PermissionStatusSnapshot>
@@ -85,7 +90,7 @@ type GenerateActionPayload = {
 }
 
 // Types for the exposed Electron API
-interface ElectronAPI {
+interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   updateContentDimensions: (dimensions: {
     width: number
     height: number
@@ -1034,6 +1039,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Window Mode
   setWindowMode: (mode: 'launcher' | 'overlay', inactive?: boolean) => ipcRenderer.invoke("set-window-mode", mode, inactive),
   setOverlayV2Layout: (enabled: boolean) => ipcRenderer.invoke("set-overlay-v2-layout", enabled),
+  setProviderAnalyticsSessionSnapshot: (snapshot: ProviderAnalyticsSessionSnapshot | null) =>
+    ipcRenderer.invoke(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.set, snapshot),
+  getProviderAnalyticsSessionSnapshot: () =>
+    ipcRenderer.invoke(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.get),
+  onProviderAnalyticsSessionSnapshotChanged: (callback: (snapshot: ProviderAnalyticsSessionSnapshot | null) => void) => {
+    const subscription = (_: IpcRendererEvent, snapshot: ProviderAnalyticsSessionSnapshot | null) => callback(snapshot)
+    ipcRenderer.on(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.changed, subscription)
+    return () => {
+      ipcRenderer.removeListener(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.changed, subscription)
+    }
+  },
 
   // Intelligence Mode Events
   onIntelligenceAssistUpdate: (callback: (data: { insight: string; requestId?: string }) => void) => {

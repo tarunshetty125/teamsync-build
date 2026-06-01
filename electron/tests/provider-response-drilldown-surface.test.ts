@@ -252,9 +252,9 @@ test('Sprint 7 UI-G settings integration uses existing read models without respo
 
     assert.match(settings, /import \{ ProviderResponseDrilldownSurface \}/);
     assert.match(settings, /<ProviderResponseDrilldownSurface/);
-    assert.match(settings, /ownershipByResponseId=\{\{\}\}/);
+    assert.match(settings, /ownershipByResponseId=\{providerAnalyticsSnapshot\.ownershipByResponseId\}/);
     assert.match(settings, /routingReadModel=\{providerRoutingReadModel\}/);
-    assert.match(settings, /diagnosticsReadModel=\{providerDiagnosticsReadModel\}/);
+    assert.match(settings, /diagnosticsReadModel=\{providerResponseDiagnosticsReadModel\}/);
     assert.match(settings, /telemetryReadModel=\{providerTelemetryReadModel\}/);
     assert.doesNotMatch(settings, /useState<[^>]*ProviderResponse|setProviderResponse|providerResponseState/);
     assert.doesNotMatch(settings, /setResponseHistory|capResponseHistoryMessages|resolveNextActiveResponseSelection/);

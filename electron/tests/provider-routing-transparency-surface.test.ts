@@ -196,7 +196,7 @@ test('Sprint 7 UI-C settings integration derives routing read model without new 
     assert.match(settings, /import \{ buildProviderRoutingReadModel \}/);
     assert.match(settings, /import \{ ProviderRoutingTransparencySurface \}/);
     assert.match(settings, /const providerRoutingReadModel = useMemo/);
-    assert.match(settings, /buildProviderRoutingReadModel\(\{ responses: \[\] \}\)/);
+    assert.match(settings, /buildProviderRoutingReadModel\(\{\s*responses: providerAnalyticsSnapshot\.responses,\s*activeResponseId: providerAnalyticsSnapshot\.activeResponseId,/s);
     assert.match(settings, /<ProviderRoutingTransparencySurface readModel=\{providerRoutingReadModel\} \/>/);
     assert.doesNotMatch(settings, /useState<[^>]*ProviderRouting|setProviderRouting|providerRoutingState/);
     assert.doesNotMatch(settings, /useState<[^>]*ProviderPersonalization|setProviderPersonalization|providerPersonalizationState/);

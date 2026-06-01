@@ -265,7 +265,7 @@ test('Sprint 7 UI-E settings integration derives telemetry read model without ne
     assert.match(settings, /import \{ buildProviderTelemetryReadModel \}/);
     assert.match(settings, /import \{ ProviderTelemetrySurface \}/);
     assert.match(settings, /const providerTelemetryReadModel = useMemo/);
-    assert.match(settings, /buildProviderTelemetryReadModel\(\{ responses: \[\] \}\)/);
+    assert.match(settings, /buildProviderTelemetryReadModel\(\{\s*responses: providerAnalyticsSnapshot\.responses,\s*activeResponseId: providerAnalyticsSnapshot\.activeResponseId,/s);
     assert.match(settings, /<ProviderTelemetrySurface readModel=\{providerTelemetryReadModel\} \/>/);
     assert.doesNotMatch(settings, /useState<[^>]*ProviderTelemetry|setProviderTelemetry|providerTelemetryState/);
     assert.doesNotMatch(settings, /useState<[^>]*ProviderPersonalization|setProviderPersonalization|providerPersonalizationState/);

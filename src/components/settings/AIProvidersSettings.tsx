@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Plus, Trash2, Edit2, AlertCircle, CheckCircle, Save, ChevronDown, Check, RefreshCw, ExternalLink, Loader2 } from 'lucide-react';
 import { STANDARD_CLOUD_MODELS, prettifyModelId } from '../../utils/modelUtils';
 import { validateCurl } from '../../lib/curl-validator';
@@ -8,6 +8,11 @@ import { buildProviderRoutingReadModel } from '../../lib/providers/providerRouti
 import { buildProviderFallbackReadModel } from '../../lib/providers/providerFallbackReadModel';
 import { buildProviderTelemetryReadModel } from '../../lib/providers/providerTelemetryReadModel';
 import { buildProviderPersonalizationReadModel } from '../../lib/providers/providerPersonalizationReadModel';
+import {
+    buildProviderAnalyticsSessionSnapshotStateKey,
+    createEmptyProviderAnalyticsSessionSnapshot,
+    type ProviderAnalyticsSessionSnapshot,
+} from '../../lib/providers/providerAnalyticsSessionSnapshot';
 import { ProviderCard } from './ProviderCard';
 import { GroqKeyVault } from './GroqKeyVault';
 import { ProviderHealthStatusSurface } from './ProviderHealthStatusSurface';
@@ -54,6 +59,43 @@ interface ModelSelectProps {
     options: ModelOption[];
     onChange: (value: string) => void;
     placeholder?: string;
+}
+
+function ProviderSettingsDisclosure({
+    title,
+    summary,
+    children,
+}: {
+    title: string;
+    summary: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <details
+            className="group overflow-hidden rounded-xl border border-border-subtle bg-bg-input/35"
+            data-provider-settings-density="disclosure"
+        >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-bg-item-surface/70 [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+                        Session analytics
+                    </div>
+                    <div className="mt-0.5 truncate text-sm font-semibold text-text-primary">
+                        {title}
+                    </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-md border border-border-subtle bg-bg-item-surface px-2 py-1 text-[10px] font-semibold text-text-secondary">
+                        {summary}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-text-tertiary transition-transform group-open:rotate-180" />
+                </div>
+            </summary>
+            <div className="border-t border-border-subtle p-4">
+                {children}
+            </div>
+        </details>
+    );
 }
 
 const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, placeholder = "Select model" }) => {
@@ -213,6 +255,22 @@ export const AIProvidersSettings: React.FC = () => {
     // --- Dynamic Model Discovery ---
     const [preferredModels, setPreferredModels] = useState<Record<string, string>>({});
     const [dynamicModels, setDynamicModels] = useState<Record<string, { id: string, name: string }[]>>({});
+    const [providerAnalyticsSnapshot, setProviderAnalyticsSnapshot] = useState<ProviderAnalyticsSessionSnapshot>(
+        () => createEmptyProviderAnalyticsSessionSnapshot(0),
+    );
+    const providerAnalyticsSnapshotKeyRef = useRef(
+        buildProviderAnalyticsSessionSnapshotStateKey(createEmptyProviderAnalyticsSessionSnapshot(0)),
+    );
+    const applyProviderAnalyticsSnapshot = useCallback((snapshot: ProviderAnalyticsSessionSnapshot | null) => {
+        const nextSnapshot = snapshot ?? createEmptyProviderAnalyticsSessionSnapshot(0);
+        const nextKey = buildProviderAnalyticsSessionSnapshotStateKey(nextSnapshot);
+        if (providerAnalyticsSnapshotKeyRef.current === nextKey) {
+            return;
+        }
+
+        providerAnalyticsSnapshotKeyRef.current = nextKey;
+        setProviderAnalyticsSnapshot(nextSnapshot);
+    }, []);
     const providerHealthReadModel = useMemo(() => {
         const connectionSignal = (provider: 'gemini' | 'openai' | 'claude' | 'bedrock') => {
             if (testStatus[provider] === 'success') {
@@ -267,21 +325,62 @@ export const AIProvidersSettings: React.FC = () => {
         [providerHealthReadModel],
     );
     const providerRoutingReadModel = useMemo(
-        () => buildProviderRoutingReadModel({ responses: [] }),
-        [],
+        () => buildProviderRoutingReadModel({
+            responses: providerAnalyticsSnapshot.responses,
+            activeResponseId: providerAnalyticsSnapshot.activeResponseId,
+        }),
+        [providerAnalyticsSnapshot],
     );
     const providerFallbackReadModel = useMemo(
-        () => buildProviderFallbackReadModel({ responses: [] }),
-        [],
+        () => buildProviderFallbackReadModel({
+            responses: providerAnalyticsSnapshot.responses,
+            activeResponseId: providerAnalyticsSnapshot.activeResponseId,
+        }),
+        [providerAnalyticsSnapshot],
     );
     const providerTelemetryReadModel = useMemo(
-        () => buildProviderTelemetryReadModel({ responses: [] }),
-        [],
+        () => buildProviderTelemetryReadModel({
+            responses: providerAnalyticsSnapshot.responses,
+            activeResponseId: providerAnalyticsSnapshot.activeResponseId,
+        }),
+        [providerAnalyticsSnapshot],
     );
     const providerPersonalizationReadModel = useMemo(
-        () => buildProviderPersonalizationReadModel({ responses: [] }),
-        [],
+        () => buildProviderPersonalizationReadModel({
+            responses: providerAnalyticsSnapshot.responses,
+            activeResponseId: providerAnalyticsSnapshot.activeResponseId,
+        }),
+        [providerAnalyticsSnapshot],
     );
+    const providerResponseDiagnosticsReadModel = useMemo(
+        () => buildProviderDiagnosticsReadModel({
+            health: providerHealthReadModel,
+            responses: providerAnalyticsSnapshot.responses,
+            activeResponseId: providerAnalyticsSnapshot.activeResponseId,
+        }),
+        [providerAnalyticsSnapshot, providerHealthReadModel],
+    );
+
+    useEffect(() => {
+        let cancelled = false;
+
+        window.electronAPI?.getProviderAnalyticsSessionSnapshot?.()
+            .then((snapshot) => {
+                if (!cancelled && snapshot) {
+                    applyProviderAnalyticsSnapshot(snapshot);
+                }
+            })
+            .catch(() => {});
+
+        const unsubscribe = window.electronAPI?.onProviderAnalyticsSessionSnapshotChanged?.((snapshot) => {
+            applyProviderAnalyticsSnapshot(snapshot);
+        });
+
+        return () => {
+            cancelled = true;
+            unsubscribe?.();
+        };
+    }, [applyProviderAnalyticsSnapshot]);
 
     // Load Initial Data
     useEffect(() => {
@@ -909,18 +1008,59 @@ export const AIProvidersSettings: React.FC = () => {
                 </div>
             </div>
 
-            <ProviderHealthStatusSurface readModel={providerHealthReadModel} />
-            <ProviderDiagnosticsSurface readModel={providerDiagnosticsReadModel} />
-            <ProviderRoutingTransparencySurface readModel={providerRoutingReadModel} />
-            <ProviderFallbackAnalyticsSurface readModel={providerFallbackReadModel} />
-            <ProviderTelemetrySurface readModel={providerTelemetryReadModel} />
-            <ProviderPersonalizationImpactSurface readModel={providerPersonalizationReadModel} />
-            <ProviderResponseDrilldownSurface
-                ownershipByResponseId={{}}
-                routingReadModel={providerRoutingReadModel}
-                diagnosticsReadModel={providerDiagnosticsReadModel}
-                telemetryReadModel={providerTelemetryReadModel}
-            />
+            <section aria-label="Provider operations" className="space-y-4">
+                <div className="rounded-xl border border-border-subtle bg-bg-item-surface/70 p-4">
+                    <h3 className="text-sm font-bold text-text-primary mb-1">Provider Operations</h3>
+                    <p className="text-xs text-text-secondary">
+                        Connection health and current-session routing metadata.
+                    </p>
+                </div>
+
+                <ProviderHealthStatusSurface readModel={providerHealthReadModel} />
+                <ProviderDiagnosticsSurface readModel={providerDiagnosticsReadModel} />
+
+                <div className="space-y-3" aria-label="Provider session analytics">
+                    <ProviderSettingsDisclosure
+                        title="Routing transparency"
+                        summary={`${providerRoutingReadModel.summary.totalRoutes} routes`}
+                    >
+                        <ProviderRoutingTransparencySurface readModel={providerRoutingReadModel} />
+                    </ProviderSettingsDisclosure>
+
+                    <ProviderSettingsDisclosure
+                        title="Fallback analytics"
+                        summary={`${providerFallbackReadModel.summary.totalFallbacks} fallbacks`}
+                    >
+                        <ProviderFallbackAnalyticsSurface readModel={providerFallbackReadModel} />
+                    </ProviderSettingsDisclosure>
+
+                    <ProviderSettingsDisclosure
+                        title="Telemetry"
+                        summary={`${providerTelemetryReadModel.summary.requestCount} requests`}
+                    >
+                        <ProviderTelemetrySurface readModel={providerTelemetryReadModel} />
+                    </ProviderSettingsDisclosure>
+
+                    <ProviderSettingsDisclosure
+                        title="Personalization impact"
+                        summary={`${providerPersonalizationReadModel.summary.totalResponses} responses`}
+                    >
+                        <ProviderPersonalizationImpactSurface readModel={providerPersonalizationReadModel} />
+                    </ProviderSettingsDisclosure>
+
+                    <ProviderSettingsDisclosure
+                        title="Response provider drilldown"
+                        summary={`${providerRoutingReadModel.routes.length} responses`}
+                    >
+                        <ProviderResponseDrilldownSurface
+                            ownershipByResponseId={providerAnalyticsSnapshot.ownershipByResponseId}
+                            routingReadModel={providerRoutingReadModel}
+                            diagnosticsReadModel={providerResponseDiagnosticsReadModel}
+                            telemetryReadModel={providerTelemetryReadModel}
+                        />
+                    </ProviderSettingsDisclosure>
+                </div>
+            </section>
 
             {/* Cloud Providers */}
             <div className="space-y-5">

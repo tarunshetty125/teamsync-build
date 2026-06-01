@@ -11,6 +11,11 @@ import * as fs from "fs";
 import { AudioDevices } from "./audio/AudioDevices";
 import { PermissionManager } from "./services/PermissionManager";
 import type { PermissionKind } from "../src/lib/permissions/types";
+import {
+  PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC,
+  type ProviderAnalyticsSessionSnapshot,
+  type ProviderAnalyticsSessionSnapshotSetResult,
+} from "../src/lib/providers/providerAnalyticsSessionSnapshot";
 
 
 import { RECOGNITION_LANGUAGES, AI_RESPONSE_LANGUAGES } from "./config/languages"
@@ -19,6 +24,14 @@ export function initializeIpcHandlers(appState: AppState): void {
   const safeHandle = (channel: string, listener: (event: any, ...args: any[]) => Promise<any> | any) => {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, listener);
+  };
+  let providerAnalyticsSessionSnapshot: ProviderAnalyticsSessionSnapshot | null = null;
+  const broadcastProviderAnalyticsSessionSnapshot = (snapshot: ProviderAnalyticsSessionSnapshot | null): void => {
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (!win.isDestroyed()) {
+        win.webContents.send(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.changed, snapshot);
+      }
+    });
   };
   const permissionManager = PermissionManager.getInstance();
   const { getCurrentUserPlan, hasActiveProPlan } = require('../premium/electron/auth/PlanService');
@@ -450,6 +463,16 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("set-overlay-v2-layout", async (_, enabled: boolean) => {
     appState.getWindowHelper().setOverlayUsesV2Layout(!!enabled);
     return { success: true };
+  })
+
+  safeHandle(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.set, async (_, snapshot: ProviderAnalyticsSessionSnapshot | null): Promise<ProviderAnalyticsSessionSnapshotSetResult> => {
+    providerAnalyticsSessionSnapshot = snapshot ?? null;
+    broadcastProviderAnalyticsSessionSnapshot(providerAnalyticsSessionSnapshot);
+    return { success: true };
+  })
+
+  safeHandle(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.get, async (): Promise<ProviderAnalyticsSessionSnapshot | null> => {
+    return providerAnalyticsSessionSnapshot;
   })
 
 
