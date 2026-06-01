@@ -319,6 +319,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
 
                         <ProResponseSurface
                             activeResponse={bridge.activeResponse}
+                            responseHistory={bridge.responseHistory}
                             activeResponseChain={bridge.activeResponseChain}
                             isProcessing={bridge.isProcessing}
                             activeResponseIndex={bridge.activeResponseIndex}

@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChevronLeft, ChevronRight, ChevronsRight, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, ChevronsRight, Code2, FileText, X } from 'lucide-react';
 import { SkeletonLoader, EmptyListeningState } from '../ui/PremiumStates';
 import CodeBlock from '../ui/CodeBlock';
 import MermaidRenderer from '../ui/MermaidRenderer';
@@ -55,9 +55,21 @@ import {
     normalizeMermaidChartSource,
     normalizeV2MermaidMarkdown,
 } from '../../lib/overlay/v2Mermaid';
+import { buildSessionExportReadModel } from '../../lib/export/sessionExportReadModel';
+import {
+    generateSessionExportHtmlReport,
+    generateSessionExportMarkdownReport,
+    type SessionExportReportFormat,
+} from '../../lib/export/sessionExportReportGenerator';
+import { buildProviderRoutingReadModel } from '../../lib/providers/providerRoutingReadModel';
+import { buildProviderFallbackReadModel } from '../../lib/providers/providerFallbackReadModel';
+import { buildProviderTelemetryReadModel } from '../../lib/providers/providerTelemetryReadModel';
+import { buildProviderDiagnosticsReadModel } from '../../lib/providers/providerDiagnosticsReadModel';
+import { buildProviderPersonalizationReadModel } from '../../lib/providers/providerPersonalizationReadModel';
 
 interface ProResponseSurfaceProps {
     activeResponse: V2Message | null;
+    responseHistory: V2Message[];
     activeResponseChain: V2Message[];
     isProcessing: boolean;
     activeResponseIndex: number;
@@ -92,6 +104,7 @@ type DiagramComparisonMode = 'parent_current' | 'root_current' | 'version_pair';
 
 const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSurface({
     activeResponse,
+    responseHistory,
     activeResponseChain,
     isProcessing,
     activeResponseIndex,
@@ -107,6 +120,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
     scrollContainerRef,
 }) {
     const [copied, setCopied] = useState(false);
+    const [exportCopiedFormat, setExportCopiedFormat] = useState<SessionExportReportFormat | null>(null);
     const [selectedDiagramNodeId, setSelectedDiagramNodeId] = useState<string | null>(null);
     const [diagramComparisonMode, setDiagramComparisonMode] = useState<DiagramComparisonMode>('parent_current');
     const [comparisonFromVersion, setComparisonFromVersion] = useState(1);
@@ -173,6 +187,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         : diagramComparisonMode === 'version_pair'
             ? versionPairDiagramComparison
             : parentDiagramComparison;
+    const canExportSessionReport = responseHistory.length > 0;
     const selectedDiagramNode = diagramNodeIntelligence.selectedNode;
     const shouldShowDiagramTimeline = diagramTimeline.items.length >= 2 && Boolean(diagramTimeline.activeItem);
     const shouldShowEvolutionSummary = Boolean(
@@ -209,6 +224,79 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         () => resolveV2ResponseWidthPx(renderedResponse?.text),
         [renderedResponse?.text],
     );
+
+    const buildCurrentSessionExportReadModel = useCallback(() => {
+        const generatedAt = Date.now();
+        const activeResponseId = renderedResponse?.id ?? null;
+        const providerRouting = buildProviderRoutingReadModel({
+            responses: responseHistory,
+            activeResponseId,
+            now: generatedAt,
+        });
+        const providerFallback = buildProviderFallbackReadModel({
+            responses: responseHistory,
+            activeResponseId,
+            now: generatedAt,
+        });
+        const providerTelemetry = buildProviderTelemetryReadModel({
+            responses: responseHistory,
+            activeResponseId,
+            now: generatedAt,
+        });
+        const providerDiagnostics = buildProviderDiagnosticsReadModel({
+            responses: responseHistory,
+            activeResponseId,
+            now: generatedAt,
+        });
+        const providerPersonalization = buildProviderPersonalizationReadModel({
+            responses: responseHistory,
+            activeResponseId,
+            now: generatedAt,
+        });
+
+        return buildSessionExportReadModel({
+            responses: responseHistory,
+            activeResponseId,
+            generatedAt,
+            providerRouting,
+            providerFallback,
+            providerTelemetry,
+            providerDiagnostics,
+            providerPersonalization,
+            diagramTimeline,
+            parentCurrentEvolution: parentEvolutionSummary,
+            rootCurrentEvolution: rootEvolutionSummary,
+            diagramGuardrails,
+            parentCurrentComparison: parentDiagramComparison,
+            rootCurrentComparison: rootDiagramComparison,
+            versionPairComparison: versionPairDiagramComparison,
+        });
+    }, [
+        diagramGuardrails,
+        diagramTimeline,
+        parentDiagramComparison,
+        parentEvolutionSummary,
+        renderedResponse?.id,
+        responseHistory,
+        rootDiagramComparison,
+        rootEvolutionSummary,
+        versionPairDiagramComparison,
+    ]);
+
+    const handleCopyExportReport = useCallback((format: SessionExportReportFormat) => {
+        if (!canExportSessionReport) return;
+        const exportModel = buildCurrentSessionExportReadModel();
+        const report = format === 'html'
+            ? generateSessionExportHtmlReport(exportModel)
+            : generateSessionExportMarkdownReport(exportModel);
+
+        void navigator.clipboard.writeText(report.content)
+            .then(() => {
+                setExportCopiedFormat(format);
+                window.setTimeout(() => setExportCopiedFormat(null), 1800);
+            })
+            .catch(() => {});
+    }, [buildCurrentSessionExportReadModel, canExportSessionReport]);
 
     const isSystemDesignResponse = useMemo(() => {
         const text = renderedResponse?.text ?? '';
@@ -265,6 +353,30 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                         </div>
                     )}
                     {/* Copy */}
+                    {canExportSessionReport && (
+                        <div className="v2-export-actions" aria-label="Export session report">
+                            <button
+                                type="button"
+                                className={`v2-panel-btn v2-export-btn${exportCopiedFormat === 'markdown' ? ' v2-export-btn--copied' : ''}`}
+                                onClick={() => handleCopyExportReport('markdown')}
+                                title="Copy Markdown session report"
+                                aria-label="Copy Markdown session report"
+                            >
+                                {exportCopiedFormat === 'markdown' ? <Check size={13} strokeWidth={2.4} aria-hidden /> : <FileText size={13} strokeWidth={2} aria-hidden />}
+                                <span>MD</span>
+                            </button>
+                            <button
+                                type="button"
+                                className={`v2-panel-btn v2-export-btn${exportCopiedFormat === 'html' ? ' v2-export-btn--copied' : ''}`}
+                                onClick={() => handleCopyExportReport('html')}
+                                title="Copy HTML session report"
+                                aria-label="Copy HTML session report"
+                            >
+                                {exportCopiedFormat === 'html' ? <Check size={13} strokeWidth={2.4} aria-hidden /> : <Code2 size={13} strokeWidth={2} aria-hidden />}
+                                <span>HTML</span>
+                            </button>
+                        </div>
+                    )}
                     {renderedResponse?.text && (
                         <button className="v2-panel-btn" onClick={handleCopy} title="Copy response">
                             {copied ? (

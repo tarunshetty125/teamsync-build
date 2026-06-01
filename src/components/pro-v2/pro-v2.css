@@ -2431,6 +2431,12 @@
   flex-shrink: 0;
 }
 
+.v2-export-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
 .v2-panel-btn {
   width: 28px;
   height: 28px;
@@ -2445,6 +2451,12 @@
   transition: background 0.2s var(--v2-ease-premium), color 0.2s var(--v2-ease-premium), transform 0.16s var(--v2-ease-premium);
 }
 
+.v2-panel-btn:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.86);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
+}
+
 .v2-panel-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.88);
@@ -2452,6 +2464,26 @@
 
 .v2-panel-btn:active {
   transform: scale(0.94);
+}
+
+.v2-export-btn {
+  width: auto;
+  min-width: 34px;
+  height: 26px;
+  gap: 4px;
+  padding: 0 7px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.v2-export-btn--copied {
+  color: rgba(52, 211, 153, 0.92);
+  border-color: rgba(52, 211, 153, 0.22);
+  background: rgba(52, 211, 153, 0.10);
 }
 
 .v2-panel-btn.v2-overlay-icon-btn {
