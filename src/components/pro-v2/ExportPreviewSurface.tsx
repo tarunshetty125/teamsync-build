@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Check, Clipboard, Code2, Download, FileText, X } from 'lucide-react';
+import { Check, Clipboard, Code2, Download, FileDown, FileText, X } from 'lucide-react';
 import {
     buildSessionExportDefaultFileName,
     type SessionExportSaveResult,
@@ -34,6 +34,8 @@ export function ExportPreviewSurface({
     const panelId = `${previewId}-panel`;
     const [saveState, setSaveState] = React.useState<'idle' | 'saving' | 'saved' | 'canceled' | 'error'>('idle');
     const [saveMessage, setSaveMessage] = React.useState<string>('');
+    const [pdfState, setPdfState] = React.useState<'idle' | 'saving' | 'saved' | 'canceled' | 'error'>('idle');
+    const [pdfMessage, setPdfMessage] = React.useState<string>('');
     const [copyState, setCopyState] = React.useState<'idle' | 'copying' | 'copied' | 'error'>('idle');
     const [copyMessage, setCopyMessage] = React.useState<string>('');
     const preview = useMemo(
@@ -43,11 +45,14 @@ export function ExportPreviewSurface({
     const canSave = preview.guardrailFeedback.canPreviewReport
         && !preview.blocked
         && preview.guardrailStatus !== 'invalid';
+    const canSavePdf = canSave;
     const canCopy = canSave;
 
     React.useEffect(() => {
         setSaveState('idle');
         setSaveMessage('');
+        setPdfState('idle');
+        setPdfMessage('');
         setCopyState('idle');
         setCopyMessage('');
     }, [format, model]);
@@ -93,6 +98,44 @@ export function ExportPreviewSurface({
         preview.format,
         preview.guardrailFeedback.canPreviewReport,
         preview.guardrailStatus,
+    ]);
+
+    const handleSavePdf = React.useCallback(() => {
+        if (!canSavePdf || !window.electronAPI?.saveSessionExportPdfReport) return;
+
+        setPdfState('saving');
+        setPdfMessage('');
+        const pdfPreview = buildExportPreviewModel(model, 'html');
+
+        void window.electronAPI.saveSessionExportPdfReport({
+            sourceFormat: 'html',
+            html: pdfPreview.contentPreview,
+            generatedAt: model.generatedAt,
+            suggestedFileName: buildSessionExportDefaultFileName('pdf', model.generatedAt),
+            guardrailStatus: pdfPreview.guardrailStatus === 'warning' ? 'warning' : 'valid',
+            blocked: false,
+        }).then((result) => {
+            if (result.canceled) {
+                setPdfState('canceled');
+                setPdfMessage('PDF save canceled.');
+                return;
+            }
+
+            if (result.success) {
+                setPdfState('saved');
+                setPdfMessage('PDF saved.');
+                return;
+            }
+
+            setPdfState('error');
+            setPdfMessage(result.error ?? 'Unable to save PDF report.');
+        }).catch((error: unknown) => {
+            setPdfState('error');
+            setPdfMessage(error instanceof Error ? error.message : 'Unable to save PDF report.');
+        });
+    }, [
+        canSavePdf,
+        model,
     ]);
 
     const handleCopy = React.useCallback(() => {
@@ -169,6 +212,17 @@ export function ExportPreviewSurface({
                     </button>
                     <button
                         type="button"
+                        className={`v2-export-delivery-btn v2-export-delivery-btn--${pdfState}`}
+                        onClick={handleSavePdf}
+                        disabled={!canSavePdf || pdfState === 'saving'}
+                        title={preview.blocked ? 'Blocked exports cannot be saved as PDF' : 'Save PDF session report'}
+                        aria-label={preview.blocked ? 'Blocked exports cannot be saved as PDF' : 'Save PDF session report'}
+                    >
+                        {pdfState === 'saved' ? <Check size={13} strokeWidth={2.4} aria-hidden /> : <FileDown size={13} strokeWidth={2} aria-hidden />}
+                        <span>{pdfState === 'saving' ? 'Saving PDF' : pdfState === 'saved' ? 'PDF Saved' : 'Save PDF'}</span>
+                    </button>
+                    <button
+                        type="button"
                         className={`v2-export-delivery-btn v2-export-delivery-btn--${copyState}`}
                         onClick={handleCopy}
                         disabled={!canCopy || copyState === 'copying'}
@@ -182,6 +236,9 @@ export function ExportPreviewSurface({
                 <div className="v2-export-delivery-status" aria-label="Export delivery status">
                     <span className={`v2-export-delivery-status-line v2-export-delivery-status-line--${saveState}`} role="status">
                         {saveMessage || (canSave ? 'Save uses a user-selected file.' : 'Save disabled until guardrails pass.')}
+                    </span>
+                    <span className={`v2-export-delivery-status-line v2-export-delivery-status-line--${pdfState}`} role="status">
+                        {pdfMessage || (canSavePdf ? 'PDF uses print-ready HTML.' : 'PDF disabled until guardrails pass.')}
                     </span>
                     <span className={`v2-export-delivery-status-line v2-export-delivery-status-line--${copyState}`} role="status">
                         {copyMessage || (canCopy ? 'Copy is available after preview review.' : 'Copy disabled until guardrails pass.')}

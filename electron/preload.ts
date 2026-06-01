@@ -7,14 +7,26 @@ import type {
   PermissionStatusSnapshot,
 } from "../src/lib/permissions/types";
 import {
-  PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC,
   type ProviderAnalyticsSessionSnapshot,
   type ProviderAnalyticsSessionSnapshotBridge,
 } from "../src/lib/providers/providerAnalyticsSessionSnapshot";
 import {
-  SESSION_EXPORT_DELIVERY_IPC,
+  type SessionExportPdfSaveRequest,
+  type SessionExportPdfSaveResult,
   type SessionExportSaveRequest,
+  type SessionExportSaveResult,
 } from "../src/lib/export/sessionExportDelivery";
+
+const PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC = {
+  set: 'provider-analytics:set-session-snapshot',
+  get: 'provider-analytics:get-session-snapshot',
+  changed: 'provider-analytics:session-snapshot-changed',
+} as const;
+
+const SESSION_EXPORT_DELIVERY_IPC = {
+  save: 'session-export:save-report',
+  savePdf: 'session-export:save-pdf-report',
+} as const;
 
 interface PermissionsBridge {
   getStatus: () => Promise<PermissionStatusSnapshot>
@@ -95,6 +107,8 @@ type GenerateActionPayload = {
 
 // Types for the exposed Electron API
 interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
+  saveSessionExportReport: (request: SessionExportSaveRequest) => Promise<SessionExportSaveResult>
+  saveSessionExportPdfReport: (request: SessionExportPdfSaveRequest) => Promise<SessionExportPdfSaveResult>
   updateContentDimensions: (dimensions: {
     width: number
     height: number
@@ -560,6 +574,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("update-content-dimensions", dimensions),
   saveSessionExportReport: (request: SessionExportSaveRequest) =>
     ipcRenderer.invoke(SESSION_EXPORT_DELIVERY_IPC.save, request),
+  saveSessionExportPdfReport: (request: SessionExportPdfSaveRequest) =>
+    ipcRenderer.invoke(SESSION_EXPORT_DELIVERY_IPC.savePdf, request),
   getRecognitionLanguages: () => ipcRenderer.invoke("get-recognition-languages"),
   takeScreenshot: (options?: { requireVision?: boolean }) => ipcRenderer.invoke("take-screenshot", options),
   captureScreen: async () => {

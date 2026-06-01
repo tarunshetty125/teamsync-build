@@ -18,6 +18,7 @@ import {
 } from '../../src/components/pro-v2/architecture/diagramGuardrails.ts';
 import {
     buildSessionExportReadModel,
+    SESSION_EXPORT_PRIVACY_EXCLUDED_FIELDS,
     type SessionExportReadModel,
     type SessionExportSourceResponse,
 } from '../../src/lib/export/sessionExportReadModel.ts';
@@ -305,6 +306,58 @@ test('Sprint 10 Phase E renders detailed diagram timeline, evolution, and guardr
     assert.doesNotMatch(html.content, /SECRET_DIAGRAM_PAYLOAD|"payload"|fallbackDiagram|parsedDiagram/);
 });
 
+test('Sprint 12 Phase B emits print-ready HTML styles for reports', () => {
+    const report = generateSessionExportHtmlReport(buildReportModel(), {
+        title: 'Print Report',
+    });
+
+    assert.equal(report.blocked, false);
+    assert.match(report.content, /@page\{size:auto;margin:0\.65in;\}/);
+    assert.match(report.content, /@media print\{/);
+    assert.match(report.content, /main\.export-report\{max-width:none;margin:0;\}/);
+    assert.match(report.content, /print-color-adjust:exact/);
+    assert.match(report.content, /break-inside:avoid-page;page-break-inside:avoid/);
+    assert.match(report.content, /break-after:avoid-page;page-break-after:avoid/);
+});
+
+test('Sprint 12 Phase B emits table and long-token print rules', () => {
+    const report = generateSessionExportHtmlReport(buildReportModel(), {
+        title: 'Table Print Report',
+    });
+
+    assert.match(report.content, /thead\{display:table-header-group;\}/);
+    assert.match(report.content, /tfoot\{display:table-footer-group;\}/);
+    assert.match(report.content, /tbody\{display:table-row-group;\}/);
+    assert.match(report.content, /tr\{break-inside:avoid-page;page-break-inside:avoid;\}/);
+    assert.match(report.content, /overflow-wrap:anywhere;word-break:break-word/);
+    assert.match(report.content, /pre,code\{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;\}/);
+});
+
+test('Sprint 12 Phase B marks provider and diagram sections for print layout', () => {
+    const report = generateSessionExportHtmlReport(buildReportModel(), {
+        title: 'Section Print Report',
+    });
+
+    assert.match(report.content, /<main class="export-report">/);
+    assert.match(report.content, /<section class="export-section export-section--provider"><h2>Provider Routing<\/h2>/);
+    assert.match(report.content, /<section class="export-section export-section--provider"><h2>Provider Telemetry<\/h2>/);
+    assert.match(report.content, /<section class="export-section export-section--diagram"><h2>Diagrams<\/h2>/);
+    assert.match(report.content, /<section class="export-section export-section--diagram"><h2>Diagram Timeline<\/h2>/);
+    assert.match(report.content, /<section class="export-section export-section--diagram"><h2>Diagram Evolution<\/h2>/);
+    assert.match(report.content, /<section class="export-section export-section--diagram"><h2>Diagram Guardrails<\/h2>/);
+});
+
+test('Sprint 12 Phase B preserves export privacy exclusions while adding print styles', () => {
+    const model = buildReportModel();
+    const report = generateSessionExportHtmlReport(model, {
+        title: 'Privacy Print Report',
+    });
+
+    assert.deepEqual([...model.privacy.excludedFields], [...SESSION_EXPORT_PRIVACY_EXCLUDED_FIELDS]);
+    assert.match(report.content, /@media print/);
+    assert.doesNotMatch(report.content, /SECRET_RESPONSE_TEXT|SECRET_MARKDOWN|SECRET_RAW_PROMPT|SECRET_PROVIDER_PAYLOAD|SECRET_DIAGRAM_PAYLOAD/);
+});
+
 test('Sprint 10 Phase D generates escaped HTML without raw content leakage', () => {
     const model = buildSessionExportReadModel({
         responses: [
@@ -387,5 +440,5 @@ test('Sprint 10 Phase D remains generator-only without UI, IPC, persistence, or 
     assert.doesNotMatch(helper, /from 'react'|from "react"|createElement|renderToStaticMarkup/);
     assert.doesNotMatch(helper, /ipcMain|ipcRenderer|safeHandle|preload/);
     assert.doesNotMatch(helper, /localStorage|sessionStorage|indexedDB|electron-store|writeFile|appendFile/);
-    assert.doesNotMatch(helper, /pdfkit|html2pdf|puppeteer|BrowserWindow/);
+    assert.doesNotMatch(helper, /pdfkit|html2pdf|puppeteer|BrowserWindow|printToPDF/);
 });

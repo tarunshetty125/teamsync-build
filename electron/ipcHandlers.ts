@@ -19,9 +19,15 @@ import {
 } from "../src/lib/providers/providerAnalyticsSessionSnapshot";
 import {
   SESSION_EXPORT_DELIVERY_IPC,
+  SESSION_EXPORT_PDF_RUNTIME_BUDGETS,
   buildSessionExportDefaultFileName,
   getSessionExportFileExtension,
+  validateSessionExportPdfBuffer,
+  validateSessionExportPdfSaveRequest,
   validateSessionExportSaveRequest,
+  type SessionExportDeliveryFormat,
+  type SessionExportPdfSaveRequest,
+  type SessionExportPdfSaveResult,
   type SessionExportSaveRequest,
   type SessionExportSaveResult,
 } from "../src/lib/export/sessionExportDelivery";
@@ -57,7 +63,14 @@ export function initializeIpcHandlers(appState: AppState): void {
     return result;
   };
 
-  const buildSessionExportSaveFilters = (format: SessionExportSaveRequest['format']): FileFilter[] => {
+  const buildSessionExportSaveFilters = (format: SessionExportDeliveryFormat): FileFilter[] => {
+    if (format === 'pdf') {
+      return [
+        { name: 'PDF Report', extensions: ['pdf'] },
+        { name: 'All Files', extensions: ['*'] },
+      ];
+    }
+
     if (format === 'html') {
       return [
         { name: 'HTML Report', extensions: ['html'] },
@@ -69,6 +82,46 @@ export function initializeIpcHandlers(appState: AppState): void {
       { name: 'Markdown Report', extensions: ['md'] },
       { name: 'All Files', extensions: ['*'] },
     ];
+  };
+
+  const renderSessionExportPdfFromHtml = async (html: string): Promise<Buffer> => {
+    const pdfWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true,
+      },
+    });
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      const htmlDataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+      await pdfWindow.loadURL(htmlDataUrl);
+      const renderPromise = pdfWindow.webContents.printToPDF({
+        displayHeaderFooter: false,
+        printBackground: true,
+        preferCSSPageSize: true,
+        pageSize: 'Letter',
+        generateTaggedPDF: true,
+        generateDocumentOutline: true,
+      });
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error(`PDF render timed out after ${SESSION_EXPORT_PDF_RUNTIME_BUDGETS.renderTimeoutMs}ms.`));
+        }, SESSION_EXPORT_PDF_RUNTIME_BUDGETS.renderTimeoutMs);
+      });
+
+      return await Promise.race([renderPromise, timeoutPromise]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      if (!pdfWindow.isDestroyed()) {
+        pdfWindow.destroy();
+      }
+    }
   };
 
   /**
@@ -549,6 +602,67 @@ export function initializeIpcHandlers(appState: AppState): void {
       success: true,
       filePath: selectedPath,
     };
+  })
+
+  safeHandle(SESSION_EXPORT_DELIVERY_IPC.savePdf, async (event, request: unknown): Promise<SessionExportPdfSaveResult> => {
+    const validation = validateSessionExportPdfSaveRequest(request);
+    if (!validation.valid) {
+      console.warn('[SessionExport] PDF save request rejected:', validation.error);
+      return { success: false, error: validation.error ?? 'Invalid PDF export save request.' };
+    }
+
+    const pdfRequest = request as SessionExportPdfSaveRequest;
+    const extension = getSessionExportFileExtension('pdf');
+    const fallbackName = buildSessionExportDefaultFileName('pdf', pdfRequest.generatedAt);
+    const requestedName = pdfRequest.suggestedFileName?.trim()
+      ? pdfRequest.suggestedFileName.trim().split(/[\\/]/).pop()
+      : undefined;
+    const defaultPath = requestedName || fallbackName;
+    const parentWindow = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: 'Save PDF Session Report',
+      defaultPath,
+      filters: buildSessionExportSaveFilters('pdf'),
+      properties: ['createDirectory'] as Array<'createDirectory'>,
+    };
+    const rawResult = parentWindow && !parentWindow.isDestroyed()
+      ? await dialog.showSaveDialog(parentWindow, options)
+      : await dialog.showSaveDialog(options);
+    const result = typeof rawResult === 'string'
+      ? { canceled: rawResult.length === 0, filePath: rawResult }
+      : rawResult;
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, canceled: true };
+    }
+
+    try {
+      const selectedPath = path.extname(result.filePath)
+        ? result.filePath
+        : `${result.filePath}.${extension}`;
+      const pdfBuffer = await renderSessionExportPdfFromHtml(pdfRequest.html);
+      const pdfValidation = validateSessionExportPdfBuffer(pdfBuffer);
+      if (!pdfValidation.valid) {
+        throw new Error(pdfValidation.error ?? 'Generated PDF failed validation.');
+      }
+      if (pdfValidation.warning) {
+        console.warn('[SessionExport] PDF output warning:', {
+          warning: pdfValidation.warning,
+          byteLength: pdfValidation.byteLength,
+          budget: SESSION_EXPORT_PDF_RUNTIME_BUDGETS.warningPdfBytes,
+        });
+      }
+      await fs.promises.writeFile(selectedPath, pdfBuffer);
+
+      return {
+        success: true,
+        filePath: selectedPath,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save PDF report.';
+      console.warn('[SessionExport] PDF save failed:', message);
+      return { success: false, error: message };
+    }
   })
 
 

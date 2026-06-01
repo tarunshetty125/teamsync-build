@@ -3,15 +3,34 @@ import type { SessionExportReportFormat } from './sessionExportReportGenerator';
 
 export const SESSION_EXPORT_DELIVERY_IPC = {
     save: 'session-export:save-report',
+    savePdf: 'session-export:save-pdf-report',
 } as const;
 
 export const SESSION_EXPORT_SAVE_BUDGETS = Object.freeze({
     maxContentBytes: 1024 * 1024,
+    maxPdfHtmlBytes: 1024 * 1024,
 });
+
+export const SESSION_EXPORT_PDF_RUNTIME_BUDGETS = Object.freeze({
+    renderTimeoutMs: 30_000,
+    warningPdfBytes: 8 * 1024 * 1024,
+    maxPdfBytes: 16 * 1024 * 1024,
+});
+
+export type SessionExportDeliveryFormat = SessionExportReportFormat | 'pdf';
 
 export interface SessionExportSaveRequest {
     format: SessionExportReportFormat;
     content: string;
+    generatedAt?: number;
+    suggestedFileName?: string;
+    guardrailStatus: Exclude<SessionExportGuardrailStatus, 'invalid'>;
+    blocked: false;
+}
+
+export interface SessionExportPdfSaveRequest {
+    sourceFormat: 'html';
+    html: string;
     generatedAt?: number;
     suggestedFileName?: string;
     guardrailStatus: Exclude<SessionExportGuardrailStatus, 'invalid'>;
@@ -25,6 +44,8 @@ export interface SessionExportSaveResult {
     error?: string;
 }
 
+export type SessionExportPdfSaveResult = SessionExportSaveResult;
+
 export interface SessionExportClipboardRequest {
     format: SessionExportReportFormat;
     content: string;
@@ -37,7 +58,15 @@ export interface SessionExportDeliveryRequestValidation {
     error?: string;
 }
 
-export function getSessionExportFileExtension(format: SessionExportReportFormat): 'md' | 'html' {
+export interface SessionExportPdfBufferValidation {
+    valid: boolean;
+    byteLength: number;
+    warning?: string;
+    error?: string;
+}
+
+export function getSessionExportFileExtension(format: SessionExportDeliveryFormat): 'md' | 'html' | 'pdf' {
+    if (format === 'pdf') return 'pdf';
     return format === 'html' ? 'html' : 'md';
 }
 
@@ -50,7 +79,7 @@ function sanitizeFileNamePart(value: string): string {
 }
 
 export function buildSessionExportDefaultFileName(
-    format: SessionExportReportFormat,
+    format: SessionExportDeliveryFormat,
     generatedAt: number = Date.now(),
 ): string {
     const timestamp = Number.isFinite(generatedAt)
@@ -76,8 +105,106 @@ export function validateSessionExportSaveRequest(request: unknown): SessionExpor
     return { valid: true };
 }
 
+export function validateSessionExportPdfSaveRequest(request: unknown): SessionExportDeliveryRequestValidation {
+    const record = request && typeof request === 'object'
+        ? request as Record<string, unknown>
+        : null;
+
+    if (!record) {
+        return { valid: false, error: 'PDF export request must be an object.' };
+    }
+
+    if (record.sourceFormat !== 'html') {
+        return { valid: false, error: 'PDF export request sourceFormat must be HTML.' };
+    }
+
+    const guardrailStatus = typeof record.guardrailStatus === 'string'
+        ? record.guardrailStatus
+        : undefined;
+
+    if (record.blocked !== false || guardrailStatus === 'invalid') {
+        return { valid: false, error: 'Blocked or invalid exports cannot be delivered as PDF.' };
+    }
+
+    if (guardrailStatus !== 'valid' && guardrailStatus !== 'warning') {
+        return { valid: false, error: 'PDF export request guardrail status is invalid.' };
+    }
+
+    if (typeof record.html !== 'string' || record.html.trim().length === 0) {
+        return { valid: false, error: 'PDF export request HTML is empty.' };
+    }
+
+    if (serializedByteLength(record.html) > SESSION_EXPORT_SAVE_BUDGETS.maxPdfHtmlBytes) {
+        return { valid: false, error: 'PDF export HTML exceeds the delivery payload budget.' };
+    }
+
+    if (!/^\s*<!doctype html>/i.test(record.html) || !/<html\b/i.test(record.html)) {
+        return { valid: false, error: 'PDF export requires a complete generated HTML report.' };
+    }
+
+    if (/<script\b/i.test(record.html)) {
+        return { valid: false, error: 'PDF export HTML cannot contain script tags.' };
+    }
+
+    if (/\b(?:file|filesystem):\/\//i.test(record.html)) {
+        return { valid: false, error: 'PDF export HTML cannot reference local file URLs.' };
+    }
+
+    if (record.suggestedFileName !== undefined && typeof record.suggestedFileName !== 'string') {
+        return { valid: false, error: 'PDF export request suggestedFileName must be a string.' };
+    }
+
+    return { valid: true };
+}
+
 export function validateSessionExportClipboardRequest(request: unknown): SessionExportDeliveryRequestValidation {
     return validateSessionExportDeliveryRequest(request);
+}
+
+export function validateSessionExportPdfBuffer(buffer: Uint8Array): SessionExportPdfBufferValidation {
+    const byteLength = buffer.byteLength;
+    if (byteLength === 0) {
+        return {
+            valid: false,
+            byteLength,
+            error: 'Generated PDF is empty.',
+        };
+    }
+
+    const hasPdfHeader = buffer.length >= 4
+        && buffer[0] === 0x25
+        && buffer[1] === 0x50
+        && buffer[2] === 0x44
+        && buffer[3] === 0x46;
+
+    if (!hasPdfHeader) {
+        return {
+            valid: false,
+            byteLength,
+            error: 'Generated PDF does not contain a valid PDF header.',
+        };
+    }
+
+    if (byteLength > SESSION_EXPORT_PDF_RUNTIME_BUDGETS.maxPdfBytes) {
+        return {
+            valid: false,
+            byteLength,
+            error: 'Generated PDF exceeds the output size ceiling.',
+        };
+    }
+
+    if (byteLength > SESSION_EXPORT_PDF_RUNTIME_BUDGETS.warningPdfBytes) {
+        return {
+            valid: true,
+            byteLength,
+            warning: 'Generated PDF is larger than the preferred output budget.',
+        };
+    }
+
+    return {
+        valid: true,
+        byteLength,
+    };
 }
 
 function validateSessionExportDeliveryRequest(request: unknown): SessionExportDeliveryRequestValidation {

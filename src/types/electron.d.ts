@@ -8,6 +8,8 @@ import type {
 import type { PersonalizationPreferences } from '../lib/personalization/preferences';
 import type { ProviderAnalyticsSessionSnapshotBridge } from '../lib/providers/providerAnalyticsSessionSnapshot';
 import type {
+  SessionExportPdfSaveRequest,
+  SessionExportPdfSaveResult,
   SessionExportSaveRequest,
   SessionExportSaveResult,
 } from '../lib/export/sessionExportDelivery';
@@ -93,6 +95,7 @@ type GenerateActionPayload = {
 
 export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   saveSessionExportReport: (request: SessionExportSaveRequest) => Promise<SessionExportSaveResult>
+  saveSessionExportPdfReport: (request: SessionExportPdfSaveRequest) => Promise<SessionExportPdfSaveResult>
   updateContentDimensions: (dimensions: {
     width: number
     height: number
