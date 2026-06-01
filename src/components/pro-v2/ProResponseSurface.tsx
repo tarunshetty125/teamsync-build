@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsRight, X } from 'lucide-react';
 import { SkeletonLoader, EmptyListeningState } from '../ui/PremiumStates';
 import CodeBlock from '../ui/CodeBlock';
 import MermaidRenderer from '../ui/MermaidRenderer';
@@ -26,6 +26,31 @@ import {
     parseArchitectureResponse,
 } from './architecture/architectureParser';
 import {
+    buildDiagramTimeline,
+    type DiagramTimeline,
+} from './architecture/diagramTimeline';
+import {
+    buildDiagramNodeIntelligence,
+    type DiagramNodeIntelligence,
+    type DiagramNodeIntelligenceReadModel,
+} from './architecture/diagramNodeIntelligence';
+import {
+    buildParentToCurrentEvolutionSummary,
+    buildRootToCurrentEvolutionSummary,
+    type DiagramEvolutionSummary,
+} from './architecture/diagramEvolutionSummary';
+import {
+    buildDiagramGuardrails,
+    type DiagramGuardrailReadModel,
+} from './architecture/diagramGuardrails';
+import {
+    buildParentCurrentDiagramComparison,
+    buildRootCurrentDiagramComparison,
+    buildVersionPairDiagramComparison,
+    type DiagramComparisonReadModel,
+    type DiagramComparisonStatus,
+} from './architecture/diagramComparison';
+import {
     looksLikeMermaidSource,
     normalizeMermaidChartSource,
     normalizeV2MermaidMarkdown,
@@ -33,6 +58,7 @@ import {
 
 interface ProResponseSurfaceProps {
     activeResponse: V2Message | null;
+    activeResponseChain: V2Message[];
     isProcessing: boolean;
     activeResponseIndex: number;
     responseHistoryTotal: number;
@@ -43,6 +69,7 @@ interface ProResponseSurfaceProps {
     onPreviousResponse: () => void;
     onNextResponse: () => void;
     onJumpLatestResponse: () => void;
+    onSelectTimelineResponse: (responseId: string) => void;
     scrollContainerRef: React.RefObject<HTMLDivElement>;
 }
 
@@ -61,8 +88,11 @@ const SOURCE_ICONS: Record<string, string> = {
     'Manual Input': '✏️',
 };
 
+type DiagramComparisonMode = 'parent_current' | 'root_current' | 'version_pair';
+
 const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSurface({
     activeResponse,
+    activeResponseChain,
     isProcessing,
     activeResponseIndex,
     responseHistoryTotal,
@@ -73,9 +103,14 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
     onPreviousResponse,
     onNextResponse,
     onJumpLatestResponse,
+    onSelectTimelineResponse,
     scrollContainerRef,
 }) {
     const [copied, setCopied] = useState(false);
+    const [selectedDiagramNodeId, setSelectedDiagramNodeId] = useState<string | null>(null);
+    const [diagramComparisonMode, setDiagramComparisonMode] = useState<DiagramComparisonMode>('parent_current');
+    const [comparisonFromVersion, setComparisonFromVersion] = useState(1);
+    const [comparisonToVersion, setComparisonToVersion] = useState(1);
     const renderedResponse = activeResponse;
 
     const handleCopy = useCallback(() => {
@@ -98,6 +133,77 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         () => buildResponseMetaItems(renderedResponse),
         [renderedResponse],
     );
+    const diagramTimeline = useMemo(
+        () => buildDiagramTimeline(activeResponseChain, renderedResponse?.id ?? null),
+        [activeResponseChain, renderedResponse?.id],
+    );
+    const diagramNodeIntelligence = useMemo(
+        () => buildDiagramNodeIntelligence(diagramTimeline, {
+            responseId: renderedResponse?.id ?? null,
+            selectedNodeId: selectedDiagramNodeId,
+        }),
+        [diagramTimeline, renderedResponse?.id, selectedDiagramNodeId],
+    );
+    const parentEvolutionSummary = useMemo(
+        () => buildParentToCurrentEvolutionSummary(diagramTimeline, renderedResponse?.id ?? null),
+        [diagramTimeline, renderedResponse?.id],
+    );
+    const rootEvolutionSummary = useMemo(
+        () => buildRootToCurrentEvolutionSummary(diagramTimeline, renderedResponse?.id ?? null),
+        [diagramTimeline, renderedResponse?.id],
+    );
+    const diagramGuardrails = useMemo(
+        () => buildDiagramGuardrails(diagramTimeline, renderedResponse?.id ?? null),
+        [diagramTimeline, renderedResponse?.id],
+    );
+    const parentDiagramComparison = useMemo(
+        () => buildParentCurrentDiagramComparison(diagramTimeline, renderedResponse?.id ?? null),
+        [diagramTimeline, renderedResponse?.id],
+    );
+    const rootDiagramComparison = useMemo(
+        () => buildRootCurrentDiagramComparison(diagramTimeline, renderedResponse?.id ?? null),
+        [diagramTimeline, renderedResponse?.id],
+    );
+    const versionPairDiagramComparison = useMemo(
+        () => buildVersionPairDiagramComparison(diagramTimeline, comparisonFromVersion, comparisonToVersion),
+        [comparisonFromVersion, comparisonToVersion, diagramTimeline],
+    );
+    const activeDiagramComparison = diagramComparisonMode === 'root_current'
+        ? rootDiagramComparison
+        : diagramComparisonMode === 'version_pair'
+            ? versionPairDiagramComparison
+            : parentDiagramComparison;
+    const selectedDiagramNode = diagramNodeIntelligence.selectedNode;
+    const shouldShowDiagramTimeline = diagramTimeline.items.length >= 2 && Boolean(diagramTimeline.activeItem);
+    const shouldShowEvolutionSummary = Boolean(
+        parentEvolutionSummary.diff || rootEvolutionSummary.diff,
+    );
+    const shouldShowGuardrailMessage = diagramGuardrails.status !== 'supported';
+    const shouldShowComparisonView = diagramTimeline.items.length >= 2;
+
+    useEffect(() => {
+        setSelectedDiagramNodeId(null);
+    }, [renderedResponse?.id]);
+
+    useEffect(() => {
+        const versions = diagramTimeline.items.map((item) => item.version);
+        if (versions.length === 0) {
+            setComparisonFromVersion(1);
+            setComparisonToVersion(1);
+            return;
+        }
+
+        const activeVersion = diagramTimeline.activeVersion ?? versions[versions.length - 1] ?? 1;
+        const parentVersion = diagramTimeline.activeItem?.parentVersion ?? Math.max(versions[0] ?? 1, activeVersion - 1);
+        setComparisonFromVersion((current) => (versions.includes(current) ? current : parentVersion));
+        setComparisonToVersion((current) => (versions.includes(current) ? current : activeVersion));
+    }, [
+        diagramTimeline.activeItem?.parentVersion,
+        diagramTimeline.activeItem?.responseId,
+        diagramTimeline.activeVersion,
+        diagramTimeline.activeVersionCount,
+        diagramTimeline.items,
+    ]);
 
     const responseWidthPx = useMemo(
         () => resolveV2ResponseWidthPx(renderedResponse?.text),
@@ -190,6 +296,37 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
             <div className="v2-response-drag-rail v2-response-drag-rail--left" aria-hidden="true" />
             <div className="v2-response-drag-rail v2-response-drag-rail--right" aria-hidden="true" />
 
+            {shouldShowDiagramTimeline && (
+                <DiagramTimelinePanel
+                    timeline={diagramTimeline}
+                    onSelectResponse={onSelectTimelineResponse}
+                />
+            )}
+
+            {shouldShowEvolutionSummary && (
+                <DiagramEvolutionSummaryPanel
+                    parentSummary={parentEvolutionSummary}
+                    rootSummary={rootEvolutionSummary}
+                />
+            )}
+
+            {shouldShowGuardrailMessage && (
+                <DiagramGuardrailMessage guardrails={diagramGuardrails} />
+            )}
+
+            {shouldShowComparisonView && (
+                <DiagramComparisonPanel
+                    timeline={diagramTimeline}
+                    mode={diagramComparisonMode}
+                    comparison={activeDiagramComparison}
+                    fromVersion={comparisonFromVersion}
+                    toVersion={comparisonToVersion}
+                    onModeChange={setDiagramComparisonMode}
+                    onFromVersionChange={setComparisonFromVersion}
+                    onToVersionChange={setComparisonToVersion}
+                />
+            )}
+
             {/* ── Response Body — dynamic height ── */}
             <div
                 ref={scrollContainerRef as React.RefObject<HTMLDivElement>}
@@ -258,6 +395,16 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                                     isCode={!!renderedResponse.isCode}
                                     actionContract={renderedResponse.actionContract}
                                     diagramChainKey={getDiagramChainKey(renderedResponse)}
+                                    selectedNodeId={selectedDiagramNodeId}
+                                    onNodeSelect={setSelectedDiagramNodeId}
+                                />
+                            )}
+
+                            {selectedDiagramNode && (
+                                <DiagramNodeIntelligenceDrawer
+                                    model={diagramNodeIntelligence}
+                                    node={selectedDiagramNode}
+                                    onClose={() => setSelectedDiagramNodeId(null)}
                                 />
                             )}
 
@@ -358,6 +505,457 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         </motion.div>
     );
 });
+
+function DiagramTimelinePanel({
+    timeline,
+    onSelectResponse,
+}: {
+    timeline: DiagramTimeline;
+    onSelectResponse: (responseId: string) => void;
+}) {
+    return (
+        <div className="v2-diagram-timeline-panel v2-no-drag" aria-label="Diagram timeline">
+            <div className="v2-diagram-timeline-summary">
+                <span className="v2-diagram-timeline-kicker">Diagram</span>
+                <span className="v2-diagram-timeline-count">
+                    v{timeline.activeVersion ?? 1} of {timeline.activeVersionCount}
+                </span>
+            </div>
+            <div className="v2-diagram-timeline-rail" role="list" aria-label="Diagram versions">
+                {timeline.items.map((item) => {
+                    const isActive = item.responseId === timeline.activeItem?.responseId;
+                    const changeLabel = item.diffSummary.hasChanges
+                        ? `+${item.diffSummary.totalChanges}`
+                        : item.version === 1 ? 'base' : '0';
+                    return (
+                        <button
+                            key={item.artifactId}
+                            type="button"
+                            className={`v2-diagram-timeline-version${isActive ? ' v2-diagram-timeline-version--active' : ''}`}
+                            onClick={() => {
+                                if (!isActive) onSelectResponse(item.responseId);
+                            }}
+                            disabled={isActive}
+                            title={`Diagram v${item.version} | ${changeLabel} changes | Response ${item.responseId}`}
+                            aria-label={`Diagram version ${item.version}`}
+                            aria-current={isActive ? 'true' : undefined}
+                        >
+                            <span className="v2-diagram-timeline-version-label">v{item.version}</span>
+                            <span className="v2-diagram-timeline-version-delta">{changeLabel}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function DiagramEvolutionSummaryPanel({
+    parentSummary,
+    rootSummary,
+}: {
+    parentSummary: DiagramEvolutionSummary;
+    rootSummary: DiagramEvolutionSummary;
+}) {
+    const rows = [
+        parentSummary.diff ? { label: 'Parent', summary: parentSummary } : null,
+        rootSummary.diff ? { label: 'Root', summary: rootSummary } : null,
+    ].filter((row): row is { label: string; summary: DiagramEvolutionSummary } => Boolean(row));
+
+    if (rows.length === 0) return null;
+
+    return (
+        <div className="v2-diagram-evolution-panel v2-no-drag" aria-label="Diagram evolution summary">
+            <div className="v2-diagram-evolution-heading">
+                <span>Evolution</span>
+                <em>{rows[0].summary.diffSource === 'stored_artifact_diff' ? 'stored diff' : 'computed diff'}</em>
+            </div>
+            <div className="v2-diagram-evolution-rows">
+                {rows.map((row) => (
+                    <div className="v2-diagram-evolution-row" key={row.label}>
+                        <span className="v2-diagram-evolution-row-label">{row.label}</span>
+                        <DiagramEvolutionMetric label="Nodes +" value={row.summary.diffSummary.addedNodes} />
+                        <DiagramEvolutionMetric label="Nodes -" value={row.summary.diffSummary.removedNodes} />
+                        <DiagramEvolutionMetric label="Nodes ~" value={row.summary.diffSummary.modifiedNodes} />
+                        <DiagramEvolutionMetric label="Edges +" value={row.summary.diffSummary.addedEdges} />
+                        <DiagramEvolutionMetric label="Edges -" value={row.summary.diffSummary.removedEdges} />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function DiagramEvolutionMetric({
+    label,
+    value,
+}: {
+    label: string;
+    value: number;
+}) {
+    return (
+        <span className={`v2-diagram-evolution-metric${value > 0 ? ' v2-diagram-evolution-metric--active' : ''}`}>
+            <em>{label}</em>
+            <strong>{value}</strong>
+        </span>
+    );
+}
+
+function DiagramGuardrailMessage({
+    guardrails,
+}: {
+    guardrails: DiagramGuardrailReadModel;
+}) {
+    if (guardrails.status === 'supported') return null;
+
+    const copy = getDiagramGuardrailCopy(guardrails);
+
+    return (
+        <div
+            className={`v2-diagram-guardrail v2-diagram-guardrail--${guardrails.status} v2-no-drag`}
+            aria-label="Diagram guardrail message"
+        >
+            <span>{copy.label}</span>
+            <strong>{copy.message}</strong>
+            <em>{guardrails.counts.nodes} nodes · {guardrails.counts.edges} edges</em>
+        </div>
+    );
+}
+
+function getDiagramGuardrailCopy(guardrails: DiagramGuardrailReadModel): { label: string; message: string } {
+    if (guardrails.truncated) {
+        return {
+            label: 'Truncated',
+            message: `Parser cap reached at ${guardrails.parserCaps.nodeCap} nodes or ${guardrails.parserCaps.edgeCap} edges.`,
+        };
+    }
+
+    if (guardrails.oversized) {
+        return {
+            label: 'Oversized',
+            message: 'Large diagram. Rendering may feel heavier; navigation remains available.',
+        };
+    }
+
+    return {
+        label: 'Notice',
+        message: 'Diagram is dense or fallback-rendered; pan and zoom remain available.',
+    };
+}
+
+function DiagramComparisonPanel({
+    timeline,
+    mode,
+    comparison,
+    fromVersion,
+    toVersion,
+    onModeChange,
+    onFromVersionChange,
+    onToVersionChange,
+}: {
+    timeline: DiagramTimeline;
+    mode: DiagramComparisonMode;
+    comparison: DiagramComparisonReadModel;
+    fromVersion: number;
+    toVersion: number;
+    onModeChange: (mode: DiagramComparisonMode) => void;
+    onFromVersionChange: (version: number) => void;
+    onToVersionChange: (version: number) => void;
+}) {
+    const rows = buildDiagramComparisonRows(comparison);
+    const endpointLabel = comparison.from && comparison.to
+        ? `v${comparison.from.version} -> v${comparison.to.version}`
+        : 'Unavailable';
+    const sourceLabel = comparison.diffSource === 'stored_artifact_diff'
+        ? 'stored diff'
+        : comparison.diffSource === 'computed'
+            ? 'computed diff'
+            : comparison.diffSource;
+
+    return (
+        <section className="v2-diagram-comparison-panel v2-no-drag" aria-label="Diagram comparison view">
+            <div className="v2-diagram-comparison-heading">
+                <div>
+                    <span>Compare</span>
+                    <strong>{endpointLabel}</strong>
+                </div>
+                <em>{sourceLabel}</em>
+            </div>
+
+            <div className="v2-diagram-comparison-modes" role="tablist" aria-label="Comparison mode">
+                <DiagramComparisonModeButton
+                    active={mode === 'parent_current'}
+                    label="Parent ↔ Current"
+                    onClick={() => onModeChange('parent_current')}
+                />
+                <DiagramComparisonModeButton
+                    active={mode === 'root_current'}
+                    label="Root ↔ Current"
+                    onClick={() => onModeChange('root_current')}
+                />
+                <DiagramComparisonModeButton
+                    active={mode === 'version_pair'}
+                    label="Version Pair"
+                    onClick={() => onModeChange('version_pair')}
+                />
+            </div>
+
+            {mode === 'version_pair' && (
+                <div className="v2-diagram-comparison-pair" aria-label="Version pair comparison controls">
+                    <label>
+                        <span>From</span>
+                        <select
+                            value={fromVersion}
+                            onChange={(event) => onFromVersionChange(Number(event.target.value))}
+                        >
+                            {timeline.items.map((item) => (
+                                <option key={`from-${item.responseId}`} value={item.version}>
+                                    v{item.version}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <label>
+                        <span>To</span>
+                        <select
+                            value={toVersion}
+                            onChange={(event) => onToVersionChange(Number(event.target.value))}
+                        >
+                            {timeline.items.map((item) => (
+                                <option key={`to-${item.responseId}`} value={item.version}>
+                                    v{item.version}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                </div>
+            )}
+
+            <div className="v2-diagram-comparison-table" role="table" aria-label="Diagram comparison changes">
+                {rows.map((row) => (
+                    <DiagramComparisonRowView key={row.label} row={row} />
+                ))}
+            </div>
+
+            {!comparison.available && comparison.issues.length > 0 && (
+                <div className="v2-diagram-comparison-issues" aria-label="Comparison status">
+                    {comparison.issues.map((issue) => formatReadableMetaValue(issue)).join(' | ')}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function DiagramComparisonModeButton({
+    active,
+    label,
+    onClick,
+}: {
+    active: boolean;
+    label: string;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-pressed={active}
+            className={`v2-diagram-comparison-mode${active ? ' v2-diagram-comparison-mode--active' : ''}`}
+            onClick={onClick}
+        >
+            {label}
+        </button>
+    );
+}
+
+type DiagramComparisonRow = {
+    label: string;
+    status: DiagramComparisonStatus;
+    count: number;
+    items: string[];
+};
+
+function buildDiagramComparisonRows(comparison: DiagramComparisonReadModel): DiagramComparisonRow[] {
+    const nodeLabels = (status: DiagramComparisonStatus) => comparison.nodes
+        .filter((node) => node.status === status)
+        .map((node) => {
+            if (status === 'modified' && node.changedFields.length > 0) {
+                return `${node.label} (${node.changedFields.join(', ')})`;
+            }
+            return node.label;
+        });
+    const edgeLabels = (status: DiagramComparisonStatus) => comparison.edges
+        .filter((edge) => edge.status === status)
+        .map((edge) => edge.key);
+
+    return [
+        {
+            label: 'Added Nodes',
+            status: 'added',
+            count: comparison.nodeCounts.added,
+            items: nodeLabels('added'),
+        },
+        {
+            label: 'Removed Nodes',
+            status: 'removed',
+            count: comparison.nodeCounts.removed,
+            items: nodeLabels('removed'),
+        },
+        {
+            label: 'Modified Nodes',
+            status: 'modified',
+            count: comparison.nodeCounts.modified,
+            items: nodeLabels('modified'),
+        },
+        {
+            label: 'Added Edges',
+            status: 'added',
+            count: comparison.edgeCounts.added,
+            items: edgeLabels('added'),
+        },
+        {
+            label: 'Removed Edges',
+            status: 'removed',
+            count: comparison.edgeCounts.removed,
+            items: edgeLabels('removed'),
+        },
+    ];
+}
+
+function DiagramComparisonRowView({
+    row,
+}: {
+    row: DiagramComparisonRow;
+}) {
+    const previewItems = row.items.slice(0, 3);
+    const overflowCount = Math.max(0, row.items.length - previewItems.length);
+    const itemLabel = previewItems.length > 0
+        ? `${previewItems.join(', ')}${overflowCount > 0 ? ` +${overflowCount}` : ''}`
+        : 'No changes';
+
+    return (
+        <div
+            className={`v2-diagram-comparison-row${row.count > 0 ? ' v2-diagram-comparison-row--active' : ''}`}
+            role="row"
+            title={row.items.join(', ') || 'No changes'}
+        >
+            <span className={`v2-diagram-comparison-status v2-diagram-comparison-status--${row.status}`}>
+                {formatReadableMetaValue(row.status)}
+            </span>
+            <strong>{row.label}</strong>
+            <em>{itemLabel}</em>
+            <span className="v2-diagram-comparison-count">{row.count}</span>
+        </div>
+    );
+}
+
+function DiagramNodeIntelligenceDrawer({
+    model,
+    node,
+    onClose,
+}: {
+    model: DiagramNodeIntelligenceReadModel;
+    node: DiagramNodeIntelligence;
+    onClose: () => void;
+}) {
+    const metadata = [
+        { label: 'ID', value: node.id },
+        { label: 'Kind', value: formatReadableMetaValue(node.kind) },
+        { label: 'Tech', value: node.technology },
+        { label: 'Purpose', value: node.purpose },
+        { label: 'Layer', value: node.layer },
+        { label: 'Latency', value: node.latency },
+        { label: 'Risk', value: node.failureMode },
+    ].filter((item): item is { label: string; value: string } => Boolean(item.value));
+    const ownership = [
+        `v${node.responseOwnership.version}`,
+        node.responseOwnership.parentVersion ? `parent v${node.responseOwnership.parentVersion}` : '',
+        node.responseOwnership.rootVersion ? `root v${node.responseOwnership.rootVersion}` : '',
+    ].filter(Boolean).join(' | ');
+    const diffStatus = formatReadableMetaValue(node.diffParticipation.status);
+    const incoming = node.incomingDependencies.slice(0, 4);
+    const outgoing = node.outgoingDependencies.slice(0, 4);
+
+    return (
+        <aside className="v2-diagram-node-drawer v2-no-drag" aria-label="Node intelligence">
+            <div className="v2-diagram-node-drawer-header">
+                <div className="v2-diagram-node-drawer-title">
+                    <span>{node.label}</span>
+                    <em>{formatReadableMetaValue(node.kind)}</em>
+                </div>
+                <button
+                    type="button"
+                    className="v2-diagram-node-drawer-close"
+                    onClick={onClose}
+                    title="Close node details"
+                    aria-label="Close node details"
+                >
+                    <X size={13} strokeWidth={2} aria-hidden />
+                </button>
+            </div>
+
+            <div className="v2-diagram-node-drawer-grid">
+                {metadata.map((item) => (
+                    <div className="v2-diagram-node-drawer-field" key={item.label} title={item.value}>
+                        <span>{item.label}</span>
+                        <strong>{item.value}</strong>
+                    </div>
+                ))}
+            </div>
+
+            <div className="v2-diagram-node-drawer-deps">
+                <DiagramDependencyList
+                    label={`Incoming ${node.dependencyCounts.incoming}`}
+                    dependencies={incoming}
+                    emptyLabel="None"
+                />
+                <DiagramDependencyList
+                    label={`Outgoing ${node.dependencyCounts.outgoing}`}
+                    dependencies={outgoing}
+                    emptyLabel="None"
+                />
+            </div>
+
+            <div className="v2-diagram-node-drawer-footer">
+                <span title={node.diffParticipation.changedFields.join(', ') || diffStatus}>
+                    Diff {diffStatus}
+                </span>
+                <span title={node.artifactOwnership.artifactId}>
+                    {ownership || `v${node.responseOwnership.version}`}
+                </span>
+                <span>
+                    {model.nodeCount} nodes
+                </span>
+            </div>
+        </aside>
+    );
+}
+
+function DiagramDependencyList({
+    label,
+    dependencies,
+    emptyLabel,
+}: {
+    label: string;
+    dependencies: DiagramNodeIntelligence['incomingDependencies'];
+    emptyLabel: string;
+}) {
+    return (
+        <div className="v2-diagram-node-drawer-dep-list">
+            <span>{label}</span>
+            <div>
+                {dependencies.length > 0 ? dependencies.map((dependency) => (
+                    <em key={dependency.edgeKey} title={dependency.edgeLabel ?? dependency.nodeId}>
+                        {dependency.label}
+                    </em>
+                )) : (
+                    <em>{emptyLabel}</em>
+                )}
+            </div>
+        </div>
+    );
+}
 
 type ResponseMetaItem = {
     label: string;
@@ -798,7 +1396,13 @@ function logV2DiagramRenderAudit(text: string, parsedArchitecture: ReturnType<ty
     }));
 }
 
-function renderV2ResponseBody(text: string, allowOpenMermaid: boolean, diagramChainKey?: string) {
+function renderV2ResponseBody(
+    text: string,
+    allowOpenMermaid: boolean,
+    diagramChainKey?: string,
+    selectedNodeId?: string | null,
+    onNodeSelect?: (nodeId: string) => void,
+) {
     const normalizedText = normalizeV2MermaidMarkdown(text, { isStreaming: !allowOpenMermaid });
     const parsedArchitecture = parseArchitectureResponse(normalizedText, { isStreaming: !allowOpenMermaid });
     logV2DiagramRenderAudit(normalizedText, parsedArchitecture, allowOpenMermaid);
@@ -815,6 +1419,8 @@ function renderV2ResponseBody(text: string, allowOpenMermaid: boolean, diagramCh
                 fallbackDiagram={parsedArchitecture.fallbackDiagram}
                 isStreaming={!allowOpenMermaid}
                 diagramChainKey={diagramChainKey}
+                selectedNodeId={selectedNodeId}
+                onNodeSelect={onNodeSelect}
             />
         );
         const architectureSplit = parsedArchitecture.markdown
@@ -923,7 +1529,17 @@ const V2ResponseText = memo<{
     isCode?: boolean;
     actionContract?: V2Message['actionContract'];
     diagramChainKey?: string;
-}>(function V2ResponseText({ text, isStreaming, isCode, actionContract, diagramChainKey }) {
+    selectedNodeId?: string | null;
+    onNodeSelect?: (nodeId: string) => void;
+}>(function V2ResponseText({
+    text,
+    isStreaming,
+    isCode,
+    actionContract,
+    diagramChainKey,
+    selectedNodeId,
+    onNodeSelect,
+}) {
     // During streaming: render Mermaid blocks that have complete fences.
     // Incomplete / open fences show as raw pre blocks (handled by renderFenceBlock).
     // This ensures completed Mermaid diagrams appear even mid-stream,
@@ -938,7 +1554,7 @@ const V2ResponseText = memo<{
         : renderStructuredCodingContract(text, allowOpenMermaid);
     if (structuredCodingContract) return structuredCodingContract;
 
-    const body = renderV2ResponseBody(text, allowOpenMermaid, diagramChainKey);
+    const body = renderV2ResponseBody(text, allowOpenMermaid, diagramChainKey, selectedNodeId, onNodeSelect);
     const wrapAsCodeSection = Boolean(isCode) && !responseContainsMermaid(text);
 
     if (wrapAsCodeSection) {

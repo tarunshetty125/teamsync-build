@@ -1111,6 +1111,695 @@
   opacity: 0.4;
 }
 
+/* ── Diagram Timeline Panel ──────────────────────────────── */
+
+.v2-diagram-timeline-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 18px 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.038);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  min-width: 0;
+}
+
+.v2-diagram-timeline-summary {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 2px;
+  min-width: 76px;
+}
+
+.v2-diagram-timeline-kicker {
+  font-size: 8.5px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.v2-diagram-timeline-count {
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.76);
+  font-variant-numeric: tabular-nums;
+}
+
+.v2-diagram-timeline-rail {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.v2-diagram-timeline-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.v2-diagram-timeline-version {
+  flex: 0 0 auto;
+  min-width: 48px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.66);
+  cursor: pointer;
+  transition:
+    background 0.16s var(--v2-ease-premium),
+    color 0.16s var(--v2-ease-premium),
+    transform 0.14s var(--v2-ease-premium);
+}
+
+.v2-diagram-timeline-version:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.v2-diagram-timeline-version:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.v2-diagram-timeline-version:disabled {
+  cursor: default;
+}
+
+.v2-diagram-timeline-version--active {
+  background: rgba(125, 211, 252, 0.13);
+  color: rgba(224, 242, 254, 0.95);
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.v2-diagram-timeline-version-label {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.v2-diagram-timeline-version-delta {
+  min-width: 16px;
+  font-size: 9px;
+  font-weight: 720;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.48);
+  font-variant-numeric: tabular-nums;
+}
+
+.v2-diagram-timeline-version--active .v2-diagram-timeline-version-delta {
+  color: rgba(224, 242, 254, 0.70);
+}
+
+/* ── Diagram Evolution Summary Panel ─────────────────────── */
+
+.v2-diagram-evolution-panel {
+  display: grid;
+  gap: 8px;
+  margin: 0 18px 8px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.034);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  min-width: 0;
+}
+
+.v2-diagram-evolution-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.v2-diagram-evolution-heading span {
+  font-size: 8.5px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.v2-diagram-evolution-heading em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 660;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.46);
+}
+
+.v2-diagram-evolution-rows {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.v2-diagram-evolution-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.v2-diagram-evolution-row::-webkit-scrollbar {
+  display: none;
+}
+
+.v2-diagram-evolution-row-label {
+  flex: 0 0 auto;
+  min-width: 42px;
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.v2-diagram-evolution-metric {
+  flex: 0 0 auto;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.v2-diagram-evolution-metric--active {
+  background: rgba(125, 211, 252, 0.09);
+  border-color: rgba(125, 211, 252, 0.14);
+  color: rgba(224, 242, 254, 0.84);
+}
+
+.v2-diagram-evolution-metric em {
+  font-style: normal;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.v2-diagram-evolution-metric strong {
+  font-size: 10.5px;
+  font-weight: 760;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Diagram Guardrail Messaging ─────────────────────────── */
+
+.v2-diagram-guardrail {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 18px 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.034);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.v2-diagram-guardrail--warning {
+  background: rgba(125, 211, 252, 0.055);
+  border-color: rgba(125, 211, 252, 0.12);
+}
+
+.v2-diagram-guardrail--truncated {
+  background: rgba(251, 191, 36, 0.075);
+  border-color: rgba(251, 191, 36, 0.18);
+}
+
+.v2-diagram-guardrail--oversized {
+  background: rgba(244, 114, 182, 0.065);
+  border-color: rgba(244, 114, 182, 0.15);
+}
+
+.v2-diagram-guardrail span {
+  flex: 0 0 auto;
+  font-size: 8.5px;
+  font-weight: 780;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.v2-diagram-guardrail strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 610;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.v2-diagram-guardrail em {
+  flex: 0 0 auto;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 660;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.46);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Diagram Comparison View ─────────────────────────────── */
+
+.v2-diagram-comparison-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 18px 8px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.034);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.v2-diagram-comparison-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.v2-diagram-comparison-heading div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.v2-diagram-comparison-heading span {
+  font-size: 8.5px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.v2-diagram-comparison-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.1;
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.v2-diagram-comparison-heading em {
+  flex: 0 0 auto;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 660;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.46);
+}
+
+.v2-diagram-comparison-modes {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.v2-diagram-comparison-modes::-webkit-scrollbar {
+  display: none;
+}
+
+.v2-diagram-comparison-mode {
+  flex: 0 0 auto;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.16s var(--v2-ease-premium),
+    color 0.16s var(--v2-ease-premium),
+    transform 0.14s var(--v2-ease-premium);
+}
+
+.v2-diagram-comparison-mode:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.v2-diagram-comparison-mode:active {
+  transform: scale(0.97);
+}
+
+.v2-diagram-comparison-mode--active {
+  background: rgba(125, 211, 252, 0.12);
+  color: rgba(224, 242, 254, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.16);
+}
+
+.v2-diagram-comparison-pair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.v2-diagram-comparison-pair label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 680;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.v2-diagram-comparison-pair select {
+  height: 24px;
+  min-width: 58px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0 7px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 10px;
+  font-weight: 700;
+  outline: none;
+}
+
+.v2-diagram-comparison-table {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.v2-diagram-comparison-row {
+  display: grid;
+  grid-template-columns: 54px minmax(84px, 0.55fr) minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 24px;
+  padding: 4px 6px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.022);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.v2-diagram-comparison-row--active {
+  background: rgba(125, 211, 252, 0.055);
+  border-color: rgba(125, 211, 252, 0.10);
+}
+
+.v2-diagram-comparison-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8px;
+  font-weight: 780;
+  line-height: 1;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.v2-diagram-comparison-status--added {
+  color: rgba(134, 239, 172, 0.76);
+}
+
+.v2-diagram-comparison-status--removed {
+  color: rgba(253, 164, 175, 0.76);
+}
+
+.v2-diagram-comparison-status--modified {
+  color: rgba(253, 224, 71, 0.76);
+}
+
+.v2-diagram-comparison-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.v2-diagram-comparison-row em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 560;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.v2-diagram-comparison-count {
+  justify-self: end;
+  min-width: 18px;
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.66);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.v2-diagram-comparison-row--active .v2-diagram-comparison-count {
+  color: rgba(224, 242, 254, 0.92);
+}
+
+.v2-diagram-comparison-issues {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 620;
+  line-height: 1.25;
+  color: rgba(251, 191, 36, 0.72);
+}
+
+/* ── Diagram Node Intelligence Drawer ────────────────────── */
+
+.v2-diagram-node-drawer {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 2px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.v2-diagram-node-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.v2-diagram-node-drawer-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.v2-diagram-node-drawer-title span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.15;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.v2-diagram-node-drawer-title em {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(125, 211, 252, 0.72);
+}
+
+.v2-diagram-node-drawer-close {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.68);
+  cursor: pointer;
+  transition:
+    background 0.16s var(--v2-ease-premium),
+    color 0.16s var(--v2-ease-premium),
+    transform 0.14s var(--v2-ease-premium);
+}
+
+.v2-diagram-node-drawer-close:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.v2-diagram-node-drawer-close:active {
+  transform: scale(0.92);
+}
+
+.v2-diagram-node-drawer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.v2-diagram-node-drawer-field {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.v2-diagram-node-drawer-field span,
+.v2-diagram-node-drawer-dep-list>span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8.5px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.v2-diagram-node-drawer-field strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 610;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.v2-diagram-node-drawer-deps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.v2-diagram-node-drawer-dep-list {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.v2-diagram-node-drawer-dep-list div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.v2-diagram-node-drawer-dep-list em {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: normal;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(125, 211, 252, 0.08);
+  border: 1px solid rgba(125, 211, 252, 0.12);
+  color: rgba(224, 242, 254, 0.74);
+  font-size: 10px;
+  font-weight: 640;
+  line-height: 1;
+}
+
+.v2-diagram-node-drawer-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.v2-diagram-node-drawer-footer span {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 9.5px;
+  font-weight: 660;
+  line-height: 1;
+}
+
 .v2-response-body pre,
 .v2-response-body .v2-response-pre {
   overflow-x: auto;
@@ -1406,6 +2095,13 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.v2-architecture-node--selected {
+  box-shadow:
+    0 0 0 2px rgba(125, 211, 252, 0.32),
+    0 12px 28px rgba(14, 165, 233, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .v2-architecture-node-icon {

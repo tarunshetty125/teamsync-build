@@ -38,6 +38,8 @@ interface ArchitectureCanvasProps {
     diagram: ArchitectureDiagram;
     onRenderError: (error: unknown) => void;
     diagramChainKey?: string;
+    selectedNodeId?: string | null;
+    onNodeSelect?: (nodeId: string) => void;
 }
 
 function ArchitectureSkeletonContent() {
@@ -67,7 +69,13 @@ function rememberViewport(cacheKey: string, viewport: ArchitectureViewport) {
     viewportByChainKey.set(cacheKey, viewport);
 }
 
-const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function ArchitectureFlowInner({ diagram, onRenderError, diagramChainKey }) {
+const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function ArchitectureFlowInner({
+    diagram,
+    onRenderError,
+    diagramChainKey,
+    selectedNodeId,
+    onNodeSelect,
+}) {
     const diagramKey = useMemo(() => architectureDiagramFingerprint(diagram), [diagram]);
     const viewportCacheKey = diagramChainKey || diagramKey;
     const [nodes, setNodes] = useState<ArchitectureFlowNode[]>([]);
@@ -77,6 +85,13 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
     const requestSeqRef = useRef(0);
     const { fitView, getViewport, setViewport } = useReactFlow();
     const viewportSettings = useMemo(() => getViewportSettings(diagram.nodes.length), [diagram.nodes.length]);
+    const renderedNodes = useMemo(
+        () => nodes.map((node) => ({
+            ...node,
+            selected: node.id === selectedNodeId,
+        })),
+        [nodes, selectedNodeId],
+    );
 
     const setDiagramInteraction = useCallback((active: boolean) => {
         setIsPanning((current) => (current === active ? current : active));
@@ -90,6 +105,10 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
     const saveViewport = useCallback(() => {
         rememberViewport(viewportCacheKey, getViewport());
     }, [getViewport, viewportCacheKey]);
+
+    const handleNodeClick = useCallback((_: React.MouseEvent, node: ArchitectureFlowNode) => {
+        onNodeSelect?.(node.id);
+    }, [onNodeSelect]);
 
     useEffect(() => {
         const handleVisibilityChange = () => {
@@ -188,7 +207,7 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
             ) : (
                 <ReactFlow
                     className="v2-architecture-flow v2-no-drag"
-                    nodes={nodes}
+                    nodes={renderedNodes}
                     edges={edges}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
@@ -208,6 +227,7 @@ const ArchitectureFlowInner = memo<ArchitectureCanvasProps>(function Architectur
                     zoomOnPinch
                     preventScrolling
                     zoomOnDoubleClick={false}
+                    onNodeClick={handleNodeClick}
                     onMoveStart={() => setDiagramInteraction(true)}
                     onMoveEnd={() => {
                         setDiagramInteraction(false);

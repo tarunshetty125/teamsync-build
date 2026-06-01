@@ -32,7 +32,7 @@ function handlePositions(direction: ArchitectureFlowNode['data']['direction']) {
     return { source: Position.Bottom, target: Position.Top };
 }
 
-const ArchitectureNode = memo<NodeProps<ArchitectureFlowNode>>(function ArchitectureNode({ data }) {
+const ArchitectureNode = memo<NodeProps<ArchitectureFlowNode>>(function ArchitectureNode({ data, selected }) {
     const style = ARCHITECTURE_KIND_STYLES[data.kind];
     const Icon = ICONS[data.kind] ?? Cable;
     const positions = handlePositions(data.direction);
@@ -47,7 +47,7 @@ const ArchitectureNode = memo<NodeProps<ArchitectureFlowNode>>(function Architec
 
     return (
         <div
-            className={`v2-architecture-node v2-architecture-node--${data.kind} ${data.emphasized ? 'v2-architecture-node--emphasized' : ''} ${data.failureMode ? 'v2-architecture-node--has-failure' : ''}`}
+            className={`v2-architecture-node v2-architecture-node--${data.kind} ${data.emphasized ? 'v2-architecture-node--emphasized' : ''} ${data.failureMode ? 'v2-architecture-node--has-failure' : ''} ${selected ? 'v2-architecture-node--selected' : ''}`}
             title={title}
             style={{
                 borderColor: style.border,

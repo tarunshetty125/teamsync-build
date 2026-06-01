@@ -1692,6 +1692,10 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         setResponseSelection(latestResponse?.id ?? null, 'latest');
     }, [latestResponse?.id, setResponseSelection]);
 
+    const selectResponseFromTimeline = useCallback((responseId: string) => {
+        setResponseSelection(responseId, 'pinned');
+    }, [setResponseSelection]);
+
     const activeRootResponseId = activeResponse
         ? responseRootIdById.get(activeResponse.id) ?? activeResponse.rootResponseId ?? activeResponse.id
         : null;
@@ -1792,6 +1796,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         canGoPreviousResponse: responseNavigation.canGoPrevious,
         canGoNextResponse: responseNavigation.canGoNext,
         canJumpLatestResponse: responseNavigation.canJumpLatest,
+        selectResponseFromTimeline,
         latestResponse,
         attachedContext,
         activeModeLabel,

@@ -11,6 +11,8 @@ interface ArchitectureRendererProps {
     fallbackDiagram?: ArchitectureDiagram | null;
     isStreaming?: boolean;
     diagramChainKey?: string;
+    selectedNodeId?: string | null;
+    onNodeSelect?: (nodeId: string) => void;
 }
 
 interface ArchitectureErrorBoundaryProps {
@@ -103,6 +105,8 @@ const ArchitectureRenderer = memo<ArchitectureRendererProps>(function Architectu
     fallbackDiagram,
     isStreaming = false,
     diagramChainKey,
+    selectedNodeId,
+    onNodeSelect,
 }) {
     const [stage, setStage] = useState<'flow' | 'cards'>('flow');
     const cardsDiagram = fallbackDiagram ?? diagram ?? null;
@@ -125,6 +129,8 @@ const ArchitectureRenderer = memo<ArchitectureRendererProps>(function Architectu
                 <ArchitectureCanvas
                     diagram={diagram}
                     diagramChainKey={diagramChainKey}
+                    selectedNodeId={selectedNodeId}
+                    onNodeSelect={onNodeSelect}
                     onRenderError={handleFlowError}
                 />
             </ArchitectureErrorBoundary>

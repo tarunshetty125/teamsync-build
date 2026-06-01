@@ -319,6 +319,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
 
                         <ProResponseSurface
                             activeResponse={bridge.activeResponse}
+                            activeResponseChain={bridge.activeResponseChain}
                             isProcessing={bridge.isProcessing}
                             activeResponseIndex={bridge.activeResponseIndex}
                             responseHistoryTotal={bridge.responseHistoryTotal}
@@ -329,6 +330,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                             onPreviousResponse={bridge.goToPreviousResponse}
                             onNextResponse={bridge.goToNextResponse}
                             onJumpLatestResponse={bridge.jumpToLatestResponse}
+                            onSelectTimelineResponse={bridge.selectResponseFromTimeline}
                             scrollContainerRef={bridge.scrollContainerRef}
                         />
                     </motion.div>
