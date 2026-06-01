@@ -194,7 +194,7 @@ test('Sprint 9 Phase D enforces retained-response budget compliance', () => {
 test('Sprint 9 Phase D keeps IPC channels stable and adds non-blocking relay guardrails', () => {
     const ipcHandlers = read('electron/ipcHandlers.ts');
     const relayStart = ipcHandlers.indexOf('PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.set');
-    const relayEnd = ipcHandlers.indexOf('safeHandle("delete-screenshot"');
+    const relayEnd = ipcHandlers.indexOf('safeHandle(SESSION_EXPORT_DELIVERY_IPC.save', relayStart);
     const relayBody = ipcHandlers.slice(relayStart, relayEnd);
 
     assert.deepEqual(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC, {
