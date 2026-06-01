@@ -3236,7 +3236,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   safeHandle("generate-action", async (_, payload: {
-    intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now';
+    intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now' | 'system_design_tradeoffs';
     message?: string;
     additionalContext?: string;
     imagePaths?: string[];

@@ -518,12 +518,90 @@ function buildOutputFormat(mode: TinyPromptMode, intent: UnifiedActionIntent): s
     }
 }
 
+function getOutputContractContent(prompt: PromptObject): string {
+    return prompt.instructions.find((instruction) => (
+        instruction.key === 'output_contract'
+        || instruction.title.trim().toUpperCase() === 'OUTPUT CONTRACT'
+    ))?.content ?? '';
+}
+
+function extractFirstMatchingLine(content: string, pattern: RegExp): string | null {
+    return content
+        .split('\n')
+        .map((line) => line.trim())
+        .find((line) => pattern.test(line)) ?? null;
+}
+
+function buildTinyContractPreservation(prompt: PromptObject): { lines: string[]; fullCodeRequired: boolean } {
+    const contract = getOutputContractContent(prompt);
+    const lines: string[] = [];
+    const fullCodeRequired = /FULL working code in one fenced markdown block/i.test(contract)
+        || /Solution:\*\*.*FULL working code/i.test(contract);
+    const architectureJsonRequired = /architecture_json/i.test(contract)
+        && /must|mandatory|required|invalid|quality floor|min(?:imum)?/i.test(contract);
+
+    if (/Return hints only/i.test(contract)) {
+        lines.push('Contract: return hints only; no full solution, no Solution section, no fenced code.');
+    }
+    if (/complexity analysis only/i.test(contract)) {
+        lines.push('Contract: return complexity analysis only; no implementation or fenced code.');
+    }
+    if (/edge cases and test cases only/i.test(contract)) {
+        lines.push('Contract: return edge cases and test cases only; no full solution or fenced code.');
+    }
+    if (/debugging guidance only/i.test(contract)) {
+        lines.push('Contract: return debugging guidance only; no full rewrite or full solution.');
+    }
+    if (/brute-force approach only/i.test(contract)) {
+        lines.push('Contract: return the brute-force approach only; do not present the optimal solution.');
+    }
+    if (/follow-up questions only/i.test(contract)) {
+        lines.push('Contract: return follow-up questions only; no answers or commentary.');
+    }
+
+    if (fullCodeRequired) {
+        lines.push('Contract: include Problem, Approach, Complexity, and Solution sections.');
+        lines.push('Mandatory code: FULL working code in one fenced markdown block.');
+        lines.push('Complexity is mandatory: include time and space complexity.');
+        const languageLine = extractFirstMatchingLine(contract, /Required solution language for this prompt:/i);
+        if (languageLine) lines.push(languageLine);
+        const fenceLine = extractFirstMatchingLine(contract, /Use exactly this fence shape:/i);
+        if (fenceLine) lines.push(fenceLine);
+        lines.push('Do not replace the required solution with hint-only or prose-only output.');
+    }
+
+    if (architectureJsonRequired) {
+        lines.push('Contract: include exactly one fenced ```architecture_json``` block.');
+        lines.push('architecture_json is mandatory and must be valid JSON only inside the fence.');
+        lines.push('Minimum diagram quality: simple systems require 12+ nodes; production systems need more detail.');
+        lines.push('Nodes require id, label, kind; include technology, purpose, layer, latency, and failureMode when available.');
+        lines.push('Edges require source and target; include label, protocol, and latency when available.');
+        lines.push('Do not output Mermaid for system_design answers.');
+    }
+
+    return {
+        lines: uniqueOrdered(lines),
+        fullCodeRequired,
+    };
+}
+
+function reconcileRulesWithContract(rules: string[], contract: { fullCodeRequired: boolean }): string[] {
+    if (!contract.fullCodeRequired) return rules;
+    return rules.map((rule) => (
+        /Avoid full code unless explicitly needed/i.test(rule)
+            ? 'Full code is explicitly required by the active output contract.'
+            : rule
+    ));
+}
+
 function buildTinyInstructions(
     prompt: PromptObject,
     mode: TinyPromptMode,
     brainSignals: string[],
     hasRag: boolean,
 ): PromptInstruction[] {
+    const contractPreservation = buildTinyContractPreservation(prompt);
+    const rules = reconcileRulesWithContract(buildRules(mode, prompt.intent), contractPreservation);
     const instructions: PromptInstruction[] = [
         {
             key: 'tiny_role',
@@ -538,7 +616,7 @@ function buildTinyInstructions(
         {
             key: 'tiny_rules',
             title: 'RULES',
-            content: buildRules(mode, prompt.intent).map((line) => `- ${line}`).join('\n'),
+            content: rules.map((line) => `- ${line}`).join('\n'),
         },
         {
             key: 'tiny_output',
@@ -557,6 +635,14 @@ function buildTinyInstructions(
             ].join('\n'),
         },
     ];
+
+    if (contractPreservation.lines.length > 0) {
+        instructions.splice(3, 0, {
+            key: 'tiny_contract',
+            title: 'CONTRACT',
+            content: contractPreservation.lines.map((line) => `- ${line}`).join('\n'),
+        });
+    }
 
     if (brainSignals.length > 0) {
         instructions.splice(4, 0, {

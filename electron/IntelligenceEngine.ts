@@ -282,6 +282,15 @@ function validationStatus(outcome: ValidationOutcome): string {
     return outcome.valid ? 'valid' : 'invalid';
 }
 
+function extractPreferredCodingLanguageForRepair(prompt: PromptObject): string | null {
+    const outputContract = prompt.instructions.find((instruction) => (
+        instruction.key === 'output_contract'
+        || instruction.title.trim().toUpperCase() === 'OUTPUT CONTRACT'
+    ))?.content ?? '';
+    const preferredMatch = outputContract.match(/Required solution language for this prompt:\s*([^,\n]+),\s*from the user preferred coding language setting/i);
+    return preferredMatch?.[1]?.trim() || null;
+}
+
 function createTelemetryRequestId(requestId: string | null, actionType: string): string {
     return requestId ?? `${actionType}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -2136,7 +2145,13 @@ export class IntelligenceEngine extends EventEmitter {
                     key: 'output_repair',
                     title: 'OUTPUT REPAIR',
                     content: [
-                        buildRepairInstruction(prompt.intent, validation.issues, prompt.actionContract),
+                        buildRepairInstruction(
+                            prompt.intent,
+                            validation.issues,
+                            prompt.actionContract,
+                            prompt.question,
+                            extractPreferredCodingLanguageForRepair(prompt)
+                        ),
                         this.buildScreenScanLanguageRepairInstruction(prompt),
                         `INVALID DRAFT EXCERPT:\n${invalidDraftForRepair}`,
                     ].filter(Boolean).join('\n\n'),

@@ -80,7 +80,7 @@ type BridgeActionContract =
   | 'followup_questions_only'
 
 type GenerateActionPayload = {
-  intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now'
+  intent: 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now' | 'system_design_tradeoffs'
   message?: string
   additionalContext?: string
   transcriptOverride?: string

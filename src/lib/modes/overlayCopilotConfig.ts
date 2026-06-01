@@ -8,7 +8,8 @@ export type OverlayActionIntent =
   | 'recap'
   | 'clarify'
   | 'brainstorm'
-  | 'follow_up_questions';
+  | 'follow_up_questions'
+  | 'system_design_tradeoffs';
 export type OverlayRecommendationId = OverlayQuickActionId | 'answer_now';
 export type OverlayQuickActionId =
   | 'what_to_answer'
@@ -212,7 +213,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     id: 'lecture_explain',
     label: 'Explain Concept',
     icon: '📘',
-    intent: 'clarify',
+    intent: 'what_to_answer',
     contextTarget: 'latest_turn',
     source: 'Explain Concept',
     analyticsKey: 'lecture_explain',
@@ -266,7 +267,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     id: 'recruiting_red_flag',
     label: 'Red Flag',
     icon: '🚩',
-    intent: 'clarify',
+    intent: 'what_to_answer',
     contextTarget: 'active_context',
     source: 'Candidate Red Flag',
     analyticsKey: 'recruiting_red_flag',
@@ -306,7 +307,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     id: 'team_action_item',
     label: 'Action Item',
     icon: '✅',
-    intent: 'follow_up_questions',
+    intent: 'what_to_answer',
     contextTarget: 'latest_turn',
     source: 'Action Items',
     analyticsKey: 'team_action_item',
@@ -316,7 +317,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     id: 'team_risk',
     label: 'Blocker',
     icon: '⚠️',
-    intent: 'clarify',
+    intent: 'what_to_answer',
     contextTarget: 'active_context',
     source: 'Blockers and Risks',
     analyticsKey: 'team_risk',
@@ -346,7 +347,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     id: 'job_resume_alignment',
     label: 'Resume Alignment',
     icon: '📄',
-    intent: 'clarify',
+    intent: 'what_to_answer',
     contextTarget: 'latest_turn',
     source: 'Resume Alignment',
     analyticsKey: 'job_resume_alignment',
@@ -366,7 +367,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     id: 'job_improvement',
     label: 'Behavioral Optimize',
     icon: '📈',
-    intent: 'follow_up_questions',
+    intent: 'what_to_answer',
     contextTarget: 'active_context',
     source: 'Behavioral Optimization',
     analyticsKey: 'job_improvement',
@@ -376,7 +377,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     id: 'system_tradeoffs',
     label: 'Tradeoffs',
     icon: '⚖️',
-    intent: 'what_to_answer',
+    intent: 'system_design_tradeoffs',
     contextTarget: 'latest_turn',
     source: 'System Tradeoffs',
     analyticsKey: 'system_tradeoffs',
@@ -409,11 +410,11 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     id: 'system_deep_dive',
     label: 'Deep Dive',
     icon: '🔍',
-    intent: 'follow_up_questions',
+    intent: 'what_to_answer',
     contextTarget: 'active_context',
     source: 'System Deep Dive',
     analyticsKey: 'system_deep_dive',
-    additionalContext: 'System design mode: suggest the best deeper-dive question about scaling, data model, caching, reliability, or operations.',
+    additionalContext: 'System design mode: provide a focused deeper-dive answer about scaling, data model, caching, reliability, or operations.',
     profilePreference: 'force_off',
   },
   salary_negotiate: {
@@ -440,7 +441,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     id: 'salary_confidence',
     label: 'Confidence',
     icon: '🗣️',
-    intent: 'clarify',
+    intent: 'what_to_answer',
     contextTarget: 'active_context',
     source: 'Confidence Coaching',
     analyticsKey: 'salary_confidence',
@@ -450,7 +451,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
     id: 'salary_anchor',
     label: 'Anchor',
     icon: '⚓',
-    intent: 'follow_up_questions',
+    intent: 'what_to_answer',
     contextTarget: 'latest_turn',
     source: 'Anchoring Strategy',
     analyticsKey: 'salary_anchor',

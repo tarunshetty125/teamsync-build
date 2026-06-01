@@ -1,5 +1,10 @@
 import type { SessionMode } from './SessionTracker';
-import { getQuestionResponseProfile, type UnifiedActionIntent } from './ActionContextBuilder';
+import {
+    getQuestionResponseProfile,
+    resolveCodingContractLanguage,
+    type CodingContractLanguage,
+    type UnifiedActionIntent,
+} from './ActionContextBuilder';
 import {
     normalizeActionContract,
     resolveEffectiveActionContract,
@@ -13,6 +18,18 @@ export interface ActionOutputValidationResult {
     issues: string[];
     warnings?: string[];
     repairApplied?: boolean;
+}
+
+function describeRepairCodingLanguage(language: CodingContractLanguage): string {
+    switch (language.source) {
+        case 'explicit':
+            return `Required solution language for repair: ${language.label}, because the latest question explicitly requested it.`;
+        case 'preference':
+            return `Required solution language for repair: ${language.label}, from the user preferred coding language setting.`;
+        case 'default':
+        default:
+            return 'Required solution language for repair: JavaScript, because no explicit language or user preference was provided.';
+    }
 }
 
 function cleanLines(content: string): string[] {
@@ -739,19 +756,6 @@ function validateSystemDesignInterviewAnswer(content: string, question: string =
     const hasComponents = /\b(component|api gateway|database|cache|queue|kafka|redis)\b/i.test(trimmed);
 
     if ('issues' in architectureJson) {
-        const substantialSystemDesignAnswer = trimmed.length > 250 && (sectionHeaders >= 2 || hasComponents);
-        if (substantialSystemDesignAnswer) {
-            return {
-                valid: true,
-                correctedContent: trimmed,
-                autoCorrected: normalized.changed,
-                issues: [
-                    ...(normalized.changed ? ['normalized_mermaid_fences'] : []),
-                ],
-                warnings: architectureJson.issues,
-            };
-        }
-
         return {
             valid: false,
             correctedContent: trimmed,
@@ -846,11 +850,14 @@ export function validateActionOutput(
                 ? 'system_design'
                 : 'general';
 
+    if (intent === 'system_design_tradeoffs') {
+        return validateBrainstorm(trimmed);
+    }
+
     if (profile === 'system_design' && (
         intent === 'manual_chat'
         || intent === 'what_to_answer'
         || intent === 'answer_now'
-        || intent === 'system_design_tradeoffs'
     )) {
         return validateSystemDesignInterviewAnswer(trimmed, question);
     }
@@ -886,8 +893,6 @@ export function validateActionOutput(
                     ? validateCodingContractAnswer(trimmed, effectiveActionContract)
                     : validateCodingScreenScan(trimmed)
                 : validateDirectAnswer(trimmed);
-        case 'system_design_tradeoffs':
-            return validateBrainstorm(trimmed);
         case 'answer_now':
         case 'what_to_answer':
         default:
@@ -915,20 +920,47 @@ function buildActionContractRepairInstruction(actionContract?: ActionContract): 
     }
 }
 
-export function buildRepairInstruction(intent: UnifiedActionIntent, issues: string[], actionContract?: ActionContract): string {
-    const architectureJsonRepair = issues.some((issue) => issue.startsWith('system_design_architecture_json') || issue === 'system_design_missing_fenced_architecture_json');
-    const codingRepair = issues.some((issue) => issue === 'coding_missing_code_block' || issue === 'coding_unbalanced_delimiters' || issue === 'coding_likely_compile_error');
+function buildCodingRepairInstruction(question?: string, preferredCodingLanguage?: string | null): string {
+    const language = resolveCodingContractLanguage(question, preferredCodingLanguage);
+    return [
+        'For coding answers, include the complete runnable solution inside one fenced markdown code block.',
+        describeRepairCodingLanguage(language),
+        `Use exactly three backticks: opening fence \`\`\`${language.fence} on its own line, code on following lines, closing fence \`\`\` on its own line.`,
+        'Never use two backticks or inline code for the solution.',
+        `The code must compile in ${language.label}: balance all parentheses, braces, and brackets; fix typos in keywords and standard libraries; use valid loop syntax for ${language.label}; keep prose like "Example usage" outside code or as comments; and for rectangular arrays, every row must have the same length.`,
+    ].join(' ');
+}
+
+export function buildRepairInstruction(
+    intent: UnifiedActionIntent,
+    issues: string[],
+    actionContract?: ActionContract,
+    question?: string,
+    preferredCodingLanguage?: string | null
+): string {
+    const isArchitectureJsonIssue = (issue: string) => (
+        issue.startsWith('system_design_architecture_json')
+        || issue === 'system_design_missing_fenced_architecture_json'
+    );
+    const repairIssues = intent === 'system_design_tradeoffs'
+        ? issues.filter((issue) => !isArchitectureJsonIssue(issue))
+        : issues;
+    const effectiveRepairIssues = repairIssues.length > 0
+        ? repairIssues
+        : ['system_design_tradeoffs_requires_concise_tradeoff_bullets'];
+    const architectureJsonRepair = intent !== 'system_design_tradeoffs' && issues.some(isArchitectureJsonIssue);
+    const codingRepair = effectiveRepairIssues.some((issue) => issue === 'coding_missing_code_block' || issue === 'coding_unbalanced_delimiters' || issue === 'coding_likely_compile_error');
     const contractRepair = buildActionContractRepairInstruction(resolveEffectiveActionContract({ intent, actionContract }));
     const screenScanLanguageRepair = issues.some((issue) => issue.startsWith('screen_scan_language_mismatch_expected_'));
     return [
         `The previous draft violated the output contract for intent "${intent}".`,
-        `Fix these issues: ${issues.join(', ')}.`,
+        `Fix these issues: ${effectiveRepairIssues.join(', ')}.`,
         contractRepair,
         architectureJsonRepair
             ? 'For system design answers, include one fenced ```architecture_json``` block with valid JSON only. MINIMUM 12 nodes required. Simple systems need 12+ nodes, medium production systems need 20+ nodes, FAANG-scale systems need 35-60+ nodes. Each node requires id, label, kind and should include technology, purpose, layer, latency, failureMode. Each edge requires source, target and should include label, protocol, latency. Kinds: client, gateway, service, database, cache, queue, storage, external. Include client, edge/gateway, core services, async, data, cache, security, and observability layers. Do not use Mermaid.'
             : '',
         codingRepair
-            ? 'For coding answers, include the complete runnable solution inside one fenced markdown code block. Use exactly three backticks: opening fence like ```python on its own line, code on following lines, closing fence ``` on its own line. Never use two backticks or inline code for the solution. The code must compile: balance all parentheses, braces, and brackets; fix typos in keywords and standard libraries; use valid loop increments such as i++; use valid Python indentation/imports when writing Python; keep prose like "Example usage" outside code or as comments; and for rectangular arrays, every row must have the same length.'
+            ? buildCodingRepairInstruction(question, preferredCodingLanguage)
             : '',
         screenScanLanguageRepair
             ? 'For screen scan coding answers, the detected editor language is authoritative. Rewrite the solution in the required detected language and use the required code fence. Do not default to Python when a non-Python editor language was detected.'

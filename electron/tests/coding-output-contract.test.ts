@@ -237,6 +237,56 @@ test('coding clarify output without fenced code is rejected for repair', () => {
     assert.deepEqual(result.issues, ['coding_missing_code_block']);
 });
 
+test('coding clarify accepts the existing full fenced-code contract', () => {
+    const result = outputValidator.validateActionOutput(
+        'clarify',
+        'coding',
+        [
+            '**Problem:**',
+            'Reverse a singly linked list.',
+            '',
+            '**Approach:**',
+            '- Walk the list once.',
+            '- Reverse each pointer as we go.',
+            '- Return the previous pointer after traversal.',
+            '',
+            '**Complexity:**',
+            'Time O(n), because each node is visited once. Space O(1), because reversal is in place.',
+            '',
+            '**Solution:**',
+            '```javascript',
+            'function reverseList(head) {',
+            '  let prev = null;',
+            '  let curr = head;',
+            '  while (curr) {',
+            '    const next = curr.next;',
+            '    curr.next = prev;',
+            '    prev = curr;',
+            '    curr = next;',
+            '  }',
+            '  return prev;',
+            '}',
+            '```',
+        ].join('\n'),
+        'reverse linked list',
+    );
+
+    assert.equal(result.valid, true);
+});
+
+test('coding clarify repair prompt inherits the full-solution coding contract', () => {
+    const repair = outputValidator.buildRepairInstruction(
+        'clarify',
+        ['coding_missing_code_block'],
+        undefined,
+        'reverse linked list',
+    );
+
+    assert.match(repair, /complete runnable solution/i);
+    assert.match(repair, /Required solution language for repair: JavaScript/i);
+    assert.match(repair, /opening fence ```javascript on its own line/i);
+});
+
 test('coding hint-only output accepts concise hints without code', () => {
     const result = outputValidator.validateActionOutput(
         'code_hint',
@@ -626,6 +676,138 @@ test('coding screen scan preserves substantial answers even when code syntax heu
     assert.equal(result.valid, true);
     assert.match(result.correctedContent, /Text Justification/);
     assert.ok(result.issues.includes('coding_unbalanced_delimiters_ignored_for_screen_scan'));
+});
+
+function buildArchitectureAnswer(nodeCount: number = 12): string {
+    const kinds = ['client', 'gateway', 'service', 'database', 'cache', 'queue', 'storage', 'external'] as const;
+    const nodes = Array.from({ length: nodeCount }, (_, index) => ({
+        id: `node_${index + 1}`,
+        label: `Component ${index + 1}`,
+        kind: kinds[index % kinds.length],
+        technology: index === 0 ? 'Web' : 'Service',
+        purpose: `Purpose ${index + 1}`,
+        layer: 'core_services',
+        latency: '<50ms',
+        failureMode: 'retry_or_failover',
+    }));
+    const edges = nodes.slice(1).map((node, index) => ({
+        source: nodes[index].id,
+        target: node.id,
+        label: 'calls',
+        protocol: 'https',
+        latency: '<20ms',
+    }));
+    const architectureJson = JSON.stringify({
+        diagram: {
+            type: 'architecture',
+            direction: 'TB',
+            nodes,
+            edges,
+        },
+    });
+
+    return [
+        '### Problem Description',
+        'Design WhatsApp-style messaging with reliable delivery and low-latency fanout.',
+        '### 1. High-Level Understanding',
+        'Use clients, gateways, message services, queues, caches, databases, and observability components.',
+        '### 2. Clarifying Questions',
+        '- What scale should we support?',
+        '- Is end-to-end encryption required?',
+        '### 3. Requirements',
+        '- One-to-one messaging.',
+        '- Multi-device delivery.',
+        '### 4. Architecture Diagram',
+        '```architecture_json',
+        architectureJson,
+        '```',
+        '### 5. Component Breakdown',
+        'The services coordinate message persistence, delivery, caching, and notifications.',
+    ].join('\n');
+}
+
+test('system-design tradeoff validates concise bullets without architecture_json', () => {
+    const result = outputValidator.validateActionOutput(
+        'system_design_tradeoffs',
+        'system_design',
+        [
+            '- Redis improves read latency, but it adds cache invalidation complexity.',
+            '- Kafka improves fanout resilience, but it adds operational overhead.',
+            '- Multi-region replication improves availability, but it complicates consistency.',
+        ].join('\n'),
+        'Design WhatsApp tradeoffs',
+    );
+
+    assert.equal(result.valid, true);
+    assert.deepEqual(result.issues, []);
+});
+
+test('system-design tradeoff repair does not escalate to architecture_json', () => {
+    const repair = outputValidator.buildRepairInstruction(
+        'system_design_tradeoffs',
+        ['system_design_missing_fenced_architecture_json'],
+        undefined,
+        'Design WhatsApp tradeoffs',
+    );
+
+    assert.doesNotMatch(repair, /architecture_json/);
+    assert.doesNotMatch(repair, /MINIMUM 12 nodes required/i);
+});
+
+test('full system-design validation requires architecture_json for repair alignment', () => {
+    const result = outputValidator.validateActionOutput(
+        'manual_chat',
+        'system_design',
+        [
+            '### Problem Description',
+            'Design WhatsApp-style messaging for reliable delivery.',
+            '### 1. High-Level Understanding',
+            'Use clients, API gateway, message service, Redis cache, Kafka queue, PostgreSQL database, and observability components.',
+            '### 2. Requirements',
+            'Support low latency, high availability, and durable message storage.',
+        ].join('\n'),
+        'Design WhatsApp',
+    );
+
+    assert.equal(result.valid, false);
+    assert.deepEqual(result.issues, ['system_design_missing_fenced_architecture_json']);
+});
+
+test('full system-design repair keeps architecture_json requirements', () => {
+    const repair = outputValidator.buildRepairInstruction(
+        'manual_chat',
+        ['system_design_missing_fenced_architecture_json'],
+        undefined,
+        'Design WhatsApp',
+    );
+
+    assert.match(repair, /architecture_json/);
+    assert.match(repair, /MINIMUM 12 nodes required/i);
+    assert.match(repair, /Do not use Mermaid/i);
+});
+
+test('valid architecture_json passes the full system-design validation path', () => {
+    const result = outputValidator.validateActionOutput(
+        'manual_chat',
+        'system_design',
+        buildArchitectureAnswer(12),
+        'Design WhatsApp',
+    );
+
+    assert.equal(result.valid, true);
+    assert.deepEqual(result.issues, []);
+});
+
+test('architecture_json validation rejects diagrams below the node floor', () => {
+    const result = outputValidator.validateActionOutput(
+        'manual_chat',
+        'system_design',
+        buildArchitectureAnswer(3),
+        'Design WhatsApp',
+    );
+
+    assert.equal(result.valid, false);
+    assert.deepEqual(result.issues, ['system_design_architecture_json_too_few_nodes']);
 });
 
 test('screen scan OCR question preserves visible JavaScript editor language', () => {

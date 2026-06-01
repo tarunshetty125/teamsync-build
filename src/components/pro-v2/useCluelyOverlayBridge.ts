@@ -84,7 +84,14 @@ export interface V2Message {
 
 type ScreenshotAttachment = { path: string; preview: string };
 type SessionMode = DetectedQuestionType;
-type ActionIntent = 'what_to_answer' | 'recap' | 'clarify' | 'brainstorm' | 'follow_up_questions' | 'answer_now';
+type ActionIntent =
+    | 'what_to_answer'
+    | 'recap'
+    | 'clarify'
+    | 'brainstorm'
+    | 'follow_up_questions'
+    | 'answer_now'
+    | 'system_design_tradeoffs';
 type ContextSummary = { label: string; detail: string };
 type ContextPreviewByActionId = Partial<Record<OverlayQuickActionId, string>>;
 type FrozenTranscriptUiSnapshot = {
