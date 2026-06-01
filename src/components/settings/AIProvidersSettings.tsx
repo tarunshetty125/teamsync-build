@@ -1,9 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Edit2, AlertCircle, CheckCircle, Save, ChevronDown, Check, RefreshCw, ExternalLink, Loader2 } from 'lucide-react';
 import { STANDARD_CLOUD_MODELS, prettifyModelId } from '../../utils/modelUtils';
 import { validateCurl } from '../../lib/curl-validator';
+import { buildProviderHealthReadModel } from '../../lib/providers/providerHealthReadModel';
+import { buildProviderDiagnosticsReadModel } from '../../lib/providers/providerDiagnosticsReadModel';
+import { buildProviderRoutingReadModel } from '../../lib/providers/providerRoutingReadModel';
+import { buildProviderFallbackReadModel } from '../../lib/providers/providerFallbackReadModel';
+import { buildProviderTelemetryReadModel } from '../../lib/providers/providerTelemetryReadModel';
+import { buildProviderPersonalizationReadModel } from '../../lib/providers/providerPersonalizationReadModel';
 import { ProviderCard } from './ProviderCard';
 import { GroqKeyVault } from './GroqKeyVault';
+import { ProviderHealthStatusSurface } from './ProviderHealthStatusSurface';
+import { ProviderDiagnosticsSurface } from './ProviderDiagnosticsSurface';
+import { ProviderRoutingTransparencySurface } from './ProviderRoutingTransparencySurface';
+import { ProviderFallbackAnalyticsSurface } from './ProviderFallbackAnalyticsSurface';
+import { ProviderTelemetrySurface } from './ProviderTelemetrySurface';
+import { ProviderPersonalizationImpactSurface } from './ProviderPersonalizationImpactSurface';
+import { ProviderResponseDrilldownSurface } from './ProviderResponseDrilldownSurface';
 
 interface CustomProvider {
     id: string;
@@ -200,6 +213,75 @@ export const AIProvidersSettings: React.FC = () => {
     // --- Dynamic Model Discovery ---
     const [preferredModels, setPreferredModels] = useState<Record<string, string>>({});
     const [dynamicModels, setDynamicModels] = useState<Record<string, { id: string, name: string }[]>>({});
+    const providerHealthReadModel = useMemo(() => {
+        const connectionSignal = (provider: 'gemini' | 'openai' | 'claude' | 'bedrock') => {
+            if (testStatus[provider] === 'success') {
+                return {
+                    success: true,
+                    source: provider === 'bedrock' ? 'test-bedrock-connection' : 'test-llm-connection',
+                };
+            }
+
+            if (testStatus[provider] === 'error') {
+                return {
+                    success: false,
+                    error: testError[provider] || 'Connection failed',
+                    source: provider === 'bedrock' ? 'test-bedrock-connection' : 'test-llm-connection',
+                };
+            }
+
+            return undefined;
+        };
+
+        return buildProviderHealthReadModel({
+            credentials: {
+                hasBedrockCredentials: !!hasStoredKey.bedrock,
+                hasGroqKey: !!hasStoredKey.groq,
+                hasGeminiKey: !!hasStoredKey.gemini,
+                hasOpenaiKey: !!hasStoredKey.openai,
+                hasClaudeKey: !!hasStoredKey.claude,
+            },
+            connectionTests: {
+                bedrock: connectionSignal('bedrock'),
+                gemini: connectionSignal('gemini'),
+                openai: connectionSignal('openai'),
+                claude: connectionSignal('claude'),
+            },
+            modelFetches: {
+                bedrock: dynamicModels.bedrock ? { modelCount: dynamicModels.bedrock.length, source: 'fetch-bedrock-models' } : undefined,
+                groq: dynamicModels.groq ? { modelCount: dynamicModels.groq.length, source: 'groq-vault:get-models' } : undefined,
+                gemini: dynamicModels.gemini ? { modelCount: dynamicModels.gemini.length, source: 'fetch-provider-models' } : undefined,
+                openai: dynamicModels.openai ? { modelCount: dynamicModels.openai.length, source: 'fetch-provider-models' } : undefined,
+                claude: dynamicModels.claude ? { modelCount: dynamicModels.claude.length, source: 'fetch-provider-models' } : undefined,
+            },
+            ollama: {
+                configured: ollamaStatus !== 'not-found' || ollamaModels.length > 0,
+                reachable: ollamaStatus === 'detected',
+                status: ollamaStatus,
+                models: ollamaModels,
+            },
+        });
+    }, [dynamicModels, hasStoredKey, ollamaModels, ollamaStatus, testError, testStatus]);
+    const providerDiagnosticsReadModel = useMemo(
+        () => buildProviderDiagnosticsReadModel({ health: providerHealthReadModel }),
+        [providerHealthReadModel],
+    );
+    const providerRoutingReadModel = useMemo(
+        () => buildProviderRoutingReadModel({ responses: [] }),
+        [],
+    );
+    const providerFallbackReadModel = useMemo(
+        () => buildProviderFallbackReadModel({ responses: [] }),
+        [],
+    );
+    const providerTelemetryReadModel = useMemo(
+        () => buildProviderTelemetryReadModel({ responses: [] }),
+        [],
+    );
+    const providerPersonalizationReadModel = useMemo(
+        () => buildProviderPersonalizationReadModel({ responses: [] }),
+        [],
+    );
 
     // Load Initial Data
     useEffect(() => {
@@ -826,6 +908,19 @@ export const AIProvidersSettings: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            <ProviderHealthStatusSurface readModel={providerHealthReadModel} />
+            <ProviderDiagnosticsSurface readModel={providerDiagnosticsReadModel} />
+            <ProviderRoutingTransparencySurface readModel={providerRoutingReadModel} />
+            <ProviderFallbackAnalyticsSurface readModel={providerFallbackReadModel} />
+            <ProviderTelemetrySurface readModel={providerTelemetryReadModel} />
+            <ProviderPersonalizationImpactSurface readModel={providerPersonalizationReadModel} />
+            <ProviderResponseDrilldownSurface
+                ownershipByResponseId={{}}
+                routingReadModel={providerRoutingReadModel}
+                diagnosticsReadModel={providerDiagnosticsReadModel}
+                telemetryReadModel={providerTelemetryReadModel}
+            />
 
             {/* Cloud Providers */}
             <div className="space-y-5">
