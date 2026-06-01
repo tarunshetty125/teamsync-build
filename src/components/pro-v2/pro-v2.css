@@ -1193,6 +1193,18 @@
   transform: scale(0.96);
 }
 
+.v2-diagram-timeline-version:focus-visible,
+.v2-response-switcher-btn:focus-visible,
+.v2-response-switcher-jump:focus-visible,
+.v2-diagram-comparison-mode:focus-visible,
+.v2-diagram-comparison-pair select:focus-visible,
+.v2-diagram-node-drawer-close:focus-visible,
+.v2-diagram-node-drawer:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.86);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
+}
+
 .v2-diagram-timeline-version:disabled {
   cursor: default;
 }

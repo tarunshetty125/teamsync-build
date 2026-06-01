@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import type {
     ProviderTelemetryBucket,
     ProviderTelemetryEntry,
@@ -59,6 +59,31 @@ function formatLatency(value: number | null | undefined): string {
     if (value === null || value === undefined) return '-';
     if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}s`;
     return `${value}ms`;
+}
+
+function FieldValue({
+    label,
+    title,
+    children,
+    className = '',
+    cellRole = 'cell',
+}: {
+    label: string;
+    title?: string;
+    children: ReactNode;
+    className?: string;
+    cellRole?: 'cell' | 'rowheader';
+}) {
+    return (
+        <div className="min-w-0" role={cellRole}>
+            <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-text-tertiary md:hidden">
+                {label}
+            </div>
+            <div className={className} title={title}>
+                {children}
+            </div>
+        </div>
+    );
 }
 
 function sumValues(entries: ProviderTelemetryEntry[], key: keyof Pick<ProviderTelemetryEntry, 'promptTokens' | 'completionTokens' | 'inputTokens' | 'outputTokens'>): number {
@@ -258,7 +283,7 @@ function EntryTable({ readModel }: { readModel: ProviderTelemetryReadModel }) {
             <div role="rowgroup" className="divide-y divide-border-subtle">
                 {readModel.entries.length === 0 ? (
                     <div className="px-4 py-3 text-xs text-text-secondary" role="row">
-                        No provider telemetry
+                        <div role="cell">No provider telemetry</div>
                     </div>
                 ) : (
                     readModel.entries.map((entry) => (
@@ -270,29 +295,29 @@ function EntryTable({ readModel }: { readModel: ProviderTelemetryReadModel }) {
                             data-telemetry-cancelled={entry.cancelled}
                             className="grid min-w-[900px] grid-cols-1 gap-3 border-l-2 border-border-subtle bg-bg-item-surface px-4 py-3 text-xs md:grid-cols-[1.05fr_1fr_1fr_0.75fr_0.8fr_0.8fr_0.8fr] md:items-center"
                         >
-                            <div className="min-w-0 truncate font-medium text-text-primary" title={entry.responseId}>
+                            <FieldValue label="Response" className="truncate font-medium text-text-primary" title={entry.responseId} cellRole="rowheader">
                                 {compactValue(entry.responseId, 24)}
-                            </div>
-                            <div className="min-w-0 truncate text-text-secondary" title={displayValue(entry.actualProvider ?? entry.requestedProvider)}>
+                            </FieldValue>
+                            <FieldValue label="Provider" className="truncate text-text-secondary" title={displayValue(entry.actualProvider ?? entry.requestedProvider)}>
                                 {compactValue(entry.actualProvider ?? entry.requestedProvider)}
-                            </div>
-                            <div className="min-w-0 truncate text-text-secondary" title={displayValue(entry.actualModel ?? entry.requestedModel)}>
+                            </FieldValue>
+                            <FieldValue label="Model" className="truncate text-text-secondary" title={displayValue(entry.actualModel ?? entry.requestedModel)}>
                                 {compactValue(entry.actualModel ?? entry.requestedModel)}
-                            </div>
-                            <div>
+                            </FieldValue>
+                            <FieldValue label="Status">
                                 <span className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold ${statusClassName(entry.status)}`}>
                                     {STATUS_LABELS[entry.status]}
                                 </span>
-                            </div>
-                            <div className="text-text-secondary">
+                            </FieldValue>
+                            <FieldValue label="Latency" className="text-text-secondary">
                                 {formatLatency(entry.latencyMs)}
-                            </div>
-                            <div className="text-text-secondary">
+                            </FieldValue>
+                            <FieldValue label="Streaming" className="text-text-secondary">
                                 {entry.streamingCompleted ? 'Completed' : entry.streamingStarted ? 'Started' : '-'}
-                            </div>
-                            <div className="text-text-secondary">
+                            </FieldValue>
+                            <FieldValue label="Validation" className="text-text-secondary">
                                 {entry.validationPassed === true ? 'Passed' : entry.validationPassed === false ? 'Failed' : '-'}
-                            </div>
+                            </FieldValue>
                         </div>
                     ))
                 )}

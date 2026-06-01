@@ -711,6 +711,12 @@ body {
   background: var(--overlay-control-hover-bg);
 }
 
+:where(button, [role="button"], [role="combobox"], [role="tab"], summary, select, input, textarea):focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.86);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
+}
+
 .overlay-icon-surface {
   background: var(--overlay-icon-bg);
 }

@@ -70,10 +70,20 @@ function ProviderSettingsDisclosure({
     summary: string;
     children: React.ReactNode;
 }) {
+    const [hasMountedContent, setHasMountedContent] = useState(false);
+
+    const handleDisclosureToggle = (event: React.SyntheticEvent<HTMLDetailsElement>) => {
+        if (event.currentTarget.open) {
+            setHasMountedContent(true);
+        }
+    };
+
     return (
         <details
             className="group overflow-hidden rounded-xl border border-border-subtle bg-bg-input/35"
             data-provider-settings-density="disclosure"
+            data-provider-settings-render="lazy"
+            onToggle={handleDisclosureToggle}
         >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-bg-item-surface/70 [&::-webkit-details-marker]:hidden">
                 <div className="min-w-0">
@@ -91,16 +101,20 @@ function ProviderSettingsDisclosure({
                     <ChevronDown className="h-4 w-4 text-text-tertiary transition-transform group-open:rotate-180" />
                 </div>
             </summary>
-            <div className="border-t border-border-subtle p-4">
-                {children}
-            </div>
+            {hasMountedContent && (
+                <div className="border-t border-border-subtle p-4">
+                    {children}
+                </div>
+            )}
         </details>
     );
 }
 
 const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, placeholder = "Select model" }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [activeOptionIndex, setActiveOptionIndex] = useState(0);
     const containerRef = React.useRef<HTMLDivElement>(null);
+    const listboxId = React.useId();
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -113,6 +127,8 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
     }, []);
 
     const selectedOption = options.find(o => o.id === value);
+    const selectedOptionIndex = Math.max(0, options.findIndex(o => o.id === value));
+    const activeOption = options[activeOptionIndex] ?? options[selectedOptionIndex];
     const showProviderSections = options.some(option => option.provider);
     const providerLabels: Record<string, string> = {
         teamsync: 'TeamSync',
@@ -136,12 +152,81 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
     };
     let lastProvider = '';
 
+    const selectOption = (option: ModelOption) => {
+        onChange(option.id);
+        setIsOpen(false);
+        setActiveOptionIndex(Math.max(0, options.findIndex(item => item.id === option.id)));
+    };
+
+    const moveActiveOption = (direction: 1 | -1) => {
+        if (options.length === 0) return;
+        setIsOpen(true);
+        setActiveOptionIndex((current) => {
+            const start = isOpen ? current : selectedOptionIndex;
+            return (start + direction + options.length) % options.length;
+        });
+    };
+
+    const handleComboboxKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            moveActiveOption(1);
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            moveActiveOption(-1);
+            return;
+        }
+
+        if (event.key === 'Home' && options.length > 0) {
+            event.preventDefault();
+            setIsOpen(true);
+            setActiveOptionIndex(0);
+            return;
+        }
+
+        if (event.key === 'End' && options.length > 0) {
+            event.preventDefault();
+            setIsOpen(true);
+            setActiveOptionIndex(options.length - 1);
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            setIsOpen(false);
+            return;
+        }
+
+        if ((event.key === 'Enter' || event.key === ' ') && options.length > 0) {
+            event.preventDefault();
+            if (!isOpen) {
+                setIsOpen(true);
+                setActiveOptionIndex(selectedOptionIndex);
+                return;
+            }
+
+            selectOption(activeOption ?? options[selectedOptionIndex]);
+        }
+    };
+
     return (
         <div className="relative" ref={containerRef}>
             <button
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={() => {
+                    setIsOpen(!isOpen);
+                    setActiveOptionIndex(selectedOptionIndex);
+                }}
+                onKeyDown={handleComboboxKeyDown}
                 className="w-72 max-w-[52vw] bg-bg-input border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary flex items-center justify-between hover:bg-bg-elevated transition-colors"
                 type="button"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded={isOpen}
+                aria-controls={listboxId}
+                aria-activedescendant={isOpen && activeOption ? `${listboxId}-${activeOption.id}` : undefined}
                 title={selectedOption ? selectedOption.name : placeholder}
             >
                 <span className="truncate pr-2">{selectedOption ? selectedOption.name : placeholder}</span>
@@ -149,9 +234,14 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
             </button>
 
             {isOpen && (
-                <div className="absolute top-full right-0 mt-1 w-[min(560px,80vw)] bg-bg-elevated border border-border-subtle rounded-lg shadow-xl z-50 max-h-72 overflow-y-auto animated fadeIn">
+                <div
+                    id={listboxId}
+                    role="listbox"
+                    aria-label={placeholder}
+                    className="absolute top-full right-0 mt-1 w-[min(560px,80vw)] bg-bg-elevated border border-border-subtle rounded-lg shadow-xl z-50 max-h-72 overflow-y-auto animated fadeIn"
+                >
                     <div className="p-1 space-y-0.5">
-                        {options.map((option) => {
+                        {options.map((option, index) => {
                             const provider = option.provider || '';
                             const shouldRenderHeader = showProviderSections && provider && provider !== lastProvider;
                             if (shouldRenderHeader) lastProvider = provider;
@@ -166,12 +256,13 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
                                         </div>
                                     )}
                                     <button
-                                        onClick={() => {
-                                            onChange(option.id);
-                                            setIsOpen(false);
-                                        }}
+                                        id={`${listboxId}-${option.id}`}
+                                        onClick={() => selectOption(option)}
+                                        onMouseEnter={() => setActiveOptionIndex(index)}
                                         className={`w-full text-left px-3 py-2 text-xs rounded-md flex items-center justify-between group transition-colors ${value === option.id ? 'bg-bg-input hover:bg-bg-elevated text-text-primary' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
                                         type="button"
+                                        role="option"
+                                        aria-selected={value === option.id}
                                         title={option.name}
                                     >
                                         <span className="flex min-w-0 items-start gap-2 whitespace-normal break-words leading-snug pr-2">

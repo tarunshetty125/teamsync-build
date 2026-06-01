@@ -662,6 +662,14 @@ function DiagramComparisonPanel({
     onFromVersionChange: (version: number) => void;
     onToVersionChange: (version: number) => void;
 }) {
+    const panelId = React.useId();
+    const tabPanelId = `${panelId}-panel`;
+    const comparisonModes: Array<{ mode: DiagramComparisonMode; label: string }> = [
+        { mode: 'parent_current', label: 'Parent ↔ Current' },
+        { mode: 'root_current', label: 'Root ↔ Current' },
+        { mode: 'version_pair', label: 'Version Pair' },
+    ];
+    const activeModeIndex = Math.max(0, comparisonModes.findIndex((option) => option.mode === mode));
     const rows = buildDiagramComparisonRows(comparison);
     const endpointLabel = comparison.from && comparison.to
         ? `v${comparison.from.version} -> v${comparison.to.version}`
@@ -683,86 +691,124 @@ function DiagramComparisonPanel({
             </div>
 
             <div className="v2-diagram-comparison-modes" role="tablist" aria-label="Comparison mode">
-                <DiagramComparisonModeButton
-                    active={mode === 'parent_current'}
-                    label="Parent ↔ Current"
-                    onClick={() => onModeChange('parent_current')}
-                />
-                <DiagramComparisonModeButton
-                    active={mode === 'root_current'}
-                    label="Root ↔ Current"
-                    onClick={() => onModeChange('root_current')}
-                />
-                <DiagramComparisonModeButton
-                    active={mode === 'version_pair'}
-                    label="Version Pair"
-                    onClick={() => onModeChange('version_pair')}
-                />
+                {comparisonModes.map((option, index) => {
+                    const tabId = `${panelId}-tab-${option.mode}`;
+                    return (
+                        <DiagramComparisonModeButton
+                            key={option.mode}
+                            id={tabId}
+                            controlsId={tabPanelId}
+                            active={mode === option.mode}
+                            label={option.label}
+                            tabIndex={mode === option.mode ? 0 : -1}
+                            onClick={() => onModeChange(option.mode)}
+                            onKeyDown={(event) => {
+                                const isForward = event.key === 'ArrowRight' || event.key === 'ArrowDown';
+                                const isBackward = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
+                                const isHome = event.key === 'Home';
+                                const isEnd = event.key === 'End';
+                                if (!isForward && !isBackward && !isHome && !isEnd) return;
+
+                                event.preventDefault();
+                                const nextIndex = isHome
+                                    ? 0
+                                    : isEnd
+                                        ? comparisonModes.length - 1
+                                        : isForward
+                                            ? (index + 1) % comparisonModes.length
+                                            : (index - 1 + comparisonModes.length) % comparisonModes.length;
+                                const nextMode = comparisonModes[nextIndex].mode;
+                                onModeChange(nextMode);
+                                window.requestAnimationFrame(() => {
+                                    document.getElementById(`${panelId}-tab-${nextMode}`)?.focus();
+                                });
+                            }}
+                        />
+                    );
+                })}
             </div>
 
-            {mode === 'version_pair' && (
-                <div className="v2-diagram-comparison-pair" aria-label="Version pair comparison controls">
-                    <label>
-                        <span>From</span>
-                        <select
-                            value={fromVersion}
-                            onChange={(event) => onFromVersionChange(Number(event.target.value))}
-                        >
-                            {timeline.items.map((item) => (
-                                <option key={`from-${item.responseId}`} value={item.version}>
-                                    v{item.version}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    <label>
-                        <span>To</span>
-                        <select
-                            value={toVersion}
-                            onChange={(event) => onToVersionChange(Number(event.target.value))}
-                        >
-                            {timeline.items.map((item) => (
-                                <option key={`to-${item.responseId}`} value={item.version}>
-                                    v{item.version}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
-            )}
+            <div
+                id={tabPanelId}
+                role="tabpanel"
+                aria-labelledby={`${panelId}-tab-${comparisonModes[activeModeIndex].mode}`}
+            >
+                {mode === 'version_pair' && (
+                    <div className="v2-diagram-comparison-pair" aria-label="Version pair comparison controls">
+                        <label>
+                            <span>From</span>
+                            <select
+                                value={fromVersion}
+                                onChange={(event) => onFromVersionChange(Number(event.target.value))}
+                            >
+                                {timeline.items.map((item) => (
+                                    <option key={`from-${item.responseId}`} value={item.version}>
+                                        v{item.version}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label>
+                            <span>To</span>
+                            <select
+                                value={toVersion}
+                                onChange={(event) => onToVersionChange(Number(event.target.value))}
+                            >
+                                {timeline.items.map((item) => (
+                                    <option key={`to-${item.responseId}`} value={item.version}>
+                                        v{item.version}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+                )}
 
-            <div className="v2-diagram-comparison-table" role="table" aria-label="Diagram comparison changes">
-                {rows.map((row) => (
-                    <DiagramComparisonRowView key={row.label} row={row} />
-                ))}
+                <div className="v2-diagram-comparison-table" role="table" aria-label="Diagram comparison changes">
+                    {rows.map((row) => (
+                        <DiagramComparisonRowView key={row.label} row={row} />
+                    ))}
+                </div>
+
+                {!comparison.available && comparison.issues.length > 0 && (
+                    <div className="v2-diagram-comparison-issues" aria-label="Comparison status">
+                        {comparison.issues.map((issue) => formatReadableMetaValue(issue)).join(' | ')}
+                    </div>
+                )}
             </div>
-
-            {!comparison.available && comparison.issues.length > 0 && (
-                <div className="v2-diagram-comparison-issues" aria-label="Comparison status">
-                    {comparison.issues.map((issue) => formatReadableMetaValue(issue)).join(' | ')}
-                </div>
-            )}
         </section>
     );
 }
 
 function DiagramComparisonModeButton({
+    id,
+    controlsId,
     active,
     label,
+    tabIndex,
     onClick,
+    onKeyDown,
 }: {
+    id: string;
+    controlsId: string;
     active: boolean;
     label: string;
+    tabIndex: number;
     onClick: () => void;
+    onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
 }) {
     return (
         <button
+            id={id}
             type="button"
             role="tab"
             aria-selected={active}
             aria-pressed={active}
+            aria-controls={controlsId}
+            tabIndex={tabIndex}
             className={`v2-diagram-comparison-mode${active ? ' v2-diagram-comparison-mode--active' : ''}`}
             onClick={onClick}
+            onKeyDown={onKeyDown}
         >
             {label}
         </button>
@@ -840,12 +886,12 @@ function DiagramComparisonRowView({
             role="row"
             title={row.items.join(', ') || 'No changes'}
         >
-            <span className={`v2-diagram-comparison-status v2-diagram-comparison-status--${row.status}`}>
+            <span className={`v2-diagram-comparison-status v2-diagram-comparison-status--${row.status}`} role="cell">
                 {formatReadableMetaValue(row.status)}
             </span>
-            <strong>{row.label}</strong>
-            <em>{itemLabel}</em>
-            <span className="v2-diagram-comparison-count">{row.count}</span>
+            <strong role="rowheader">{row.label}</strong>
+            <em role="cell">{itemLabel}</em>
+            <span className="v2-diagram-comparison-count" role="cell">{row.count}</span>
         </div>
     );
 }
@@ -859,6 +905,8 @@ function DiagramNodeIntelligenceDrawer({
     node: DiagramNodeIntelligence;
     onClose: () => void;
 }) {
+    const drawerRef = React.useRef<HTMLElement | null>(null);
+    const previousFocusRef = React.useRef<HTMLElement | null>(null);
     const metadata = [
         { label: 'ID', value: node.id },
         { label: 'Kind', value: formatReadableMetaValue(node.kind) },
@@ -877,8 +925,33 @@ function DiagramNodeIntelligenceDrawer({
     const incoming = node.incomingDependencies.slice(0, 4);
     const outgoing = node.outgoingDependencies.slice(0, 4);
 
+    useEffect(() => {
+        previousFocusRef.current = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
+        window.requestAnimationFrame(() => {
+            drawerRef.current?.focus();
+        });
+
+        return () => {
+            previousFocusRef.current?.focus?.();
+        };
+    }, []);
+
+    const handleDrawerKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        onClose();
+    };
+
     return (
-        <aside className="v2-diagram-node-drawer v2-no-drag" aria-label="Node intelligence">
+        <aside
+            ref={drawerRef}
+            className="v2-diagram-node-drawer v2-no-drag"
+            aria-label="Node intelligence"
+            tabIndex={-1}
+            onKeyDown={handleDrawerKeyDown}
+        >
             <div className="v2-diagram-node-drawer-header">
                 <div className="v2-diagram-node-drawer-title">
                     <span>{node.label}</span>

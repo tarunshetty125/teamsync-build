@@ -25,6 +25,41 @@ export interface ProviderAnalyticsSessionSnapshot {
     ownershipByResponseId: Record<string, Partial<ResponseOwnership>>;
 }
 
+/**
+ * Provider analytics snapshots are a retained-session metadata relay, not a
+ * second response-history store. Keep these budgets near the snapshot shape so
+ * IPC payload growth is easy to audit.
+ */
+export const PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS = Object.freeze({
+    maxResponses: 30,
+    maxOwnershipEntries: 30,
+    warningSerializedBytes: 96 * 1024,
+    maxSerializedBytes: 256 * 1024,
+});
+
+export type ProviderAnalyticsSessionSnapshotValidationStatus =
+    | 'valid'
+    | 'warning'
+    | 'invalid';
+
+export interface ProviderAnalyticsSessionSnapshotValidationIssue {
+    severity: Exclude<ProviderAnalyticsSessionSnapshotValidationStatus, 'valid'>;
+    code: string;
+    path: string;
+    message: string;
+    actual?: number | string;
+    budget?: number | string;
+}
+
+export interface ProviderAnalyticsSessionSnapshotValidationResult {
+    status: ProviderAnalyticsSessionSnapshotValidationStatus;
+    issues: ProviderAnalyticsSessionSnapshotValidationIssue[];
+    responseCount: number;
+    ownershipEntryCount: number;
+    serializedBytes: number;
+    budgets: typeof PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS;
+}
+
 export const PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC = {
     set: 'provider-analytics:set-session-snapshot',
     get: 'provider-analytics:get-session-snapshot',
@@ -165,10 +200,457 @@ const OWNERSHIP_KEYS: Array<keyof ResponseOwnership> = [
     'personalizationVersion',
 ];
 
+const SNAPSHOT_TOP_LEVEL_KEYS = new Set([
+    'generatedAt',
+    'activeResponseId',
+    'responses',
+    'ownershipByResponseId',
+]);
+
+const SNAPSHOT_RESPONSE_KEYS = new Set([
+    'id',
+    'responseId',
+    'requestId',
+    'provider',
+    'model',
+    'intent',
+    'source',
+    'timestamp',
+    'questionTurnId',
+    'ownership',
+    'intelligenceMetadata',
+    'debugMetadata',
+    'parentResponseId',
+    'rootResponseId',
+    'questionTurn',
+    'requestedProvider',
+    'requestedModel',
+    'actualProvider',
+    'actualModel',
+    'routingReason',
+    'personalizationVersion',
+    'providerDiagnosticsMetadata',
+    'providerTelemetryMetadata',
+    'validationMetadata',
+    'isStreaming',
+]);
+
+const SNAPSHOT_CONTENT_LEAKAGE_KEYS = new Set([
+    'answer',
+    'answers',
+    'artifact',
+    'artifacts',
+    'architecture',
+    'architecturejson',
+    'architecture_json',
+    'architecturepayload',
+    'body',
+    'completion',
+    'content',
+    'diagram',
+    'diagrampayload',
+    'diagrams',
+    'image',
+    'imagepayload',
+    'images',
+    'markdown',
+    'messages',
+    'parsedarchitecture',
+    'parseddiagram',
+    'prompt',
+    'prompts',
+    'rawcontent',
+    'rawresponse',
+    'responsecontent',
+    'responsemarkdown',
+    'responsetext',
+    'screenshot',
+    'screenshotpreview',
+    'screenshots',
+    'streamedcontent',
+    'streamingcontent',
+    'text',
+    'transcript',
+    'transcripts',
+    'transcripttext',
+]);
+
 function asRecord(value: unknown): UnknownRecord | undefined {
     return value && typeof value === 'object' && !Array.isArray(value)
         ? value as UnknownRecord
         : undefined;
+}
+
+function normalizedSnapshotKey(key: string): string {
+    return key.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+}
+
+function serializedByteLength(value: unknown): number {
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) return 0;
+    return new TextEncoder().encode(serialized).length;
+}
+
+function pushSnapshotValidationIssue(
+    issues: ProviderAnalyticsSessionSnapshotValidationIssue[],
+    issue: ProviderAnalyticsSessionSnapshotValidationIssue,
+): void {
+    issues.push(issue);
+}
+
+function collectContentLeakageIssues(
+    value: unknown,
+    path: string,
+    issues: ProviderAnalyticsSessionSnapshotValidationIssue[],
+    seen: WeakSet<object> = new WeakSet<object>(),
+): void {
+    if (!value || typeof value !== 'object') return;
+
+    if (seen.has(value)) return;
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+        value.forEach((entry, index) => {
+            collectContentLeakageIssues(entry, `${path}[${index}]`, issues, seen);
+        });
+        return;
+    }
+
+    Object.entries(value as UnknownRecord).forEach(([key, nestedValue]) => {
+        const normalizedKey = normalizedSnapshotKey(key);
+        const nextPath = path ? `${path}.${key}` : key;
+        if (SNAPSHOT_CONTENT_LEAKAGE_KEYS.has(normalizedKey)) {
+            pushSnapshotValidationIssue(issues, {
+                severity: 'invalid',
+                code: 'content_leakage_detected',
+                path: nextPath,
+                message: 'Provider analytics session snapshots must remain metadata-only.',
+                actual: key,
+            });
+        }
+        collectContentLeakageIssues(nestedValue, nextPath, issues, seen);
+    });
+}
+
+function compareSnapshotField(
+    issues: ProviderAnalyticsSessionSnapshotValidationIssue[],
+    responseId: string,
+    field: string,
+    responseValue: unknown,
+    ownershipValue: unknown,
+): void {
+    if (responseValue === undefined || ownershipValue === undefined || responseValue === ownershipValue) {
+        return;
+    }
+
+    pushSnapshotValidationIssue(issues, {
+        severity: 'invalid',
+        code: 'ownership_field_mismatch',
+        path: `ownershipByResponseId.${responseId}.${field}`,
+        message: 'Snapshot response metadata must stay aligned with ownership metadata.',
+        actual: String(ownershipValue),
+        budget: String(responseValue),
+    });
+}
+
+function buildSnapshotValidationResult(
+    issues: ProviderAnalyticsSessionSnapshotValidationIssue[],
+    responseCount: number,
+    ownershipEntryCount: number,
+    serializedBytes: number,
+): ProviderAnalyticsSessionSnapshotValidationResult {
+    const status: ProviderAnalyticsSessionSnapshotValidationStatus = issues.some((issue) => issue.severity === 'invalid')
+        ? 'invalid'
+        : issues.length > 0
+            ? 'warning'
+            : 'valid';
+
+    return {
+        status,
+        issues,
+        responseCount,
+        ownershipEntryCount,
+        serializedBytes,
+        budgets: PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS,
+    };
+}
+
+export function validateProviderAnalyticsSessionSnapshot(
+    snapshot: unknown,
+): ProviderAnalyticsSessionSnapshotValidationResult {
+    const issues: ProviderAnalyticsSessionSnapshotValidationIssue[] = [];
+    let serializedBytes = 0;
+
+    try {
+        serializedBytes = serializedByteLength(snapshot);
+    } catch (error) {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'invalid',
+            code: 'snapshot_serialization_failed',
+            path: '$',
+            message: 'Provider analytics session snapshot must be JSON-serializable.',
+            actual: error instanceof Error ? error.message : String(error),
+        });
+    }
+
+    if (serializedBytes > PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS.maxSerializedBytes) {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'invalid',
+            code: 'payload_size_exceeded',
+            path: '$',
+            message: 'Provider analytics session snapshot exceeds the maximum serialized payload size.',
+            actual: serializedBytes,
+            budget: PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS.maxSerializedBytes,
+        });
+    } else if (serializedBytes > PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS.warningSerializedBytes) {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'warning',
+            code: 'payload_size_warning',
+            path: '$',
+            message: 'Provider analytics session snapshot is approaching the serialized payload budget.',
+            actual: serializedBytes,
+            budget: PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS.warningSerializedBytes,
+        });
+    }
+
+    if (snapshot === null) {
+        return buildSnapshotValidationResult(issues, 0, 0, serializedBytes);
+    }
+
+    const snapshotRecord = asRecord(snapshot);
+    if (!snapshotRecord) {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'invalid',
+            code: 'snapshot_shape_invalid',
+            path: '$',
+            message: 'Provider analytics session snapshot must be an object or null.',
+        });
+        return buildSnapshotValidationResult(issues, 0, 0, serializedBytes);
+    }
+
+    Object.keys(snapshotRecord).forEach((key) => {
+        if (!SNAPSHOT_TOP_LEVEL_KEYS.has(key)) {
+            pushSnapshotValidationIssue(issues, {
+                severity: 'invalid',
+                code: 'metadata_only_shape_violation',
+                path: key,
+                message: 'Provider analytics session snapshot contains an unsupported top-level field.',
+                actual: key,
+            });
+        }
+    });
+
+    if (typeof snapshotRecord.generatedAt !== 'number') {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'invalid',
+            code: 'generated_at_invalid',
+            path: 'generatedAt',
+            message: 'Provider analytics session snapshot generatedAt must be numeric.',
+        });
+    }
+
+    if (snapshotRecord.activeResponseId !== null && snapshotRecord.activeResponseId !== undefined && typeof snapshotRecord.activeResponseId !== 'string') {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'invalid',
+            code: 'active_response_id_invalid',
+            path: 'activeResponseId',
+            message: 'Provider analytics session snapshot activeResponseId must be a string or null.',
+        });
+    }
+
+    const responses = Array.isArray(snapshotRecord.responses) ? snapshotRecord.responses : [];
+    if (!Array.isArray(snapshotRecord.responses)) {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'invalid',
+            code: 'responses_shape_invalid',
+            path: 'responses',
+            message: 'Provider analytics session snapshot responses must be an array.',
+        });
+    }
+
+    const ownershipByResponseId = asRecord(snapshotRecord.ownershipByResponseId) ?? {};
+    if (!asRecord(snapshotRecord.ownershipByResponseId)) {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'invalid',
+            code: 'ownership_shape_invalid',
+            path: 'ownershipByResponseId',
+            message: 'Provider analytics session snapshot ownershipByResponseId must be an object.',
+        });
+    }
+
+    if (responses.length > PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS.maxResponses) {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'invalid',
+            code: 'response_count_exceeded',
+            path: 'responses',
+            message: 'Provider analytics session snapshot exceeds the retained-response budget.',
+            actual: responses.length,
+            budget: PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS.maxResponses,
+        });
+    }
+
+    const ownershipEntries = Object.entries(ownershipByResponseId);
+    if (ownershipEntries.length > PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS.maxOwnershipEntries) {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'invalid',
+            code: 'ownership_entry_count_exceeded',
+            path: 'ownershipByResponseId',
+            message: 'Provider analytics session snapshot exceeds the ownership-entry budget.',
+            actual: ownershipEntries.length,
+            budget: PROVIDER_ANALYTICS_SESSION_SNAPSHOT_BUDGETS.maxOwnershipEntries,
+        });
+    }
+
+    collectContentLeakageIssues(snapshotRecord, '$', issues);
+
+    const responseRecords = responses
+        .map((response, index) => {
+            const record = asRecord(response);
+            if (!record) {
+                pushSnapshotValidationIssue(issues, {
+                    severity: 'invalid',
+                    code: 'response_shape_invalid',
+                    path: `responses[${index}]`,
+                    message: 'Provider analytics session snapshot response entries must be objects.',
+                });
+            }
+            return record ? { record, index } : null;
+        })
+        .filter((entry): entry is { record: UnknownRecord; index: number } => Boolean(entry));
+    const responseIds = new Set<string>();
+
+    responseRecords.forEach(({ record, index }) => {
+        Object.keys(record).forEach((key) => {
+            if (!SNAPSHOT_RESPONSE_KEYS.has(key)) {
+                pushSnapshotValidationIssue(issues, {
+                    severity: 'warning',
+                    code: 'unknown_response_metadata_key',
+                    path: `responses[${index}].${key}`,
+                    message: 'Provider analytics session snapshot response contains an unrecognized metadata key.',
+                    actual: key,
+                });
+            }
+        });
+
+        if (typeof record.responseId !== 'string' || !record.responseId.trim()) {
+            pushSnapshotValidationIssue(issues, {
+                severity: 'invalid',
+                code: 'response_id_invalid',
+                path: `responses[${index}].responseId`,
+                message: 'Provider analytics session snapshot responseId must be a non-empty string.',
+            });
+            return;
+        }
+
+        responseIds.add(record.responseId);
+
+        if (record.id !== undefined && record.id !== record.responseId) {
+            pushSnapshotValidationIssue(issues, {
+                severity: 'invalid',
+                code: 'response_id_mismatch',
+                path: `responses[${index}].id`,
+                message: 'Provider analytics session snapshot id must match responseId.',
+                actual: String(record.id),
+                budget: String(record.responseId),
+            });
+        }
+    });
+
+    if (typeof snapshotRecord.activeResponseId === 'string' && !responseIds.has(snapshotRecord.activeResponseId)) {
+        pushSnapshotValidationIssue(issues, {
+            severity: 'invalid',
+            code: 'active_response_not_retained',
+            path: 'activeResponseId',
+            message: 'Provider analytics activeResponseId must reference a retained response.',
+            actual: snapshotRecord.activeResponseId,
+        });
+    }
+
+    responseRecords.forEach(({ record, index }) => {
+        const responseId = String(record.responseId);
+        const parentResponseId = typeof record.parentResponseId === 'string' ? record.parentResponseId : undefined;
+        const rootResponseId = typeof record.rootResponseId === 'string' ? record.rootResponseId : undefined;
+        const responseOwnership = asRecord(record.ownership);
+        const mappedOwnership = asRecord(ownershipByResponseId[responseId]);
+
+        if (parentResponseId && !responseIds.has(parentResponseId)) {
+            pushSnapshotValidationIssue(issues, {
+                severity: 'invalid',
+                code: 'parent_response_not_retained',
+                path: `responses[${index}].parentResponseId`,
+                message: 'Provider analytics parentResponseId must reference a retained response.',
+                actual: parentResponseId,
+            });
+        }
+
+        if (rootResponseId && !responseIds.has(rootResponseId)) {
+            pushSnapshotValidationIssue(issues, {
+                severity: 'invalid',
+                code: 'root_response_not_retained',
+                path: `responses[${index}].rootResponseId`,
+                message: 'Provider analytics rootResponseId must reference a retained response.',
+                actual: rootResponseId,
+            });
+        }
+
+        if (responseOwnership && !mappedOwnership) {
+            pushSnapshotValidationIssue(issues, {
+                severity: 'invalid',
+                code: 'ownership_entry_missing',
+                path: `ownershipByResponseId.${responseId}`,
+                message: 'Provider analytics ownership map must include retained response ownership.',
+            });
+        }
+
+        if (!mappedOwnership) return;
+
+        if (mappedOwnership.responseId !== undefined && mappedOwnership.responseId !== responseId) {
+            pushSnapshotValidationIssue(issues, {
+                severity: 'invalid',
+                code: 'ownership_response_id_mismatch',
+                path: `ownershipByResponseId.${responseId}.responseId`,
+                message: 'Provider analytics ownership entry responseId must match its map key.',
+                actual: String(mappedOwnership.responseId),
+                budget: responseId,
+            });
+        }
+
+        compareSnapshotField(issues, responseId, 'parentResponseId', parentResponseId, mappedOwnership.parentResponseId);
+        compareSnapshotField(issues, responseId, 'requestedProvider', record.requestedProvider, mappedOwnership.requestedProvider);
+        compareSnapshotField(issues, responseId, 'requestedModel', record.requestedModel, mappedOwnership.requestedModel);
+        compareSnapshotField(issues, responseId, 'actualProvider', record.actualProvider, mappedOwnership.actualProvider);
+        compareSnapshotField(issues, responseId, 'actualModel', record.actualModel, mappedOwnership.actualModel);
+        compareSnapshotField(issues, responseId, 'routingReason', record.routingReason, mappedOwnership.routingReason);
+        compareSnapshotField(issues, responseId, 'personalizationVersion', record.personalizationVersion, mappedOwnership.personalizationVersion);
+    });
+
+    ownershipEntries.forEach(([responseId, ownership]) => {
+        if (!responseIds.has(responseId)) {
+            pushSnapshotValidationIssue(issues, {
+                severity: 'invalid',
+                code: 'ownership_entry_not_retained',
+                path: `ownershipByResponseId.${responseId}`,
+                message: 'Provider analytics ownership map contains an entry for a non-retained response.',
+                actual: responseId,
+            });
+        }
+
+        if (!asRecord(ownership)) {
+            pushSnapshotValidationIssue(issues, {
+                severity: 'invalid',
+                code: 'ownership_entry_shape_invalid',
+                path: `ownershipByResponseId.${responseId}`,
+                message: 'Provider analytics ownership entries must be objects.',
+            });
+        }
+    });
+
+    return buildSnapshotValidationResult(
+        issues,
+        responses.length,
+        ownershipEntries.length,
+        serializedBytes,
+    );
 }
 
 function pickDefined<T extends readonly string[]>(

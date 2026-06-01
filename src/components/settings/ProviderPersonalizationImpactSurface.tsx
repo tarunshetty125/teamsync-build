@@ -195,14 +195,16 @@ function FieldValue({
     title,
     children,
     className = '',
+    cellRole = 'cell',
 }: {
     label: string;
     title?: string;
     children: React.ReactNode;
     className?: string;
+    cellRole?: 'cell' | 'rowheader';
 }) {
     return (
-        <div className="min-w-0">
+        <div className="min-w-0" role={cellRole}>
             <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-text-tertiary md:hidden">
                 {label}
             </div>
@@ -230,7 +232,7 @@ function PersonalizationRow({ entry }: { entry: ProviderPersonalizationEntry }) 
             data-preference-bypassed={bypassed}
             className="grid min-w-[1120px] grid-cols-1 gap-3 border-l-2 border-border-subtle bg-bg-item-surface px-4 py-3 text-xs md:grid-cols-[1fr_1.25fr_1fr_1.25fr_1fr_1.25fr_0.75fr_0.75fr_0.85fr_1fr_1fr] md:items-center"
         >
-            <FieldValue label="Preferred Provider" className="truncate font-medium text-text-primary" title={displayValue(entry.providerPreference)}>
+            <FieldValue label="Preferred Provider" className="truncate font-medium text-text-primary" title={displayValue(entry.providerPreference)} cellRole="rowheader">
                 {compactValue(entry.providerPreference)}
             </FieldValue>
             <FieldValue label="Preferred Model" className="truncate text-text-secondary" title={displayValue(preferredModelValue(entry))}>
@@ -331,7 +333,7 @@ export function ProviderPersonalizationImpactSurface({ readModel }: ProviderPers
                 <div role="rowgroup" className="divide-y divide-border-subtle">
                     {readModel.entries.length === 0 ? (
                         <div className="px-4 py-3 text-xs text-text-secondary" role="row">
-                            No provider personalization impact
+                            <div role="cell">No provider personalization impact</div>
                         </div>
                     ) : (
                         readModel.entries.map((entry) => (

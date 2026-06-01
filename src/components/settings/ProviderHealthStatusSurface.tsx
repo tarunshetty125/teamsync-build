@@ -58,13 +58,15 @@ function FieldValue({
     label,
     children,
     className = '',
+    cellRole = 'cell',
 }: {
     label: string;
     children: ReactNode;
     className?: string;
+    cellRole?: 'cell' | 'rowheader';
 }) {
     return (
-        <div className="min-w-0">
+        <div className="min-w-0" role={cellRole}>
             <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-text-tertiary md:hidden">
                 {label}
             </div>
@@ -109,7 +111,7 @@ export function ProviderHealthStatusSurface({ readModel }: ProviderHealthStatusS
                                 data-health-tone={tone}
                                 className={`grid grid-cols-1 gap-3 border-l-2 px-4 py-3 text-xs md:grid-cols-[1.1fr_0.75fr_0.75fr_0.85fr_0.7fr_2.4fr] md:items-center ${rowClassName}`}
                             >
-                                <FieldValue label="Provider" className="min-w-0 font-semibold text-text-primary">
+                                <FieldValue label="Provider" className="min-w-0 font-semibold text-text-primary" cellRole="rowheader">
                                     <span className="block truncate">{entry.label}</span>
                                 </FieldValue>
                                 <FieldValue

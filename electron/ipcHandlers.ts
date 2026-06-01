@@ -13,6 +13,7 @@ import { PermissionManager } from "./services/PermissionManager";
 import type { PermissionKind } from "../src/lib/permissions/types";
 import {
   PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC,
+  validateProviderAnalyticsSessionSnapshot,
   type ProviderAnalyticsSessionSnapshot,
   type ProviderAnalyticsSessionSnapshotSetResult,
 } from "../src/lib/providers/providerAnalyticsSessionSnapshot";
@@ -466,6 +467,16 @@ export function initializeIpcHandlers(appState: AppState): void {
   })
 
   safeHandle(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.set, async (_, snapshot: ProviderAnalyticsSessionSnapshot | null): Promise<ProviderAnalyticsSessionSnapshotSetResult> => {
+    const validation = validateProviderAnalyticsSessionSnapshot(snapshot);
+    if (validation.status !== 'valid') {
+      console.warn('[ProviderAnalytics] session snapshot guardrail', {
+        status: validation.status,
+        responseCount: validation.responseCount,
+        ownershipEntryCount: validation.ownershipEntryCount,
+        serializedBytes: validation.serializedBytes,
+        issues: validation.issues,
+      });
+    }
     providerAnalyticsSessionSnapshot = snapshot ?? null;
     broadcastProviderAnalyticsSessionSnapshot(providerAnalyticsSessionSnapshot);
     return { success: true };

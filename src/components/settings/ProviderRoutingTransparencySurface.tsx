@@ -113,14 +113,16 @@ function FieldValue({
     title,
     children,
     className = '',
+    cellRole = 'cell',
 }: {
     label: string;
     title?: string;
     children: ReactNode;
     className?: string;
+    cellRole?: 'cell' | 'rowheader';
 }) {
     return (
-        <div className="min-w-0">
+        <div className="min-w-0" role={cellRole}>
             <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-text-tertiary md:hidden">
                 {label}
             </div>
@@ -140,7 +142,7 @@ function ProviderRoutingRow({ route }: { route: ProviderRoutingEntry }) {
             data-fallback-used={route.fallbackUsed}
             className={`grid min-w-[920px] grid-cols-1 gap-3 border-l-2 px-4 py-3 text-xs md:grid-cols-[1fr_1.35fr_1fr_1.35fr_1.45fr_0.85fr_0.85fr_0.9fr] md:items-center ${rowClassName(route.status)}`}
         >
-            <FieldValue label="Requested Provider" className="truncate font-medium text-text-primary" title={displayValue(route.requestedProvider)}>
+            <FieldValue label="Requested Provider" className="truncate font-medium text-text-primary" title={displayValue(route.requestedProvider)} cellRole="rowheader">
                 {displayValue(route.requestedProvider)}
             </FieldValue>
             <FieldValue label="Requested Model" className="truncate text-text-secondary" title={displayValue(route.requestedModel)}>
@@ -223,7 +225,7 @@ export function ProviderRoutingTransparencySurface({ readModel }: ProviderRoutin
                 <div role="rowgroup" className="divide-y divide-border-subtle">
                     {readModel.routes.length === 0 ? (
                         <div className="px-4 py-3 text-xs text-text-secondary" role="row">
-                            No provider routes
+                            <div role="cell">No provider routes</div>
                         </div>
                     ) : (
                         readModel.routes.map((route) => (

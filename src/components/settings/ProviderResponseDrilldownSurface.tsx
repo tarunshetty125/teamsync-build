@@ -172,14 +172,16 @@ function FieldValue({
     title,
     children,
     className = '',
+    cellRole = 'cell',
 }: {
     label: string;
     title?: string;
     children: ReactNode;
     className?: string;
+    cellRole?: 'cell' | 'rowheader';
 }) {
     return (
-        <div className="min-w-0">
+        <div className="min-w-0" role={cellRole}>
             <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-text-tertiary md:hidden">
                 {label}
             </div>
@@ -225,7 +227,7 @@ function DrilldownRowView({ row }: { row: DrilldownRow }) {
             data-drilldown-validation={validation}
             className="grid min-w-[1180px] grid-cols-1 gap-3 border-l-2 border-border-subtle bg-bg-item-surface px-4 py-3 text-xs md:grid-cols-[1fr_1.25fr_1fr_1.25fr_1.4fr_0.85fr_0.8fr_1.4fr_0.75fr_1.25fr_0.95fr] md:items-center"
         >
-            <FieldValue label="Requested Provider" className="truncate font-medium text-text-primary" title={displayValue(requestedProvider(row))}>
+            <FieldValue label="Requested Provider" className="truncate font-medium text-text-primary" title={displayValue(requestedProvider(row))} cellRole="rowheader">
                 {compactValue(requestedProvider(row))}
             </FieldValue>
             <FieldValue label="Requested Model" className="truncate text-text-secondary" title={displayValue(requestedModel(row))}>
@@ -321,7 +323,7 @@ export function ProviderResponseDrilldownSurface(props: ProviderResponseDrilldow
                 <div role="rowgroup" className="divide-y divide-border-subtle">
                     {rows.length === 0 ? (
                         <div className="px-4 py-3 text-xs text-text-secondary" role="row">
-                            No response provider drilldown
+                            <div role="cell">No response provider drilldown</div>
                         </div>
                     ) : (
                         rows.map((row) => (

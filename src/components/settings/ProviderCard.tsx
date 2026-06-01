@@ -48,7 +48,9 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [selectedModel, setSelectedModel] = useState<string>(preferredModel || '');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [activeModelIndex, setActiveModelIndex] = useState(0);
     const dropdownRef = React.useRef<HTMLDivElement>(null);
+    const listboxId = React.useId();
 
     // Refs to avoid stale closures in the auto-save timer
     const savedRef = useRef(savedStatus);
@@ -126,6 +128,7 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
     const handleSelectModel = async (modelId: string) => {
         setSelectedModel(modelId);
         setIsDropdownOpen(false);
+        setActiveModelIndex(Math.max(0, fetchedModels.findIndex(model => model.id === modelId)));
         try {
             // @ts-ignore
             await window.electronAPI?.setProviderPreferredModel(providerId, modelId);
@@ -138,6 +141,62 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
     };
 
     const selectedOption = fetchedModels.find(m => m.id === selectedModel);
+    const selectedModelIndex = Math.max(0, fetchedModels.findIndex(model => model.id === selectedModel));
+    const activeModel = fetchedModels[activeModelIndex] ?? fetchedModels[selectedModelIndex];
+
+    const moveActiveModel = (direction: 1 | -1) => {
+        if (fetchedModels.length === 0) return;
+        setIsDropdownOpen(true);
+        setActiveModelIndex((current) => {
+            const start = isDropdownOpen ? current : selectedModelIndex;
+            return (start + direction + fetchedModels.length) % fetchedModels.length;
+        });
+    };
+
+    const handleModelComboboxKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            moveActiveModel(1);
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            moveActiveModel(-1);
+            return;
+        }
+
+        if (event.key === 'Home' && fetchedModels.length > 0) {
+            event.preventDefault();
+            setIsDropdownOpen(true);
+            setActiveModelIndex(0);
+            return;
+        }
+
+        if (event.key === 'End' && fetchedModels.length > 0) {
+            event.preventDefault();
+            setIsDropdownOpen(true);
+            setActiveModelIndex(fetchedModels.length - 1);
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            setIsDropdownOpen(false);
+            return;
+        }
+
+        if ((event.key === 'Enter' || event.key === ' ') && fetchedModels.length > 0) {
+            event.preventDefault();
+            if (!isDropdownOpen) {
+                setIsDropdownOpen(true);
+                setActiveModelIndex(selectedModelIndex);
+                return;
+            }
+
+            void handleSelectModel((activeModel ?? fetchedModels[selectedModelIndex]).id);
+        }
+    };
 
     return (
         <div className="bg-bg-item-surface rounded-xl p-5 border border-border-subtle">
@@ -208,9 +267,19 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
                 {fetchedModels.length > 0 || preferredModel ? (
                     <div className="relative flex-1 max-w-[340px] mx-4" ref={dropdownRef}>
                         <button
-                            onClick={() => fetchedModels.length > 0 && setIsDropdownOpen(!isDropdownOpen)}
+                            onClick={() => {
+                                if (fetchedModels.length === 0) return;
+                                setIsDropdownOpen(!isDropdownOpen);
+                                setActiveModelIndex(selectedModelIndex);
+                            }}
+                            onKeyDown={handleModelComboboxKeyDown}
                             className={`w-full bg-bg-input border border-border-subtle rounded-md px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary flex items-center justify-between transition-colors ${fetchedModels.length > 0 ? 'hover:bg-bg-elevated' : 'opacity-80 cursor-default'}`}
                             type="button"
+                            role="combobox"
+                            aria-haspopup="listbox"
+                            aria-expanded={isDropdownOpen}
+                            aria-controls={listboxId}
+                            aria-activedescendant={isDropdownOpen && activeModel ? `${listboxId}-${activeModel.id}` : undefined}
                             title={selectedOption ? selectedOption.label : (preferredModel || 'Select model')}
                         >
                             <span className="truncate pr-2">{selectedOption ? selectedOption.label : (preferredModel || 'Select model')}</span>
@@ -218,14 +287,23 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
                         </button>
 
                         {isDropdownOpen && fetchedModels.length > 0 && (
-                            <div className="absolute top-full right-0 mt-1 w-[min(560px,80vw)] bg-bg-elevated border border-border-subtle rounded-lg shadow-xl z-50 max-h-72 overflow-y-auto animated fadeIn">
+                            <div
+                                id={listboxId}
+                                role="listbox"
+                                aria-label={`${providerName} preferred model`}
+                                className="absolute top-full right-0 mt-1 w-[min(560px,80vw)] bg-bg-elevated border border-border-subtle rounded-lg shadow-xl z-50 max-h-72 overflow-y-auto animated fadeIn"
+                            >
                                 <div className="p-1 space-y-0.5">
-                                    {fetchedModels.map((model) => (
+                                    {fetchedModels.map((model, index) => (
                                         <button
                                             key={model.id}
+                                            id={`${listboxId}-${model.id}`}
                                             onClick={() => handleSelectModel(model.id)}
+                                            onMouseEnter={() => setActiveModelIndex(index)}
                                             className={`w-full text-left px-3 py-2 text-xs rounded-md flex items-center justify-between group transition-colors ${selectedModel === model.id ? 'bg-bg-input hover:bg-bg-elevated text-text-primary' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
                                             type="button"
+                                            role="option"
+                                            aria-selected={selectedModel === model.id}
                                             title={model.id}
                                         >
                                             <span className="whitespace-normal break-words leading-snug pr-2">{model.label}</span>

@@ -77,6 +77,9 @@ const ModelSelectorWindow = () => {
     });
     const [isLoading, setIsLoading] = useState<boolean>(() => availableModels.length === 0);
     const [providerFetchErrors, setProviderFetchErrors] = useState<Record<string, string>>({});
+    const [activeModelIndex, setActiveModelIndex] = useState(0);
+    const listboxId = React.useId();
+    const comboboxRef = useRef<HTMLDivElement>(null);
 
 
 
@@ -317,10 +320,70 @@ const ModelSelectorWindow = () => {
 
     const handleSelectFn = (modelId: string) => {
         setCurrentModel(modelId);
+        setActiveModelIndex(Math.max(0, availableModels.findIndex(model => model.id === modelId)));
         localStorage.setItem('cached-current-model', modelId);
         
         window.electronAPI?.setModel(modelId)
             .catch((err: any) => console.error("Failed to set model:", err));
+    };
+
+    useEffect(() => {
+        if (availableModels.length === 0) {
+            setActiveModelIndex(0);
+            return;
+        }
+
+        setActiveModelIndex(Math.max(0, availableModels.findIndex(model => model.id === currentModel)));
+    }, [availableModels, currentModel]);
+
+    useLayoutEffect(() => {
+        comboboxRef.current?.focus();
+    }, []);
+
+    useEffect(() => {
+        const activeModel = availableModels[activeModelIndex];
+        if (!activeModel) return;
+        document.getElementById(`${listboxId}-${activeModel.id}`)?.scrollIntoView({ block: 'nearest' });
+    }, [activeModelIndex, availableModels, listboxId]);
+
+    const handleModelListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            window.close();
+            return;
+        }
+
+        if (availableModels.length === 0) return;
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setActiveModelIndex((current) => (current + 1) % availableModels.length);
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setActiveModelIndex((current) => (current - 1 + availableModels.length) % availableModels.length);
+            return;
+        }
+
+        if (event.key === 'Home') {
+            event.preventDefault();
+            setActiveModelIndex(0);
+            return;
+        }
+
+        if (event.key === 'End') {
+            event.preventDefault();
+            setActiveModelIndex(availableModels.length - 1);
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            const activeModel = availableModels[activeModelIndex];
+            if (activeModel) handleSelectFn(activeModel.id);
+        }
     };
 
     const panelClass = isLight
@@ -342,9 +405,20 @@ const ModelSelectorWindow = () => {
     const orphanedProviderFetchErrors = Object.entries(providerFetchErrors)
         .filter(([, message]) => Boolean(message))
         .filter(([provider]) => !providerIdsWithModels.has(provider));
+    const activeModel = availableModels[activeModelIndex];
 
     return (
-        <div className="w-fit h-fit bg-transparent flex flex-col">
+        <div
+            ref={comboboxRef}
+            className="w-fit h-fit bg-transparent flex flex-col"
+            role="combobox"
+            aria-expanded="true"
+            aria-haspopup="listbox"
+            aria-controls={listboxId}
+            aria-activedescendant={activeModel ? `${listboxId}-${activeModel.id}` : undefined}
+            tabIndex={0}
+            onKeyDown={handleModelListKeyDown}
+        >
             <div className={`w-[360px] max-w-[calc(100vw-24px)] h-[320px] backdrop-blur-md border rounded-[16px] overflow-hidden shadow-2xl p-2 flex flex-col animate-scale-in origin-top-left ${panelClass}`}>
 
                 {isLoading ? (
@@ -353,7 +427,12 @@ const ModelSelectorWindow = () => {
                         <span className="text-xs">Loading models...</span>
                     </div>
                 ) : (
-                    <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col gap-0.5">
+                    <div
+                        id={listboxId}
+                        role="listbox"
+                        aria-label="Available AI models"
+                        className="flex-1 overflow-y-auto scrollbar-hide flex flex-col gap-0.5"
+                    >
                         {availableModels.length === 0 ? (
                             <div className={`px-4 py-3 text-center text-xs ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
                                 No models connected.<br />Check Settings.
@@ -392,8 +471,13 @@ const ModelSelectorWindow = () => {
                                             </div>
                                         )}
                                         <button
+                                            id={`${listboxId}-${model.id}`}
                                             onClick={() => handleSelectFn(model.id)}
+                                            onMouseEnter={() => setActiveModelIndex(index)}
                                             title={model.name}
+                                            role="option"
+                                            aria-selected={isSelected}
+                                            tabIndex={-1}
                                             className={`
                                                 w-full text-left px-3 py-2 flex items-center justify-between group transition-colors duration-200 rounded-lg
                                                 ${isSelected

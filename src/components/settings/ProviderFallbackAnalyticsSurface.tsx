@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import type {
     ProviderFallbackCategory,
     ProviderFallbackEntry,
@@ -70,6 +70,31 @@ function compactValue(value?: string, maxLength: number = 38): string {
     const normalized = displayValue(value);
     if (normalized.length <= maxLength) return normalized;
     return `${normalized.slice(0, Math.max(1, maxLength - 1))}...`;
+}
+
+function FieldValue({
+    label,
+    title,
+    children,
+    className = '',
+    cellRole = 'cell',
+}: {
+    label: string;
+    title?: string;
+    children: ReactNode;
+    className?: string;
+    cellRole?: 'cell' | 'rowheader';
+}) {
+    return (
+        <div className="min-w-0" role={cellRole}>
+            <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-text-tertiary md:hidden">
+                {label}
+            </div>
+            <div className={className} title={title}>
+                {children}
+            </div>
+        </div>
+    );
 }
 
 function metricClassName(value: number, tone: 'normal' | 'warning' | 'critical' = 'normal'): string {
@@ -210,7 +235,7 @@ function FallbackEntryTable({ readModel }: { readModel: ProviderFallbackReadMode
             <div role="rowgroup" className="divide-y divide-border-subtle">
                 {readModel.fallbacks.length === 0 ? (
                     <div className="px-4 py-3 text-xs text-text-secondary" role="row">
-                        No provider fallbacks
+                        <div role="cell">No provider fallbacks</div>
                     </div>
                 ) : (
                     readModel.fallbacks.map((fallback) => (
@@ -222,24 +247,24 @@ function FallbackEntryTable({ readModel }: { readModel: ProviderFallbackReadMode
                             data-validation-fallback={fallback.validationFallback}
                             className={`grid min-w-[860px] grid-cols-1 gap-3 border-l-2 px-4 py-3 text-xs md:grid-cols-[1.05fr_1fr_1fr_1.45fr_1fr_0.8fr] md:items-center ${metricClassName(1, fallbackTone(fallback))}`}
                         >
-                            <div className="min-w-0 truncate font-medium text-text-primary" title={fallback.responseId}>
+                            <FieldValue label="Response" className="truncate font-medium text-text-primary" title={fallback.responseId} cellRole="rowheader">
                                 {compactValue(fallback.responseId, 24)}
-                            </div>
-                            <div className="min-w-0 truncate text-text-secondary" title={[fallback.requestedProvider, fallback.requestedModel].filter(Boolean).join(' / ')}>
+                            </FieldValue>
+                            <FieldValue label="Requested" className="truncate text-text-secondary" title={[fallback.requestedProvider, fallback.requestedModel].filter(Boolean).join(' / ')}>
                                 {compactValue(fallback.requestedProvider)}
-                            </div>
-                            <div className="min-w-0 truncate text-text-secondary" title={[fallback.actualProvider, fallback.actualModel].filter(Boolean).join(' / ')}>
+                            </FieldValue>
+                            <FieldValue label="Actual" className="truncate text-text-secondary" title={[fallback.actualProvider, fallback.actualModel].filter(Boolean).join(' / ')}>
                                 {compactValue(fallback.actualProvider)}
-                            </div>
-                            <div className="min-w-0 truncate text-text-secondary" title={displayValue(fallback.fallbackReason)}>
+                            </FieldValue>
+                            <FieldValue label="Fallback Reason" className="truncate text-text-secondary" title={displayValue(fallback.fallbackReason)}>
                                 {compactValue(fallback.fallbackReason)}
-                            </div>
-                            <div className="min-w-0 truncate font-medium text-text-primary" title={fallback.category}>
+                            </FieldValue>
+                            <FieldValue label="Failure Category" className="truncate font-medium text-text-primary" title={fallback.category}>
                                 {CATEGORY_LABELS[fallback.category]}
-                            </div>
-                            <div className="text-text-secondary">
+                            </FieldValue>
+                            <FieldValue label="Attempts" className="text-text-secondary">
                                 {fallback.failedAttemptCount} failed
-                            </div>
+                            </FieldValue>
                         </div>
                     ))
                 )}
