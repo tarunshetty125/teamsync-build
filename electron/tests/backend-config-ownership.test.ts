@@ -14,21 +14,13 @@ function read(rel: string): string {
     return fs.readFileSync(path.join(root, rel), 'utf8');
 }
 
-test('BackendManager only passes non-secret backend runtime launch values', () => {
-    const manager = read('electron/services/BackendManager.ts');
+test('Electron no longer owns or launches the hosted backend', () => {
+    assert.equal(fs.existsSync(path.join(root, 'electron/services/BackendManager.ts')), false);
 
-    assert.doesNotMatch(manager, /CredentialsManager/);
-    assert.doesNotMatch(manager, /buildBackendEnv/);
-    assert.doesNotMatch(manager, /ensureCredentials/);
-    assert.doesNotMatch(manager, /\.\.\.process\.env/);
-
-    for (const key of REQUIRED_BACKEND_ENV_KEYS) {
-        assert.doesNotMatch(manager, new RegExp(`${key}\\s*:`));
-    }
-
-    assert.match(manager, /PORT: String\(BACKEND_PORT\)/);
-    assert.match(manager, /NODE_ENV: 'production'/);
-    assert.match(manager, /NODE_PATH: backendNodeModules/);
+    const main = read('electron/main.ts');
+    assert.doesNotMatch(main, /BackendManager/);
+    assert.doesNotMatch(main, /backend\/dist\/server/);
+    assert.match(main, /Backend services are hosted separately/);
 });
 
 test('CredentialsManager keeps provider credentials but not backend-owned secrets', () => {
@@ -74,14 +66,16 @@ test('LicenseManager no longer owns MongoDB license secrets', () => {
     assert.doesNotMatch(licenseManager, /verifyMongoLicense/);
 });
 
-test('legacy CalendarManager does not own Google OAuth backend configuration', () => {
-    const calendarManager = read('electron/services/CalendarManager.ts');
+test('legacy CalendarManager local OAuth path is removed', () => {
+    assert.equal(fs.existsSync(path.join(root, 'electron/services/CalendarManager.ts')), false);
 
-    assert.doesNotMatch(calendarManager, /process\.env\.GOOGLE_CLIENT_ID/);
-    assert.doesNotMatch(calendarManager, /process\.env\.GOOGLE_CLIENT_SECRET/);
-    assert.doesNotMatch(calendarManager, /client_secret: GOOGLE_CLIENT_SECRET/);
-    assert.doesNotMatch(calendarManager, /REDIRECT_URI =/);
-    assert.match(calendarManager, /Legacy Electron calendar OAuth is disabled/);
+    const main = read('electron/main.ts');
+    const preload = read('electron/preload.ts');
+    const ipc = read('electron/ipcHandlers.ts');
+
+    assert.doesNotMatch(main, /CalendarManager/);
+    assert.doesNotMatch(preload, /calendar-connect|get-calendar-status|get-upcoming-events|calendar-refresh/);
+    assert.doesNotMatch(ipc, /CalendarManager|calendar-connect|get-calendar-status|get-upcoming-events|calendar-refresh/);
 });
 
 test('backend config validates required secrets and applies non-secret fallbacks', () => {

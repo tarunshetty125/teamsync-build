@@ -1,0 +1,11 @@
+export const LICENSE_PUBLIC_KEY = (process.env.LICENSE_PUBLIC_KEY || `
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0d+kivbifEc/dYmLmubv
+ouAQq+FQH98ArzAWwHPhq687bUUd/vr0U5y9O8CX0DJe6/mR7Nh/3rTqe1RJ2uRg
+W5cZtJUvYigwbJ7tJk+08tG4SH4/Ou1XshJXvSrOspZUyA4YV2DigAvtJukQP8za
+7aBVUm0wcfsIcxUsvqNmHcibkvVeDod8iyv2eIe0W9Qx4N9oVXeAYV1miQyHcgKI
+RjNtNvJYt37ddwwHbTV0b1XlpdEckBJ6wxTYRMbGWDuvY6uHOycO24SiI1rsQjaP
+QI0NMpgVKIZN47BhRV6IJOTLcvQNsdarMNNZZLXdPzWgbAqx43q+hovrMlrHYkWr
+CwIDAQAB
+-----END PUBLIC KEY-----
+`).replace(/\\n/g, '\n').trim();

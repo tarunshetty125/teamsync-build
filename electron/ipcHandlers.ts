@@ -10,6 +10,8 @@ import * as path from "path";
 import * as fs from "fs";
 import { AudioDevices } from "./audio/AudioDevices";
 import { PermissionManager } from "./services/PermissionManager";
+import { EntitlementVerifier, type EntitlementStatus } from "./licensing/EntitlementVerifier";
+import { TEAMSYNC_USAGE_URL } from "../src/lib/config/apiConfig";
 import type { PermissionKind } from "../src/lib/permissions/types";
 import {
   PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC,
@@ -43,6 +45,16 @@ export function initializeIpcHandlers(appState: AppState): void {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, listener);
   };
+  const isDevelopmentOnlyIpcAllowed = () => !app.isPackaged || process.env.NODE_ENV === 'development';
+  const safeDevelopmentHandle = (channel: string, listener: (event: any, ...args: any[]) => Promise<any> | any) => {
+    safeHandle(channel, (event, ...args) => {
+      if (!isDevelopmentOnlyIpcAllowed()) {
+        console.warn(`[IPC] Blocked development-only IPC in packaged production: ${channel}`);
+        return { success: false, error: 'unavailable_in_production' };
+      }
+      return listener(event, ...args);
+    });
+  };
   let providerAnalyticsSessionSnapshot: ProviderAnalyticsSessionSnapshot | null = null;
   const broadcastProviderAnalyticsSessionSnapshot = (snapshot: ProviderAnalyticsSessionSnapshot | null): void => {
     BrowserWindow.getAllWindows().forEach((win) => {
@@ -52,7 +64,41 @@ export function initializeIpcHandlers(appState: AppState): void {
     });
   };
   const permissionManager = PermissionManager.getInstance();
-  const { getCurrentUserPlan, hasActiveProPlan } = require('../premium/electron/auth/PlanService');
+  const entitlementVerifier = EntitlementVerifier.getInstance();
+  const toPlanState = (status: EntitlementStatus = entitlementVerifier.getStatus()) => ({
+    plan: status.isPremium ? status.plan : 'free',
+    isActive: status.isPremium,
+    provider: status.provider,
+    isPremium: status.isPremium,
+    status: status.status,
+    trial: status.trial,
+    expiresAt: status.expiresAt,
+    graceUntil: status.graceUntil,
+    lastSuccessfulSyncAt: status.lastSuccessfulSyncAt,
+    entitlementVersion: status.entitlement?.entitlementVersion,
+    features: status.features,
+  });
+  const validateLicenseSender = (event: any): boolean => {
+    const senderId = event?.sender?.id;
+    const allowedWindows = [
+      appState.getWindowHelper?.().getLauncherWindow?.(),
+      appState.settingsWindowHelper?.getSettingsWindow?.(),
+    ].filter(Boolean);
+    return allowedWindows.some((win: BrowserWindow) => !win.isDestroyed() && win.webContents.id === senderId);
+  };
+  const rejectUntrustedLicenseSender = (event: any) => {
+    if (!validateLicenseSender(event)) {
+      console.warn('[IPC] Blocked licensing IPC from untrusted sender');
+      return { success: false, error: 'unauthorized_sender' };
+    }
+    return null;
+  };
+  const broadcastLicenseState = () => {
+    const status = entitlementVerifier.getStatus();
+    BrowserWindow.getAllWindows().forEach(win => {
+      if (!win.isDestroyed()) win.webContents.send('license-status-changed', toPlanState(status));
+    });
+  };
 
   const showOpenDialogNormalized = async (options: OpenDialogOptions): Promise<OpenDialogReturnValue> => {
     const result = await dialog.showOpenDialog(options as any);
@@ -131,26 +177,8 @@ export function initializeIpcHandlers(appState: AppState): void {
    * Returns true if the user has an active premium license OR an unexpired free trial.
    * Used to gate profile intelligence features (resume upload, JD upload, company research, etc.).
    */
-  const isProOrTrialActive = (): boolean => {
-    // 1. Full premium license (Dodo / Gumroad / TeamSync API subscription)
-    try {
-      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      if (LicenseManager.getInstance().isPremium()) return true;
-    } catch { /* premium module not available */ }
-
-    // 2. Active free trial (token present and not expired)
-    try {
-      const { CredentialsManager } = require('./services/CredentialsManager');
-      const cm = CredentialsManager.getInstance();
-      const token = cm.getTrialToken();
-      if (!token) return false;
-      const expiresAt = cm.getTrialExpiresAt();
-      if (!expiresAt) return false;
-      return new Date(expiresAt).getTime() > Date.now();
-    } catch {
-      return false;
-    }
-  };
+  const isProOrTrialActive = (): boolean => entitlementVerifier.hasPremiumAccess();
+  const hasActiveProPlan = (): boolean => entitlementVerifier.hasPremiumAccess();
 
   const broadcastNegotiationStateChanged = (): void => {
     try {
@@ -258,127 +286,55 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  // ─── Helper: generate stable device ID from hardware info ───
-  const crypto = require('crypto');
-  const getDeviceId = (): string => {
-    const cpus = os.cpus();
-    const raw = [
-      os.hostname(),
-      os.userInfo().username,
-      os.platform(),
-      os.arch(),
-      cpus.length > 0 ? cpus[0].model : 'unknown',
-      os.totalmem().toString(),
-    ].join('|');
-    return crypto.createHash('sha256').update(raw).digest('hex');
-  };
-
-  safeHandle("license:activate", async (event, key: string) => {
-    // Try the existing premium LicenseManager first (Dodo server)
-    try {
-      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      const result = await LicenseManager.getInstance().activateLicense(key);
-      if (result?.success) {
-        const planState = getCurrentUserPlan();
-        BrowserWindow.getAllWindows().forEach(win => {
-          if (!win.isDestroyed()) win.webContents.send('license-status-changed', planState);
-        });
-        return result;
-      }
-      // If Dodo fails, fall through to MongoDB
-    } catch (err: any) {
-      console.log('[IPC] LicenseManager not available, trying MongoDB verification...');
-    }
-
-    // Fallback: check key against MongoDB (teamsync.licenseverify)
-    // New key → register with this device's ID
-    // Existing key + same device → already active, no worries
-    // Existing key + different device → rejected
-    try {
-      const deviceId = getDeviceId();
-      const response = await fetch('http://localhost:3456/auth/license/activate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ licenseKey: key, deviceId }),
-      });
-
-      const mongoResult = await response.json();
-      if (mongoResult?.success) {
-        BrowserWindow.getAllWindows().forEach(win => {
-          if (!win.isDestroyed()) win.webContents.send('license-status-changed', { isPremium: true, plan: mongoResult.plan || 'pro' });
-        });
-      }
-      return mongoResult;
-    } catch (mongoErr: any) {
-      console.error('[IPC] MongoDB license:activate also failed:', mongoErr);
-      return { success: false, error: 'License verification unavailable. Please ensure the backend server is running.' };
-    }
-  });
-  safeHandle("license:check-premium", async () => {
-    try {
-      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      const result = LicenseManager.getInstance().isPremium();
-      if (result) return result;
-    } catch { /* fall through to MongoDB */ }
-
-    // Fallback: check if this device has an active license in MongoDB
-    try {
-      const deviceId = getDeviceId();
-      const response = await fetch('http://localhost:3456/auth/license/check-device', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId }),
-      });
-      if (!response.ok) return false;
-      const data = await response.json();
-      return data.isPremium === true;
-    } catch {
-      return false;
-    }
+  safeHandle("license:activate", async (event, payload: string | { licenseKey?: string; trial?: boolean }) => {
+    const rejected = rejectUntrustedLicenseSender(event);
+    if (rejected) return rejected;
+    const result = typeof payload === 'object' && payload?.trial
+      ? await entitlementVerifier.startTrial()
+      : await entitlementVerifier.activateLicense(typeof payload === 'string' ? payload : payload?.licenseKey || '');
+    broadcastLicenseState();
+    return {
+      ...result,
+      entitlement: result.entitlement ? {
+        plan: result.entitlement.plan,
+        trial: result.entitlement.trial,
+        issuedAt: result.entitlement.issuedAt,
+        expiresAt: result.entitlement.expiresAt,
+        graceUntil: result.entitlement.graceUntil,
+        entitlementVersion: result.entitlement.entitlementVersion,
+        features: result.entitlement.features,
+      } : undefined,
+    };
   });
 
-  safeHandle("license:get-details", async () => {
-    try {
-      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      const details = LicenseManager.getInstance().getLicenseDetails();
-      if (details?.isPremium) return details;
-    } catch { /* fall through */ }
-
-    // Fallback: check MongoDB by deviceId
-    try {
-      const deviceId = getDeviceId();
-      const response = await fetch('http://localhost:3456/auth/license/check-device', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId }),
-      });
-      if (!response.ok) return { isPremium: false };
-      const data = await response.json();
-      if (data.isPremium) {
-        return {
-          isPremium: true,
-          plan: data.plan || 'pro',
-          key: data.licenseKey,
-          provider: 'mongodb',
-          activatedAt: data.activatedAt,
-        };
-      }
-      return { isPremium: false };
-    } catch {
-      return { isPremium: false };
-    }
+  safeHandle("license:sync", async (event) => {
+    const rejected = rejectUntrustedLicenseSender(event);
+    if (rejected) return rejected;
+    const status = await entitlementVerifier.sync('manual');
+    broadcastLicenseState();
+    return toPlanState(status);
   });
 
-  safeHandle("get_user_plan", async () => {
+  safeHandle("license:deactivate", async (event) => {
+    const rejected = rejectUntrustedLicenseSender(event);
+    if (rejected) return rejected;
+    await entitlementVerifier.deactivate();
     try {
-      return getCurrentUserPlan();
-    } catch {
-      return {
-        plan: 'free',
-        isActive: false,
-        isPremium: false,
-      };
-    }
+      const orchestrator = appState.getKnowledgeOrchestrator();
+      if (orchestrator) {
+        orchestrator.setKnowledgeMode(false);
+        console.log('[IPC] Knowledge mode auto-disabled due to license deactivation');
+      }
+    } catch (e) { /* ignore */ }
+    clearActiveModeOnLicenseLoss();
+    broadcastLicenseState();
+    return { success: true };
+  });
+
+  safeHandle("license:get-entitlement", async (event) => {
+    const rejected = rejectUntrustedLicenseSender(event);
+    if (rejected) return rejected;
+    return toPlanState();
   });
 
   safeHandle("app:get-startup-state", async () => {
@@ -424,48 +380,6 @@ export function initializeIpcHandlers(appState: AppState): void {
         gapAnalysis: { exists: false, data: null, updatedAt: null, version: 0, hash: null },
         questions: { exists: false, data: null, updatedAt: null, version: 0, hash: null }
       };
-    }
-  });
-  // Async variant: performs Dodo server-side revocation check on startup.
-  // Returns false only if the server definitively revokes the key.
-  // Network errors fail-open (returns cached sync result).
-  safeHandle("license:check-premium-async", async () => {
-    try {
-      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      return await LicenseManager.getInstance().isPremiumAsync();
-    } catch {
-      return false;
-    }
-  });
-  safeHandle("license:deactivate", async () => {
-    try {
-      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      // deactivate() is async — it calls the Dodo server to free the activation slot
-      // before removing the local license file. Must be awaited.
-      await LicenseManager.getInstance().deactivate();
-      // Auto-disable knowledge mode when license is removed
-      try {
-        const orchestrator = appState.getKnowledgeOrchestrator();
-        if (orchestrator) {
-          orchestrator.setKnowledgeMode(false);
-          console.log('[IPC] Knowledge mode auto-disabled due to license deactivation');
-        }
-      } catch (e) { /* ignore */ }
-      // Notify all windows so the license UI (ProGate, settings) refreshes immediately
-      clearActiveModeOnLicenseLoss();
-      const planState = getCurrentUserPlan();
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) win.webContents.send('license-status-changed', planState);
-      });
-    } catch { /* LicenseManager not available */ }
-    return { success: true };
-  });
-  safeHandle("license:get-hardware-id", async () => {
-    try {
-      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      return LicenseManager.getInstance().getHardwareId();
-    } catch {
-      return getDeviceId();
     }
   });
 
@@ -1707,48 +1621,10 @@ export function initializeIpcHandlers(appState: AppState): void {
         await appState.reconfigureSttProvider();
       }
 
-      // Auto-activate TeamSync Pro for pro/max/ultra API plans.
-      // Skips silently if the user already has a Gumroad/Dodo lifetime license.
+      // TeamSync API keys no longer grant local Pro. Hosted APIs validate keys server-side,
+      // while premium UI/features require a signed entitlement from the license service.
       if (apiKey) {
-        try {
-          const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-          const result = await LicenseManager.getInstance().activateWithApiKey(apiKey);
-          if (result.success) {
-            console.log('[IPC] set-teamsync-api-key: Pro auto-activated via API plan.');
-            // Notify all windows so the license UI refreshes immediately
-            const planState = getCurrentUserPlan();
-            BrowserWindow.getAllWindows().forEach(win => {
-              if (!win.isDestroyed()) win.webContents.send('license-status-changed', planState);
-            });
-          } else if (result.skipped) {
-            console.log('[IPC] set-teamsync-api-key: existing Gumroad/Dodo license preserved — Pro not overwritten.');
-          } else {
-            console.log('[IPC] set-teamsync-api-key: Pro not activated —', result.error);
-          }
-        } catch (e: any) {
-          // LicenseManager not available in this build — non-fatal
-          console.warn('[IPC] set-teamsync-api-key: LicenseManager unavailable for Pro auto-activation:', e?.message);
-        }
-      } else {
-        // API key was cleared — deactivate any teamsync_api Pro license so premium is revoked.
-        try {
-          const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-          const lm = LicenseManager.getInstance();
-          // Only deactivate if the stored license is from a teamsync_api subscription.
-          // Never touch Gumroad/Dodo lifetime licenses here.
-          const details = lm.getLicenseDetails();
-          if (details.isPremium && details.provider === 'teamsync_api') {
-            await lm.deactivate();
-            console.log('[IPC] set-teamsync-api-key: key cleared — teamsync_api Pro license deactivated.');
-            clearActiveModeOnLicenseLoss();
-            const planState = getCurrentUserPlan();
-            BrowserWindow.getAllWindows().forEach(win => {
-              if (!win.isDestroyed()) win.webContents.send('license-status-changed', planState);
-            });
-          }
-        } catch (e: any) {
-          console.warn('[IPC] set-teamsync-api-key: LicenseManager unavailable for Pro deactivation on key clear:', e?.message);
-        }
+        console.log('[IPC] set-teamsync-api-key: key saved; no local premium entitlement granted.');
       }
 
       return { success: true };
@@ -1774,7 +1650,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         return cached.data;
       }
 
-      const res = await fetch('https://api.teamsync-ai.vercel.app/v1/usage', {
+      const res = await fetch(TEAMSYNC_USAGE_URL, {
         headers: { 'x-teamsync-key': key },
         signal: AbortSignal.timeout(8000),
       });
@@ -1799,203 +1675,12 @@ export function initializeIpcHandlers(appState: AppState): void {
     return { ok: true };
   });
 
-  // ── Free Trial IPC ───────────────────────────────────────────────────────────
-
-  // Start or resume a free trial. Fetches HWID, calls server, persists token locally.
-  safeHandle("trial:start", async () => {
-    try {
-      const { CredentialsManager } = require('./services/CredentialsManager');
-      const cm = CredentialsManager.getInstance();
-
-      // Get hardware ID for HWID-binding
-      let hwid = 'unavailable';
-      try {
-        const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-        hwid = LicenseManager.getInstance().getHardwareId() || 'unavailable';
-      } catch { /* LicenseManager not available — fall back */ }
-
-      const res = await fetch('https://api.teamsync-ai.vercel.app/v1/trial/start', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ hwid }),
-        signal:  AbortSignal.timeout(10_000),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as any;
-        return { ok: false, error: body.error || 'request_failed', status: res.status };
-      }
-
-      const data = await res.json() as any;
-
-      if (data.ok && data.trial_token && !data.expired) {
-        cm.setTrialToken(data.trial_token, data.expires_at, data.started_at);
-
-        // Auto-configure teamsync as the model + STT provider during trial
-        const prevSttProvider = cm.getSttProvider();
-        cm.setTeamSyncApiKey('__trial__');   // sentinel — activates teamsync model routing
-        const newSttProvider = cm.getSttProvider();
-        if (newSttProvider !== prevSttProvider) {
-          await appState.reconfigureSttProvider();
-        }
-        const llmHelper = appState.processingHelper?.getLLMHelper?.();
-        if (llmHelper) llmHelper.setTeamSyncKey('__trial__');
-      }
-
-      return { ok: true, ...data };
-    } catch (error: any) {
-      console.error('[IPC] trial:start failed:', error);
-      return { ok: false, error: error.message || 'network_error' };
-    }
-  });
-
-  // Poll the server for live trial status (remaining time + usage counters).
-  safeHandle("trial:status", async () => {
-    try {
-      const { CredentialsManager } = require('./services/CredentialsManager');
-      const token = CredentialsManager.getInstance().getTrialToken();
-      if (!token) return { ok: false, error: 'no_trial_token' };
-
-      const res = await fetch('https://api.teamsync-ai.vercel.app/v1/trial/status', {
-        headers: { 'x-trial-token': token },
-        signal:  AbortSignal.timeout(8_000),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as any;
-        return { ok: false, error: body.error || 'request_failed', status: res.status };
-      }
-
-      return await res.json();
-    } catch (error: any) {
-      return { ok: false, error: error.message || 'network_error' };
-    }
-  });
-
-  // Return local trial state from credentials (no network call — safe for startup check).
-  safeHandle("trial:get-local", async () => {
-    try {
-      const { CredentialsManager } = require('./services/CredentialsManager');
-      const cm    = CredentialsManager.getInstance();
-      const token = cm.getTrialToken();
-      if (!token) return { hasToken: false, trialClaimed: cm.getTrialClaimed() };
-      return {
-        hasToken:     true,
-        trialClaimed: true,
-        trialToken:   token,
-        expiresAt:    cm.getTrialExpiresAt(),
-        startedAt:    cm.getTrialStartedAt(),
-        expired:      cm.getTrialExpiresAt()
-                        ? new Date(cm.getTrialExpiresAt()!).getTime() < Date.now()
-                        : false,
-      };
-    } catch {
-      return { hasToken: false, trialClaimed: false };
-    }
-  });
-
-  // Record the user's post-trial choice in analytics and clean up local state.
-  safeHandle("trial:convert", async (_, choice: string) => {
-    try {
-      const { CredentialsManager } = require('./services/CredentialsManager');
-      const token = CredentialsManager.getInstance().getTrialToken();
-      if (!token) return { ok: true };  // no token to report
-
-      await fetch('https://api.teamsync-ai.vercel.app/v1/trial/convert', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'x-trial-token': token },
-        body:    JSON.stringify({ choice }),
-        signal:  AbortSignal.timeout(5_000),
-      }).catch(() => {});  // fire-and-forget — don't block local cleanup on network failure
-
-      return { ok: true };
-    } catch {
-      return { ok: true };
-    }
-  });
-
-  // End trial via BYOK path: wipe Pro-ingested data, clear trial token + teamsync key.
-  safeHandle("trial:end-byok", async () => {
-    try {
-      const { CredentialsManager } = require('./services/CredentialsManager');
-      const cm = CredentialsManager.getInstance();
-
-      // 1. Fire-and-forget analytics (non-blocking)
-      const token = cm.getTrialToken();
-      if (token) {
-        fetch('https://api.teamsync-ai.vercel.app/v1/trial/convert', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', 'x-trial-token': token },
-          body:    JSON.stringify({ choice: 'byok' }),
-          signal:  AbortSignal.timeout(4_000),
-        }).catch(() => {});
-      }
-
-      // 2. Clear trial token
-      cm.clearTrialToken();
-
-      // 3. Clear the trial sentinel key + revert model / STT to open defaults
-      cm.setTeamSyncApiKey('');
-      const llmHelper = appState.processingHelper?.getLLMHelper?.();
-      if (llmHelper) llmHelper.setTeamSyncKey(null);
-      await appState.reconfigureSttProvider();
-
-      // 4. Deactivate Pro license (removes license.enc)
-      try {
-        const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-        await LicenseManager.getInstance().deactivate();
-      } catch { /* LicenseManager not available in this build */ }
-
-      // 5. Disable knowledge mode + wipe orchestrator in-memory caches for resume/JD
-      try {
-        const orchestrator = appState.getKnowledgeOrchestrator();
-        if (orchestrator) {
-          orchestrator.setKnowledgeMode(false);
-          const { DocType } = require('../premium/electron/knowledge/types');
-          orchestrator.deleteDocumentsByType(DocType.RESUME);
-          orchestrator.deleteDocumentsByType(DocType.JD);
-        }
-      } catch { /* ignore */ }
-
-      // 6. Wipe Pro-specific cached data from local SQLite
-      //    Targets: company dossiers, knowledge docs (+ cascades), resume nodes, user profile
-      //    NOT wiped: meetings, transcripts, chunks (user's own recordings)
-      try {
-        const sqliteDb = DatabaseManager.getInstance().getDb();
-        if (sqliteDb) {
-          sqliteDb.exec(`
-            DELETE FROM company_dossiers;
-            DELETE FROM knowledge_documents;
-            DELETE FROM resume_nodes;
-            DELETE FROM user_profile;
-          `);
-          console.log('[IPC] trial:end-byok: Pro data wiped from SQLite');
-        }
-      } catch (dbErr: any) {
-        console.warn('[IPC] trial:end-byok: SQLite wipe partial error:', dbErr.message);
-      }
-
-      // 7. Notify all windows to refresh license + model state
-      clearActiveModeOnLicenseLoss();
-      const planState = getCurrentUserPlan();
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) {
-          win.webContents.send('license-status-changed', planState);
-          win.webContents.send('trial-ended', { choice: 'byok' });
-        }
-      });
-
-      return { success: true };
-    } catch (error: any) {
-      console.error('[IPC] trial:end-byok error:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
   // Wipe only Pro profile data (resume + JD + company dossiers) without clearing
-  // trial token or teamsync key. Called automatically when trial expires so that
+  // credentials. Called automatically when a signed trial entitlement expires so
   // profile intelligence data can't linger in SQLite after the trial window closes.
-  safeHandle("trial:wipe-profile-data", async () => {
+  safeHandle("profile:wipe-trial-data", async (event) => {
+    const rejected = rejectUntrustedLicenseSender(event);
+    if (rejected) return rejected;
     try {
       // 1. Disable knowledge mode + wipe orchestrator in-memory caches
       try {
@@ -2021,12 +1706,12 @@ export function initializeIpcHandlers(appState: AppState): void {
           `);
         }
       } catch (dbErr: any) {
-        console.warn('[IPC] trial:wipe-profile-data: SQLite wipe partial error:', dbErr.message);
+        console.warn('[IPC] profile:wipe-trial-data: SQLite wipe partial error:', dbErr.message);
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error('[IPC] trial:wipe-profile-data error:', error);
+      console.error('[IPC] profile:wipe-trial-data error:', error);
       return { success: false, error: error.message };
     }
   });
@@ -2463,7 +2148,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("stt:debug-simulate-failure", async (_, channel: 'user' | 'interviewer', provider?: string, reason?: string) => {
+  safeDevelopmentHandle("stt:debug-simulate-failure", async (_, channel: 'user' | 'interviewer', provider?: string, reason?: string) => {
     try {
       const triggered = appState.debugSimulateSttFailure(channel, provider, reason);
       return { success: triggered, channel, provider: provider || 'active' };
@@ -2472,7 +2157,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("stt:debug-prime-replay-buffer", async (_, channel: 'user' | 'interviewer', durationMs?: number) => {
+  safeDevelopmentHandle("stt:debug-prime-replay-buffer", async (_, channel: 'user' | 'interviewer', durationMs?: number) => {
     try {
       const result = appState.debugPrimeSttReplayBuffer(channel, durationMs);
       return { success: !!result, ...(result || {}) };
@@ -2489,7 +2174,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("stt:set-debug-enabled", async (_, enabled: boolean) => {
+  safeDevelopmentHandle("stt:set-debug-enabled", async (_, enabled: boolean) => {
     try {
       appState.setSttDebugEnabled(!!enabled);
       return { success: true, enabled: appState.getSttDebugEnabled() };
@@ -2502,7 +2187,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     return appState.getSttDebugEnabled();
   });
 
-  safeHandle("stt:run-failover-validation", async (_, channel: 'user' | 'interviewer' = 'interviewer') => {
+  safeDevelopmentHandle("stt:run-failover-validation", async (_, channel: 'user' | 'interviewer' = 'interviewer') => {
     try {
       return await appState.runSttFailoverValidation(channel);
     } catch (error: any) {
@@ -2510,7 +2195,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("stt:run-load-test", async (_, channel: 'user' | 'interviewer' = 'interviewer', options?: {
+  safeDevelopmentHandle("stt:run-load-test", async (_, channel: 'user' | 'interviewer' = 'interviewer', options?: {
     durationMinutes?: number;
     chunkMs?: number;
     sampleRate?: number;
@@ -3177,7 +2862,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     return { success: true };
   });
 
-  safeHandle("flush-database", async () => {
+  safeDevelopmentHandle("flush-database", async () => {
     const result = DatabaseManager.getInstance().clearAllData();
     return { success: result };
   });
@@ -3577,51 +3262,6 @@ export function initializeIpcHandlers(appState: AppState): void {
   // Calendar Integration Handlers
   // ==========================================
 
-  safeHandle("calendar-connect", async () => {
-    try {
-      const { CalendarManager } = require('./services/CalendarManager');
-      await CalendarManager.getInstance().startAuthFlow();
-
-      // Broadcast calendar connected to all windows (Launcher <-> Settings sync)
-      const status = CalendarManager.getInstance().getConnectionStatus();
-      BrowserWindow.getAllWindows().forEach(win => {
-        if (!win.isDestroyed()) {
-          win.webContents.send('calendar-status-changed', status);
-        }
-      });
-
-      return { success: true };
-    } catch (error: any) {
-      console.error("Calendar auth error:", error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  safeHandle("calendar-disconnect", async () => {
-    const { CalendarManager } = require('./services/CalendarManager');
-    await CalendarManager.getInstance().disconnect();
-    calendarIntelligence.clearRecommendation();
-
-    // Broadcast calendar disconnected to all windows (Launcher <-> Settings sync)
-    BrowserWindow.getAllWindows().forEach(win => {
-      if (!win.isDestroyed()) {
-        win.webContents.send('calendar-status-changed', { connected: false, email: null });
-      }
-    });
-
-    return { success: true };
-  });
-
-  safeHandle("get-calendar-status", async () => {
-    const { CalendarManager } = require('./services/CalendarManager');
-    return CalendarManager.getInstance().getConnectionStatus();
-  });
-
-  safeHandle("get-upcoming-events", async () => {
-    const { CalendarManager } = require('./services/CalendarManager');
-    return CalendarManager.getInstance().getUpcomingEvents();
-  });
-
   safeHandle("calendar-intelligence:evaluate-events", async (_, events: any[]) => {
     return calendarIntelligence.observeUpcomingEvents(Array.isArray(events) ? events : []);
   });
@@ -3632,12 +3272,6 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("calendar-intelligence:dismiss", async (_, eventId: string) => {
     calendarIntelligence.dismissEvent(eventId);
-    return { success: true };
-  });
-
-  safeHandle("calendar-refresh", async () => {
-    const { CalendarManager } = require('./services/CalendarManager');
-    await CalendarManager.getInstance().refreshState();
     return { success: true };
   });
 
@@ -3681,20 +3315,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("get-calendar-attendees", async (_, eventId: string) => {
     try {
-      const { CalendarManager } = require('./services/CalendarManager');
-      const cm = CalendarManager.getInstance();
-
-      // Try to get attendees from the event
-      const events = await cm.getUpcomingEvents();
-      const event = events?.find((e: any) => e.id === eventId);
-
-      if (event && event.attendees) {
-        return event.attendees.map((a: any) => ({
-          email: a.email,
-          name: a.displayName || a.email?.split('@')[0] || ''
-        })).filter((a: any) => a.email);
-      }
-
+      console.warn("[IPC] get-calendar-attendees is unavailable without a hosted calendar event payload:", eventId);
       return [];
     } catch (error: any) {
       console.error("Error getting calendar attendees:", error);

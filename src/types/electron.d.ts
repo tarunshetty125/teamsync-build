@@ -93,6 +93,21 @@ type GenerateActionPayload = {
   modelOverride?: string
 }
 
+type LicenseBridgeState = {
+  isPremium: boolean
+  isActive: boolean
+  plan: 'free' | 'pro' | 'team' | string
+  provider?: string
+  status?: string
+  trial?: boolean
+  expiresAt?: string
+  graceUntil?: string
+  lastSuccessfulSyncAt?: string
+  entitlementVersion?: number
+  features?: string[]
+  error?: string
+}
+
 export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   saveSessionExportReport: (request: SessionExportSaveRequest) => Promise<SessionExportSaveResult>
   saveSessionExportPdfReport: (request: SessionExportPdfSaveRequest) => Promise<SessionExportPdfSaveResult>
@@ -195,9 +210,9 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   requestMicPermission: () => Promise<boolean>
 
   // Free Trial
-  startTrial:     () => Promise<{ ok: boolean; trial_token?: string; started_at?: string; expires_at?: string; expired?: boolean; already_used?: boolean; converted_to?: string | null; usage?: { ai: number; stt_seconds: number; search: number }; limits?: { duration_ms: number; ai_requests: number; stt_minutes: number; search_requests: number }; error?: string; status?: number }>
+  startTrial:     () => Promise<{ ok: boolean; started_at?: string; expires_at?: string; expired?: boolean; already_used?: boolean; converted_to?: string | null; usage?: { ai: number; stt_seconds: number; search: number }; limits?: { duration_ms: number; ai_requests: number; stt_minutes: number; search_requests: number }; error?: string; status?: number }>
   getTrialStatus: () => Promise<{ ok: boolean; expired?: boolean; remaining_ms?: number; started_at?: string; expires_at?: string; converted_to?: string | null; usage?: { ai: number; stt_seconds: number; search: number }; limits?: object; error?: string }>
-  getLocalTrial:  () => Promise<{ hasToken: boolean; trialClaimed?: boolean; trialToken?: string; expiresAt?: string; startedAt?: string; expired?: boolean }>
+  getLocalTrial:  () => Promise<{ hasToken: boolean; trialClaimed?: boolean; expiresAt?: string; startedAt?: string; expired?: boolean }>
   convertTrial:   (choice: string) => Promise<{ ok: boolean }>
   endTrialByok:        () => Promise<{ success: boolean; error?: string }>
   wipeTrialProfileData: () => Promise<{ success: boolean; error?: string }>
@@ -423,11 +438,6 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   onThemeChanged: (callback: (data: { mode: 'system' | 'light' | 'dark', resolved: 'light' | 'dark' }) => void) => () => void
 
   // Calendar
-  calendarConnect: () => Promise<{ success: boolean; error?: string }>
-  calendarDisconnect: () => Promise<{ success: boolean; error?: string }>
-  getCalendarStatus: () => Promise<{ connected: boolean; email?: string }>
-  getUpcomingEvents: () => Promise<Array<{ id: string; title: string; description?: string; startTime: string; endTime: string; link?: string; source: 'google' }>>
-  calendarRefresh: () => Promise<{ success: boolean; error?: string }>
   calendarIntelligenceEvaluateEvents: (events: CalendarEventPayload[]) => Promise<CalendarModeRecommendation | null>
   calendarIntelligenceGetRecommendation: () => Promise<CalendarModeRecommendation | null>
   calendarIntelligenceDismiss: (eventId: string) => Promise<{ success: boolean }>
@@ -552,16 +562,17 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
       };
     };
   }>
-  licenseActivate: (key: string) => Promise<{ success: boolean; error?: string }>
+  licenseActivate: (key: string) => Promise<{ success: boolean; error?: string; entitlement?: Partial<LicenseBridgeState> }>
+  licenseSync: () => Promise<LicenseBridgeState>
+  licenseGetEntitlement: () => Promise<LicenseBridgeState>
   licenseCheckPremium: () => Promise<boolean>
-  licenseGetDetails: () => Promise<{ isPremium: boolean; plan?: string; provider?: string }>
-  getUserPlan: () => Promise<{ plan: string; isActive: boolean; isPremium: boolean; provider?: string }>
-  /** Async startup check — calls Dodo validate endpoint to detect server-side revocations. */
+  licenseGetDetails: () => Promise<LicenseBridgeState>
+  getUserPlan: () => Promise<LicenseBridgeState>
+  /** Async check - synchronizes with the hosted license authority. */
   licenseCheckPremiumAsync: () => Promise<boolean>
   onLicenseRestored: (callback: (data: { isPremium: boolean; plan?: string; provider?: string }) => void) => () => void
   onLicenseStatusChanged: (callback: (data: { isPremium: boolean, plan?: string }) => void) => () => void
-  licenseDeactivate: () => Promise<void>
-  licenseGetHardwareId: () => Promise<string>
+  licenseDeactivate: () => Promise<{ success: boolean; error?: string }>
 
   // Overlay Opacity (Stealth Mode)
   setOverlayOpacity: (opacity: number) => Promise<void>;

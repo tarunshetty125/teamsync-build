@@ -301,7 +301,7 @@ const App: React.FC = () => {
       trialPollId = setInterval(checkTrial, 30_000);
     }).catch(() => { });
 
-    // Listen for trial-ended event (emitted by trial:end-byok IPC)
+    // Listen for local cleanup notifications after entitlement loss.
     const removeTrialListener = window.electronAPI?.onTrialEnded?.(() => {
       setActiveTrial(null);
       setShowTrialExpiredModal(false);
@@ -900,8 +900,8 @@ const App: React.FC = () => {
             setIsPremiumActive(true);
             // Refresh full plan details after activation so ad targeting reflects the new plan
             window.electronAPI?.licenseGetDetails?.()
-              .then(d => setPlanDetails(d ?? { isPremium: true }))
-              .catch(() => setPlanDetails({ isPremium: true }));
+              .then(d => setPlanDetails(d ?? { isPremium: false }))
+              .catch(() => setPlanDetails({ isPremium: false }));
             setShowPremiumModal(false);
             // If user activated during post-trial modal, close it — they have a plan now
             setShowTrialExpiredModal(false);

@@ -2,30 +2,72 @@ import express from 'express';
 import cors from 'cors';
 import { connectToMongoDB, disconnectFromMongoDB } from './db/mongodb';
 import authRoutes from './routes/auth';
+import { attachV1WebSocketServer, createV1Router } from './routes/v1';
 import { getBackendConfig } from './config/env';
+import licensingRoutes from './licensing/routes';
+import webhookRoutes from './licensing/routes/webhooks';
 
 const backendConfig = getBackendConfig();
 
 const app = express();
 const PORT = backendConfig.port;
+const ALLOWED_ORIGINS = new Set([
+  'https://apiteamsync.duckdns.org',
+  'https://api.teamsync.ai',
+  'http://localhost:5180',
+  'http://localhost:3000',
+  'http://localhost:3456',
+]);
 
 // ─────────────────────────────────────────────────────────────
 // Middleware
 // ─────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: ['http://localhost:5180', 'http://localhost:3456', 'app://.*'],
+  origin: (origin, callback) => {
+    if (
+      !origin ||
+      origin === 'null' ||
+      ALLOWED_ORIGINS.has(origin) ||
+      origin.startsWith('app://') ||
+      origin.startsWith('file://')
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS origin not allowed: ${origin}`));
+  },
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({
+  limit: '16mb',
+  verify: (req, _res, buffer) => {
+    (req as any).rawBody = Buffer.from(buffer);
+  },
+}));
 
 // ─────────────────────────────────────────────────────────────
 // Routes
 // ─────────────────────────────────────────────────────────────
 app.use('/auth', authRoutes);
+app.use('/license', licensingRoutes);
+app.use('/webhooks', webhookRoutes);
+app.use('/v1', createV1Router());
 
 // Health check
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    routes: {
+      auth: true,
+      license: true,
+      webhooks: true,
+      v1: {
+        chat: true,
+        usage: true,
+        transcribe: true,
+      },
+    },
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -37,11 +79,12 @@ async function start() {
     await connectToMongoDB();
     console.log('[Server] MongoDB connected');
 
-    app.listen(PORT, () => {
-      console.log(`[Server] Running on http://localhost:${PORT}`);
-      console.log(`[Server] Google OAuth callback: http://localhost:${PORT}/auth/google/callback`);
-      console.log(`[Server] Health check: http://localhost:${PORT}/health`);
+    const server = app.listen(PORT, () => {
+      console.log(`[Server] Running on port ${PORT}`);
+      console.log(`[Server] Google OAuth callback: ${backendConfig.redirectUri}`);
+      console.log(`[Server] Health check: /health`);
     });
+    attachV1WebSocketServer(server);
   } catch (error) {
     console.error('[Server] Failed to start:', error);
     process.exit(1);

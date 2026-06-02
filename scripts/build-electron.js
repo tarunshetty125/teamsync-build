@@ -15,11 +15,16 @@ const outDir = path.resolve(rootDir, 'dist-electron');
 const entryPoints = [];
 
 // Function to recursively find all .ts files in a directory
+const BUILD_EXCLUDED_DIRS = new Set(['tests', '__tests__', '__mocks__']);
+
 const findTs = (dir) => {
   const results = [];
   for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, f.name);
-    if (f.isDirectory()) results.push(...findTs(full));
+    if (f.isDirectory()) {
+      if (BUILD_EXCLUDED_DIRS.has(f.name)) continue;
+      results.push(...findTs(full));
+    }
     else if (f.name.endsWith('.ts') && !f.name.endsWith('.d.ts')) results.push(full);
   }
   return results;
@@ -40,7 +45,9 @@ if (fs.existsSync(premiumDir)) {
 // Esbuild only emits entry points when bundling is disabled, so these files
 // must be listed explicitly to preserve the existing runtime import paths.
 const sharedRuntimeDirs = [
+  path.resolve(rootDir, 'src/lib/config'),
   path.resolve(rootDir, 'src/lib/modes'),
+  path.resolve(rootDir, 'src/lib/personalization'),
   path.resolve(rootDir, 'src/lib/permissions'),
 ];
 
@@ -52,8 +59,12 @@ for (const sharedDir of sharedRuntimeDirs) {
 
 const sharedRuntimeFiles = [
   path.resolve(rootDir, 'src/utils/transcriptSpeakers.ts'),
+  path.resolve(rootDir, 'src/utils/modelUtils.ts'),
+  path.resolve(rootDir, 'src/lib/overlay/actionContextTypes.ts'),
   path.resolve(rootDir, 'src/lib/overlay/systemDesignEntityNormalizer.ts'),
+  path.resolve(rootDir, 'src/lib/providers/providerFallbackCandidatePolicy.ts'),
   path.resolve(rootDir, 'src/lib/providers/providerAnalyticsSessionSnapshot.ts'),
+  path.resolve(rootDir, 'src/lib/providers/providerModelMetadata.ts'),
   path.resolve(rootDir, 'src/lib/export/sessionExportDelivery.ts'),
 ];
 

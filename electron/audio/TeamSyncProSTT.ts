@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import WebSocket from 'ws';
 import { RECOGNITION_LANGUAGES, EnglishVariant } from '../config/languages';
+import { TEAMSYNC_TRANSCRIBE_URL } from '../../src/lib/config/apiConfig';
 
 /**
  * TeamSyncProSTT
@@ -41,7 +42,7 @@ export class TeamSyncProSTT extends EventEmitter {
     // Cleared only after 5 s of stable connection so backoff actually increases on rapid 1006 loops
     private stabilityTimer: NodeJS.Timeout | null = null;
 
-    private readonly BACKEND_URL = 'wss://api.teamsync-ai.vercel.app/v1/transcribe';
+    private readonly TRANSCRIBE_URL = TEAMSYNC_TRANSCRIBE_URL;
 
     // Static: stagger concurrent connections with the same key so both instances
     // don't hit the server (and its upstream Deepgram key rotation) simultaneously.
@@ -199,30 +200,21 @@ export class TeamSyncProSTT extends EventEmitter {
 
         console.log(`[TeamSyncProSTT] Connecting (attempt ${this.reconnectAttempts + 1})...`);
 
-        this.ws = new WebSocket(this.BACKEND_URL);
+        this.ws = new WebSocket(this.TRANSCRIBE_URL);
 
         this.ws.on('open', () => {
             if (!this.isActive) { this.ws?.close(); return; }
 
-            // Build auth + config handshake.
-            // When the key is the trial sentinel, swap it for the real trial token
-            // in the trial_token field — the server validates that separately.
+            // Build auth + config handshake. Trial access is licensed through
+            // signed entitlements; local trial tokens are not accepted.
             const baseFrame: Record<string, unknown> = {
+                key:                 this.apiKey,
                 sample_rate:         this.sampleRate,
                 language:            this.languageBcp47,
                 language_alternates: this.languageAlternates,
                 audio_channels:      this.audioChannels,
                 channel:             this.channel,
             };
-            if (this.apiKey === '__trial__') {
-                try {
-                    const { CredentialsManager } = require('../services/CredentialsManager');
-                    const trialToken = CredentialsManager.getInstance().getTrialToken();
-                    if (trialToken) baseFrame.trial_token = trialToken;
-                } catch { /* CredentialsManager unavailable — connection will be rejected by server */ }
-            } else {
-                baseFrame.key = this.apiKey;
-            }
 
             this.ws!.send(JSON.stringify(baseFrame));
         });

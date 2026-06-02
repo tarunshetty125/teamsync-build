@@ -31,6 +31,7 @@ import {
     type ResponseStylePreference,
     type InterviewFocusPreference,
 } from '../lib/personalization/preferences';
+import { API_BASE_URL } from '../lib/config/apiConfig';
 import { KeyRecorder } from './ui/KeyRecorder';
 import { ProfileVisualizer, PremiumUpgradeModal, ResearchPanel } from '../premium';
 import icon from './icon.png';
@@ -1695,23 +1696,17 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             const savedSck = localStorage.getItem('useExperimentalSckBackend') === 'true';
             setUseExperimentalSck(savedSck);
 
-            // Load Calendar Status — check localStorage first (backend auth), fallback to old CalendarManager
+            // Load Calendar Status from hosted backend auth state.
             const storedUser = localStorage.getItem('teamsync_auth_user');
             if (storedUser) {
                 try {
                     const userData = JSON.parse(storedUser);
-                    if (userData.calendarConnected) {
-                        setCalendarStatus({ connected: true, email: userData.email });
-                    } else if (window.electronAPI?.getCalendarStatus) {
-                        window.electronAPI.getCalendarStatus().then(setCalendarStatus);
-                    }
+                    setCalendarStatus({ connected: Boolean(userData.calendarConnected), email: userData.email });
                 } catch {
-                    if (window.electronAPI?.getCalendarStatus) {
-                        window.electronAPI.getCalendarStatus().then(setCalendarStatus);
-                    }
+                    setCalendarStatus({ connected: false });
                 }
-            } else if (window.electronAPI?.getCalendarStatus) {
-                window.electronAPI.getCalendarStatus().then(setCalendarStatus);
+            } else {
+                setCalendarStatus({ connected: false });
             }
 
             // Listen for calendar status changes from other views (Launcher <-> Settings sync)
@@ -3372,7 +3367,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 const token = localStorage.getItem('teamsync_auth_token');
                                                                 if (token) {
                                                                     try {
-                                                                        await fetch('http://localhost:3456/auth/logout', {
+                                                                        await fetch(`${API_BASE_URL}/auth/logout`, {
                                                                             method: 'POST',
                                                                             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                                                                         });
@@ -3970,7 +3965,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             try {
                                                                 const token = localStorage.getItem('teamsync_auth_token') || undefined;
                                                                 await window.electronAPI.googleLogout?.(token);
-                                                                await window.electronAPI.calendarDisconnect();
                                                                 const storedUser = localStorage.getItem('teamsync_auth_user');
                                                                 if (storedUser) {
                                                                     try {
@@ -3984,8 +3978,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 window.dispatchEvent(
                                                                     new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: false } })
                                                                 );
-                                                                const status = await window.electronAPI.getCalendarStatus();
-                                                                setCalendarStatus(status);
+                                                                setCalendarStatus({ connected: false });
                                                             } catch (e) {
                                                                 console.error(e);
                                                             } finally {
@@ -4014,10 +4007,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 const storedUser = localStorage.getItem('teamsync_auth_user');
                                                                 const email = storedUser ? JSON.parse(storedUser)?.email : undefined;
 
-                                                                const urlRes = await fetch('http://localhost:3456/auth/google/calendar' +
+                                                                const urlRes = await fetch(`${API_BASE_URL}/auth/google/calendar` +
                                                                     (email ? `?login_hint=${encodeURIComponent(email)}` : ''));
                                                                 if (!urlRes.ok) throw new Error('Failed to get calendar auth URL');
-                                                                const { url } = await urlRes.json();
+                                                                const { url, authSessionId } = await urlRes.json();
+                                                                if (!url || !authSessionId) throw new Error('Authentication session was not created');
 
                                                                 if (window.electronAPI?.openExternal) {
                                                                     await window.electronAPI.openExternal(url);
@@ -4026,7 +4020,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 // Poll for completion
                                                                 const poll = setInterval(async () => {
                                                                     try {
-                                                                        const pendingRes = await fetch('http://localhost:3456/auth/pending');
+                                                                        const pendingRes = await fetch(`${API_BASE_URL}/auth/pending?authSessionId=${encodeURIComponent(authSessionId)}`);
                                                                         if (!pendingRes.ok) return;
                                                                         const data = await pendingRes.json();
                                                                         if (data.pending) return;
@@ -4038,8 +4032,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                             window.dispatchEvent(
                                                                                 new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: true } })
                                                                             );
-                                                                            const status = await window.electronAPI.getCalendarStatus();
-                                                                            setCalendarStatus({ ...status, connected: true });
+                                                                            setCalendarStatus({ connected: true, email: data.user?.email });
                                                                         }
                                                                         setIsCalendarsLoading(false);
                                                                     } catch { }

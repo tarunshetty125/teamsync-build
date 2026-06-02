@@ -6,26 +6,66 @@ import {
   verifyAndGetUser,
   fetchCalendarEvents,
 } from '../services/googleAuth';
-import { getLicenseVerifyCollection, getUsersCollection } from '../db/mongodb';
+import { getAuthSessionsCollection, getUsersCollection } from '../db/mongodb';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────
-// In-memory store for pending auth results.
-// The callback page writes here; the Electron app polls to pick it up.
-// Expires after 5 minutes. Only stores the latest result.
+// Session-scoped pending auth results.
+// The callback writes to the session from Google OAuth "state"; Electron polls
+// that exact authSessionId so users cannot consume each other's results.
 // ─────────────────────────────────────────────────────────────
-let pendingAuthResult: { data: any; expiresAt: number } | null = null;
+const AUTH_SESSION_TTL_MS = 5 * 60 * 1000;
+
+async function createAuthSession(): Promise<string> {
+  const authSessionId = randomUUID();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + AUTH_SESSION_TTL_MS);
+  await getAuthSessionsCollection().insertOne({ authSessionId, createdAt: now, expiresAt });
+  return authSessionId;
+}
+
+function readAuthSessionId(req: Request): string {
+  const raw = req.query.authSessionId ?? req.query.state;
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
+async function requirePendingAuthSession(authSessionId: string) {
+  if (!authSessionId) return null;
+  return getAuthSessionsCollection().findOne({
+    authSessionId,
+    expiresAt: { $gt: new Date() },
+  });
+}
+
+async function writeAuthSessionResult(authSessionId: string, data: any): Promise<boolean> {
+  if (!authSessionId) return false;
+  const expiresAt = new Date(Date.now() + AUTH_SESSION_TTL_MS);
+  const result = await getAuthSessionsCollection().updateOne({
+    authSessionId,
+    expiresAt: { $gt: new Date() },
+  }, {
+    $set: { data, expiresAt },
+  });
+  return result.modifiedCount > 0;
+}
+
+async function deleteAuthSession(authSessionId: string): Promise<void> {
+  if (!authSessionId) return;
+  await getAuthSessionsCollection().deleteOne({ authSessionId });
+}
 
 // ─────────────────────────────────────────────────────────────
 // GET /auth/google
 // Returns the Google OAuth consent URL for sign-in
 // ─────────────────────────────────────────────────────────────
-router.get('/google', (req: Request, res: Response) => {
+router.get('/google', async (req: Request, res: Response) => {
   try {
     const loginHint = req.query.login_hint as string | undefined;
-    const authUrl = getGoogleAuthUrl(loginHint);
-    res.json({ url: authUrl });
+    const authSessionId = await createAuthSession();
+    const authUrl = getGoogleAuthUrl(loginHint, authSessionId);
+    res.json({ url: authUrl, authSessionId });
   } catch (error: any) {
     console.error('[AuthRoutes] Failed to generate auth URL:', error);
     res.status(500).json({ error: 'Failed to generate auth URL' });
@@ -35,26 +75,25 @@ router.get('/google', (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────────
 // GET /auth/google/callback
 // Handles the OAuth redirect, exchanges code, upserts user
-// Stores result in memory for the Electron app to poll
+// Stores result by authSessionId for the Electron app to poll
 // ─────────────────────────────────────────────────────────────
 router.get('/google/callback', async (req: Request, res: Response) => {
+  const authSessionId = readAuthSessionId(req);
   try {
     const code = req.query.code as string;
     const error = req.query.error as string;
 
+    if (!await requirePendingAuthSession(authSessionId)) {
+      return res.status(400).send(getCallbackHTML(false, 'Authentication session expired. Please return to TeamSync and try again.'));
+    }
+
     if (error) {
-      pendingAuthResult = {
-        data: { success: false, error: 'Authentication was cancelled.' },
-        expiresAt: Date.now() + 5 * 60 * 1000,
-      };
+      await writeAuthSessionResult(authSessionId, { success: false, error: 'Authentication was cancelled.' });
       return res.send(getCallbackHTML(false, 'Authentication was cancelled.'));
     }
 
     if (!code) {
-      pendingAuthResult = {
-        data: { success: false, error: 'No authorization code received.' },
-        expiresAt: Date.now() + 5 * 60 * 1000,
-      };
+      await writeAuthSessionResult(authSessionId, { success: false, error: 'No authorization code received.' });
       return res.status(400).send(getCallbackHTML(false, 'No authorization code received.'));
     }
 
@@ -72,13 +111,10 @@ router.get('/google/callback', async (req: Request, res: Response) => {
       },
     };
 
-    // Store for polling — Electron app picks this up
-    pendingAuthResult = {
-      data: authData,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    };
+    // Store for polling — only the matching authSessionId can pick this up.
+    await writeAuthSessionResult(authSessionId, authData);
 
-    console.log(`[AuthRoutes] Auth result stored for polling (user: ${result.user.email})`);
+    console.log(`[AuthRoutes] Auth result stored for polling session ${authSessionId} (user: ${result.user.email})`);
 
     // Return HTML page to the browser
     res.send(getCallbackHTML(true, undefined, result.jwt, {
@@ -90,10 +126,9 @@ router.get('/google/callback', async (req: Request, res: Response) => {
     }));
   } catch (error: any) {
     console.error('[AuthRoutes] Google callback error:', error);
-    pendingAuthResult = {
-      data: { success: false, error: error.message || 'Authentication failed.' },
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    };
+    if (authSessionId) {
+      await writeAuthSessionResult(authSessionId, { success: false, error: error.message || 'Authentication failed.' });
+    }
     res.status(500).send(getCallbackHTML(false, error.message || 'Authentication failed.'));
   }
 });
@@ -129,17 +164,25 @@ router.post('/calendar/disconnect', async (req: Request, res: Response) => {
 
 // ─────────────────────────────────────────────────────────────
 // GET /auth/pending
-// Poll this endpoint to pick up the auth result after callback
-// Returns the result once and clears it (one-time read)
+// Poll this endpoint with authSessionId to pick up the auth result after callback.
+// Returns the result once and clears only that session.
 // ─────────────────────────────────────────────────────────────
-router.get('/pending', (_req: Request, res: Response) => {
-  if (pendingAuthResult && Date.now() < pendingAuthResult.expiresAt) {
-    const result = pendingAuthResult.data;
-    pendingAuthResult = null; // Clear after read
-    return res.json(result);
+router.get('/pending', async (req: Request, res: Response) => {
+  const authSessionId = readAuthSessionId(req);
+  if (!authSessionId) {
+    return res.status(400).json({ success: false, error: 'authSessionId is required' });
   }
 
-  // No pending result or expired
+  const session = await requirePendingAuthSession(authSessionId);
+  if (!session) {
+    return res.status(404).json({ success: false, error: 'Authentication session not found or expired.' });
+  }
+
+  if (session.data) {
+    await deleteAuthSession(authSessionId);
+    return res.json(session.data);
+  }
+
   res.json({ pending: true });
 });
 
@@ -147,11 +190,12 @@ router.get('/pending', (_req: Request, res: Response) => {
 // GET /auth/google/calendar
 // Returns the Google OAuth consent URL for calendar access
 // ─────────────────────────────────────────────────────────────
-router.get('/google/calendar', (req: Request, res: Response) => {
+router.get('/google/calendar', async (req: Request, res: Response) => {
   try {
     const loginHint = req.query.login_hint as string | undefined;
-    const authUrl = getCalendarAuthUrl(loginHint);
-    res.json({ url: authUrl });
+    const authSessionId = await createAuthSession();
+    const authUrl = getCalendarAuthUrl(loginHint, authSessionId);
+    res.json({ url: authUrl, authSessionId });
   } catch (error: any) {
     console.error('[AuthRoutes] Failed to generate calendar auth URL:', error);
     res.status(500).json({ error: 'Failed to generate calendar auth URL' });
@@ -265,251 +309,6 @@ router.post('/logout', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// POST /auth/license/verify
-// Check if a license key + device ID is valid in MongoDB
-// Collection: licenseverify
-// Schema: { licenseKey, deviceId, activatedAt, lastSeenAt, updatedAt }
-// ─────────────────────────────────────────────────────────────
-router.post('/license/verify', async (req: Request, res: Response) => {
-  try {
-    const { licenseKey, deviceId } = req.body;
-
-    if (!licenseKey || typeof licenseKey !== 'string') {
-      return res.status(400).json({ success: false, error: 'License key is required' });
-    }
-    if (!deviceId || typeof deviceId !== 'string') {
-      return res.status(400).json({ success: false, error: 'Device ID is required' });
-    }
-
-    const collection = getLicenseVerifyCollection();
-    const trimmedKey = licenseKey.trim();
-    const trimmedDevice = deviceId.trim();
-
-    // Key must already exist in DB (pre-provisioned by admin)
-    const existingKey = await collection.findOne({ licenseKey: trimmedKey });
-    if (!existingKey) {
-      return res.json({
-        success: false,
-        error: 'Invalid license key.',
-      });
-    }
-
-    // One device = one key. A device already bound to another key cannot claim this key.
-    const deviceWithDifferentKey = await collection.findOne({
-      deviceId: trimmedDevice,
-      licenseKey: { $ne: trimmedKey },
-    });
-    if (deviceWithDifferentKey) {
-      return res.json({
-        success: false,
-        error: 'This device is already linked to another license key.',
-      });
-    }
-
-    // If key is already bound to another device, reject.
-    if (existingKey.deviceId && existingKey.deviceId !== trimmedDevice) {
-      return res.json({
-        success: false,
-        error: 'This license key is already activated on another device.',
-      });
-    }
-
-    const now = new Date();
-
-    // If key exists but is unbound, bind it to this device during verification.
-    if (!existingKey.deviceId) {
-      await collection.updateOne(
-        { _id: existingKey._id },
-        {
-          $set: {
-            deviceId: trimmedDevice,
-            activatedAt: existingKey.activatedAt ?? now,
-            lastSeenAt: now,
-            updatedAt: now,
-          },
-        }
-      );
-
-      return res.json({
-        success: true,
-        plan: 'pro',
-        activated: true,
-        message: 'License verified and activated for this device.',
-      });
-    }
-
-    // Key already bound to this device, just refresh timestamps.
-    await collection.updateOne(
-      { _id: existingKey._id },
-      { $set: { lastSeenAt: now, updatedAt: now } }
-    );
-
-    return res.json({
-      success: true,
-      plan: 'pro',
-      activated: true,
-      message: 'License verified for this device.',
-    });
-
-  } catch (error: any) {
-    console.error('[AuthRoutes] License verify error:', error);
-    res.status(500).json({ success: false, error: 'Server error' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────
-// POST /auth/license/activate
-// Bind a license key to a device ID in MongoDB
-// One device = one key (stored in licenseverify collection)
-// ─────────────────────────────────────────────────────────────
-router.post('/license/activate', async (req: Request, res: Response) => {
-  try {
-    const { licenseKey, deviceId } = req.body;
-
-    if (!licenseKey || typeof licenseKey !== 'string') {
-      return res.status(400).json({ success: false, error: 'License key is required' });
-    }
-    if (!deviceId || typeof deviceId !== 'string') {
-      return res.status(400).json({ success: false, error: 'Device ID is required' });
-    }
-
-    const collection = getLicenseVerifyCollection();
-    const trimmedKey = licenseKey.trim();
-    const trimmedDevice = deviceId.trim();
-
-    // Key must already exist in DB (pre-provisioned by admin).
-    const existingKey = await collection.findOne({ licenseKey: trimmedKey });
-    if (!existingKey) {
-      return res.json({
-        success: false,
-        error: 'Invalid license key.',
-      });
-    }
-
-    // Check if this key is already activated on another device
-    if (existingKey.deviceId && existingKey.deviceId !== trimmedDevice) {
-      return res.json({
-        success: false,
-        error: 'This license key is already activated on another device.',
-      });
-    }
-
-    // Check if this device already has a different key
-    const existingDevice = await collection.findOne({ deviceId: trimmedDevice });
-    if (existingDevice && existingDevice.licenseKey !== trimmedKey) {
-      return res.json({
-        success: false,
-        error: 'This device is already linked to another license key.',
-      });
-    }
-
-    // If key+device already exist — just refresh timestamps
-    if (existingKey && existingKey.deviceId === trimmedDevice) {
-      await collection.updateOne(
-        { _id: existingKey._id },
-        { $set: { lastSeenAt: new Date(), updatedAt: new Date() } }
-      );
-
-      return res.json({
-        success: true,
-        plan: 'pro',
-        message: 'License already active on this device.',
-      });
-    }
-
-    // Existing unbound key: bind it to this device.
-    const now = new Date();
-    await collection.updateOne(
-      { _id: existingKey._id },
-      {
-        $set: {
-          deviceId: trimmedDevice,
-          activatedAt: existingKey.activatedAt ?? now,
-          lastSeenAt: now,
-          updatedAt: now,
-        },
-      }
-    );
-
-    console.log(`[AuthRoutes] License bound: ${trimmedKey} to device ${trimmedDevice.slice(0, 8)}...`);
-
-    res.json({
-      success: true,
-      plan: 'pro',
-      message: 'Pro license activated successfully!',
-    });
-
-  } catch (error: any) {
-    console.error('[AuthRoutes] License activate error:', error);
-    res.status(500).json({ success: false, error: 'Server error' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────
-// POST /auth/license/deactivate
-// Remove a license key binding from a device
-// ─────────────────────────────────────────────────────────────
-router.post('/license/deactivate', async (req: Request, res: Response) => {
-  try {
-    const { deviceId } = req.body;
-
-    if (!deviceId || typeof deviceId !== 'string') {
-      return res.status(400).json({ success: false, error: 'Device ID is required' });
-    }
-
-    const collection = getLicenseVerifyCollection();
-    const result = await collection.deleteOne({ deviceId: deviceId.trim() });
-
-    if (result.deletedCount > 0) {
-      console.log(`[AuthRoutes] License deactivated for device ${deviceId.slice(0, 8)}...`);
-    }
-
-    res.json({ success: true, message: 'License deactivated.' });
-  } catch (error: any) {
-    console.error('[AuthRoutes] License deactivate error:', error);
-    res.status(500).json({ success: false, error: 'Server error' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────
-// POST /auth/license/check-device
-// Check if a device has an active license (by deviceId only)
-// ─────────────────────────────────────────────────────────────
-router.post('/license/check-device', async (req: Request, res: Response) => {
-  try {
-    const { deviceId } = req.body;
-
-    if (!deviceId || typeof deviceId !== 'string') {
-      return res.status(400).json({ success: false, error: 'Device ID is required' });
-    }
-
-    const collection = getLicenseVerifyCollection();
-    const existing = await collection.findOne({ deviceId: deviceId.trim() });
-
-    if (existing) {
-      // Update lastSeenAt
-      await collection.updateOne(
-        { _id: existing._id },
-        { $set: { lastSeenAt: new Date() } }
-      );
-
-      return res.json({
-        success: true,
-        isPremium: true,
-        plan: 'pro',
-        licenseKey: existing.licenseKey,
-        activatedAt: existing.activatedAt,
-      });
-    }
-
-    res.json({ success: true, isPremium: false });
-  } catch (error: any) {
-    console.error('[AuthRoutes] License check-device error:', error);
-    res.status(500).json({ success: false, error: 'Server error' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────
 // Helper: Generate callback HTML that sends data to Electron
 // ─────────────────────────────────────────────────────────────
 function getCallbackHTML(
@@ -602,10 +401,6 @@ function getCallbackHTML(
     <p>${success ? 'You should be redirected back to the product. <a href="teamsync://">Click here</a> if not working.' : (errorMessage || 'Something went wrong.')}</p>
   </div>
   <script>
-    try {
-      const data = ${data};
-      localStorage.setItem('natively_auth_result', JSON.stringify(data));
-    } catch(e) {}
     // Auto-close after a brief pause
     setTimeout(() => { window.close(); }, 3000);
   </script>

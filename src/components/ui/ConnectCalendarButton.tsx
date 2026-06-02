@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, Loader, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { API_BASE_URL } from '../../lib/config/apiConfig';
 
 interface ConnectCalendarButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: 'default' | 'dark';
@@ -21,7 +22,7 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
 
             if (token) {
                 try {
-                    const response = await fetch('http://localhost:3456/auth/me', {
+                    const response = await fetch(`${API_BASE_URL}/auth/me`, {
                         headers: { Authorization: `Bearer ${token}` },
                     });
 
@@ -55,22 +56,7 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
                 }
             }
 
-            if (!window.electronAPI) {
-                return;
-            }
-
-            if (!token) {
-                window.electronAPI.getCalendarStatus().then(status => {
-                    if (cancelled) return;
-
-                    if (status.connected) {
-                        setConnected(true);
-                        props.onConnect?.();
-                    }
-                });
-            }
-
-            unsubscribe = window.electronAPI.onCalendarStatusChanged?.((status) => {
+            unsubscribe = window.electronAPI?.onCalendarStatusChanged?.((status) => {
                 if (cancelled) return;
 
                 if (token && status.connected && !status.email) {
@@ -115,11 +101,12 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
             const email = storedUser ? JSON.parse(storedUser)?.email : undefined;
 
             // Open calendar auth in browser via backend
-            const res = await fetch('http://localhost:3456/auth/google/calendar' + 
+            const res = await fetch(`${API_BASE_URL}/auth/google/calendar` + 
                 (email ? `?login_hint=${encodeURIComponent(email)}` : ''));
             if (!res.ok) throw new Error('Failed to get calendar auth URL');
             
-            const { url } = await res.json();
+            const { url, authSessionId } = await res.json();
+            if (!url || !authSessionId) throw new Error('Authentication session was not created');
             
             // Open in external browser
             if (window.electronAPI?.openExternal) {
@@ -138,7 +125,7 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
                     return;
                 }
                 try {
-                    const pendingRes = await fetch('http://localhost:3456/auth/pending');
+                    const pendingRes = await fetch(`${API_BASE_URL}/auth/pending?authSessionId=${encodeURIComponent(authSessionId)}`);
                     if (!pendingRes.ok) return;
                     const data = await pendingRes.json();
                     if (data.pending) return;

@@ -25,7 +25,7 @@ function createOAuth2Client(): Auth.OAuth2Client {
 /**
  * Generate the Google OAuth consent URL for sign-in (basic scopes only)
  */
-export function getGoogleAuthUrl(loginHint?: string): string {
+export function getGoogleAuthUrl(loginHint?: string, state?: string): string {
   const oauth2Client = createOAuth2Client();
   
   const options: Auth.GenerateAuthUrlOpts = {
@@ -38,6 +38,9 @@ export function getGoogleAuthUrl(loginHint?: string): string {
   if (loginHint) {
     (options as any).login_hint = loginHint;
   }
+  if (state) {
+    options.state = state;
+  }
 
   return oauth2Client.generateAuthUrl(options);
 }
@@ -45,7 +48,7 @@ export function getGoogleAuthUrl(loginHint?: string): string {
 /**
  * Generate incremental auth URL for calendar (requests only calendar scope)
  */
-export function getCalendarAuthUrl(loginHint?: string): string {
+export function getCalendarAuthUrl(loginHint?: string, state?: string): string {
   const oauth2Client = createOAuth2Client();
 
   const options: Auth.GenerateAuthUrlOpts = {
@@ -57,6 +60,9 @@ export function getCalendarAuthUrl(loginHint?: string): string {
 
   if (loginHint) {
     (options as any).login_hint = loginHint;
+  }
+  if (state) {
+    options.state = state;
   }
 
   return oauth2Client.generateAuthUrl(options);

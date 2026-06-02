@@ -105,6 +105,33 @@ type GenerateActionPayload = {
   modelOverride?: string
 }
 
+type LicenseBridgeState = {
+  isPremium: boolean
+  plan: 'free' | 'pro' | 'team' | string
+  isActive: boolean
+  provider?: string
+  status?: string
+  trial?: boolean
+  expiresAt?: string
+  graceUntil?: string
+  lastSuccessfulSyncAt?: string
+  entitlementVersion?: number
+  features?: string[]
+  error?: string
+}
+
+type TrialBridgeState = {
+  ok: boolean
+  expired?: boolean
+  remaining_ms?: number
+  started_at?: string
+  expires_at?: string
+  converted_to?: string | null
+  usage?: { ai: number; stt_seconds: number; search: number }
+  limits?: object
+  error?: string
+}
+
 // Types for the exposed Electron API
 interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   saveSessionExportReport: (request: SessionExportSaveRequest) => Promise<SessionExportSaveResult>
@@ -184,11 +211,12 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   checkPermissions: () => Promise<{ microphone: 'granted' | 'denied' | 'not-determined' | 'restricted'; screen: 'granted' | 'denied' | 'not-determined' | 'restricted'; platform: string }>
   requestMicPermission: () => Promise<boolean>
   // Free Trial
-  startTrial:     () => Promise<{ ok: boolean; trial_token?: string; started_at?: string; expires_at?: string; expired?: boolean; already_used?: boolean; converted_to?: string | null; usage?: { ai: number; stt_seconds: number; search: number }; limits?: { duration_ms: number; ai_requests: number; stt_minutes: number; search_requests: number }; error?: string; status?: number }>
+  startTrial:     () => Promise<{ ok: boolean; started_at?: string; expires_at?: string; expired?: boolean; already_used?: boolean; converted_to?: string | null; usage?: { ai: number; stt_seconds: number; search: number }; limits?: { duration_ms: number; ai_requests: number; stt_minutes: number; search_requests: number }; error?: string; status?: number }>
   getTrialStatus: () => Promise<{ ok: boolean; expired?: boolean; remaining_ms?: number; started_at?: string; expires_at?: string; converted_to?: string | null; usage?: { ai: number; stt_seconds: number; search: number }; limits?: object; error?: string }>
-  getLocalTrial:  () => Promise<{ hasToken: boolean; trialClaimed?: boolean; trialToken?: string; expiresAt?: string; startedAt?: string; expired?: boolean }>
+  getLocalTrial:  () => Promise<{ hasToken: boolean; trialClaimed?: boolean; expiresAt?: string; startedAt?: string; expired?: boolean }>
   convertTrial:   (choice: string) => Promise<{ ok: boolean }>
   endTrialByok:   () => Promise<{ success: boolean; error?: string }>
+  wipeTrialProfileData: () => Promise<{ success: boolean; error?: string }>
   onTrialEnded:   (cb: (data: { choice: string }) => void) => () => void
   onModesActiveCleared: (cb: () => void) => () => void
 
@@ -376,11 +404,6 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   onThemeChanged: (callback: (data: { mode: 'system' | 'light' | 'dark', resolved: 'light' | 'dark' }) => void) => () => void
 
   // Calendar
-  calendarConnect: () => Promise<{ success: boolean; error?: string }>
-  calendarDisconnect: () => Promise<{ success: boolean; error?: string }>
-  getCalendarStatus: () => Promise<{ connected: boolean; email?: string }>
-  getUpcomingEvents: () => Promise<Array<{ id: string; title: string; description?: string; startTime: string; endTime: string; link?: string; source: 'google' }>>
-  calendarRefresh: () => Promise<{ success: boolean; error?: string }>
   calendarIntelligenceEvaluateEvents: (events: CalendarEventPayload[]) => Promise<CalendarModeRecommendation | null>
   calendarIntelligenceGetRecommendation: () => Promise<CalendarModeRecommendation | null>
   calendarIntelligenceDismiss: (eventId: string) => Promise<{ success: boolean }>
@@ -489,6 +512,14 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
       };
     };
   }>;
+  licenseActivate: (key: string) => Promise<{ success: boolean; error?: string; entitlement?: Partial<LicenseBridgeState> }>
+  licenseSync: () => Promise<LicenseBridgeState>
+  licenseGetEntitlement: () => Promise<LicenseBridgeState>
+  licenseCheckPremium: () => Promise<boolean>
+  licenseGetDetails: () => Promise<LicenseBridgeState>
+  getUserPlan: () => Promise<LicenseBridgeState>
+  licenseCheckPremiumAsync: () => Promise<boolean>
+  licenseDeactivate: () => Promise<{ success: boolean; error?: string }>
 
   // Tavily Search API
   setTavilyApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
@@ -567,6 +598,36 @@ function toLegacyPermissionStatus(status: PermissionStatusSnapshot["microphone"]
       return 'denied';
   }
 }
+
+const getEntitlementState = async (): Promise<LicenseBridgeState> => {
+  const state = await ipcRenderer.invoke('license:get-entitlement');
+  return state && typeof state === 'object'
+    ? state as LicenseBridgeState
+    : { isPremium: false, plan: 'free', isActive: false, status: 'free' };
+};
+
+const syncEntitlementState = async (): Promise<LicenseBridgeState> => {
+  const state = await ipcRenderer.invoke('license:sync');
+  return state && typeof state === 'object'
+    ? state as LicenseBridgeState
+    : { isPremium: false, plan: 'free', isActive: false, status: 'free' };
+};
+
+const trialBridgeStatus = (state: LicenseBridgeState): TrialBridgeState => {
+  const expiresMs = state.expiresAt ? Date.parse(state.expiresAt) : NaN;
+  const remainingMs = Number.isFinite(expiresMs) ? Math.max(0, expiresMs - Date.now()) : undefined;
+  const isTrial = state.trial === true;
+  return {
+    ok: isTrial && state.isPremium === true,
+    expired: isTrial && state.isPremium !== true,
+    remaining_ms: remainingMs,
+    expires_at: state.expiresAt,
+    converted_to: null,
+    usage: { ai: 0, stt_seconds: 0, search: 0 },
+    limits: {},
+    error: state.error,
+  };
+};
 
 // Expose the Electron API to the renderer process
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -852,12 +913,31 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // Free Trial
-  startTrial:       () => ipcRenderer.invoke("trial:start"),
-  getTrialStatus:   () => ipcRenderer.invoke("trial:status"),
-  getLocalTrial:    () => ipcRenderer.invoke("trial:get-local"),
-  convertTrial:     (choice: string) => ipcRenderer.invoke("trial:convert", choice),
-  endTrialByok:        () => ipcRenderer.invoke("trial:end-byok"),
-  wipeTrialProfileData: () => ipcRenderer.invoke("trial:wipe-profile-data"),
+  startTrial: async () => {
+    const result = await ipcRenderer.invoke("license:activate", { trial: true });
+    if (!result?.success) return { ok: false, error: result?.error || 'trial_start_failed' };
+    return {
+      ok: true,
+      started_at: result.entitlement?.issuedAt,
+      expires_at: result.entitlement?.expiresAt,
+      usage: { ai: 0, stt_seconds: 0, search: 0 },
+      limits: {},
+    };
+  },
+  getTrialStatus: async () => trialBridgeStatus(await syncEntitlementState()),
+  getLocalTrial: async () => {
+    const state = await getEntitlementState();
+    const trial = state.trial === true;
+    return {
+      hasToken: trial,
+      trialClaimed: trial,
+      expiresAt: state.expiresAt,
+      expired: trial && state.isPremium !== true,
+    };
+  },
+  convertTrial: async (_choice: string) => ({ ok: true }),
+  endTrialByok: () => ipcRenderer.invoke("license:deactivate"),
+  wipeTrialProfileData: () => ipcRenderer.invoke("profile:wipe-trial-data"),
   onTrialEnded:     (cb: (data: { choice: string }) => void) => {
     const sub = (_: any, data: any) => cb(data);
     ipcRenderer.on('trial-ended', sub);
@@ -1412,11 +1492,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // Calendar API
-  calendarConnect: () => ipcRenderer.invoke('calendar-connect'),
-  calendarDisconnect: () => ipcRenderer.invoke('calendar-disconnect'),
-  getCalendarStatus: () => ipcRenderer.invoke('get-calendar-status'),
-  getUpcomingEvents: () => ipcRenderer.invoke('get-upcoming-events'),
-  calendarRefresh: () => ipcRenderer.invoke('calendar-refresh'),
   calendarIntelligenceEvaluateEvents: (events: CalendarEventPayload[]) => ipcRenderer.invoke('calendar-intelligence:evaluate-events', events),
   calendarIntelligenceGetRecommendation: () => ipcRenderer.invoke('calendar-intelligence:get-recommendation'),
   calendarIntelligenceDismiss: (eventId: string) => ipcRenderer.invoke('calendar-intelligence:dismiss', eventId),
@@ -1654,15 +1729,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // License Management
   licenseActivate: (key: string) => ipcRenderer.invoke('license:activate', key),
-  licenseCheckPremium: () => ipcRenderer.invoke('license:check-premium'),
-  licenseGetDetails: () => ipcRenderer.invoke('license:get-details'),
-  getUserPlan: () => ipcRenderer.invoke('get_user_plan'),
-  licenseCheckPremiumAsync: () => ipcRenderer.invoke('license:check-premium-async'),
+  licenseSync: () => ipcRenderer.invoke('license:sync'),
+  licenseGetEntitlement: () => ipcRenderer.invoke('license:get-entitlement'),
+  licenseCheckPremium: async () => (await getEntitlementState()).isPremium === true,
+  licenseGetDetails: () => ipcRenderer.invoke('license:get-entitlement'),
+  getUserPlan: () => ipcRenderer.invoke('license:get-entitlement'),
+  licenseCheckPremiumAsync: async () => (await syncEntitlementState()).isPremium === true,
   getStartupState: () => ipcRenderer.invoke('app:get-startup-state'),
   getAOTState: () => ipcRenderer.invoke('app:get-aot-state'),
   forceResync: () => ipcRenderer.invoke('app:force-resync'),
   licenseDeactivate: () => ipcRenderer.invoke('license:deactivate'),
-  licenseGetHardwareId: () => ipcRenderer.invoke('license:get-hardware-id'),
   onLicenseRestored: (callback: (data: { isPremium: boolean; plan?: string; provider?: string }) => void) => {
     const subscription = (_: any, data: { isPremium: boolean; plan?: string; provider?: string }) => callback(data);
     ipcRenderer.on('license-restored', subscription);

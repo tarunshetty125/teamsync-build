@@ -30,6 +30,7 @@ import { promisify } from 'util';
 import axios from 'axios';
 import path from 'path';
 import { createProviderRateLimiters, RateLimiter } from './services/RateLimiter';
+import { TEAMSYNC_CHAT_URL } from '../src/lib/config/apiConfig';
 const execAsync = promisify(exec);
 
 interface OllamaResponse {
@@ -2261,18 +2262,10 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     }
     if (!teamsyncKey) throw new Error('TeamSync API key not set');
 
-    const endpointUrl = 'https://api.teamsync-ai.vercel.app/v1/chat';
-    // When the key is the trial sentinel, authenticate with the real trial token
-    // instead — the server validates x-trial-token, not __trial__ as an API key.
-    const headers: any = { 'Content-Type': 'application/json' };
-    if (teamsyncKey === '__trial__') {
-      const { CredentialsManager } = require('./services/CredentialsManager');
-      const trialToken = CredentialsManager.getInstance().getTrialToken();
-      if (!trialToken) throw new Error('Trial token not found');
-      headers['x-trial-token'] = trialToken;
-    } else {
-      headers['x-teamsync-key'] = teamsyncKey;
-    }
+    const headers: any = {
+      'Content-Type': 'application/json',
+      'x-teamsync-key': teamsyncKey,
+    };
 
     const body: any = { messages: [{ role: 'user', content: userMessage }] };
     if (maxOutputTokens) body.max_tokens = maxOutputTokens;
@@ -2317,7 +2310,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       body.language = this.aiResponseLanguage; // 'auto' is forwarded — server handles it
     }
 
-    const response = await fetch(endpointUrl, {
+    const response = await fetch(TEAMSYNC_CHAT_URL, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -3784,23 +3777,15 @@ Return only the final answer. No meta commentary.
       if (images.length) body.images = images;
     }
 
-    // When the key is the trial sentinel, authenticate with the real trial token.
     const streamHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
+      'x-teamsync-key': teamsyncKey,
     };
-    if (teamsyncKey === '__trial__') {
-      const { CredentialsManager } = require('./services/CredentialsManager');
-      const trialToken = CredentialsManager.getInstance().getTrialToken();
-      if (!trialToken) throw new Error('Trial token not found');
-      streamHeaders['x-trial-token'] = trialToken;
-    } else {
-      streamHeaders['x-teamsync-key'] = teamsyncKey;
-    }
 
     // 60s timeout covers worst-case: max-token Gemini Pro response streamed over a slow connection.
     // This is intentionally longer than the non-streaming 25s timeout.
-    const response = await fetch('https://api.teamsync-ai.vercel.app/v1/chat', {
+    const response = await fetch(TEAMSYNC_CHAT_URL, {
       method: 'POST',
       headers: streamHeaders,
       body: JSON.stringify(body),

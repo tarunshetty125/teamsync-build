@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useMotionTemplate, useMotionValue, useSpring } from 'framer-motion';
 import appIcon from '../icon.png';
+import { API_BASE_URL } from '../../lib/config/apiConfig';
 
 interface GoogleSignInProps {
   onSignInComplete: (userData: {
@@ -12,8 +13,6 @@ interface GoogleSignInProps {
     isNewUser: boolean;
   }) => void;
 }
-
-const BACKEND_URL = 'http://localhost:3456';
 
 // ─────────────────────────────────────────────────────────────
 // Particle System — Ambient floating orbs
@@ -140,7 +139,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
 
   const verifyExistingToken = async (token: string) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/auth/me`, {
+      const res = await fetch(`${API_BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -167,10 +166,11 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
     setErrorMessage('');
 
     try {
-      const res = await fetch(`${BACKEND_URL}/auth/google`);
+      const res = await fetch(`${API_BASE_URL}/auth/google`);
       if (!res.ok) throw new Error('Could not connect to server');
 
-      const { url } = await res.json();
+      const { url, authSessionId } = await res.json();
+      if (!url || !authSessionId) throw new Error('Authentication session was not created');
 
       // Open auth in external browser
       if (window.electronAPI?.openExternal) {
@@ -182,19 +182,19 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
       setState('waiting');
 
       // Start polling for token (backend stores it on callback)
-      startTokenPolling();
+      startTokenPolling(authSessionId);
 
     } catch (error: any) {
       setState('error');
       setErrorMessage(
         error.message?.includes('connect') || error.message?.includes('fetch')
-          ? 'Backend server not running. Start it with: cd backend && npm run dev'
+          ? 'Could not reach the TeamSync backend. Please try again.'
           : error.message || 'Failed to start sign in'
       );
     }
   };
 
-  const startTokenPolling = () => {
+  const startTokenPolling = (authSessionId: string) => {
     // Poll the backend /auth/pending endpoint for the auth result
     if (pollRef.current) clearInterval(pollRef.current);
 
@@ -210,7 +210,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
       }
 
       try {
-        const res = await fetch(`${BACKEND_URL}/auth/pending`);
+        const res = await fetch(`${API_BASE_URL}/auth/pending?authSessionId=${encodeURIComponent(authSessionId)}`);
         if (!res.ok) return;
 
         const data = await res.json();

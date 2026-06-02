@@ -1,5 +1,9 @@
 import { MongoClient, Db, Collection, ObjectId } from 'mongodb';
 import { getBackendConfig } from '../config/env';
+import type { LicenseDocument } from '../licensing/models/License';
+import type { DeviceDocument } from '../licensing/models/Device';
+import type { EntitlementDocument } from '../licensing/models/Entitlement';
+import type { TrialDocument } from '../licensing/models/Trial';
 
 // ═══════════════════════════════════════════════════════
 // User Documents (Google Auth)
@@ -32,6 +36,17 @@ export interface SessionDocument {
 }
 
 // ═══════════════════════════════════════════════════════
+// OAuth Auth Sessions (Electron external-browser polling)
+// ═══════════════════════════════════════════════════════
+export interface AuthSessionDocument {
+  _id?: ObjectId;
+  authSessionId: string;
+  data?: any;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
+// ═══════════════════════════════════════════════════════
 // License Verification (matches existing MongoDB schema)
 // Collection: licenseverify
 // One device = One key binding
@@ -43,6 +58,22 @@ export interface LicenseVerifyDocument {
   activatedAt?: Date;
   lastSeenAt?: Date;
   updatedAt?: Date;
+}
+
+// ═══════════════════════════════════════════════════════
+// Hosted TeamSync API Usage
+// Kept separate from licensing/entitlement documents.
+// ═══════════════════════════════════════════════════════
+export interface TeamSyncUsageDocument {
+  _id?: ObjectId;
+  keyHash: string;
+  plan: string;
+  aiRequests: number;
+  sttSeconds: number;
+  searchRequests: number;
+  resetsAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 let client: MongoClient | null = null;
@@ -68,8 +99,20 @@ export async function connectToMongoDB(): Promise<Db> {
     await safeCreateIndex('users', { email: 1 }, { unique: true });
     await safeCreateIndex('sessions', { token: 1 }, { unique: true });
     await safeCreateIndex('sessions', { expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await safeCreateIndex('auth_sessions', { authSessionId: 1 }, { unique: true });
+    await safeCreateIndex('auth_sessions', { expiresAt: 1 }, { expireAfterSeconds: 0 });
     await safeCreateIndex('licenseverify', { licenseKey: 1 });
     await safeCreateIndex('licenseverify', { deviceId: 1 });
+    await safeCreateIndex('licenses', { licenseId: 1 }, { unique: true });
+    await safeCreateIndex('licenses', { licenseKeyHash: 1 }, { unique: true });
+    await safeCreateIndex('licenses', { providerSubscriptionId: 1 });
+    await safeCreateIndex('devices', { deviceId: 1, licenseId: 1 }, { unique: true });
+    await safeCreateIndex('devices', { licenseId: 1, status: 1 });
+    await safeCreateIndex('entitlements', { licenseId: 1, version: 1, deviceId: 1 });
+    await safeCreateIndex('trials', { trialId: 1 }, { unique: true });
+    await safeCreateIndex('trials', { deviceId: 1 });
+    await safeCreateIndex('teamsync_usage', { keyHash: 1 }, { unique: true });
+    await safeCreateIndex('teamsync_usage', { resetsAt: 1 });
 
     console.log(`[MongoDB] Connected to teamsync database`);
     return db;
@@ -94,8 +137,32 @@ export function getSessionsCollection(): Collection<SessionDocument> {
   return getDb().collection<SessionDocument>('sessions');
 }
 
+export function getAuthSessionsCollection(): Collection<AuthSessionDocument> {
+  return getDb().collection<AuthSessionDocument>('auth_sessions');
+}
+
 export function getLicenseVerifyCollection(): Collection<LicenseVerifyDocument> {
   return getDb().collection<LicenseVerifyDocument>('licenseverify');
+}
+
+export function getLicensesCollection(): Collection<LicenseDocument> {
+  return getDb().collection<LicenseDocument>('licenses');
+}
+
+export function getDevicesCollection(): Collection<DeviceDocument> {
+  return getDb().collection<DeviceDocument>('devices');
+}
+
+export function getEntitlementsCollection(): Collection<EntitlementDocument> {
+  return getDb().collection<EntitlementDocument>('entitlements');
+}
+
+export function getTrialsCollection(): Collection<TrialDocument> {
+  return getDb().collection<TrialDocument>('trials');
+}
+
+export function getTeamSyncUsageCollection(): Collection<TeamSyncUsageDocument> {
+  return getDb().collection<TeamSyncUsageDocument>('teamsync_usage');
 }
 
 export async function disconnectFromMongoDB(): Promise<void> {

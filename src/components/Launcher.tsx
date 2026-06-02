@@ -16,6 +16,7 @@ import { analytics } from '../lib/analytics/analytics.service'; // Added analyti
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { isMac } from '../utils/platformUtils';
+import { API_BASE_URL } from '../lib/config/apiConfig';
 import WindowControls from './WindowControls';
 
 type RecommendationModeId =
@@ -160,7 +161,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
         if (token) {
             try {
-                const response = await fetch('http://localhost:3456/auth/me', {
+                const response = await fetch(`${API_BASE_URL}/auth/me`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
 
@@ -212,18 +213,10 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                 }
             }
         } catch (err) {
-            console.warn("Backend calendar fetch failed, falling back to local calendar manager:", err);
+            console.warn("Backend calendar fetch failed:", err);
         }
 
-        // Fallback path: legacy local CalendarManager
-        if (window.electronAPI?.getUpcomingEvents) {
-            try {
-                const events = await window.electronAPI.getUpcomingEvents();
-                applyEvents(events);
-            } catch (err) {
-                console.error("Failed to fetch events:", err);
-            }
-        }
+        applyEvents([]);
     };
 
     const handleRefresh = async () => {
@@ -233,17 +226,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
         try {
             setShowNotification(true);
-
-            const token = localStorage.getItem('teamsync_auth_token');
-            // If backend auth token exists, refresh from backend only.
-            // This avoids noisy legacy CalendarManager "not connected" logs.
-            if (!token && window.electronAPI?.calendarRefresh) {
-                try {
-                    await window.electronAPI.calendarRefresh();
-                } catch {
-                    // Best-effort for legacy path only.
-                }
-            }
 
             await fetchEvents();
             fetchMeetings();
@@ -312,11 +294,9 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                 if (!mounted) return;
 
                 const token = localStorage.getItem('teamsync_auth_token');
-                // If we're authenticated via backend, ignore status broadcasts that don't include an email,
-                // because those come from the legacy CalendarManager which might falsely report 'connected'
-                // based on stale local tokens.
+                // Hosted auth is the source of truth; ignore incomplete optimistic broadcasts.
                 if (token && status.email === undefined && status.connected) {
-                    console.log("Ignoring legacy calendar status broadcast because backend auth is active.");
+                    console.log("Ignoring incomplete calendar status broadcast because backend auth is active.");
                     return;
                 }
 

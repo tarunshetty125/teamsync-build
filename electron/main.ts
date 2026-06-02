@@ -133,6 +133,7 @@ import { DatabaseManager } from "./db/DatabaseManager"
 import { warmupIntentClassifier } from "./llm"
 import { ModesManager } from "./services/ModesManager"
 import { getTranscriptDisplayLabel } from "../src/utils/transcriptSpeakers"
+import { EntitlementVerifier } from "./licensing/EntitlementVerifier"
 
 type STTProvider = SttSupervisor;
 
@@ -804,18 +805,41 @@ export class AppState {
 
   private async bootstrapLicenseState(): Promise<void> {
     try {
-      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      const licenseManager = LicenseManager.getInstance();
-      if (typeof licenseManager.init === 'function') {
-        licenseManager.init();
-      }
-      const details = typeof licenseManager.getLicenseDetails === 'function'
-        ? licenseManager.getLicenseDetails()
-        : { isPremium: !!licenseManager.isPremium?.() };
-      console.log(`[AppState] License bootstrap complete: premium=${details.isPremium} provider=${details.provider || 'none'} plan=${details.plan || 'none'}`);
+      const entitlementVerifier = EntitlementVerifier.getInstance();
+      entitlementVerifier.removeAllListeners('changed');
+      entitlementVerifier.on('changed', (status: any) => {
+        this.broadcast('license-status-changed', {
+          isPremium: status.isPremium,
+          plan: status.plan,
+          provider: status.provider,
+          status: status.status,
+          trial: status.trial,
+        });
+        if (!status.isPremium) {
+          this.clearPremiumStateAfterEntitlementLoss();
+        }
+      });
+      const details = await entitlementVerifier.initialize();
+      console.log(`[AppState] License bootstrap complete: premium=${details.isPremium} provider=${details.provider || 'none'} plan=${details.plan || 'none'} status=${details.status}`);
     } catch (error) {
       console.warn('[AppState] License bootstrap skipped:', error);
     }
+  }
+
+  private clearPremiumStateAfterEntitlementLoss(): void {
+    try {
+      const orchestrator = this.getKnowledgeOrchestrator();
+      if (orchestrator) {
+        orchestrator.setKnowledgeMode(false);
+      }
+    } catch { /* non-fatal */ }
+    try {
+      const manager = ModesManager.getInstance();
+      const fallbackGeneralMode = manager.getModes().find((mode: any) => mode.templateType === 'general');
+      manager.setSelectedMode(fallbackGeneralMode?.id ?? null);
+      manager.setActiveMode(fallbackGeneralMode?.id ?? null);
+      this.broadcast('modes-active-cleared');
+    } catch { /* non-fatal */ }
   }
 
   private async bootstrapKnowledgeState(): Promise<void> {
@@ -2452,6 +2476,10 @@ export class AppState {
     // Enable all intelligence feature flags (dev-only, localStorage-gated in renderer)
     // Premium gate still applies — this only flips featureFlags, does NOT bypass license.
     ipcMain.handle('intelligence:enable-dev-mode', () => {
+        if (app.isPackaged && process.env.NODE_ENV !== 'development') {
+            console.warn('[Intelligence] Blocked development-only dev-mode IPC in packaged production');
+            return { success: false, error: 'unavailable_in_production' };
+        }
         try {
             const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
             const registry = CapabilityRegistry.getInstance();
@@ -2582,8 +2610,12 @@ export class AppState {
   } {
     let license = { isPremium: false as boolean, plan: undefined as string | undefined, provider: undefined as string | undefined };
     try {
-      const { LicenseManager } = require('../premium/electron/services/LicenseManager');
-      license = LicenseManager.getInstance().getLicenseDetails();
+      const status = EntitlementVerifier.getInstance().getStatus();
+      license = {
+        isPremium: status.isPremium,
+        plan: status.plan,
+        provider: status.provider,
+      };
     } catch { /* optional premium build */ }
 
     let liveKnowledge = this.getKnowledgeBootstrapSnapshot();
@@ -3569,27 +3601,8 @@ async function initializeApp() {
 
   console.log("App is ready")
 
-  // ── Production Backend Auto-Start ──────────────────────────
-  // In packaged builds, the backend server is mandatory.
-  // It must be healthy before any window is created.
-  // In dev mode (app.isPackaged === false), this block is skipped entirely.
-  if (app.isPackaged) {
-    const { BackendManager } = require('./services/BackendManager');
-    try {
-      await BackendManager.getInstance().start();
-      console.log('[Main] Backend server started successfully');
-    } catch (error) {
-      console.error('[Main] Backend failed to start:', error);
-      const { dialog } = require('electron');
-      dialog.showErrorBox(
-        'TeamSync — Backend Error',
-        'The backend server failed to start. TeamSync cannot continue.\n\n' +
-        (error instanceof Error ? error.message : String(error))
-      );
-      app.quit();
-      return; // Prevent createWindow()
-    }
-  }
+  // Backend services are hosted separately. Electron no longer owns or launches
+  // a local production backend process.
 
   PermissionManager.getInstance().startMonitoring()
   appState.createWindow()
@@ -3614,40 +3627,6 @@ async function initializeApp() {
 
   // Pre-create settings window in background for faster first open
   appState.settingsWindowHelper.preloadWindow()
-
-  // Initialize CalendarManager
-  try {
-    const { CalendarManager } = require('./services/CalendarManager');
-    const calMgr = CalendarManager.getInstance();
-    calMgr.init();
-
-    calMgr.on('start-meeting-requested', (event: any) => {
-      console.log('[Main] Start meeting requested from calendar notification', event);
-      void (async () => {
-        try {
-          appState.centerAndShowWindow();
-          await appState.startMeeting({
-            title: event.title,
-            calendarEventId: event.id,
-            source: 'calendar'
-          });
-        } catch (error) {
-          console.error('[Main] Calendar-triggered meeting start failed:', error);
-          await appState.showPermissionRemediation(
-            error instanceof Error ? error.message : 'TeamSync needs additional permissions before it can start a meeting.'
-          );
-        }
-      })();
-    });
-
-    calMgr.on('open-requested', () => {
-      appState.centerAndShowWindow();
-    });
-
-    console.log('[Main] CalendarManager initialized');
-  } catch (e) {
-    console.error('[Main] Failed to initialize CalendarManager:', e);
-  }
 
   // Note: We do NOT force dock show here anymore, respecting stealth mode.
 
@@ -3692,17 +3671,6 @@ async function initializeApp() {
 
     // Kill Ollama if we started it
     OllamaManager.getInstance().stop();
-
-    // Stop backend server if we started it (production only)
-    if (app.isPackaged) {
-      try {
-        const { BackendManager } = require('./services/BackendManager');
-        BackendManager.getInstance().stop();
-        console.log('[Main] Backend server stopped');
-      } catch (e) {
-        console.warn('[Main] BackendManager cleanup failed:', e);
-      }
-    }
 
     // Destroy StealthManager — stops watchdog timer, reverts process identity
     try {

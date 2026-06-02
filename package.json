@@ -22,209 +22,157 @@
     "build:native": "node scripts/build-native.js",
     "build:backend": "cd backend && npm run build"
   },
-  
- "build": {
-"generateUpdatesFilesForAllChannels": true,
-
-"appId": "com.electron.meeting-notes",
-
-"productName": "TeamSync",
-
-"afterPack": "./scripts/ad-hoc-sign.js",
-
-"compression": "normal",
-
-"asar": true,
-
-"asarUnpack": [
-"**/*.node",
-"**/*.dll",
-"**/*.dylib",
-"native-module/**"
-],
-
-"files": [
-"dist/**",
-"dist-electron/**",
-"native-module/**",
-"package.json",
-"node_modules/**",
-
-
-"!**/native-module/target/**",
-"!**/native-module/src/**",
-"!**/native-module/.cargo/**",
-"!**/*.map"
-
-
-],
-
-"directories": {
-"output": "release",
-"buildResources": "assets"
-},
-
-"extraResources": [
-{
-"from": "assets/",
-"to": "assets/"
-},
-{
-"from": "resources/models/",
-"to": "models/"
-},
-{
-"from": "native-module/",
-"to": "native-module/"
-},
-{
-"from": "python-runtime/ocr/",
-"to": "python/ocr/"
-},
-{
-"from": "python-runtime/models/",
-"to": "python/ocr/models/"
-},
-{
-"from": "backend/dist/",
-"to": "backend/dist/"
-},
-{
-"from": "backend/node_modules/",
-"to": "backend/node_modules/"
-}
-],
-
-"mac": {
-"category": "public.app-category.productivity",
-
-
-"icon": "assets/icon.icns",
-
-"hardenedRuntime": true,
-
-"entitlements": "assets/entitlements.mac.plist",
-
-"entitlementsInherit": "assets/entitlements.mac.inherit.plist",
-
-"extraResources": [
-  {
-    "from": "python-runtime/mac-${arch}/",
-    "to": "python/"
-  }
-],
-
-"target": [
-  {
-    "target": "zip",
-    "arch": [
-      "x64",
-      "arm64"
+  "build": {
+    "generateUpdatesFilesForAllChannels": true,
+    "appId": "com.electron.meeting-notes",
+    "productName": "TeamSync",
+    "afterPack": "./scripts/ad-hoc-sign.js",
+    "compression": "normal",
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node",
+      "**/*.dll",
+      "**/*.dylib",
+      "native-module/**"
+    ],
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "native-module/**",
+      "package.json",
+      "node_modules/**",
+      "!**/native-module/target/**",
+      "!**/native-module/src/**",
+      "!**/native-module/.cargo/**",
+      "!node_modules/**/src/**",
+      "!node_modules/**/test/**",
+      "!node_modules/**/tests/**",
+      "!node_modules/**/__tests__/**",
+      "!**/*.map"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "extraResources": [
+      {
+        "from": "assets/",
+        "to": "assets/"
+      },
+      {
+        "from": "resources/models/",
+        "to": "models/"
+      },
+      {
+        "from": "native-module/",
+        "to": "native-module/"
+      },
+      {
+        "from": "python-runtime/ocr/",
+        "to": "python/ocr/"
+      },
+      {
+        "from": "python-runtime/models/",
+        "to": "python/ocr/models/"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": true,
+      "entitlements": "assets/entitlements.mac.plist",
+      "entitlementsInherit": "assets/entitlements.mac.inherit.plist",
+      "extraResources": [
+        {
+          "from": "python-runtime/mac-${arch}/",
+          "to": "python/"
+        }
+      ],
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "TeamSync needs Screen Recording permission to analyze screens and provide interview assistance.",
+        "NSMicrophoneUsageDescription": "TeamSync needs microphone access for live transcription and interview assistance."
+      }
+    },
+    "dmg": {
+      "size": "4g"
+    },
+    "win": {
+      "icon": "assets/icons/win/icon.ico",
+      "requestedExecutionLevel": "asInvoker",
+      "extraResources": [
+        {
+          "from": "python-runtime/windows-x64/",
+          "to": "python/"
+        }
+      ],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "linux": {
+      "category": "Office",
+      "icon": "assets/icons/png/",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "tarunshetty125",
+        "repo": "teamsync-build",
+        "releaseType": "release"
+      }
     ]
   },
-  {
-    "target": "dmg",
-    "arch": [
-      "x64",
-      "arm64"
-    ]
-  }
-],
-
-"extendInfo": {
-  "NSScreenCaptureUsageDescription": "TeamSync needs Screen Recording permission to analyze screens and provide interview assistance.",
-  "NSMicrophoneUsageDescription": "TeamSync needs microphone access for live transcription and interview assistance."
-}
-
-},
-
-"dmg": {
-"size": "4g"
-},
-
-
-"win": {
-"icon": "assets/icons/win/icon.ico",
-
-
-"requestedExecutionLevel": "asInvoker",
-
-"extraResources": [
-  {
-    "from": "python-runtime/windows-x64/",
-    "to": "python/"
-  }
-],
-
-"target": [
-  {
-    "target": "nsis",
-    "arch": [
-      "x64"
-    ]
-  },
-  {
-    "target": "portable",
-    "arch": [
-      "x64"
-    ]
-  }
-]
-
-
-},
-
-"portable": {
-"artifactName": "${productName}-Portable-${version}.${ext}"
-},
-
-"nsis": {
-"oneClick": false,
-
-
-"perMachine": false,
-
-"allowToChangeInstallationDirectory": true,
-
-"deleteAppDataOnUninstall": false,
-
-"artifactName": "${productName}-Setup-${version}.${ext}"
-
-
-},
-
-"linux": {
-"category": "Office",
-
-
-"icon": "assets/icons/png/",
-
-"target": [
-  {
-    "target": "AppImage",
-    "arch": [
-      "x64"
-    ]
-  },
-  {
-    "target": "deb",
-    "arch": [
-      "x64"
-    ]
-  }
-]
-},
-
-"publish": [
-{
-"provider": "github",
-"owner": "tarunshetty125",
-"repo": "teamsync-build",
-"releaseType": "release"
-}
-]
-}
-,
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -266,10 +214,10 @@
     "wait-on": "^8.0.1"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@aws-sdk/client-bedrock": "^3.1057.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1057.0",
     "@aws-sdk/credential-providers": "^3.1057.0",
-    "@anthropic-ai/sdk": "^0.74.0",
     "@bany/curl-to-json": "^1.2.10",
     "@deepgram/sdk": "^3.13.0",
     "@elevenlabs/client": "^0.15.1",
@@ -304,7 +252,6 @@
     "lucide-react": "^0.460.0",
     "mammoth": "^1.11.0",
     "mermaid": "^11.15.0",
-    "mongodb": "^7.2.0",
     "openai": "^6.22.0",
     "pdf-parse": "^2.4.5",
     "react": "^18.3.1",

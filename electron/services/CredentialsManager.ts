@@ -94,11 +94,6 @@ export interface StoredCredentials {
     groqKeyVault?: GroqVaultKey[];
     // Groq fetched model catalog — persisted so overlay windows can read without re-fetching
     groqFetchedModels?: { id: string; label: string }[];
-    // Free trial state
-    trialToken?:     string;   // server-issued signed token (teamsync_trial_…)
-    trialExpiresAt?: string;   // ISO timestamp — local copy for startup check
-    trialStartedAt?: string;   // ISO timestamp
-    trialClaimed?:   boolean;  // set true on first claim, never cleared — hides start card permanently
 }
 
 export class CredentialsManager {
@@ -648,41 +643,6 @@ export class CredentialsManager {
     public setBedrockFetchedModels(models: BedrockFetchedModel[]): void {
         this.credentials.bedrockFetchedModels = models;
         this.saveCredentials();
-    }
-
-    // ── Free Trial ─────────────────────────────────────────────
-    public getTrialToken(): string | undefined {
-        return this.credentials.trialToken;
-    }
-
-    public getTrialExpiresAt(): string | undefined {
-        return this.credentials.trialExpiresAt;
-    }
-
-    public getTrialStartedAt(): string | undefined {
-        return this.credentials.trialStartedAt;
-    }
-
-    public getTrialClaimed(): boolean {
-        return this.credentials.trialClaimed === true;
-    }
-
-    public setTrialToken(token: string, expiresAt: string, startedAt: string): void {
-        this.credentials.trialToken     = token;
-        this.credentials.trialExpiresAt = expiresAt;
-        this.credentials.trialStartedAt = startedAt;
-        this.credentials.trialClaimed   = true;
-        this.saveCredentials();
-        console.log('[CredentialsManager] Trial token stored, expires:', expiresAt);
-    }
-
-    public clearTrialToken(): void {
-        delete this.credentials.trialToken;
-        delete this.credentials.trialExpiresAt;
-        delete this.credentials.trialStartedAt;
-        // trialClaimed intentionally NOT cleared — keeps start card hidden after token wipe
-        this.saveCredentials();
-        console.log('[CredentialsManager] Trial token cleared');
     }
 
     public clearAll(): void {
