@@ -132,6 +132,28 @@ type TrialBridgeState = {
   error?: string
 }
 
+type GoogleAuthUser = {
+  name: string
+  email: string
+  picture?: string
+  calendarConnected: boolean
+  isNewUser?: boolean
+}
+
+type GoogleAuthState = {
+  authenticated: boolean
+  user: GoogleAuthUser | null
+  calendarConnected: boolean
+}
+
+type GoogleAuthResult = {
+  success: boolean
+  user?: GoogleAuthUser
+  authState?: GoogleAuthState
+  events?: any[]
+  error?: string
+}
+
 // Types for the exposed Electron API
 interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   saveSessionExportReport: (request: SessionExportSaveRequest) => Promise<SessionExportSaveResult>
@@ -408,6 +430,17 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   calendarIntelligenceGetRecommendation: () => Promise<CalendarModeRecommendation | null>
   calendarIntelligenceDismiss: (eventId: string) => Promise<{ success: boolean }>
   onCalendarRecommendationChanged: (callback: (recommendation: CalendarModeRecommendation | null) => void) => () => void
+
+  // Google Auth (Server-side OAuth + MongoDB)
+  googleSignIn: () => Promise<GoogleAuthResult>
+  googleGetAuthState: () => Promise<GoogleAuthState>
+  googleVerifySession: () => Promise<GoogleAuthResult>
+  googleConnectCalendar: (loginHint?: string) => Promise<GoogleAuthResult>
+  googleGetCalendarEvents: () => Promise<GoogleAuthResult>
+  googleLogout: () => Promise<{ success: boolean }>
+  googleDisconnectCalendar: () => Promise<GoogleAuthResult>
+  onAuthResult: (callback: (result: GoogleAuthResult) => void) => () => void
+  onAuthLoggedOut: (callback: () => void) => () => void
 
   // Auto-Update
   onUpdateAvailable: (callback: (info: any) => void) => () => void
@@ -1818,10 +1851,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Google Auth (Server-side OAuth + MongoDB)
   googleSignIn: () => ipcRenderer.invoke('auth:google-signin'),
-  googleVerifyToken: (token: string) => ipcRenderer.invoke('auth:verify-token', token),
-  googleConnectCalendar: (loginHint: string) => ipcRenderer.invoke('auth:connect-calendar', loginHint),
-  googleGetCalendarEvents: (token: string) => ipcRenderer.invoke('auth:calendar-events', token),
-  googleLogout: (token?: string) => ipcRenderer.invoke('auth:logout', token),
+  googleGetAuthState: () => ipcRenderer.invoke('auth:get-state'),
+  googleVerifySession: () => ipcRenderer.invoke('auth:verify-session'),
+  googleConnectCalendar: (loginHint?: string) => ipcRenderer.invoke('auth:connect-calendar', loginHint),
+  googleGetCalendarEvents: () => ipcRenderer.invoke('auth:calendar-events'),
+  googleLogout: () => ipcRenderer.invoke('auth:logout'),
+  googleDisconnectCalendar: () => ipcRenderer.invoke('auth:disconnect-calendar'),
   onAuthResult: (callback: (result: any) => void) => {
     const subscription = (_: any, result: any) => callback(result);
     ipcRenderer.on('auth:result', subscription);

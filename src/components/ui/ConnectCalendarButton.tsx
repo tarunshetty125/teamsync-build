@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, Loader, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { API_BASE_URL } from '../../lib/config/apiConfig';
 
 interface ConnectCalendarButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: 'default' | 'dark';
@@ -17,64 +16,24 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
         let unsubscribe: (() => void) | undefined;
 
         const syncConnectionState = async () => {
-            const token = localStorage.getItem('teamsync_auth_token');
-            const storedUser = localStorage.getItem('teamsync_auth_user');
+            try {
+                const result = await window.electronAPI?.googleVerifySession?.();
+                const authState = result?.authState || await window.electronAPI?.googleGetAuthState?.();
+                if (cancelled) return;
 
-            if (token) {
-                try {
-                    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                    });
-
-                    if (response.ok) {
-                        const userData = await response.json();
-                        if (cancelled) return;
-
-                        const isConnected = Boolean(userData?.calendarConnected);
-                        setConnected(isConnected);
-                        if (isConnected) {
-                            props.onConnect?.();
-                        }
-                    }
-                } catch {
-                    // Fall through to cached or legacy state below.
+                const isConnected = Boolean(authState?.calendarConnected);
+                setConnected(isConnected);
+                if (isConnected) {
+                    props.onConnect?.();
                 }
-            }
-
-            if (!token && storedUser) {
-                try {
-                    const userData = JSON.parse(storedUser);
-                    if (cancelled) return;
-
-                    if (userData.calendarConnected) {
-                        setConnected(true);
-                        props.onConnect?.();
-                        return;
-                    }
-                } catch {
-                    // Ignore malformed local storage payload.
-                }
+            } catch {
+                if (!cancelled) setConnected(false);
             }
 
             unsubscribe = window.electronAPI?.onCalendarStatusChanged?.((status) => {
                 if (cancelled) return;
 
-                if (token && status.connected && !status.email) {
-                    return;
-                }
-
                 setConnected(status.connected);
-                const storedUser = localStorage.getItem('teamsync_auth_user');
-                if (storedUser) {
-                    try {
-                        const userData = JSON.parse(storedUser);
-                        userData.calendarConnected = status.connected;
-                        if (status.email) userData.email = status.email;
-                        localStorage.setItem('teamsync_auth_user', JSON.stringify(userData));
-                    } catch {
-                        // Ignore malformed local storage payload.
-                    }
-                }
                 if (status.connected) {
                     props.onConnect?.();
                 }
@@ -95,64 +54,20 @@ const ConnectCalendarButton: React.FC<ConnectCalendarButtonProps> = ({ className
 
         setLoading(true);
         try {
-            // Use the backend Google OAuth flow for calendar access
-            // Get the logged-in user's email for login hint
-            const storedUser = localStorage.getItem('teamsync_auth_user');
-            const email = storedUser ? JSON.parse(storedUser)?.email : undefined;
-
-            // Open calendar auth in browser via backend
-            const res = await fetch(`${API_BASE_URL}/auth/google/calendar` + 
-                (email ? `?login_hint=${encodeURIComponent(email)}` : ''));
-            if (!res.ok) throw new Error('Failed to get calendar auth URL');
-            
-            const { url, authSessionId } = await res.json();
-            if (!url || !authSessionId) throw new Error('Authentication session was not created');
-            
-            // Open in external browser
-            if (window.electronAPI?.openExternal) {
-                await window.electronAPI.openExternal(url);
-            } else {
-                window.open(url, '_blank');
+            const authState = await window.electronAPI?.googleGetAuthState?.();
+            const result = await window.electronAPI?.googleConnectCalendar?.(authState?.user?.email);
+            if (result?.success && result.user?.calendarConnected) {
+                setConnected(true);
+                props.onConnect?.();
+                import('../../lib/analytics/analytics.service').then(({ analytics }) => {
+                    analytics.trackCalendarConnected();
+                });
+            } else if (result?.error) {
+                console.error(result.error);
             }
-
-            // Poll backend for auth completion
-            let attempts = 0;
-            const pollInterval = setInterval(async () => {
-                attempts++;
-                if (attempts >= 120) {
-                    clearInterval(pollInterval);
-                    setLoading(false);
-                    return;
-                }
-                try {
-                    const pendingRes = await fetch(`${API_BASE_URL}/auth/pending?authSessionId=${encodeURIComponent(authSessionId)}`);
-                    if (!pendingRes.ok) return;
-                    const data = await pendingRes.json();
-                    if (data.pending) return;
-
-                    clearInterval(pollInterval);
-                    if (data.success && data.user?.calendarConnected) {
-                        setConnected(true);
-                        props.onConnect?.();
-                        // Update stored user data with calendar status
-                        if (data.token) {
-                            localStorage.setItem('teamsync_auth_token', data.token);
-                        }
-                        if (data.user) {
-                            localStorage.setItem('teamsync_auth_user', JSON.stringify(data.user));
-                        }
-                        // Track calendar connection
-                        import('../../lib/analytics/analytics.service').then(({ analytics }) => {
-                            analytics.trackCalendarConnected();
-                        });
-                    }
-                    setLoading(false);
-                } catch {
-                    // Keep polling
-                }
-            }, 1000);
         } catch (err) {
             console.error(err);
+        } finally {
             setLoading(false);
         }
     };

@@ -68,6 +68,28 @@ interface BedrockFetchedModel {
   inputModalities?: string[];
 }
 
+type GoogleAuthUser = {
+  name: string;
+  email: string;
+  picture?: string;
+  calendarConnected: boolean;
+  isNewUser?: boolean;
+}
+
+type GoogleAuthState = {
+  authenticated: boolean;
+  user: GoogleAuthUser | null;
+  calendarConnected: boolean;
+}
+
+type GoogleAuthResult = {
+  success: boolean;
+  user?: GoogleAuthUser;
+  authState?: GoogleAuthState;
+  events?: any[];
+  error?: string;
+}
+
 type BridgeContextTarget = 'latest_turn' | 'active_context' | 'transcript'
 type BridgeActionContract =
   | 'default'
@@ -629,12 +651,14 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   platform: NodeJS.Platform;
 
   // Google Auth (Server-side OAuth + MongoDB)
-  googleSignIn: () => Promise<{ success: boolean; token?: string; user?: { name: string; email: string; picture?: string; calendarConnected: boolean; isNewUser: boolean }; error?: string }>;
-  googleVerifyToken: (token: string) => Promise<{ success: boolean; user?: any; error?: string }>;
-  googleConnectCalendar: (loginHint: string) => Promise<{ success: boolean; error?: string }>;
-  googleGetCalendarEvents: (token: string) => Promise<{ events?: any[]; success?: boolean; error?: string }>;
-  googleLogout: (token?: string) => Promise<{ success: boolean }>;
-  onAuthResult: (callback: (result: any) => void) => () => void;
+  googleSignIn: () => Promise<GoogleAuthResult>;
+  googleGetAuthState: () => Promise<GoogleAuthState>;
+  googleVerifySession: () => Promise<GoogleAuthResult>;
+  googleConnectCalendar: (loginHint?: string) => Promise<GoogleAuthResult>;
+  googleGetCalendarEvents: () => Promise<GoogleAuthResult>;
+  googleLogout: () => Promise<{ success: boolean }>;
+  googleDisconnectCalendar: () => Promise<GoogleAuthResult>;
+  onAuthResult: (callback: (result: GoogleAuthResult) => void) => () => void;
   onAuthLoggedOut: (callback: () => void) => () => void;
 
   // Calendar status sync (Launcher <-> Settings)

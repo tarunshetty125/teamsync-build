@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useMotionTemplate, useMotionValue, useSpring } from 'framer-motion';
 import appIcon from '../icon.png';
-import { API_BASE_URL } from '../../lib/config/apiConfig';
 
 interface GoogleSignInProps {
   onSignInComplete: (userData: {
-    token: string;
     name: string;
     email: string;
     picture?: string;
     calendarConnected: boolean;
-    isNewUser: boolean;
+    isNewUser?: boolean;
   }) => void;
 }
 
@@ -121,7 +119,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
   const [state, setState] = useState<'idle' | 'loading' | 'waiting' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [showContent, setShowContent] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const authAttemptRef = useRef(0);
 
   // Staggered entrance animation
   useEffect(() => {
@@ -129,131 +127,72 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Check if user is already authenticated
+  // Check if main process already has an encrypted auth session.
   useEffect(() => {
-    const token = localStorage.getItem('teamsync_auth_token');
-    if (token) {
-      verifyExistingToken(token);
-    }
+    void verifyExistingSession();
   }, []);
 
-  const verifyExistingToken = async (token: string) => {
+  const verifyExistingSession = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const user = await res.json();
+      const result = await window.electronAPI?.googleVerifySession?.();
+      if (result?.success && result.user) {
         onSignInComplete({
-          token,
-          name: user.name,
-          email: user.email,
-          picture: user.picture,
-          calendarConnected: user.calendarConnected,
-          isNewUser: false,
+          name: result.user.name,
+          email: result.user.email,
+          picture: result.user.picture,
+          calendarConnected: result.user.calendarConnected,
+          isNewUser: result.user.isNewUser,
         });
-      } else {
-        localStorage.removeItem('teamsync_auth_token');
       }
     } catch {
-      // Server not running — ignore, user can sign in manually
+      // Ignore; the user can sign in manually.
     }
   };
 
-  // Clean approach: Use backend polling after opening OAuth in browser
   const handleSignIn = async () => {
+    const attemptId = authAttemptRef.current + 1;
+    authAttemptRef.current = attemptId;
     setState('loading');
     setErrorMessage('');
 
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/google`);
-      if (!res.ok) throw new Error('Could not connect to server');
-
-      const { url, authSessionId } = await res.json();
-      if (!url || !authSessionId) throw new Error('Authentication session was not created');
-
-      // Open auth in external browser
-      if (window.electronAPI?.openExternal) {
-        await window.electronAPI.openExternal(url);
-      } else {
-        window.open(url, '_blank');
+      if (!window.electronAPI?.googleSignIn) {
+        throw new Error('Google sign in is only available in the desktop app.');
       }
-
       setState('waiting');
+      const result = await window.electronAPI.googleSignIn();
+      if (authAttemptRef.current !== attemptId) return;
 
-      // Start polling for token (backend stores it on callback)
-      startTokenPolling(authSessionId);
-
+      if (result?.success && result.user) {
+        setState('success');
+        setTimeout(() => {
+          if (authAttemptRef.current !== attemptId) return;
+          onSignInComplete({
+            name: result.user!.name,
+            email: result.user!.email,
+            picture: result.user!.picture,
+            calendarConnected: result.user!.calendarConnected,
+            isNewUser: result.user!.isNewUser,
+          });
+        }, 1800);
+      } else {
+        setState('error');
+        setErrorMessage(result?.error || 'Sign in failed');
+      }
     } catch (error: any) {
-      setState('error');
-      setErrorMessage(
-        error.message?.includes('connect') || error.message?.includes('fetch')
-          ? 'Could not reach the TeamSync backend. Please try again.'
-          : error.message || 'Failed to start sign in'
-      );
+      if (authAttemptRef.current === attemptId) {
+        setState('error');
+        setErrorMessage(
+          error.message?.includes('connect') || error.message?.includes('fetch')
+            ? 'Could not reach the TeamSync backend. Please try again.'
+            : error.message || 'Failed to start sign in'
+        );
+      }
     }
   };
 
-  const startTokenPolling = (authSessionId: string) => {
-    // Poll the backend /auth/pending endpoint for the auth result
-    if (pollRef.current) clearInterval(pollRef.current);
-
-    let attempts = 0;
-    pollRef.current = setInterval(async () => {
-      attempts++;
-
-      if (attempts >= 180) { // 3 minutes
-        clearInterval(pollRef.current!);
-        setState('error');
-        setErrorMessage('Sign in timed out. Please try again.');
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API_BASE_URL}/auth/pending?authSessionId=${encodeURIComponent(authSessionId)}`);
-        if (!res.ok) return;
-
-        const data = await res.json();
-
-        // Still waiting — no result yet
-        if (data.pending) return;
-
-        // Got a result — clear polling
-        clearInterval(pollRef.current!);
-        pollRef.current = null;
-
-        if (data.success && data.token) {
-          localStorage.setItem('teamsync_auth_token', data.token);
-          if (data.user) {
-            localStorage.setItem('teamsync_auth_user', JSON.stringify(data.user));
-          }
-          setState('success');
-
-          // Delay slightly for the success animation
-          setTimeout(() => {
-            onSignInComplete({
-              token: data.token,
-              name: data.user?.name || 'User',
-              email: data.user?.email || '',
-              picture: data.user?.picture,
-              calendarConnected: data.user?.calendarConnected || false,
-              isNewUser: data.user?.isNewUser || false,
-            });
-          }, 1800);
-        } else {
-          setState('error');
-          setErrorMessage(data.error || 'Sign in failed');
-        }
-      } catch {
-        // Network error — ignore and keep polling
-      }
-    }, 1000);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
+  useEffect(() => () => {
+    authAttemptRef.current += 1;
   }, []);
 
   // ─────────────────────────────────────────────
@@ -472,7 +411,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
 
                     <button
                       onClick={() => {
-                        if (pollRef.current) clearInterval(pollRef.current);
+                        authAttemptRef.current += 1;
                         setState('idle');
                       }}
                       className="text-[12px] text-white/30 hover:text-white/60 transition-colors mt-2"
@@ -563,7 +502,6 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
                 variants={itemVariants}
                 onClick={() => {
                   onSignInComplete({
-                    token: 'dev_token',
                     name: 'Developer',
                     email: 'dev@teamsync.app',
                     calendarConnected: false,

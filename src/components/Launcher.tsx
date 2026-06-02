@@ -16,7 +16,6 @@ import { analytics } from '../lib/analytics/analytics.service'; // Added analyti
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { isMac } from '../utils/platformUtils';
-import { API_BASE_URL } from '../lib/config/apiConfig';
 import WindowControls from './WindowControls';
 
 type RecommendationModeId =
@@ -157,33 +156,15 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     };
 
     const syncCalendarConnection = async () => {
-        const token = localStorage.getItem('teamsync_auth_token');
-
-        if (token) {
-            try {
-                const response = await fetch(`${API_BASE_URL}/auth/me`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-
-                if (response.ok) {
-                    const userData = await response.json();
-                    setIsCalendarConnected(Boolean(userData?.calendarConnected));
-                    return;
-                }
-            } catch {
-                // Fall back to cached state below.
-            }
-        }
-
-        const storedUser = localStorage.getItem('teamsync_auth_user');
-        if (!storedUser) {
-            setIsCalendarConnected(false);
-            return;
-        }
-
         try {
-            const userData = JSON.parse(storedUser);
-            setIsCalendarConnected(Boolean(userData?.calendarConnected));
+            const result = await window.electronAPI?.googleVerifySession?.();
+            if (result?.authState) {
+                setIsCalendarConnected(Boolean(result.authState.calendarConnected));
+                return;
+            }
+
+            const authState = await window.electronAPI?.googleGetAuthState?.();
+            setIsCalendarConnected(Boolean(authState?.calendarConnected));
         } catch {
             setIsCalendarConnected(false);
         }
@@ -191,10 +172,8 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
     const fetchEvents = async () => {
         try {
-            // Primary path: backend-auth Google calendar (token-based)
-            const token = localStorage.getItem('teamsync_auth_token');
-            if (token && window.electronAPI?.googleGetCalendarEvents) {
-                const result = await window.electronAPI.googleGetCalendarEvents(token);
+            if (window.electronAPI?.googleGetCalendarEvents) {
+                const result = await window.electronAPI.googleGetCalendarEvents();
                 if (result?.events && Array.isArray(result.events)) {
                     applyEvents(result.events);
                     // Backend responded with events payload => calendar connection is valid,
@@ -293,13 +272,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             removeCalendarStatusListener = window.electronAPI.onCalendarStatusChanged((status) => {
                 if (!mounted) return;
 
-                const token = localStorage.getItem('teamsync_auth_token');
-                // Hosted auth is the source of truth; ignore incomplete optimistic broadcasts.
-                if (token && status.email === undefined && status.connected) {
-                    console.log("Ignoring incomplete calendar status broadcast because backend auth is active.");
-                    return;
-                }
-
                 setIsCalendarConnected(Boolean(status.connected));
             });
         }
@@ -317,9 +289,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         const handleCalendarStatusSync = (event: Event) => {
             const customEvent = event as CustomEvent<{ connected: boolean }>;
             if (!mounted) return;
-            if (localStorage.getItem('teamsync_auth_token')) {
-                return;
-            }
             if (customEvent.detail && typeof customEvent.detail.connected === 'boolean') {
                 setIsCalendarConnected(customEvent.detail.connected);
                 return;

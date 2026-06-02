@@ -31,10 +31,17 @@ import {
     type ResponseStylePreference,
     type InterviewFocusPreference,
 } from '../lib/personalization/preferences';
-import { API_BASE_URL } from '../lib/config/apiConfig';
 import { KeyRecorder } from './ui/KeyRecorder';
 import { ProfileVisualizer, PremiumUpgradeModal, ResearchPanel } from '../premium';
 import icon from './icon.png';
+
+type GoogleAuthUser = {
+    name: string;
+    email: string;
+    picture?: string;
+    calendarConnected?: boolean;
+    isNewUser?: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // MockupTeamSyncInterface — fake in-meeting widget for the opacity preview
@@ -1582,6 +1589,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     };
 
 
+    const [authUser, setAuthUser] = useState<GoogleAuthUser | null>(null);
     const [calendarStatus, setCalendarStatus] = useState<{ connected: boolean; email?: string }>({ connected: false });
     const [isCalendarsLoading, setIsCalendarsLoading] = useState(false);
 
@@ -1696,39 +1704,50 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             const savedSck = localStorage.getItem('useExperimentalSckBackend') === 'true';
             setUseExperimentalSck(savedSck);
 
-            // Load Calendar Status from hosted backend auth state.
-            const storedUser = localStorage.getItem('teamsync_auth_user');
-            if (storedUser) {
-                try {
-                    const userData = JSON.parse(storedUser);
-                    setCalendarStatus({ connected: Boolean(userData.calendarConnected), email: userData.email });
-                } catch {
-                    setCalendarStatus({ connected: false });
-                }
-            } else {
-                setCalendarStatus({ connected: false });
-            }
+            // Load Calendar Status from main-process hosted auth state.
+            window.electronAPI?.googleVerifySession?.()
+                .then((result) => {
+                    const state = result?.authState;
+                    setAuthUser(state?.user || null);
+                    setCalendarStatus({
+                        connected: Boolean(state?.calendarConnected),
+                        email: state?.user?.email,
+                    });
+                })
+                .catch(() => {
+                    window.electronAPI?.googleGetAuthState?.()
+                        .then((state) => {
+                            setAuthUser(state?.user || null);
+                            setCalendarStatus({
+                                connected: Boolean(state?.calendarConnected),
+                                email: state?.user?.email,
+                            });
+                        })
+                        .catch(() => {
+                            setAuthUser(null);
+                            setCalendarStatus({ connected: false });
+                        });
+                });
 
             // Listen for calendar status changes from other views (Launcher <-> Settings sync)
             const unsubCalendar = window.electronAPI?.onCalendarStatusChanged?.((status) => {
                 setCalendarStatus({ connected: status.connected, email: status.email || undefined });
-                const storedUser = localStorage.getItem('teamsync_auth_user');
-                if (storedUser) {
-                    try {
-                        const userData = JSON.parse(storedUser);
-                        userData.calendarConnected = status.connected;
-                        if (status.email) userData.email = status.email;
-                        localStorage.setItem('teamsync_auth_user', JSON.stringify(userData));
-                    } catch {
-                        // Ignore malformed local storage payload.
-                    }
-                }
+                setAuthUser((user) => user ? { ...user, calendarConnected: status.connected } : user);
                 window.dispatchEvent(
                     new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: status.connected } })
                 );
             });
+            const unsubAuthLoggedOut = window.electronAPI?.onAuthLoggedOut?.(() => {
+                localStorage.removeItem('teamsync_auth_token');
+                localStorage.removeItem('teamsync_auth_user');
+                setAuthUser(null);
+                setCalendarStatus({ connected: false });
+            });
 
-            return () => { unsubCalendar?.(); };
+            return () => {
+                unsubCalendar?.();
+                unsubAuthLoggedOut?.();
+            };
         }
     }, [isOpen, selectedInput, selectedOutput]); // Re-run if isOpen changes, or if selected devices are cleared
 
@@ -3343,58 +3362,47 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             <p className="text-xs text-text-secondary">Manage your signed-in Google account.</p>
                                         </div>
 
-                                        {(() => {
-                                            const storedUser = localStorage.getItem('teamsync_auth_user');
-                                            const user = storedUser ? JSON.parse(storedUser) : null;
-                                            return user ? (
-                                                <div className="bg-bg-card rounded-xl border border-border-subtle p-5 space-y-4">
-                                                    <div className="flex items-center gap-4">
-                                                        {user.picture ? (
-                                                            <img src={user.picture} alt="" className="w-12 h-12 rounded-full ring-2 ring-border-subtle" referrerPolicy="no-referrer" />
-                                                        ) : (
-                                                            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-lg font-bold">
-                                                                {(user.name || user.email || '?')[0].toUpperCase()}
-                                                            </div>
-                                                        )}
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-semibold text-text-primary truncate">{user.name || 'User'}</p>
-                                                            <p className="text-xs text-text-secondary truncate">{user.email}</p>
+                                        {authUser ? (
+                                            <div className="bg-bg-card rounded-xl border border-border-subtle p-5 space-y-4">
+                                                <div className="flex items-center gap-4">
+                                                    {authUser.picture ? (
+                                                        <img src={authUser.picture} alt="" className="w-12 h-12 rounded-full ring-2 ring-border-subtle" referrerPolicy="no-referrer" />
+                                                    ) : (
+                                                        <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-lg font-bold">
+                                                            {(authUser.name || authUser.email || '?')[0].toUpperCase()}
                                                         </div>
-                                                    </div>
-                                                    <div className="pt-3 border-t border-border-subtle">
-                                                        <button
-                                                            onClick={async () => {
-                                                                const token = localStorage.getItem('teamsync_auth_token');
-                                                                if (token) {
-                                                                    try {
-                                                                        await fetch(`${API_BASE_URL}/auth/logout`, {
-                                                                            method: 'POST',
-                                                                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                                                        });
-                                                                    } catch { }
-                                                                }
-                                                                localStorage.removeItem('teamsync_auth_token');
-                                                                localStorage.removeItem('teamsync_auth_user');
-                                                                window.location.reload();
-                                                            }}
-                                                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 transition-all"
-                                                        >
-                                                            <LogOut size={14} /> Sign Out
-                                                        </button>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-semibold text-text-primary truncate">{authUser.name || 'User'}</p>
+                                                        <p className="text-xs text-text-secondary truncate">{authUser.email}</p>
                                                     </div>
                                                 </div>
-                                            ) : (
-                                                <div className="bg-bg-card rounded-xl border border-border-subtle p-5 text-center">
-                                                    <p className="text-sm text-text-secondary mb-3">Not signed in</p>
+                                                <div className="pt-3 border-t border-border-subtle">
                                                     <button
-                                                        onClick={() => window.location.reload()}
-                                                        className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                                                        onClick={async () => {
+                                                            await window.electronAPI?.googleLogout?.();
+                                                            localStorage.removeItem('teamsync_auth_token');
+                                                            localStorage.removeItem('teamsync_auth_user');
+                                                            setAuthUser(null);
+                                                            setCalendarStatus({ connected: false });
+                                                        }}
+                                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 transition-all"
                                                     >
-                                                        Sign In with Google
+                                                        <LogOut size={14} /> Sign Out
                                                     </button>
                                                 </div>
-                                            );
-                                        })()}
+                                            </div>
+                                        ) : (
+                                            <div className="bg-bg-card rounded-xl border border-border-subtle p-5 text-center">
+                                                <p className="text-sm text-text-secondary mb-3">Not signed in</p>
+                                                <button
+                                                    onClick={() => window.location.reload()}
+                                                    className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                                                >
+                                                    Sign In with Google
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 {activeTab === 'keybinds' && (
@@ -3963,22 +3971,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         onClick={async () => {
                                                             setIsCalendarsLoading(true);
                                                             try {
-                                                                const token = localStorage.getItem('teamsync_auth_token') || undefined;
-                                                                await window.electronAPI.googleLogout?.(token);
-                                                                const storedUser = localStorage.getItem('teamsync_auth_user');
-                                                                if (storedUser) {
-                                                                    try {
-                                                                        const userData = JSON.parse(storedUser);
-                                                                        userData.calendarConnected = false;
-                                                                        localStorage.setItem('teamsync_auth_user', JSON.stringify(userData));
-                                                                    } catch {
-                                                                        // Ignore malformed local storage payload.
-                                                                    }
+                                                                const result = await window.electronAPI?.googleDisconnectCalendar?.();
+                                                                if (result?.user) {
+                                                                    setAuthUser(result.user);
+                                                                } else {
+                                                                    setAuthUser((user) => user ? { ...user, calendarConnected: false } : user);
                                                                 }
                                                                 window.dispatchEvent(
                                                                     new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: false } })
                                                                 );
-                                                                setCalendarStatus({ connected: false });
+                                                                setCalendarStatus({ connected: false, email: result?.user?.email || authUser?.email });
                                                             } catch (e) {
                                                                 console.error(e);
                                                             } finally {
@@ -4003,45 +4005,19 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         onClick={async () => {
                                                             setIsCalendarsLoading(true);
                                                             try {
-                                                                // Use backend OAuth flow for calendar
-                                                                const storedUser = localStorage.getItem('teamsync_auth_user');
-                                                                const email = storedUser ? JSON.parse(storedUser)?.email : undefined;
-
-                                                                const urlRes = await fetch(`${API_BASE_URL}/auth/google/calendar` +
-                                                                    (email ? `?login_hint=${encodeURIComponent(email)}` : ''));
-                                                                if (!urlRes.ok) throw new Error('Failed to get calendar auth URL');
-                                                                const { url, authSessionId } = await urlRes.json();
-                                                                if (!url || !authSessionId) throw new Error('Authentication session was not created');
-
-                                                                if (window.electronAPI?.openExternal) {
-                                                                    await window.electronAPI.openExternal(url);
+                                                                const result = await window.electronAPI?.googleConnectCalendar?.(authUser?.email);
+                                                                if (result?.success && result.user?.calendarConnected) {
+                                                                    setAuthUser(result.user);
+                                                                    window.dispatchEvent(
+                                                                        new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: true } })
+                                                                    );
+                                                                    setCalendarStatus({ connected: true, email: result.user.email });
+                                                                } else if (result?.error) {
+                                                                    console.error(result.error);
                                                                 }
-
-                                                                // Poll for completion
-                                                                const poll = setInterval(async () => {
-                                                                    try {
-                                                                        const pendingRes = await fetch(`${API_BASE_URL}/auth/pending?authSessionId=${encodeURIComponent(authSessionId)}`);
-                                                                        if (!pendingRes.ok) return;
-                                                                        const data = await pendingRes.json();
-                                                                        if (data.pending) return;
-
-                                                                        clearInterval(poll);
-                                                                        if (data.success && data.user?.calendarConnected) {
-                                                                            if (data.token) localStorage.setItem('teamsync_auth_token', data.token);
-                                                                            if (data.user) localStorage.setItem('teamsync_auth_user', JSON.stringify(data.user));
-                                                                            window.dispatchEvent(
-                                                                                new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: true } })
-                                                                            );
-                                                                            setCalendarStatus({ connected: true, email: data.user?.email });
-                                                                        }
-                                                                        setIsCalendarsLoading(false);
-                                                                    } catch { }
-                                                                }, 1000);
-
-                                                                // Timeout after 2 minutes
-                                                                setTimeout(() => { clearInterval(poll); setIsCalendarsLoading(false); }, 120000);
                                                             } catch (e) {
                                                                 console.error(e);
+                                                            } finally {
                                                                 setIsCalendarsLoading(false);
                                                             }
                                                         }}

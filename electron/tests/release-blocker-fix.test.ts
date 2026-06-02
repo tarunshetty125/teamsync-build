@@ -70,6 +70,7 @@ test('production-only unsafe IPCs are development gated and seed-demo is preserv
     'stt:set-debug-enabled',
     'stt:run-failover-validation',
     'stt:run-load-test',
+    'test-release-fetch',
   ]) {
     assert.match(ipc, new RegExp(`safeDevelopmentHandle\\("${escapeRegex(channel)}"`));
   }

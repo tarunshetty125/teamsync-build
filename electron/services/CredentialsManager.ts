@@ -38,6 +38,14 @@ export interface GroqVaultKey {
     label?: string;       // optional user label
 }
 
+export interface GoogleAuthUser {
+    name: string;
+    email: string;
+    picture?: string;
+    calendarConnected: boolean;
+    isNewUser?: boolean;
+}
+
 export type BedrockAuthMode = 'aws_cli' | 'access_keys';
 
 export interface BedrockCredentials {
@@ -94,6 +102,9 @@ export interface StoredCredentials {
     groqKeyVault?: GroqVaultKey[];
     // Groq fetched model catalog — persisted so overlay windows can read without re-fetching
     groqFetchedModels?: { id: string; label: string }[];
+    // Google auth session — JWT is encrypted at rest by safeStorage.
+    googleJwt?: string;
+    googleAuthUser?: GoogleAuthUser;
 }
 
 export class CredentialsManager {
@@ -239,6 +250,15 @@ export class CredentialsManager {
 
     public getTeamSyncApiKey(): string | undefined {
         return this.credentials.teamsyncApiKey;
+    }
+
+    public getGoogleJwt(): string | undefined {
+        return this.credentials.googleJwt;
+    }
+
+    public getGoogleAuthUser(): GoogleAuthUser | undefined {
+        const user = this.credentials.googleAuthUser;
+        return user ? { ...user } : undefined;
     }
 
     public getAllCredentials(): StoredCredentials {
@@ -440,6 +460,29 @@ export class CredentialsManager {
 
         this.saveCredentials();
         console.log('[CredentialsManager] TeamSync API Key updated');
+    }
+
+    public setGoogleAuthSession(jwt: string, user?: GoogleAuthUser): void {
+        const trimmed = jwt.trim();
+        this.credentials.googleJwt = trimmed || undefined;
+        if (user) {
+            this.credentials.googleAuthUser = { ...user };
+        }
+        this.saveCredentials();
+        console.log('[CredentialsManager] Google auth session updated');
+    }
+
+    public updateGoogleAuthUser(user: GoogleAuthUser): void {
+        this.credentials.googleAuthUser = { ...user };
+        this.saveCredentials();
+        console.log('[CredentialsManager] Google auth user cache updated');
+    }
+
+    public clearGoogleAuthSession(): void {
+        delete this.credentials.googleJwt;
+        delete this.credentials.googleAuthUser;
+        this.saveCredentials();
+        console.log('[CredentialsManager] Google auth session cleared');
     }
 
     public getPreferredModel(provider: 'gemini' | 'groq' | 'openai' | 'claude' | 'bedrock'): string | undefined {

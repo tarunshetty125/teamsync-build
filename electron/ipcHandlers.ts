@@ -258,7 +258,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // --- NEW Test Helper ---
-  safeHandle("test-release-fetch", async () => {
+  safeDevelopmentHandle("test-release-fetch", async () => {
     try {
       console.log("[IPC] Manual Test Fetch triggered (forcing refresh)...");
       const { ReleaseNotesManager } = require('./update/ReleaseNotesManager');

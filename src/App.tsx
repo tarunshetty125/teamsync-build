@@ -51,6 +51,14 @@ type BedrockReauthenticationWarning = {
   error?: string;
 }
 
+type GoogleAuthUser = {
+  name: string;
+  email: string;
+  picture?: string;
+  calendarConnected?: boolean;
+  isNewUser?: boolean;
+}
+
 const App: React.FC = () => {
   const isSettingsWindow = new URLSearchParams(window.location.search).get('window') === 'settings';
   const isLauncherWindow = new URLSearchParams(window.location.search).get('window') === 'launcher';
@@ -106,13 +114,9 @@ const App: React.FC = () => {
 
   // State
   const [showStartup, setShowStartup] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return !!localStorage.getItem('teamsync_auth_token');
-  });
-  const [authUser, setAuthUser] = useState<{ name: string; email: string; picture?: string } | null>(() => {
-    const stored = localStorage.getItem('teamsync_auth_user');
-    return stored ? JSON.parse(stored) : null;
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authUser, setAuthUser] = useState<GoogleAuthUser | null>(null);
+  const [hasLoadedAuth, setHasLoadedAuth] = useState<boolean>(() => !(isLauncherWindow || isDefault));
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState('general');
   const [isModesOpen, setIsModesOpen] = useState(false);
@@ -164,7 +168,7 @@ const App: React.FC = () => {
     usage: { ai: number; stt_seconds: number; search: number };
   } | null>(null);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
-  const bootstrapUiReady = hasLoadedLicense && hasCompletedBootstrap;
+  const bootstrapUiReady = hasLoadedLicense && hasCompletedBootstrap && hasLoadedAuth;
 
   // ── Pro UI Toggle State ─────────────────────────────────────
   const [useV2Layout, setUseV2Layout] = useState(() => localStorage.getItem('teamsync_overlay_v2') === 'true');
@@ -202,6 +206,46 @@ const App: React.FC = () => {
       setHasCompletedBootstrap(true);
     }
   }, []);
+
+  const clearLegacyRendererAuthCache = useCallback(() => {
+    localStorage.removeItem('teamsync_auth_token');
+    localStorage.removeItem('teamsync_auth_user');
+  }, []);
+
+  const applyGoogleAuthState = useCallback((authState?: { authenticated?: boolean; user?: GoogleAuthUser | null }) => {
+    const user = authState?.user || null;
+    setAuthUser(user);
+    setIsAuthenticated(Boolean(authState?.authenticated && user));
+  }, []);
+
+  const syncGoogleAuthState = useCallback(async () => {
+    if (!(isLauncherWindow || isDefault)) {
+      setHasLoadedAuth(true);
+      return;
+    }
+
+    clearLegacyRendererAuthCache();
+
+    try {
+      const result = await window.electronAPI?.googleVerifySession?.();
+      if (result?.authState) {
+        applyGoogleAuthState(result.authState);
+        return;
+      }
+
+      const authState = await window.electronAPI?.googleGetAuthState?.();
+      applyGoogleAuthState(authState);
+    } catch {
+      try {
+        const authState = await window.electronAPI?.googleGetAuthState?.();
+        applyGoogleAuthState(authState);
+      } catch {
+        applyGoogleAuthState({ authenticated: false, user: null });
+      }
+    } finally {
+      setHasLoadedAuth(true);
+    }
+  }, [applyGoogleAuthState, clearLegacyRendererAuthCache, isDefault, isLauncherWindow]);
 
   const permissionsStatus = usePermissionsStore((state) => state.status);
   const permissionsInitialized = usePermissionsStore((state) => state.hasInitialized);
@@ -253,8 +297,10 @@ const App: React.FC = () => {
   useEffect(() => {
     // Clean up old local storage
     localStorage.removeItem('useLegacyAudioBackend');
+    clearLegacyRendererAuthCache();
 
     void syncStartupState();
+    void syncGoogleAuthState();
 
     // Also check for TeamSync API key
     window.electronAPI?.getStoredCredentials?.()
@@ -380,6 +426,11 @@ const App: React.FC = () => {
       void syncStartupState();
     });
 
+    const removeAuthLoggedOut = window.electronAPI?.onAuthLoggedOut?.(() => {
+      clearLegacyRendererAuthCache();
+      applyGoogleAuthState({ authenticated: false, user: null });
+    });
+
     return () => {
       if (removeMeetingsListener) removeMeetingsListener();
       if (removeProgress) removeProgress();
@@ -389,12 +440,13 @@ const App: React.FC = () => {
       if (removeLicenseRestored) removeLicenseRestored();
       if (removeLicenseListener) removeLicenseListener();
       if (removeKnowledgeReady) removeKnowledgeReady();
+      if (removeAuthLoggedOut) removeAuthLoggedOut();
       if (trialPollId) clearInterval(trialPollId);
       if (removeTrialListener) removeTrialListener();
       if (removeOpenSettingsTab) removeOpenSettingsTab();
       if (removePermissionRemediation) removePermissionRemediation();
     }
-  }, [initializePermissions, isDefault, isLauncherWindow, refreshPermissions, setPermissionsError, setPermissionsStep, syncStartupState]);
+  }, [applyGoogleAuthState, clearLegacyRendererAuthCache, initializePermissions, isDefault, isLauncherWindow, refreshPermissions, setPermissionsError, setPermissionsStep, syncGoogleAuthState, syncStartupState]);
 
   useEffect(() => {
     if (!shouldShowOnboarding || !showStartup) return;
@@ -658,14 +710,10 @@ const App: React.FC = () => {
             >
               <GoogleSignIn
                 onSignInComplete={(userData) => {
-                  localStorage.setItem('teamsync_auth_token', userData.token);
-                  localStorage.setItem('teamsync_auth_user', JSON.stringify({
-                    name: userData.name,
-                    email: userData.email,
-                    picture: userData.picture,
-                  }));
-                  setAuthUser({ name: userData.name, email: userData.email, picture: userData.picture });
+                  clearLegacyRendererAuthCache();
+                  setAuthUser(userData);
                   setIsAuthenticated(true);
+                  setHasLoadedAuth(true);
                 }}
               />
             </motion.div>
