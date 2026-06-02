@@ -36,9 +36,21 @@ export class DeviceService {
     });
 
     if (existing) {
-      if (existing.status !== 'active') {
+      if (existing.status === 'revoked') {
         throw new DeviceRevokedError();
       }
+
+      if (existing.status === 'removed') {
+        const activeDeviceCount = await devices.countDocuments({
+          licenseId: params.license.licenseId,
+          status: 'active',
+        });
+
+        if (activeDeviceCount >= params.license.deviceLimit) {
+          throw new DeviceLimitError();
+        }
+      }
+
       await devices.updateOne(
         { licenseId: params.license.licenseId, deviceId: params.deviceId },
         {
@@ -46,6 +58,7 @@ export class DeviceService {
             deviceName,
             platform,
             appVersion: params.appVersion,
+            status: 'active',
             lastSeenAt: now,
             updatedAt: now,
           },
@@ -56,6 +69,7 @@ export class DeviceService {
         deviceName,
         platform,
         appVersion: params.appVersion,
+        status: 'active',
         lastSeenAt: now,
         updatedAt: now,
       };

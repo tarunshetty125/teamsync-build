@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { app } from 'electron';
+import { API_BASE_URL } from '../../src/lib/config/apiConfig';
 import { loadNativeModule } from '../audio/nativeModuleLoader';
 import { LICENSE_PUBLIC_KEY } from './licensePublicKey';
 
@@ -54,7 +55,7 @@ export interface EntitlementStatus {
 
 type SyncReason = 'startup' | 'background' | 'manual' | 'activation' | 'trial' | 'deactivation';
 
-const LICENSE_BACKEND_URL = (process.env.LICENSE_BACKEND_URL || 'https://license.teamsync.ai').replace(/\/+$/g, '');
+const LICENSE_BACKEND_URL = (process.env.LICENSE_BACKEND_URL || API_BASE_URL).replace(/\/+$/g, '');
 const CACHE_FILE = 'license-entitlement-cache.json';
 const LEGACY_PREMIUM_FILE = 'premium-localStorage.json';
 const OFFLINE_GRACE_MS = 72 * 60 * 60 * 1000;
