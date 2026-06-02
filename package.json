@@ -1,6 +1,6 @@
 {
   "name": "teamsync",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "main": "dist-electron/electron/main.js",
   "description": "TeamSync is a meeting notes app that uses AI to generate notes from your meetings.",
   "scripts": {
