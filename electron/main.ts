@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, screen } from "electron"
 import path from "path"
 import fs from "fs"
+import os from "os"
 import { autoUpdater } from "electron-updater"
 import { redactForPersistentLog, stringifyForPersistentLog } from "./utils/safeLogging"
 if (!app.isPackaged) {
@@ -228,6 +229,22 @@ import { PermissionManager } from "./services/PermissionManager"
 import { formatBlockingPermissions, isPermissionStatusOperational } from "../src/lib/permissions/utils"
 import { GoogleAuthManager } from './services/GoogleAuthManager'
 
+export interface UpdaterCacheFileInfo {
+  fileName: string
+  path: string
+  size: number
+  modifiedAt: string
+}
+
+export interface UpdaterCacheInfo {
+  cacheDir: string
+  pendingDir: string
+  downloadedFiles: UpdaterCacheFileInfo[]
+  totalSize: number
+  currentVersion: string
+  latestVersion: string | null
+}
+
 export class AppState {
   private static instance: AppState | null = null
 
@@ -244,6 +261,7 @@ export class AppState {
   private knowledgeOrchestrator: any = null
   private tray: Tray | null = null
   private updateAvailable: boolean = false
+  private latestUpdateVersion: string | null = null
   private disguiseMode: 'terminal' | 'settings' | 'activity' | 'none' = 'none'
 
   // View management
@@ -922,6 +940,7 @@ export class AppState {
     autoUpdater.on("update-available", async (info) => {
       console.log("[AutoUpdater] Update available:", info.version)
       this.updateAvailable = true
+      this.latestUpdateVersion = info.version || null
 
       // Fetch structured release notes
       const releaseManager = ReleaseNotesManager.getInstance();
@@ -936,6 +955,7 @@ export class AppState {
 
     autoUpdater.on("update-not-available", (info) => {
       console.log("[AutoUpdater] Update not available:", info.version)
+      this.latestUpdateVersion = info.version || app.getVersion()
       this.broadcast("update-not-available", info)
     })
 
@@ -956,6 +976,12 @@ export class AppState {
 
     autoUpdater.on("update-downloaded", (info) => {
       console.log("[AutoUpdater] Update downloaded:", info.version)
+      this.latestUpdateVersion = info.version || this.latestUpdateVersion
+      void this.logUpdaterCacheSnapshot(
+        'Download Complete',
+        info.version,
+        typeof (info as any).downloadedFile === 'string' ? (info as any).downloadedFile : undefined
+      )
       // Notify renderer that update is ready to install
       this.broadcast("update-downloaded", info)
     })
@@ -993,6 +1019,7 @@ export class AppState {
       const currentVersion = app.getVersion();
       const latestVersionTag = notes.version; // e.g., "v1.2.0" or "1.2.0"
       const latestVersion = latestVersionTag.replace(/^v/, '');
+      this.latestUpdateVersion = latestVersion;
 
       console.log(`[AutoUpdater] Manual Check: Current=${currentVersion}, Latest=${latestVersion}`);
 
@@ -1040,6 +1067,145 @@ export class AppState {
       if (lv < cv) return false;
     }
     return false;
+  }
+
+  private getUpdaterBaseCachePath(): string {
+    const homeDir = os.homedir();
+
+    if (process.platform === 'win32') {
+      return process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local');
+    }
+
+    if (process.platform === 'darwin') {
+      return path.join(homeDir, 'Library', 'Caches');
+    }
+
+    return process.env.XDG_CACHE_HOME || path.join(homeDir, '.cache');
+  }
+
+  private async getUpdaterDownloadHelper(): Promise<any | null> {
+    const updater = autoUpdater as any;
+
+    if (updater.downloadedUpdateHelper) {
+      return updater.downloadedUpdateHelper;
+    }
+
+    if (typeof updater.getOrCreateDownloadHelper === 'function') {
+      try {
+        return await updater.getOrCreateDownloadHelper();
+      } catch (error) {
+        console.warn('[AutoUpdater] Unable to resolve updater helper from electron-updater:', error);
+      }
+    }
+
+    return null;
+  }
+
+  private async getUpdaterCacheDir(): Promise<string> {
+    const helper = await this.getUpdaterDownloadHelper();
+    if (helper?.cacheDir) {
+      return helper.cacheDir;
+    }
+
+    const updater = autoUpdater as any;
+    try {
+      const config = await updater.configOnDisk?.value;
+      const dirName = config?.updaterCacheDirName;
+      if (typeof dirName === 'string' && dirName.trim()) {
+        return path.join(this.getUpdaterBaseCachePath(), dirName);
+      }
+    } catch (error) {
+      console.warn('[AutoUpdater] Unable to read updater cache config:', error);
+    }
+
+    return path.join(this.getUpdaterBaseCachePath(), 'teamsync-updater');
+  }
+
+  public async getUpdaterCacheInfo(): Promise<UpdaterCacheInfo> {
+    const cacheDir = await this.getUpdaterCacheDir();
+    const pendingDir = path.join(cacheDir, 'pending');
+    const helper = (autoUpdater as any).downloadedUpdateHelper;
+    const helperFile = typeof helper?.file === 'string' ? helper.file : null;
+    const filesByPath = new Map<string, UpdaterCacheFileInfo>();
+
+    const addFile = (filePath: string) => {
+      try {
+        if (!fs.existsSync(filePath)) return;
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile()) return;
+        filesByPath.set(filePath, {
+          fileName: path.basename(filePath),
+          path: filePath,
+          size: stat.size,
+          modifiedAt: stat.mtime.toISOString(),
+        });
+      } catch (error) {
+        console.warn('[AutoUpdater] Unable to inspect updater cache file:', filePath, error);
+      }
+    };
+
+    const shouldSkipCacheEntry = (entry: string) => (
+      entry === 'update-info.json' ||
+      entry === 'current.blockmap' ||
+      entry.startsWith('temp-') ||
+      entry.startsWith('.')
+    );
+
+    const addDirectoryFiles = (directory: string) => {
+      if (!fs.existsSync(directory)) return;
+      try {
+        for (const entry of fs.readdirSync(directory)) {
+          if (shouldSkipCacheEntry(entry)) {
+            continue;
+          }
+          addFile(path.join(directory, entry));
+        }
+      } catch (error) {
+        console.warn('[AutoUpdater] Unable to list updater cache directory:', directory, error);
+      }
+    };
+
+    addDirectoryFiles(pendingDir);
+    addDirectoryFiles(cacheDir);
+
+    if (helperFile) {
+      addFile(helperFile);
+    }
+
+    const pendingPrefix = pendingDir + path.sep;
+    const downloadedFiles = Array.from(filesByPath.values()).sort((a, b) => {
+      const aPending = a.path.startsWith(pendingPrefix) ? 0 : 1;
+      const bPending = b.path.startsWith(pendingPrefix) ? 0 : 1;
+      if (aPending !== bPending) return aPending - bPending;
+      return new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime();
+    });
+
+    return {
+      cacheDir,
+      pendingDir,
+      downloadedFiles,
+      totalSize: downloadedFiles.reduce((sum, file) => sum + file.size, 0),
+      currentVersion: app.getVersion(),
+      latestVersion: this.latestUpdateVersion,
+    };
+  }
+
+  private async logUpdaterCacheSnapshot(label: string, version?: string, downloadedFilePath?: string): Promise<void> {
+    try {
+      const cacheInfo = await this.getUpdaterCacheInfo();
+      const downloadedFile = downloadedFilePath || cacheInfo.downloadedFiles[0]?.path || null;
+      const downloadedFileSize = downloadedFile && fs.existsSync(downloadedFile)
+        ? fs.statSync(downloadedFile).size
+        : 0;
+
+      console.log(`[AutoUpdater] ${label} Updater Cache: ${cacheInfo.cacheDir}`);
+      console.log(`[AutoUpdater] ${label} Downloaded File: ${downloadedFile ? path.basename(downloadedFile) : 'none'}`);
+      console.log(`[AutoUpdater] ${label} Full Path: ${downloadedFile || 'none'}`);
+      console.log(`[AutoUpdater] ${label} Downloaded File Size: ${downloadedFileSize} bytes`);
+      console.log(`[AutoUpdater] ${label} Update Version: ${version || cacheInfo.latestVersion || 'unknown'}`);
+    } catch (error) {
+      console.warn(`[AutoUpdater] Failed to log updater cache snapshot for ${label}:`, error);
+    }
   }
 
 
@@ -1099,6 +1265,7 @@ export class AppState {
 
   public downloadUpdate(): void {
     console.log('[AutoUpdater] Starting download...')
+    void this.logUpdaterCacheSnapshot('Download Start', this.latestUpdateVersion || undefined)
     try {
       // Errors during download are surfaced via autoUpdater.on("error") which
       // already broadcasts "update-error". Do not broadcast here to avoid duplicates.

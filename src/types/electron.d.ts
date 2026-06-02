@@ -50,6 +50,23 @@ type CalendarModeRecommendation = {
   suggestedReferences: string[]
 }
 
+type UpdaterCacheFileInfo = {
+  fileName: string
+  path: string
+  size: number
+  modifiedAt: string
+}
+
+type UpdaterCacheInfo = {
+  cacheDir: string
+  pendingDir: string
+  downloadedFiles: UpdaterCacheFileInfo[]
+  totalSize: number
+  currentVersion: string
+  latestVersion: string | null
+  error?: string
+}
+
 type BedrockAuthMode = 'aws_cli' | 'access_keys';
 
 interface BedrockCredentials {
@@ -474,6 +491,8 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   restartAndInstall: () => Promise<void>
   checkForUpdates: () => Promise<void>
   downloadUpdate: () => Promise<void>
+  getUpdaterCacheInfo: () => Promise<UpdaterCacheInfo>
+  openUpdaterCacheFolder: () => Promise<{ success: boolean; path?: string; error?: string }>
   testReleaseFetch: () => Promise<{ success: boolean; error?: string }>
 
   // RAG (Retrieval-Augmented Generation) API

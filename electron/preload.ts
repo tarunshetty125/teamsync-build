@@ -132,6 +132,23 @@ type TrialBridgeState = {
   error?: string
 }
 
+type UpdaterCacheFileInfo = {
+  fileName: string
+  path: string
+  size: number
+  modifiedAt: string
+}
+
+type UpdaterCacheInfo = {
+  cacheDir: string
+  pendingDir: string
+  downloadedFiles: UpdaterCacheFileInfo[]
+  totalSize: number
+  currentVersion: string
+  latestVersion: string | null
+  error?: string
+}
+
 type GoogleAuthUser = {
   name: string
   email: string
@@ -452,6 +469,8 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   restartAndInstall: () => Promise<void>
   checkForUpdates: () => Promise<void>
   downloadUpdate: () => Promise<void>
+  getUpdaterCacheInfo: () => Promise<UpdaterCacheInfo>
+  openUpdaterCacheFolder: () => Promise<{ success: boolean; path?: string; error?: string }>
   testReleaseFetch: () => Promise<{ success: boolean; error?: string }>
 
   // RAG (Retrieval-Augmented Generation) API
@@ -1575,6 +1594,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   restartAndInstall: () => ipcRenderer.invoke("quit-and-install-update"),
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
   downloadUpdate: () => ipcRenderer.invoke("download-update"),
+  getUpdaterCacheInfo: () => ipcRenderer.invoke("get-updater-cache-info"),
+  openUpdaterCacheFolder: () => ipcRenderer.invoke("open-updater-cache-folder"),
   testReleaseFetch: () => ipcRenderer.invoke("test-release-fetch"),
 
   // RAG API

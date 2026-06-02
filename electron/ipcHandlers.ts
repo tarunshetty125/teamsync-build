@@ -1048,6 +1048,37 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   })
 
+  safeHandle("get-updater-cache-info", async () => {
+    try {
+      return await appState.getUpdaterCacheInfo()
+    } catch (err: any) {
+      console.error('[IPC] get-updater-cache-info failed:', err)
+      return {
+        cacheDir: '',
+        pendingDir: '',
+        downloadedFiles: [],
+        totalSize: 0,
+        currentVersion: app.getVersion(),
+        latestVersion: null,
+        error: err?.message || 'Unable to read updater cache info',
+      }
+    }
+  })
+
+  safeHandle("open-updater-cache-folder", async () => {
+    try {
+      const cacheInfo = await appState.getUpdaterCacheInfo()
+      const errorMessage = await shell.openPath(cacheInfo.cacheDir)
+      if (errorMessage) {
+        return { success: false, error: errorMessage }
+      }
+      return { success: true, path: cacheInfo.cacheDir }
+    } catch (err: any) {
+      console.error('[IPC] open-updater-cache-folder failed:', err)
+      return { success: false, error: err?.message || 'Unable to open updater cache folder' }
+    }
+  })
+
   // Window movement handlers
   safeHandle("move-window-left", async () => {
     appState.moveWindowLeft()

@@ -4,7 +4,7 @@ import {
     X, Mic, Speaker, Monitor, Keyboard, User, LifeBuoy, LogOut, Upload,
     ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
     Camera, RotateCcw, Eye, Layout, MessageSquare, Crop,
-    ChevronDown, ChevronUp, Check, BadgeCheck, Power, Palette, Calendar, Ghost, Sun, Moon, RefreshCw, Info, Globe, FlaskConical, Terminal, Settings, Activity, ExternalLink, Trash2,
+    ChevronDown, ChevronUp, Check, BadgeCheck, Power, Palette, Calendar, Ghost, Sun, Moon, RefreshCw, Info, Globe, FlaskConical, Terminal, Settings, Activity, ExternalLink, Trash2, FolderOpen,
     Sparkles, Pencil, Briefcase, Building2, Search, MapPin, CheckCircle, HelpCircle, Zap, SlidersHorizontal, PointerOff,
     AlertCircle, Lock
 } from 'lucide-react';
@@ -42,6 +42,31 @@ type GoogleAuthUser = {
     calendarConnected?: boolean;
     isNewUser?: boolean;
 }
+
+type UpdaterCacheFileInfo = {
+    fileName: string;
+    path: string;
+    size: number;
+    modifiedAt: string;
+}
+
+type UpdaterCacheInfo = {
+    cacheDir: string;
+    pendingDir: string;
+    downloadedFiles: UpdaterCacheFileInfo[];
+    totalSize: number;
+    currentVersion: string;
+    latestVersion: string | null;
+    error?: string;
+}
+
+const formatUpdaterBytes = (bytes: number): string => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const value = bytes / Math.pow(1024, exponent);
+    return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
+};
 
 // ---------------------------------------------------------------------------
 // MockupTeamSyncInterface — fake in-meeting widget for the opacity preview
@@ -447,6 +472,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const [isAiLangDropdownOpen, setIsAiLangDropdownOpen] = useState(false);
     const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'uptodate' | 'error'>('idle');
     const [updateErrorMessage, setUpdateErrorMessage] = useState<string | null>(null);
+    const [latestUpdateVersion, setLatestUpdateVersion] = useState<string | null>(null);
+    const [updaterCacheInfo, setUpdaterCacheInfo] = useState<UpdaterCacheInfo | null>(null);
+    const [updaterCacheLoading, setUpdaterCacheLoading] = useState(false);
+    const [updaterCacheError, setUpdaterCacheError] = useState<string | null>(null);
     const updateStatusTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const themeDropdownRef = React.useRef<HTMLDivElement>(null);
     const aiLangDropdownRef = React.useRef<HTMLDivElement>(null);
@@ -610,6 +639,46 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         }
     };
 
+    const refreshUpdaterCacheInfo = React.useCallback(async () => {
+        if (!window.electronAPI?.getUpdaterCacheInfo) {
+            setUpdaterCacheError('Updater diagnostics are unavailable in this build');
+            return;
+        }
+
+        setUpdaterCacheLoading(true);
+        setUpdaterCacheError(null);
+        try {
+            const info = await window.electronAPI.getUpdaterCacheInfo();
+            setUpdaterCacheInfo(info);
+            setLatestUpdateVersion(info.latestVersion ?? null);
+            if (info.error) {
+                setUpdaterCacheError(info.error);
+            }
+        } catch (error) {
+            console.error('[Settings] Failed to load updater cache info:', error);
+            setUpdaterCacheError(error instanceof Error ? error.message : 'Unable to read updater cache info');
+        } finally {
+            setUpdaterCacheLoading(false);
+        }
+    }, []);
+
+    const handleOpenUpdaterCacheFolder = React.useCallback(async () => {
+        if (!window.electronAPI?.openUpdaterCacheFolder) {
+            setUpdaterCacheError('Open cache folder is unavailable in this build');
+            return;
+        }
+
+        try {
+            const result = await window.electronAPI.openUpdaterCacheFolder();
+            if (!result?.success) {
+                setUpdaterCacheError(result?.error || 'Unable to open update cache folder');
+            }
+        } catch (error) {
+            console.error('[Settings] Failed to open updater cache folder:', error);
+            setUpdaterCacheError(error instanceof Error ? error.message : 'Unable to open update cache folder');
+        }
+    }, []);
+
     // Close dropdown when clicking outside
     // Sync with global state changes
     useEffect(() => {
@@ -631,12 +700,18 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         }
     }, [isOpen]);
 
+    useEffect(() => {
+        if (!isOpen || activeTab !== 'general') return;
+        refreshUpdaterCacheInfo();
+    }, [activeTab, isOpen, refreshUpdaterCacheInfo]);
+
     // Listen for autoUpdater events to update the Settings button state
     useEffect(() => {
         const unsubs: Array<() => void> = [];
         if (window.electronAPI?.onUpdateAvailable) {
-            unsubs.push(window.electronAPI.onUpdateAvailable(() => {
+            unsubs.push(window.electronAPI.onUpdateAvailable((info) => {
                 setUpdateErrorMessage(null);
+                setLatestUpdateVersion(info?.version ?? null);
                 setUpdateStatus('available');
                 if (updateStatusTimerRef.current) clearTimeout(updateStatusTimerRef.current);
                 updateStatusTimerRef.current = setTimeout(() => setUpdateStatus('idle'), 6000);
@@ -648,6 +723,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 setUpdateStatus('uptodate');
                 if (updateStatusTimerRef.current) clearTimeout(updateStatusTimerRef.current);
                 updateStatusTimerRef.current = setTimeout(() => setUpdateStatus('idle'), 4000);
+            }));
+        }
+        if (window.electronAPI?.onUpdateDownloaded) {
+            unsubs.push(window.electronAPI.onUpdateDownloaded((info) => {
+                setLatestUpdateVersion(info?.version ?? null);
+                refreshUpdaterCacheInfo();
             }));
         }
         if (window.electronAPI?.onUpdateError) {
@@ -662,7 +743,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             unsubs.forEach(u => u());
             if (updateStatusTimerRef.current) clearTimeout(updateStatusTimerRef.current);
         };
-    }, []);
+    }, [refreshUpdaterCacheInfo]);
 
     useEffect(() => {
         if (!showVerboseToast) return;
@@ -1621,15 +1702,21 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 setUpdateErrorMessage(null);
                 setUpdateStatus('checking');
             }),
-            window.electronAPI.onUpdateAvailable(() => {
+            window.electronAPI.onUpdateAvailable((info) => {
                 setUpdateErrorMessage(null);
+                setLatestUpdateVersion(info?.version ?? null);
                 setUpdateStatus('available');
                 // Don't close settings - let user see the button change to "Update Available"
             }),
-            window.electronAPI.onUpdateNotAvailable(() => {
+            window.electronAPI.onUpdateNotAvailable((info) => {
                 setUpdateErrorMessage(null);
+                setLatestUpdateVersion(info?.version ?? null);
                 setUpdateStatus('uptodate');
                 setTimeout(() => setUpdateStatus('idle'), 3000);
+            }),
+            window.electronAPI.onUpdateDownloaded((info) => {
+                setLatestUpdateVersion(info?.version ?? null);
+                refreshUpdaterCacheInfo();
             }),
             window.electronAPI.onUpdateError((err) => {
                 console.error('[Settings] Update error:', err);
@@ -1640,7 +1727,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         ];
 
         return () => unsubs.forEach(unsub => unsub());
-    }, [isOpen, onClose]);
+    }, [isOpen, onClose, refreshUpdaterCacheInfo]);
 
 
 
@@ -1901,6 +1988,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             ) : null}
         </div>
     );
+
+    const updateDiagnosticsFile = updaterCacheInfo?.downloadedFiles[0] ?? null;
+    const updateDiagnosticsCacheDir = updaterCacheInfo?.cacheDir || 'Not resolved yet';
+    const updateDiagnosticsFileName = updateDiagnosticsFile?.fileName || 'No downloaded update found';
+    const updateDiagnosticsFilePath = updateDiagnosticsFile?.path || 'No downloaded update found';
+    const updateDiagnosticsSize = formatUpdaterBytes(updateDiagnosticsFile?.size ?? updaterCacheInfo?.totalSize ?? 0);
+    const updateDiagnosticsCurrentVersion = updaterCacheInfo?.currentVersion || packageJson.version;
+    const updateDiagnosticsLatestVersion = latestUpdateVersion || updaterCacheInfo?.latestVersion || 'Unknown';
 
     return (
         <AnimatePresence>
@@ -2484,6 +2579,86 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     </>
                                                                 )}
                                                             </button>
+                                                        </div>
+
+                                                        {/* Update Diagnostics */}
+                                                        <div className="px-4 py-4">
+                                                            <div className="flex items-start justify-between gap-4 mb-3">
+                                                                <div className="flex items-start gap-4 min-w-0">
+                                                                    <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
+                                                                        <FolderOpen size={20} />
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <h3 className="text-sm font-bold text-text-primary">Update Diagnostics</h3>
+                                                                        <p className="text-xs text-text-secondary mt-0.5">
+                                                                            Download cache details for the current updater feed
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-2 shrink-0">
+                                                                    <button
+                                                                        onClick={refreshUpdaterCacheInfo}
+                                                                        disabled={updaterCacheLoading}
+                                                                        className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-bg-component hover:bg-bg-input text-text-primary transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-wait"
+                                                                    >
+                                                                        <RefreshCw size={13} className={updaterCacheLoading ? 'animate-spin' : ''} />
+                                                                        Refresh
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={handleOpenUpdaterCacheFolder}
+                                                                        disabled={!updaterCacheInfo?.cacheDir}
+                                                                        className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-accent-primary hover:bg-accent-secondary text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    >
+                                                                        <FolderOpen size={13} />
+                                                                        Open Update Cache Folder
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                                <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                    <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Update Cache Location</p>
+                                                                    <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsCacheDir}>
+                                                                        {updateDiagnosticsCacheDir}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                    <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Downloaded Update File</p>
+                                                                    <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsFilePath}>
+                                                                        {updateDiagnosticsFileName}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                    <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Full Path</p>
+                                                                    <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsFilePath}>
+                                                                        {updateDiagnosticsFilePath}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="grid grid-cols-3 gap-2">
+                                                                    <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                        <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Size</p>
+                                                                        <p className="text-[11px] font-mono text-text-primary truncate">{updateDiagnosticsSize}</p>
+                                                                    </div>
+                                                                    <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                        <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Current Version</p>
+                                                                        <p className="text-[11px] font-mono text-text-primary truncate">v{updateDiagnosticsCurrentVersion.replace(/^v/, '')}</p>
+                                                                    </div>
+                                                                    <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                        <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Latest Version</p>
+                                                                        <p className="text-[11px] font-mono text-text-primary truncate">
+                                                                            {updateDiagnosticsLatestVersion === 'Unknown' ? 'Unknown' : `v${updateDiagnosticsLatestVersion.replace(/^v/, '')}`}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {updaterCacheError && (
+                                                                <div className="mt-2 flex items-center gap-2 text-[11px] text-red-400">
+                                                                    <AlertCircle size={12} />
+                                                                    <span className="truncate">{updaterCacheError}</span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
