@@ -44,7 +44,6 @@
       "!**/native-module/target/**",
       "!**/native-module/src/**",
       "!**/native-module/.cargo/**",
-      "!node_modules/**/src/**",
       "!node_modules/**/test/**",
       "!node_modules/**/tests/**",
       "!node_modules/**/__tests__/**",

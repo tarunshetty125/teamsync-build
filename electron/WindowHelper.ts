@@ -33,6 +33,7 @@ export class WindowHelper {
   private contentProtection: boolean = false
   private opacityTimeout: NodeJS.Timeout | null = null
   private overlayDragStateTimeout: NodeJS.Timeout | null = null
+  private startupFallbackTimeout: NodeJS.Timeout | null = null
 
   // Constants — v1 overlay content is 600px; pro v2 dual-panel layout needs ~1070px
   private static readonly OVERLAY_DEFAULT_WIDTH = 600;
@@ -362,9 +363,30 @@ export class WindowHelper {
     // explicitly asks main to show the first appropriate surface.
     this.launcherWindow.once('ready-to-show', () => {
       console.log('[WindowHelper] Launcher ready-to-show; waiting for renderer startup gate');
+      this.scheduleStartupPresentationFallback('Startup gate did not present a window', 2500);
     })
 
+    if (!isDev) {
+      this.scheduleStartupPresentationFallback('Packaged startup did not present a window', 4000);
+    }
+
     this.setupWindowListeners()
+  }
+
+  private scheduleStartupPresentationFallback(reason: string, delayMs: number): void {
+    if (this.startupFallbackTimeout) {
+      clearTimeout(this.startupFallbackTimeout);
+    }
+
+    this.startupFallbackTimeout = setTimeout(() => {
+      this.startupFallbackTimeout = null;
+      if (!this.launcherWindow || this.launcherWindow.isDestroyed()) return;
+      if (this.isWindowVisible) return;
+      if (this.appState.getUndetectable()) return;
+
+      console.warn(`[WindowHelper] ${reason}; showing launcher fallback`);
+      this.switchToLauncher();
+    }, delayMs);
   }
 
   private setupWindowListeners(): void {
