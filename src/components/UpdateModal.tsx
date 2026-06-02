@@ -73,6 +73,8 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
     };
 
     const displayVersion = formatVersion(updateInfo?.version);
+    const displayVersionNumber = displayVersion.replace(/^v/, '');
+    const manualDmgName = `TeamSync-${displayVersionNumber}${instructionsArch === 'arm64' ? '-arm64' : ''}.dmg`;
 
     const showFallback = !parsedNotes || (!parsedNotes.summary && (!parsedNotes.sections || parsedNotes.sections.length === 0));
 
@@ -191,7 +193,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
                                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 mb-4 space-y-2 w-full">
                                     <div className="space-y-1 w-full">
                                         <p className="text-[12px] font-medium text-white/80">1. Clear quarantine on the downloaded file:</p>
-                                        <CopyBlock command={`xattr -cr ~/Downloads/TeamSync-${displayVersion.replace('v', '')}-${instructionsArch || 'arm64'}.dmg`} />
+                                        <CopyBlock command={`xattr -cr ~/Downloads/${manualDmgName}`} />
                                     </div>
                                     <div className="space-y-1 mt-1 pl-0.5">
                                         <p className="text-[12px] font-medium text-white/80">2. Open the file and install TeamSync.</p>

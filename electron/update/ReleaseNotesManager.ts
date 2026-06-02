@@ -18,7 +18,7 @@ export class ReleaseNotesManager {
     private static instance: ReleaseNotesManager;
     private cachedNotes: ParsedReleaseNotes | null = null;
     private readonly repoOwner = "tarunshetty125";
-    private readonly repoName = "teamsync-build";
+    private readonly repoName = "TeamSync";
 
     private constructor() { }
 

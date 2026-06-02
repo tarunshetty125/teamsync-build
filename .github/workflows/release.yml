@@ -1,0 +1,334 @@
+name: Release Desktop
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  RELEASE_REPO: tarunshetty125/TeamSync
+
+jobs:
+  metadata:
+    name: Resolve release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      channel: ${{ steps.meta.outputs.channel }}
+      release_type: ${{ steps.meta.outputs.release_type }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      windows_manifest: ${{ steps.meta.outputs.windows_manifest }}
+      mac_manifest: ${{ steps.meta.outputs.mac_manifest }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Validate tag and channel
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          package_version="$(node -p "require('./package.json').version")"
+
+          if [[ "${tag}" == "${version}" ]]; then
+            echo "Release tags must be v-prefixed, for example v2.5.1" >&2
+            exit 1
+          fi
+
+          if [[ "${version}" != "${package_version}" ]]; then
+            echo "Tag version (${version}) must match package.json version (${package_version})" >&2
+            exit 1
+          fi
+
+          if [[ "${version}" =~ -beta\. ]]; then
+            channel="beta"
+            release_type="prerelease"
+            prerelease="true"
+            windows_manifest="beta.yml"
+            mac_manifest="beta-mac.yml"
+          elif [[ "${version}" == *-* ]]; then
+            echo "Unsupported prerelease channel in ${version}; only beta is currently supported" >&2
+            exit 1
+          else
+            channel="latest"
+            release_type="release"
+            prerelease="false"
+            windows_manifest="latest.yml"
+            mac_manifest="latest-mac.yml"
+          fi
+
+          {
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "channel=${channel}"
+            echo "release_type=${release_type}"
+            echo "prerelease=${prerelease}"
+            echo "windows_manifest=${windows_manifest}"
+            echo "mac_manifest=${mac_manifest}"
+          } >> "${GITHUB_OUTPUT}"
+
+  build-mac:
+    name: Build macOS
+    runs-on: macos-latest
+    needs: metadata
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules
+        run: npx electron-rebuild -f
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Electron main
+        run: npm run build:electron
+
+      - name: Build native module
+        run: npm run build:native
+        env:
+          TEAMSYNC_BUILD_ALL_MAC_ARCHES: "1"
+
+      - name: Prepare Python OCR runtime arm64
+        run: |
+          chmod +x python-runtime/prepare-mac.sh
+          cd python-runtime
+          bash prepare-mac.sh arm64
+
+      - name: Prepare Python OCR runtime x64
+        run: |
+          cd python-runtime
+          bash prepare-mac.sh x64
+
+      - name: Create release builder config
+        run: |
+          node scripts/create-release-builder-config.js \
+            --channel "${{ needs.metadata.outputs.channel }}" \
+            --release-type "${{ needs.metadata.outputs.release_type }}" \
+            --out "${RUNNER_TEMP}/electron-builder.release.json"
+
+      - name: Build macOS artifacts
+        run: |
+          npx electron-builder \
+            --config "${RUNNER_TEMP}/electron-builder.release.json" \
+            --mac dmg zip \
+            --x64 \
+            --arm64 \
+            --publish=never
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release-assets
+          if-no-files-found: error
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/${{ needs.metadata.outputs.mac_manifest }}
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    needs: metadata
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules
+        run: npx electron-rebuild -f
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Electron main
+        run: npm run build:electron
+
+      - name: Build native module
+        run: npm run build:native
+
+      - name: Prepare Python OCR runtime
+        run: |
+          cd python-runtime
+          powershell -ExecutionPolicy Bypass -File prepare-win.ps1
+
+      - name: Create release builder config
+        run: >
+          node scripts/create-release-builder-config.js
+          --channel "${{ needs.metadata.outputs.channel }}"
+          --release-type "${{ needs.metadata.outputs.release_type }}"
+          --out "$env:RUNNER_TEMP\electron-builder.release.json"
+
+      - name: Build Windows artifacts
+        run: >
+          npx electron-builder
+          --config "$env:RUNNER_TEMP\electron-builder.release.json"
+          --win
+          --publish=never
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-assets
+          if-no-files-found: error
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/${{ needs.metadata.outputs.windows_manifest }}
+
+  publish:
+    name: Publish public release assets
+    runs-on: ubuntu-latest
+    needs:
+      - metadata
+      - build-mac
+      - build-windows
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-release-assets
+
+      - name: Prepare upload directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p upload
+          find downloaded-release-assets -type f \( \
+            -name "*.dmg" -o \
+            -name "*.zip" -o \
+            -name "*.exe" -o \
+            -name "*.blockmap" \
+          \) -exec cp {} upload/ \;
+
+          for manifest in "${{ needs.metadata.outputs.windows_manifest }}" "${{ needs.metadata.outputs.mac_manifest }}"; do
+            manifest_path="$(find downloaded-release-assets -type f -name "${manifest}" | head -n 1)"
+            if [[ -z "${manifest_path}" ]]; then
+              echo "Missing update manifest in downloaded artifacts: ${manifest}" >&2
+              exit 1
+            fi
+            cp "${manifest_path}" upload/
+          done
+
+          ls -la upload
+
+      - name: Validate required release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${{ needs.metadata.outputs.version }}"
+          required=(
+            "${{ needs.metadata.outputs.windows_manifest }}"
+            "${{ needs.metadata.outputs.mac_manifest }}"
+            "TeamSync-Setup-${version}.exe"
+            "TeamSync-${version}.dmg"
+            "TeamSync-${version}-arm64.dmg"
+            "TeamSync-${version}-mac.zip"
+            "TeamSync-${version}-arm64-mac.zip"
+            "TeamSync-Setup-${version}.exe.blockmap"
+            "TeamSync-${version}.dmg.blockmap"
+            "TeamSync-${version}-arm64.dmg.blockmap"
+            "TeamSync-${version}-mac.zip.blockmap"
+            "TeamSync-${version}-arm64-mac.zip.blockmap"
+          )
+
+          for file in "${required[@]}"; do
+            if [[ ! -f "upload/${file}" ]]; then
+              echo "Missing required release asset: ${file}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<EOF
+          ## Summary
+          TeamSync ${{ needs.metadata.outputs.version }} desktop release.
+
+          ## Technical
+          - Channel: ${{ needs.metadata.outputs.channel }}
+          - Source repository: ${{ github.repository }}
+          - Source commit: ${{ github.sha }}
+          - Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+
+      - name: Create public GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "Missing RELEASE_REPO_TOKEN secret" >&2
+            exit 1
+          fi
+
+          tag="${{ needs.metadata.outputs.tag }}"
+          version="${{ needs.metadata.outputs.version }}"
+          release_args=(
+            release create "${tag}"
+            --repo "${RELEASE_REPO}"
+            --title "TeamSync ${version}"
+            --notes-file release-notes.md
+          )
+
+          if [[ "${{ needs.metadata.outputs.prerelease }}" == "true" ]]; then
+            release_args+=(--prerelease)
+          fi
+
+          if gh release view "${tag}" --repo "${RELEASE_REPO}" > /dev/null 2>&1; then
+            echo "Release ${tag} already exists in ${RELEASE_REPO}; uploading assets with --clobber"
+          else
+            gh "${release_args[@]}"
+          fi
+
+          gh release upload "${tag}" upload/* --repo "${RELEASE_REPO}" --clobber
