@@ -2,6 +2,8 @@ import { app, globalShortcut, Menu, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import fs from 'fs';
 
+const shouldExposeDevTools = (): boolean => !app.isPackaged;
+
 export interface KeybindConfig {
     id: string;
     label: string;
@@ -334,6 +336,10 @@ export class KeybindManager {
     }
 
     public updateMenu() {
+        const devToolsMenuItems: any[] = shouldExposeDevTools()
+            ? [{ role: 'toggleDevTools' }, { type: 'separator' }]
+            : [];
+
         // On Windows/Linux, set a minimal menu (for shortcuts like DevTools)
         // but hide the menu bar from the UI
         if (process.platform !== 'darwin') {
@@ -343,8 +349,7 @@ export class KeybindManager {
                     submenu: [
                         { role: 'reload' },
                         { role: 'forceReload' },
-                        { role: 'toggleDevTools' },
-                        { type: 'separator' },
+                        ...devToolsMenuItems,
                         { role: 'resetZoom' },
                         { role: 'zoomIn' },
                         { role: 'zoomOut' },
@@ -415,8 +420,7 @@ export class KeybindManager {
                     { type: 'separator' },
                     { role: 'reload' },
                     { role: 'forceReload' },
-                    { role: 'toggleDevTools' },
-                    { type: 'separator' },
+                    ...devToolsMenuItems,
                     { role: 'resetZoom' },
                     { role: 'zoomIn' },
                     { role: 'zoomOut' },

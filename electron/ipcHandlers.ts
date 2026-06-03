@@ -8,6 +8,7 @@ import { BenchmarkManager } from "./intelligence/BenchmarkManager";
 import * as os from "os";
 import * as path from "path";
 import * as fs from "fs";
+import * as crypto from "crypto";
 import { AudioDevices } from "./audio/AudioDevices";
 import { PermissionManager } from "./services/PermissionManager";
 import { EntitlementVerifier, type EntitlementStatus } from "./licensing/EntitlementVerifier";
@@ -44,16 +45,6 @@ export function initializeIpcHandlers(appState: AppState): void {
   const safeHandle = (channel: string, listener: (event: any, ...args: any[]) => Promise<any> | any) => {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, listener);
-  };
-  const isDevelopmentOnlyIpcAllowed = () => !app.isPackaged || process.env.NODE_ENV === 'development';
-  const safeDevelopmentHandle = (channel: string, listener: (event: any, ...args: any[]) => Promise<any> | any) => {
-    safeHandle(channel, (event, ...args) => {
-      if (!isDevelopmentOnlyIpcAllowed()) {
-        console.warn(`[IPC] Blocked development-only IPC in packaged production: ${channel}`);
-        return { success: false, error: 'unavailable_in_production' };
-      }
-      return listener(event, ...args);
-    });
   };
   let providerAnalyticsSessionSnapshot: ProviderAnalyticsSessionSnapshot | null = null;
   const broadcastProviderAnalyticsSessionSnapshot = (snapshot: ProviderAnalyticsSessionSnapshot | null): void => {
@@ -110,6 +101,68 @@ export function initializeIpcHandlers(appState: AppState): void {
       };
     }
     return result;
+  };
+
+  const hasCredentialValue = (value?: string | null): boolean => !!(value && value.trim().length > 0);
+  const maskSecretValue = (value?: string | null): string | null => {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    if (!trimmed) return null;
+    if (trimmed.length <= 8) return '****';
+    const visiblePrefixLength = trimmed.includes('-') ? Math.min(trimmed.indexOf('-') + 1, 5) : 4;
+    return `${trimmed.slice(0, Math.max(2, visiblePrefixLength))}****${trimmed.slice(-4)}`;
+  };
+  const secretStatus = (value?: string | null) => ({
+    configured: hasCredentialValue(value),
+    masked: maskSecretValue(value),
+  });
+
+  const PROFILE_FILE_TOKEN_TTL_MS = 10 * 60 * 1000;
+  const allowedProfileFileExtensions = new Set(['.pdf', '.docx', '.txt']);
+  const selectedProfileFiles = new Map<string, { filePath: string; expiresAt: number }>();
+
+  const pruneExpiredProfileFileTokens = () => {
+    const now = Date.now();
+    for (const [token, entry] of selectedProfileFiles) {
+      if (entry.expiresAt <= now) selectedProfileFiles.delete(token);
+    }
+  };
+
+  const createProfileFileToken = (filePath: string): string => {
+    pruneExpiredProfileFileTokens();
+    const token = crypto.randomUUID();
+    selectedProfileFiles.set(token, {
+      filePath: path.resolve(filePath),
+      expiresAt: Date.now() + PROFILE_FILE_TOKEN_TTL_MS,
+    });
+    return token;
+  };
+
+  const resolveProfileFileToken = async (fileToken: unknown): Promise<{ success: true; filePath: string } | { success: false; error: string }> => {
+    pruneExpiredProfileFileTokens();
+    if (typeof fileToken !== 'string' || !fileToken.trim()) {
+      return { success: false, error: 'Please select a file before uploading.' };
+    }
+
+    const entry = selectedProfileFiles.get(fileToken);
+    if (!entry) {
+      return { success: false, error: 'Selected file expired. Please choose the file again.' };
+    }
+
+    const ext = path.extname(entry.filePath).toLowerCase();
+    if (!allowedProfileFileExtensions.has(ext)) {
+      return { success: false, error: 'Unsupported file type. Choose a PDF, DOCX, or TXT file.' };
+    }
+
+    try {
+      const stat = await fs.promises.stat(entry.filePath);
+      if (!stat.isFile()) {
+        return { success: false, error: 'Selected path is not a file.' };
+      }
+      return { success: true, filePath: entry.filePath };
+    } catch {
+      selectedProfileFiles.delete(fileToken);
+      return { success: false, error: 'Selected file is no longer available.' };
+    }
   };
 
   const buildSessionExportSaveFilters = (format: SessionExportDeliveryFormat): FileFilter[] => {
@@ -255,35 +308,6 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   calendarIntelligence.on('recommendation-changed', (recommendation: any) => {
     broadcastCalendarRecommendation(recommendation);
-  });
-
-  // --- NEW Test Helper ---
-  safeDevelopmentHandle("test-release-fetch", async () => {
-    try {
-      console.log("[IPC] Manual Test Fetch triggered (forcing refresh)...");
-      const { ReleaseNotesManager } = require('./update/ReleaseNotesManager');
-      const notes = await ReleaseNotesManager.getInstance().fetchReleaseNotes('latest', true);
-
-      if (notes) {
-        console.log("[IPC] Notes fetched for:", notes.version);
-        const info = {
-          version: notes.version || 'latest',
-          files: [] as any[],
-          path: '',
-          sha512: '',
-          releaseName: notes.summary,
-          releaseNotes: notes.fullBody,
-          parsedNotes: notes
-        };
-        // Send to renderer
-        appState.getMainWindow()?.webContents.send("update-available", info);
-        return { success: true };
-      }
-      return { success: false, error: "No notes returned" };
-    } catch (err: any) {
-      console.error("[IPC] test-release-fetch failed:", err);
-      return { success: false, error: err.message };
-    }
   });
 
   safeHandle("license:activate", async (event, payload: string | { licenseKey?: string; trial?: boolean }) => {
@@ -1881,9 +1905,6 @@ export function initializeIpcHandlers(appState: AppState): void {
       const { CredentialsManager } = require('./services/CredentialsManager');
       const creds = CredentialsManager.getInstance().getAllCredentials();
 
-      // Return masked versions for security (just indicate if set)
-      const hasKey = (key?: string) => !!(key && key.trim().length > 0);
-
       // Groq vault check: user may have keys only in the vault (multi-key rotation)
       const cm = CredentialsManager.getInstance();
       const hasGroqVaultKey = (cm.getGroqKeyVault?.() || []).some((k: any) => k.enabled);
@@ -1893,40 +1914,41 @@ export function initializeIpcHandlers(appState: AppState): void {
         region: bedrockCredentials.region,
         profileName: bedrockCredentials.profileName,
         preferredModel: bedrockCredentials.preferredModel,
-        hasAccessKeyId: hasKey(bedrockCredentials.accessKeyId),
-        hasSecretAccessKey: hasKey(bedrockCredentials.secretAccessKey),
-        hasSessionToken: hasKey(bedrockCredentials.sessionToken),
+        hasAccessKeyId: hasCredentialValue(bedrockCredentials.accessKeyId),
+        hasSecretAccessKey: hasCredentialValue(bedrockCredentials.secretAccessKey),
+        hasSessionToken: hasCredentialValue(bedrockCredentials.sessionToken),
       } : undefined;
+      const sttKeys = {
+        groq: secretStatus(creds.groqSttApiKey),
+        openai: secretStatus(creds.openAiSttApiKey),
+        deepgram: secretStatus(creds.deepgramApiKey),
+        elevenlabs: secretStatus(creds.elevenLabsApiKey),
+        azure: secretStatus(creds.azureApiKey),
+        ibmwatson: secretStatus(creds.ibmWatsonApiKey),
+        soniox: secretStatus(creds.sonioxApiKey),
+      };
 
       return {
-        hasGeminiKey: hasKey(creds.geminiApiKey),
-        hasGroqKey: hasKey(creds.groqApiKey) || hasGroqVaultKey,
-        hasOpenaiKey: hasKey(creds.openaiApiKey),
-        hasClaudeKey: hasKey(creds.claudeApiKey),
-        hasTeamSyncKey: hasKey(creds.teamsyncApiKey),
+        hasGeminiKey: hasCredentialValue(creds.geminiApiKey),
+        hasGroqKey: hasCredentialValue(creds.groqApiKey) || hasGroqVaultKey,
+        hasOpenaiKey: hasCredentialValue(creds.openaiApiKey),
+        hasClaudeKey: hasCredentialValue(creds.claudeApiKey),
+        hasTeamSyncKey: hasCredentialValue(creds.teamsyncApiKey),
         googleServiceAccountPath: creds.googleServiceAccountPath || null,
         sttProvider: CredentialsManager.getInstance().getSttProvider(),
         groqSttModel: creds.groqSttModel || 'whisper-large-v3-turbo',
-        hasSttGroqKey: hasKey(creds.groqSttApiKey),
-        hasSttOpenaiKey: hasKey(creds.openAiSttApiKey),
-        hasDeepgramKey: hasKey(creds.deepgramApiKey),
-        hasElevenLabsKey: hasKey(creds.elevenLabsApiKey),
-        hasAzureKey: hasKey(creds.azureApiKey),
+        hasSttGroqKey: sttKeys.groq.configured,
+        hasSttOpenaiKey: sttKeys.openai.configured,
+        hasDeepgramKey: sttKeys.deepgram.configured,
+        hasElevenLabsKey: sttKeys.elevenlabs.configured,
+        hasAzureKey: sttKeys.azure.configured,
         azureRegion: creds.azureRegion || 'eastus',
-        hasIbmWatsonKey: hasKey(creds.ibmWatsonApiKey),
+        hasIbmWatsonKey: sttKeys.ibmwatson.configured,
         ibmWatsonRegion: creds.ibmWatsonRegion || 'us-south',
-        hasSonioxKey: hasKey(creds.sonioxApiKey),
-        // STT key values — returned so the settings UI can pre-populate input fields.
-        // AI model keys (Gemini/Groq/OpenAI/Claude) remain boolean-only; STT keys are
-        // surfaced here because users need to see which key is active when switching providers.
-        sttGroqKey: creds.groqSttApiKey || '',
-        sttOpenaiKey: creds.openAiSttApiKey || '',
-        sttDeepgramKey: creds.deepgramApiKey || '',
-        sttElevenLabsKey: creds.elevenLabsApiKey || '',
-        sttAzureKey: creds.azureApiKey || '',
-        sttIbmKey: creds.ibmWatsonApiKey || '',
-        sttSonioxKey: creds.sonioxApiKey || '',
-        hasTavilyKey: hasKey(creds.tavilyApiKey),
+        hasSonioxKey: sttKeys.soniox.configured,
+        sttKeys,
+        tavilyKey: secretStatus(creds.tavilyApiKey),
+        hasTavilyKey: hasCredentialValue(creds.tavilyApiKey),
         // Dynamic Model Discovery - preferred models
         geminiPreferredModel: creds.geminiPreferredModel || undefined,
         groqPreferredModel: creds.groqPreferredModel || undefined,
@@ -1939,7 +1961,37 @@ export function initializeIpcHandlers(appState: AppState): void {
         hasBedrockCredentials: cm.hasBedrockCredentials(),
       };
     } catch (error: any) {
-      return { hasGeminiKey: false, hasGroqKey: false, hasOpenaiKey: false, hasClaudeKey: false, hasTeamSyncKey: false, hasBedrockCredentials: false, googleServiceAccountPath: null, sttProvider: 'deepgram', groqSttModel: 'whisper-large-v3-turbo', hasSttGroqKey: false, hasSttOpenaiKey: false, hasDeepgramKey: false, hasElevenLabsKey: false, hasAzureKey: false, azureRegion: 'eastus', hasIbmWatsonKey: false, ibmWatsonRegion: 'us-south', hasSonioxKey: false, hasTavilyKey: false, sttGroqKey: '', sttOpenaiKey: '', sttDeepgramKey: '', sttElevenLabsKey: '', sttAzureKey: '', sttIbmKey: '', sttSonioxKey: '' };
+      return {
+        hasGeminiKey: false,
+        hasGroqKey: false,
+        hasOpenaiKey: false,
+        hasClaudeKey: false,
+        hasTeamSyncKey: false,
+        hasBedrockCredentials: false,
+        googleServiceAccountPath: null,
+        sttProvider: 'deepgram',
+        groqSttModel: 'whisper-large-v3-turbo',
+        hasSttGroqKey: false,
+        hasSttOpenaiKey: false,
+        hasDeepgramKey: false,
+        hasElevenLabsKey: false,
+        hasAzureKey: false,
+        azureRegion: 'eastus',
+        hasIbmWatsonKey: false,
+        ibmWatsonRegion: 'us-south',
+        hasSonioxKey: false,
+        hasTavilyKey: false,
+        sttKeys: {
+          groq: secretStatus(null),
+          openai: secretStatus(null),
+          deepgram: secretStatus(null),
+          elevenlabs: secretStatus(null),
+          azure: secretStatus(null),
+          ibmwatson: secretStatus(null),
+          soniox: secretStatus(null),
+        },
+        tavilyKey: secretStatus(null),
+      };
     }
   });
 
@@ -2337,12 +2389,30 @@ export function initializeIpcHandlers(appState: AppState): void {
     return msg.replace(/:\s*[a-zA-Z0-9*]+\*+[a-zA-Z0-9*]+\.?$/g, '').trim();
   };
 
-  safeHandle("test-stt-connection", async (_, provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string) => {
+  safeHandle("test-stt-connection", async (_, provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey?: string, region?: string) => {
     console.log(`[IPC] Received test - stt - connection request for provider: ${provider} `);
     try {
+      const { CredentialsManager } = require('./services/CredentialsManager');
+      const cm = CredentialsManager.getInstance();
+      const storedKeyByProvider = (): string | undefined => {
+        if (provider === 'groq') return cm.getGroqSttApiKey();
+        if (provider === 'openai') return cm.getOpenAiSttApiKey();
+        if (provider === 'deepgram') return cm.getDeepgramApiKey();
+        if (provider === 'elevenlabs') return cm.getElevenLabsApiKey();
+        if (provider === 'azure') return cm.getAzureApiKey();
+        if (provider === 'ibmwatson') return cm.getIbmWatsonApiKey();
+        if (provider === 'soniox') return cm.getSonioxApiKey();
+        return undefined;
+      };
+      const keyForTest = apiKey?.trim() || storedKeyByProvider()?.trim() || '';
+      if (!keyForTest) {
+        return { success: false, error: 'No API key provided' };
+      }
+      const resolvedRegion = region || (provider === 'azure' ? cm.getAzureRegion() : provider === 'ibmwatson' ? cm.getIbmWatsonRegion() : undefined);
+
       if (provider === 'deepgram') {
         const WebSocket = require('ws');
-        const token = apiKey.trim();
+        const token = keyForTest;
         return await new Promise<{ success: boolean; error?: string }>((resolve) => {
           const url = 'wss://api.deepgram.com/v1/listen?model=nova-2&encoding=linear16&sample_rate=16000&channels=1';
           const ws = new WebSocket(url, {
@@ -2410,7 +2480,7 @@ export function initializeIpcHandlers(appState: AppState): void {
           ws.on('open', () => {
             clearTimeout(connectTimeout);
             ws.send(JSON.stringify({
-              api_key: apiKey,
+              api_key: keyForTest,
               model: 'stt-rt-v4',
               audio_format: 'pcm_s16le',
               sample_rate: 16000,
@@ -2473,7 +2543,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         // Scoped keys may lack speech_to_text or user_read but still be usable once permissions are added.
         try {
           await axios.get('https://api.elevenlabs.io/v1/voices', {
-            headers: { 'xi-api-key': apiKey },
+            headers: { 'xi-api-key': keyForTest },
             timeout: 10000,
           });
         } catch (elErr: any) {
@@ -2488,24 +2558,24 @@ export function initializeIpcHandlers(appState: AppState): void {
         }
       } else if (provider === 'azure') {
         // Azure: raw binary with subscription key
-        const azureRegion = region || 'eastus';
+        const azureRegion = resolvedRegion || 'eastus';
         await axios.post(
           `https://${azureRegion}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US`,
           testWav,
           {
-            headers: { 'Ocp-Apim-Subscription-Key': apiKey, 'Content-Type': 'audio/wav' },
+            headers: { 'Ocp-Apim-Subscription-Key': keyForTest, 'Content-Type': 'audio/wav' },
             timeout: 15000,
           }
         );
       } else if (provider === 'ibmwatson') {
         // IBM Watson: raw binary with Basic auth
-        const ibmRegion = region || 'us-south';
+        const ibmRegion = resolvedRegion || 'us-south';
         await axios.post(
           `https://api.${ibmRegion}.speech-to-text.watson.cloud.ibm.com/v1/recognize`,
           testWav,
           {
             headers: {
-              Authorization: `Basic ${Buffer.from(`apikey:${apiKey}`).toString('base64')}`,
+              Authorization: `Basic ${Buffer.from(`apikey:${keyForTest}`).toString('base64')}`,
               'Content-Type': 'audio/wav',
             },
             timeout: 15000,
@@ -2524,7 +2594,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
         await axios.post(endpoint, form, {
           headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${keyForTest}`,
             ...form.getHeaders(),
           },
           timeout: 15000,
@@ -3628,7 +3698,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   // Profile Engine IPC Handlers
   // ==========================================
 
-  const getTavilyKey = (): string | null => {
+  const getStoredTavilyApiKey = (): string | null => {
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       const key = CredentialsManager.getInstance().getTavilyApiKey();
@@ -3640,7 +3710,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   const configureExplicitTavilyResearchProvider = (orchestrator: any): string | null => {
     if (!orchestrator) return null;
-    const tavilyApiKey = getTavilyKey();
+    const tavilyApiKey = getStoredTavilyApiKey();
     if (!tavilyApiKey) {
       orchestrator.setCompanyResearchProvider?.(null);
       return null;
@@ -3651,13 +3721,15 @@ export function initializeIpcHandlers(appState: AppState): void {
     return tavilyApiKey;
   };
 
-  safeHandle("profile:upload-resume", async (_, filePath: string) => {
+  safeHandle("profile:upload-resume", async (_, fileToken: string) => {
     try {
       // Premium gate: require active license or free trial for profile features
       if (!isProOrTrialActive()) {
         return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
       }
-      console.log(`[IPC] profile:upload-resume called with: ${filePath}`);
+      const resolved = await resolveProfileFileToken(fileToken);
+      if (!resolved.success) return resolved;
+      console.log(`[IPC] profile:upload-resume selected: ${path.basename(resolved.filePath)}`);
       if (!appState.isBootstrapReady()) {
         await appState.bootstrapPersistentState();
       }
@@ -3666,7 +3738,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         return { success: false, error: 'Knowledge engine not initialized. Please ensure API keys are configured.' };
       }
       const { DocType } = require('../premium/electron/knowledge/types');
-      const result = await orchestrator.ingestDocument(filePath, DocType.RESUME);
+      const result = await orchestrator.ingestDocument(resolved.filePath, DocType.RESUME);
       return result;
     } catch (error: any) {
       console.error('[IPC] profile:upload-resume error:', error);
@@ -3765,8 +3837,8 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle('get-tavily-key', async () => {
-    return getTavilyKey();
+  safeHandle('get-tavily-status', async () => {
+    return secretStatus(getStoredTavilyApiKey());
   });
 
   safeHandle("profile:select-file", async () => {
@@ -3782,7 +3854,17 @@ export function initializeIpcHandlers(appState: AppState): void {
         return { cancelled: true };
       }
 
-      return { success: true, filePath: result.filePaths[0] };
+      const selectedPath = result.filePaths[0];
+      const ext = path.extname(selectedPath).toLowerCase();
+      if (!allowedProfileFileExtensions.has(ext)) {
+        return { success: false, error: 'Unsupported file type. Choose a PDF, DOCX, or TXT file.' };
+      }
+
+      return {
+        success: true,
+        fileToken: createProfileFileToken(selectedPath),
+        fileName: path.basename(selectedPath),
+      };
     } catch (error: any) {
       return { success: false, error: error.message };
     }
@@ -3792,13 +3874,15 @@ export function initializeIpcHandlers(appState: AppState): void {
   // JD & Research IPC Handlers
   // ==========================================
 
-  safeHandle("profile:upload-jd", async (_, filePath: string) => {
+  safeHandle("profile:upload-jd", async (_, fileToken: string) => {
     try {
       // Premium gate
       if (!isProOrTrialActive()) {
         return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
       }
-      console.log(`[IPC] profile:upload-jd called with: ${filePath}`);
+      const resolved = await resolveProfileFileToken(fileToken);
+      if (!resolved.success) return resolved;
+      console.log(`[IPC] profile:upload-jd selected: ${path.basename(resolved.filePath)}`);
       if (!appState.isBootstrapReady()) {
         await appState.bootstrapPersistentState();
       }
@@ -3807,7 +3891,7 @@ export function initializeIpcHandlers(appState: AppState): void {
         return { success: false, error: 'Knowledge engine not initialized. Please ensure API keys are configured.' };
       }
       const { DocType } = require('../premium/electron/knowledge/types');
-      const result = await orchestrator.ingestDocument(filePath, DocType.JD);
+      const result = await orchestrator.ingestDocument(resolved.filePath, DocType.JD);
       return result;
     } catch (error: any) {
       console.error('[IPC] profile:upload-jd error:', error);

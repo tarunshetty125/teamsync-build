@@ -80,6 +80,11 @@ type BedrockCredentials = {
   preferredModel?: string;
 }
 
+type SecretStatus = {
+  configured: boolean;
+  masked: string | null;
+}
+
 type BridgeContextTarget = 'latest_turn' | 'active_context' | 'transcript'
 type BridgeActionContract =
   | 'default'
@@ -224,7 +229,7 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   setBedrockCredentials: (credentials: BedrockCredentials) => Promise<{ success: boolean; models?: BedrockFetchedModel[]; credentials?: BedrockCredentials; error?: string }>
   setTeamSyncApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   getTeamSyncUsage: () => Promise<{ ok: boolean; plan?: string; quota?: { transcription: { used: number; limit: number; remaining: number }; ai: { used: number; limit: number; remaining: number }; search: { used: number; limit: number; remaining: number }; resets_at: string }; member_since?: string; error?: string; status?: number }>
-  getStoredCredentials: () => Promise<{ hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; hasTeamSyncKey: boolean; hasBedrockCredentials?: boolean; bedrockCredentials?: BedrockCredentials; bedrockPreferredModel?: string; bedrockFetchedModels?: BedrockFetchedModel[]; googleServiceAccountPath: string | null; sttProvider: string; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; hasSonioxKey: boolean }>
+  getStoredCredentials: () => Promise<{ hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; hasTeamSyncKey: boolean; hasBedrockCredentials?: boolean; bedrockCredentials?: BedrockCredentials; bedrockPreferredModel?: string; bedrockFetchedModels?: BedrockFetchedModel[]; googleServiceAccountPath: string | null; sttProvider: string; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; hasSonioxKey: boolean; hasTavilyKey?: boolean; sttKeys?: Record<string, SecretStatus>; tavilyKey?: SecretStatus }>
 
   // Groq Provider Vault — Multi-Key Management
   groqVaultGetKeys: () => Promise<{ success: boolean; keys: Array<{ id: string; maskedKey: string; enabled: boolean; addedAt: number; label?: string; exhausted: boolean; cooldownUntil: number | null; requestCount: number; lastUsed: number; invalid: boolean; isAvailable: boolean }>; error?: string }>
@@ -259,7 +264,7 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   setGroqSttModel: (model: string) => Promise<{ success: boolean; error?: string }>
   setSonioxApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   setIbmWatsonRegion: (region: string) => Promise<{ success: boolean; error?: string }>
-  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string) => Promise<{ success: boolean; error?: string }>
+  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey?: string, region?: string) => Promise<{ success: boolean; error?: string }>
 
   // STT Config Events
   onSttConfigChanged: (callback: (data: { configured: boolean; provider: string }) => void) => () => void
@@ -450,7 +455,6 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   downloadUpdate: () => Promise<void>
   getUpdaterCacheInfo: () => Promise<UpdaterCacheInfo>
   openUpdaterCacheFolder: () => Promise<{ success: boolean; path?: string; error?: string }>
-  testReleaseFetch: () => Promise<{ success: boolean; error?: string }>
 
   // RAG (Retrieval-Augmented Generation) API
   ragQueryMeeting: (meetingId: string, query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
@@ -479,19 +483,19 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   setDonationComplete: () => Promise<{ success: boolean }>;
 
   // Profile Engine API
-  profileUploadResume: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+  profileUploadResume: (fileToken: string) => Promise<{ success: boolean; error?: string }>;
   profileGetStatus: () => Promise<{ hasProfile: boolean; profileMode: boolean; isReady: boolean; name?: string; role?: string; totalExperienceYears?: number }>;
   profileSetMode: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
   profileDelete: () => Promise<{ success: boolean; error?: string }>;
   profileGetProfile: () => Promise<any>;
-  profileSelectFile: () => Promise<{ success?: boolean; cancelled?: boolean; filePath?: string; error?: string }>;
+  profileSelectFile: () => Promise<{ success?: boolean; cancelled?: boolean; fileToken?: string; fileName?: string; error?: string }>;
 
   // JD & Research API
-  profileUploadJD: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+  profileUploadJD: (fileToken: string) => Promise<{ success: boolean; error?: string }>;
   profileDeleteJD: () => Promise<{ success: boolean; error?: string }>;
   profileResearchCompany: (companyName: string) => Promise<{ success: boolean; status?: string; research?: any; error?: string }>;
   runCompanyResearch: (company: string, role: string, forceRefresh?: boolean) => Promise<{ success: boolean; status?: string; research?: any; error?: string }>;
-  getTavilyKey: () => Promise<string | null>;
+  getTavilyStatus: () => Promise<SecretStatus>;
   profileGenerateNegotiation: (force?: boolean) => Promise<{ success: boolean; script?: any; error?: string }>;
   profileGetNegotiationState: () => Promise<{ success: boolean; enabled?: boolean; state?: any; isActive?: boolean; error?: string }>;
   profileSetNegotiationContextEnabled: (enabled: boolean) => Promise<{ success: boolean; enabled?: boolean; state?: any; isActive?: boolean; hasScript?: boolean; error?: string }>;
@@ -888,7 +892,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setGroqSttModel: (model: string) => ipcRenderer.invoke("set-groq-stt-model", model),
   setSonioxApiKey: (apiKey: string) => ipcRenderer.invoke("set-soniox-api-key", apiKey),
   setIbmWatsonRegion: (region: string) => ipcRenderer.invoke("set-ibmwatson-region", region),
-  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string) => ipcRenderer.invoke("test-stt-connection", provider, apiKey, region),
+  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey?: string, region?: string) => ipcRenderer.invoke("test-stt-connection", provider, apiKey, region),
 
   // STT Config Events (Adapted from public PR #173 — verify premium interaction)
   onSttConfigChanged: (callback: (data: { configured: boolean; provider: string }) => void) => {
@@ -1463,7 +1467,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   downloadUpdate: () => ipcRenderer.invoke("download-update"),
   getUpdaterCacheInfo: () => ipcRenderer.invoke("get-updater-cache-info"),
   openUpdaterCacheFolder: () => ipcRenderer.invoke("open-updater-cache-folder"),
-  testReleaseFetch: () => ipcRenderer.invoke("test-release-fetch"),
 
   // RAG API
   ragQueryMeeting: (meetingId: string, query: string) => ipcRenderer.invoke('rag:query-meeting', { meetingId, query }),
@@ -1546,7 +1549,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setDonationComplete: () => ipcRenderer.invoke('set-donation-complete'),
 
   // Profile Engine API
-  profileUploadResume: (filePath: string) => ipcRenderer.invoke('profile:upload-resume', filePath),
+  profileUploadResume: (fileToken: string) => ipcRenderer.invoke('profile:upload-resume', fileToken),
   profileGetStatus: () => ipcRenderer.invoke('profile:get-status'),
   profileSetMode: (enabled: boolean) => ipcRenderer.invoke('profile:set-mode', enabled),
   profileDelete: () => ipcRenderer.invoke('profile:delete'),
@@ -1554,11 +1557,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   profileSelectFile: () => ipcRenderer.invoke('profile:select-file'),
 
   // JD & Research API
-  profileUploadJD: (filePath: string) => ipcRenderer.invoke('profile:upload-jd', filePath),
+  profileUploadJD: (fileToken: string) => ipcRenderer.invoke('profile:upload-jd', fileToken),
   profileDeleteJD: () => ipcRenderer.invoke('profile:delete-jd'),
   profileResearchCompany: (companyName: string) => ipcRenderer.invoke('profile:research-company', companyName),
   runCompanyResearch: (company: string, role: string, forceRefresh?: boolean) => ipcRenderer.invoke('run_company_research', { company, role, forceRefresh }),
-  getTavilyKey: () => ipcRenderer.invoke('get-tavily-key'),
+  getTavilyStatus: () => ipcRenderer.invoke('get-tavily-status'),
   profileGenerateNegotiation: (force?: boolean) => ipcRenderer.invoke('profile:generate-negotiation', force),
   profileGetNegotiationState: () => ipcRenderer.invoke('profile:get-negotiation-state'),
   profileSetNegotiationContextEnabled: (enabled: boolean) => ipcRenderer.invoke('profile:set-negotiation-context-enabled', enabled),

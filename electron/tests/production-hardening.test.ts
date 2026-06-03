@@ -127,3 +127,50 @@ test('fallback debug metadata is attached to final action results', () => {
     assert.match(telemetry, /\[FALLBACK\]/);
     assert.match(engine, /fallbackChain: FallbackChainEntry\[\]/);
 });
+
+test('reverse engineering hardening does not expose raw provider secrets or debug IPC', () => {
+    const ipc = readRepoFile('electron/ipcHandlers.ts');
+    const preload = readRepoFile('electron/preload.ts');
+    const rendererTypes = readRepoFile('src/types/electron.d.ts');
+
+    const credentialHandlerStart = ipc.indexOf('safeHandle("get-stored-credentials"');
+    const credentialHandlerEnd = ipc.indexOf('// ==========================================', credentialHandlerStart);
+    const credentialHandler = ipc.slice(credentialHandlerStart, credentialHandlerEnd);
+
+    assert.match(credentialHandler, /sttKeys/);
+    assert.match(credentialHandler, /secretStatus\(creds\.groqSttApiKey\)/);
+    assert.match(credentialHandler, /tavilyKey: secretStatus\(creds\.tavilyApiKey\)/);
+
+    for (const rawField of [
+        'sttGroqKey',
+        'sttOpenaiKey',
+        'sttDeepgramKey',
+        'sttElevenLabsKey',
+        'sttAzureKey',
+        'sttIbmKey',
+        'sttSonioxKey',
+    ]) {
+        assert.doesNotMatch(credentialHandler, new RegExp(rawField));
+        assert.doesNotMatch(rendererTypes, new RegExp(`${rawField}\\?:`));
+    }
+
+    assert.doesNotMatch(preload, /getTavilyKey/);
+    assert.doesNotMatch(preload, /testReleaseFetch/);
+    assert.doesNotMatch(ipc, /test-release-fetch/);
+});
+
+test('production devtools and profile file ingestion are hardened', () => {
+    const keybinds = readRepoFile('electron/services/KeybindManager.ts');
+    const windowHelper = readRepoFile('electron/WindowHelper.ts');
+    const ipc = readRepoFile('electron/ipcHandlers.ts');
+
+    assert.match(keybinds, /const shouldExposeDevTools = \(\): boolean => !app\.isPackaged/);
+    assert.match(keybinds, /shouldExposeDevTools\(\)[\s\S]*role: 'toggleDevTools'/);
+    assert.match(windowHelper, /!\s*app\.isPackaged[\s\S]*Developer Console/);
+
+    assert.match(ipc, /selectedProfileFiles = new Map/);
+    assert.match(ipc, /createProfileFileToken/);
+    assert.match(ipc, /resolveProfileFileToken/);
+    assert.match(ipc, /safeHandle\("profile:upload-resume", async \(_, fileToken: string\)/);
+    assert.match(ipc, /safeHandle\("profile:upload-jd", async \(_, fileToken: string\)/);
+});

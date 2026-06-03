@@ -308,6 +308,26 @@ type SttProviderOptionId =
     | 'whisper';
 
 type ExternalSttKeyProvider = Exclude<SttProviderOptionId, 'none' | 'google' | 'teamsync' | 'whisper'>;
+type SecretStatus = { configured: boolean; masked: string | null };
+type SttSecretStatuses = Record<ExternalSttKeyProvider, SecretStatus>;
+
+const createEmptySttSecretStatuses = (): SttSecretStatuses => ({
+    deepgram: { configured: false, masked: null },
+    groq: { configured: false, masked: null },
+    openai: { configured: false, masked: null },
+    elevenlabs: { configured: false, masked: null },
+    azure: { configured: false, masked: null },
+    ibmwatson: { configured: false, masked: null },
+    soniox: { configured: false, masked: null },
+});
+
+const maskSecretForDisplay = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    if (trimmed.length <= 8) return '****';
+    const prefixLength = trimmed.includes('-') ? Math.min(trimmed.indexOf('-') + 1, 5) : 4;
+    return `${trimmed.slice(0, Math.max(2, prefixLength))}****${trimmed.slice(-4)}`;
+};
 
 const ProviderSelect: React.FC<ProviderSelectProps> = ({ value, options, onChange }) => {
     const isLight = useResolvedTheme() === 'light';
@@ -493,8 +513,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const [profileError, setProfileError] = useState('');
     const [profileData, setProfileData] = useState<any>(null);
     const [profileViewStatus, setProfileViewStatus] = useState<'idle' | 'processing' | 'ready' | 'empty' | 'error'>('idle');
-    const [lastResumePath, setLastResumePath] = useState<string | null>(null);
-    const [lastJdPath, setLastJdPath] = useState<string | null>(null);
+    const [lastResumeFileToken, setLastResumeFileToken] = useState<string | null>(null);
+    const [lastJdFileToken, setLastJdFileToken] = useState<string | null>(null);
     const [lastUploadKind, setLastUploadKind] = useState<'resume' | 'jd' | null>(null);
     const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
     const [isPremium, setIsPremium] = useState(isPremiumActive);
@@ -552,8 +572,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
     const retryLastUpload = React.useCallback(async () => {
         if (profileViewStatusRef.current === 'processing') return;
-        if (lastUploadKind === 'resume' && !lastResumePath) return;
-        if (lastUploadKind === 'jd' && !lastJdPath) return;
+        if (lastUploadKind === 'resume' && !lastResumeFileToken) return;
+        if (lastUploadKind === 'jd' && !lastJdFileToken) return;
         if (!lastUploadKind) return;
 
         let uploadGenerationId = 0;
@@ -567,14 +587,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             setNegotiationScript(null);
             updateProfileViewStatus('processing');
 
-            if (lastUploadKind === 'resume' && lastResumePath) {
+            if (lastUploadKind === 'resume' && lastResumeFileToken) {
                 setProfileUploading(true);
                 setProfileStatus({
                     hasProfile: false,
                     profileMode: false,
                     isReady: false
                 });
-                const result = await window.electronAPI?.profileUploadResume?.(lastResumePath);
+                const result = await window.electronAPI?.profileUploadResume?.(lastResumeFileToken);
                 if (uploadGenerationRef.current !== uploadGenerationId) return;
                 if (!result?.success) {
                     if (result?.error !== 'STALE_GENERATION') {
@@ -583,10 +603,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                     }
                     return;
                 }
-            } else if (lastUploadKind === 'jd' && lastJdPath) {
+            } else if (lastUploadKind === 'jd' && lastJdFileToken) {
                 setJdUploading(true);
                 setProfileStatus(prev => ({ ...prev, isReady: false }));
-                const result = await window.electronAPI?.profileUploadJD?.(lastJdPath);
+                const result = await window.electronAPI?.profileUploadJD?.(lastJdFileToken);
                 if (uploadGenerationRef.current !== uploadGenerationId) return;
                 if (!result?.success) {
                     if (result?.error !== 'STALE_GENERATION') {
@@ -607,7 +627,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 setJdUploading(false);
             }
         }
-    }, [lastJdPath, lastResumePath, lastUploadKind, updateProfileViewStatus]);
+    }, [lastJdFileToken, lastResumeFileToken, lastUploadKind, updateProfileViewStatus]);
 
     refreshProfileStateRef.current = async (expectedGenerationId?: number) => {
         const [status, data] = await Promise.all([
@@ -1297,6 +1317,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const [sttTestError, setSttTestError] = useState('');
     const [sttSaving, setSttSaving] = useState(false);
     const [sttSaved, setSttSaved] = useState(false);
+    const [sttKeyStatuses, setSttKeyStatuses] = useState<SttSecretStatuses>(() => createEmptySttSecretStatuses());
     const [googleServiceAccountPath, setGoogleServiceAccountPath] = useState<string | null>(null);
     const [hasTeamSyncKey, setHasTeamSyncKey] = useState(false);
     const [hasStoredSttGroqKey, setHasStoredSttGroqKey] = useState(false);
@@ -1333,28 +1354,22 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 // @ts-ignore
                 const creds = await window.electronAPI?.getStoredCredentials?.();
                 if (creds) {
+                    const nextSttKeyStatuses = { ...createEmptySttSecretStatuses(), ...(creds.sttKeys ?? {}) };
                     setSttProvider(normalizeStoredSttProvider(creds.sttProvider));
                     if (creds.groqSttModel) setGroqSttModel(creds.groqSttModel);
                     setGoogleServiceAccountPath(creds.googleServiceAccountPath);
-                    setHasStoredSttGroqKey(creds.hasSttGroqKey);
-                    setHasStoredSttOpenaiKey(creds.hasSttOpenaiKey);
-                    setHasStoredDeepgramKey(creds.hasDeepgramKey);
-                    setHasStoredElevenLabsKey(creds.hasElevenLabsKey);
-                    setHasStoredAzureKey(creds.hasAzureKey);
+                    setSttKeyStatuses(nextSttKeyStatuses);
+                    setHasStoredSttGroqKey(nextSttKeyStatuses.groq.configured || creds.hasSttGroqKey);
+                    setHasStoredSttOpenaiKey(nextSttKeyStatuses.openai.configured || creds.hasSttOpenaiKey);
+                    setHasStoredDeepgramKey(nextSttKeyStatuses.deepgram.configured || creds.hasDeepgramKey);
+                    setHasStoredElevenLabsKey(nextSttKeyStatuses.elevenlabs.configured || creds.hasElevenLabsKey);
+                    setHasStoredAzureKey(nextSttKeyStatuses.azure.configured || creds.hasAzureKey);
                     if (creds.azureRegion) setSttAzureRegion(creds.azureRegion);
-                    setHasStoredIbmWatsonKey(creds.hasIbmWatsonKey);
+                    setHasStoredIbmWatsonKey(nextSttKeyStatuses.ibmwatson.configured || creds.hasIbmWatsonKey);
                     if (creds.ibmWatsonRegion) setSttIbmRegion(creds.ibmWatsonRegion);
-                    setHasStoredSonioxKey(creds.hasSonioxKey || false);
+                    setHasStoredSonioxKey(nextSttKeyStatuses.soniox.configured || creds.hasSonioxKey || false);
                     setHasStoredTavilyKey(creds.hasTavilyKey || false);
                     setHasTeamSyncKey(creds.hasTeamSyncKey || false);
-                    // Populate key fields so switching providers doesn't make saved keys appear gone
-                    if (creds.sttGroqKey !== undefined) setSttGroqKey(creds.sttGroqKey);
-                    if (creds.sttOpenaiKey !== undefined) setSttOpenaiKey(creds.sttOpenaiKey);
-                    if (creds.sttDeepgramKey !== undefined) setSttDeepgramKey(creds.sttDeepgramKey);
-                    if (creds.sttElevenLabsKey !== undefined) setSttElevenLabsKey(creds.sttElevenLabsKey);
-                    if (creds.sttAzureKey !== undefined) setSttAzureKey(creds.sttAzureKey);
-                    if (creds.sttIbmKey !== undefined) setSttIbmKey(creds.sttIbmKey);
-                    if (creds.sttSonioxKey !== undefined) setSttSonioxKey(creds.sttSonioxKey);
                 }
             } catch (e) {
                 console.error('Failed to load STT settings:', e);
@@ -1373,26 +1388,21 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 // Re-fetch credentials silently — purely additive, no state reset
                 window.electronAPI?.getStoredCredentials?.().then((creds: any) => {
                     if (!creds) return;
+                    const nextSttKeyStatuses = { ...createEmptySttSecretStatuses(), ...(creds.sttKeys ?? {}) };
                     setSttProvider(normalizeStoredSttProvider(creds.sttProvider));
                     if (creds.groqSttModel) setGroqSttModel(creds.groqSttModel);
                     setHasTeamSyncKey(creds.hasTeamSyncKey || false);
-                    setHasStoredSttGroqKey(creds.hasSttGroqKey);
-                    setHasStoredSttOpenaiKey(creds.hasSttOpenaiKey);
-                    setHasStoredDeepgramKey(creds.hasDeepgramKey);
-                    setHasStoredElevenLabsKey(creds.hasElevenLabsKey);
-                    setHasStoredAzureKey(creds.hasAzureKey);
+                    setSttKeyStatuses(nextSttKeyStatuses);
+                    setHasStoredSttGroqKey(nextSttKeyStatuses.groq.configured || creds.hasSttGroqKey);
+                    setHasStoredSttOpenaiKey(nextSttKeyStatuses.openai.configured || creds.hasSttOpenaiKey);
+                    setHasStoredDeepgramKey(nextSttKeyStatuses.deepgram.configured || creds.hasDeepgramKey);
+                    setHasStoredElevenLabsKey(nextSttKeyStatuses.elevenlabs.configured || creds.hasElevenLabsKey);
+                    setHasStoredAzureKey(nextSttKeyStatuses.azure.configured || creds.hasAzureKey);
                     if (creds.azureRegion) setSttAzureRegion(creds.azureRegion);
-                    setHasStoredIbmWatsonKey(creds.hasIbmWatsonKey);
+                    setHasStoredIbmWatsonKey(nextSttKeyStatuses.ibmwatson.configured || creds.hasIbmWatsonKey);
                     if (creds.ibmWatsonRegion) setSttIbmRegion(creds.ibmWatsonRegion);
-                    setHasStoredSonioxKey(creds.hasSonioxKey || false);
+                    setHasStoredSonioxKey(nextSttKeyStatuses.soniox.configured || creds.hasSonioxKey || false);
                     setHasStoredTavilyKey(creds.hasTavilyKey || false);
-                    if (creds.sttGroqKey !== undefined) setSttGroqKey(creds.sttGroqKey);
-                    if (creds.sttOpenaiKey !== undefined) setSttOpenaiKey(creds.sttOpenaiKey);
-                    if (creds.sttDeepgramKey !== undefined) setSttDeepgramKey(creds.sttDeepgramKey);
-                    if (creds.sttElevenLabsKey !== undefined) setSttElevenLabsKey(creds.sttElevenLabsKey);
-                    if (creds.sttAzureKey !== undefined) setSttAzureKey(creds.sttAzureKey);
-                    if (creds.sttIbmKey !== undefined) setSttIbmKey(creds.sttIbmKey);
-                    if (creds.sttSonioxKey !== undefined) setSttSonioxKey(creds.sttSonioxKey);
                 }).catch(() => { /* silently ignore */ });
             }
         });
@@ -1409,6 +1419,26 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         } catch (e) {
             console.error('Failed to set STT provider:', e);
         }
+    };
+
+    const getHasStoredSttKey = (provider: ExternalSttKeyProvider): boolean => {
+        if (provider === 'groq') return hasStoredSttGroqKey;
+        if (provider === 'openai') return hasStoredSttOpenaiKey;
+        if (provider === 'deepgram') return hasStoredDeepgramKey;
+        if (provider === 'elevenlabs') return hasStoredElevenLabsKey;
+        if (provider === 'azure') return hasStoredAzureKey;
+        if (provider === 'ibmwatson') return hasStoredIbmWatsonKey;
+        return hasStoredSonioxKey;
+    };
+
+    const setSttInputForProvider = (provider: ExternalSttKeyProvider, value: string) => {
+        if (provider === 'groq') setSttGroqKey(value);
+        else if (provider === 'openai') setSttOpenaiKey(value);
+        else if (provider === 'deepgram') setSttDeepgramKey(value);
+        else if (provider === 'elevenlabs') setSttElevenLabsKey(value);
+        else if (provider === 'azure') setSttAzureKey(value);
+        else if (provider === 'ibmwatson') setSttIbmKey(value);
+        else setSttSonioxKey(value);
     };
 
     const handleSttKeySubmit = async (provider: ExternalSttKeyProvider, key: string) => {
@@ -1478,6 +1508,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             else if (provider === 'soniox') setHasStoredSonioxKey(true);
             else setHasStoredDeepgramKey(true);
 
+            setSttKeyStatuses(prev => ({
+                ...prev,
+                [provider]: { configured: true, masked: maskSecretForDisplay(key.trim()) },
+            }));
+            setSttInputForProvider(provider, '');
             setSttProvider(provider);
             setSttSaved(true);
             setTimeout(() => setSttSaved(false), 2000);
@@ -1530,6 +1565,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 setSttDeepgramKey('');
                 setHasStoredDeepgramKey(false);
             }
+            setSttKeyStatuses(prev => ({
+                ...prev,
+                [provider]: { configured: false, masked: null },
+            }));
         } catch (e) {
             console.error(`Failed to remove ${provider} STT key:`, e);
         }
@@ -1560,8 +1599,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             return;
         }
 
-        const tavilyKey = await window.electronAPI?.getTavilyKey?.().catch(() => null);
-        if (!tavilyKey) {
+        const tavilyStatus = await window.electronAPI?.getTavilyStatus?.().catch(() => null);
+        if (!tavilyStatus?.configured) {
             setCompanyResearchToast({
                 variant: 'error',
                 title: 'Tavily key required',
@@ -1637,7 +1676,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                 : sttProvider === 'ibmwatson' ? sttIbmKey
                                     : sttProvider === 'soniox' ? sttSonioxKey
                                         : '';
-        if (!keyToTest.trim()) {
+        const provider = sttProvider as ExternalSttKeyProvider;
+        const hasStoredKey = getHasStoredSttKey(provider);
+        const regionForTest = sttProvider === 'azure'
+            ? sttAzureRegion
+            : sttProvider === 'ibmwatson'
+                ? sttIbmRegion
+                : undefined;
+
+        if (!keyToTest.trim() && !hasStoredKey) {
             setSttTestStatus('error');
             setSttTestError('Please enter an API key first');
             return;
@@ -1649,12 +1696,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             // @ts-ignore
             const result = await window.electronAPI?.testSttConnection?.(
                 sttProvider,
-                keyToTest.trim(),
-                sttProvider === 'azure'
-                    ? sttAzureRegion
-                    : sttProvider === 'ibmwatson'
-                        ? sttIbmRegion
-                        : undefined
+                keyToTest.trim() || undefined,
+                regionForTest
             );
             if (result?.success) {
                 setSttTestStatus('success');
@@ -1907,6 +1950,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         value,
         onChange,
         hasStoredKey,
+        maskedKey,
         placeholder,
         docsUrl,
         extraFields,
@@ -1917,6 +1961,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         value: string;
         onChange: (value: string) => void;
         hasStoredKey: boolean;
+        maskedKey?: string | null;
         placeholder: string;
         docsUrl: string;
         extraFields?: React.ReactNode;
@@ -1930,7 +1975,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                     type="password"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
-                    placeholder={hasStoredKey ? '••••••••••••' : placeholder}
+                    placeholder={hasStoredKey ? (maskedKey || '••••••••••••') : placeholder}
                     className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
                 />
                 <button
@@ -2949,9 +2994,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             setProfileError('');
                                                             try {
                                                                 const fileResult = await window.electronAPI?.profileSelectFile?.();
-                                                                if (fileResult?.cancelled || !fileResult?.filePath) return;
+                                                                if (fileResult?.cancelled || !fileResult?.fileToken) return;
 
-                                                                setLastResumePath(fileResult.filePath);
+                                                                setLastResumeFileToken(fileResult.fileToken);
                                                                 setLastUploadKind('resume');
                                                                 uploadGenerationId = Date.now();
                                                                 uploadGenerationRef.current = uploadGenerationId;
@@ -2965,7 +3010,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     profileMode: false,
                                                                     isReady: false
                                                                 });
-                                                                const result = await window.electronAPI?.profileUploadResume?.(fileResult.filePath);
+                                                                const result = await window.electronAPI?.profileUploadResume?.(fileResult.fileToken);
                                                                 if (uploadGenerationRef.current !== uploadGenerationId) return;
                                                                 if (result?.success) {
                                                                     await refreshProfileStateRef.current?.(uploadGenerationId);
@@ -3057,9 +3102,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 setJdError('');
                                                                 try {
                                                                     const fileResult = await window.electronAPI?.profileSelectFile?.();
-                                                                    if (fileResult?.cancelled || !fileResult?.filePath) return;
+                                                                    if (fileResult?.cancelled || !fileResult?.fileToken) return;
 
-                                                                    setLastJdPath(fileResult.filePath);
+                                                                    setLastJdFileToken(fileResult.fileToken);
                                                                     setLastUploadKind('jd');
                                                                     uploadGenerationId = Date.now();
                                                                     uploadGenerationRef.current = uploadGenerationId;
@@ -3072,7 +3117,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                         ...prev,
                                                                         isReady: false
                                                                     }));
-                                                                    const result = await window.electronAPI?.profileUploadJD?.(fileResult.filePath);
+                                                                    const result = await window.electronAPI?.profileUploadJD?.(fileResult.fileToken);
                                                                     if (uploadGenerationRef.current !== uploadGenerationId) return;
                                                                     if (result?.success) {
                                                                         await refreshProfileStateRef.current?.(uploadGenerationId);
@@ -3789,6 +3834,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     value: sttDeepgramKey,
                                                     onChange: setSttDeepgramKey,
                                                     hasStoredKey: hasStoredDeepgramKey,
+                                                    maskedKey: sttKeyStatuses.deepgram.masked,
                                                     placeholder: 'Enter Deepgram API key',
                                                     docsUrl: 'https://console.deepgram.com',
                                                     helperText: 'Deepgram remains the default recommended primary provider.',
@@ -3800,6 +3846,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     value: sttGroqKey,
                                                     onChange: setSttGroqKey,
                                                     hasStoredKey: hasStoredSttGroqKey,
+                                                    maskedKey: sttKeyStatuses.groq.masked,
                                                     placeholder: 'Enter Groq STT API key',
                                                     docsUrl: 'https://console.groq.com/keys',
                                                     extraFields: (
@@ -3833,6 +3880,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     value: sttOpenaiKey,
                                                     onChange: setSttOpenaiKey,
                                                     hasStoredKey: hasStoredSttOpenaiKey,
+                                                    maskedKey: sttKeyStatuses.openai.masked,
                                                     placeholder: 'Enter OpenAI API key',
                                                     docsUrl: 'https://platform.openai.com/api-keys',
                                                     helperText: 'OpenAI runs as the primary path and still falls back to Google, then Whisper.',
@@ -3844,6 +3892,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     value: sttElevenLabsKey,
                                                     onChange: setSttElevenLabsKey,
                                                     hasStoredKey: hasStoredElevenLabsKey,
+                                                    maskedKey: sttKeyStatuses.elevenlabs.masked,
                                                     placeholder: 'Enter ElevenLabs API key',
                                                     docsUrl: 'https://elevenlabs.io/app/settings/api-keys',
                                                     helperText: 'Uses the realtime Scribe path when available, with the same recovery chain behind it.',
@@ -3855,6 +3904,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     value: sttAzureKey,
                                                     onChange: setSttAzureKey,
                                                     hasStoredKey: hasStoredAzureKey,
+                                                    maskedKey: sttKeyStatuses.azure.masked,
                                                     placeholder: 'Enter Azure Speech API key',
                                                     docsUrl: 'https://portal.azure.com',
                                                     extraFields: (
@@ -3878,6 +3928,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     value: sttIbmKey,
                                                     onChange: setSttIbmKey,
                                                     hasStoredKey: hasStoredIbmWatsonKey,
+                                                    maskedKey: sttKeyStatuses.ibmwatson.masked,
                                                     placeholder: 'Enter IBM Watson API key',
                                                     docsUrl: 'https://cloud.ibm.com/catalog/services/speech-to-text',
                                                     extraFields: (
@@ -3901,6 +3952,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     value: sttSonioxKey,
                                                     onChange: setSttSonioxKey,
                                                     hasStoredKey: hasStoredSonioxKey,
+                                                    maskedKey: sttKeyStatuses.soniox.masked,
                                                     placeholder: 'Enter Soniox API key',
                                                     docsUrl: 'https://app.soniox.com',
                                                     helperText: 'Soniox uses its streaming path first, then drops into Google and Whisper recovery if needed.',

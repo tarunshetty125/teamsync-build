@@ -59,14 +59,14 @@ test('production CSP removes localhost backend and campaign-sand while dev CSP k
   assert.match(developmentCsp, /localhost:3456/);
 });
 
-test('release debug IPC cleanup preserves seed-demo and release-feed test gate', () => {
+test('release debug IPC cleanup removes release-feed test bridge and preserves seed-demo', () => {
   const ipc = readRepoFile('electron/ipcHandlers.ts');
   const main = readRepoFile('electron/main.ts');
   const processingHelper = readRepoFile('electron/ProcessingHelper.ts');
 
-  assert.match(ipc, /safeDevelopmentHandle\("test-release-fetch"/);
-  assert.match(ipc, /isDevelopmentOnlyIpcAllowed/);
-  assert.match(ipc, /unavailable_in_production/);
+  assert.doesNotMatch(ipc, /test-release-fetch/);
+  assert.doesNotMatch(ipc, /safeDevelopmentHandle/);
+  assert.doesNotMatch(ipc, /isDevelopmentOnlyIpcAllowed/);
   assert.match(ipc, /safeHandle\("seed-demo"/);
 
   for (const channel of [

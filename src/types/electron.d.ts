@@ -85,6 +85,46 @@ interface BedrockFetchedModel {
   inputModalities?: string[];
 }
 
+type SecretStatus = {
+  configured: boolean;
+  masked: string | null;
+}
+
+type SttProviderId = 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync' | 'whisper';
+type ExternalSttCredentialProvider = Exclude<SttProviderId, 'none' | 'google' | 'teamsync' | 'whisper'>;
+
+type StoredCredentialsSummary = {
+  hasTeamSyncKey?: boolean;
+  hasGeminiKey: boolean;
+  hasGroqKey: boolean;
+  hasOpenaiKey: boolean;
+  hasClaudeKey: boolean;
+  hasBedrockCredentials?: boolean;
+  bedrockCredentials?: BedrockCredentials;
+  googleServiceAccountPath: string | null;
+  sttProvider: SttProviderId;
+  hasSttGroqKey: boolean;
+  hasSttOpenaiKey: boolean;
+  hasDeepgramKey: boolean;
+  hasElevenLabsKey: boolean;
+  hasAzureKey: boolean;
+  azureRegion: string;
+  hasIbmWatsonKey: boolean;
+  ibmWatsonRegion: string;
+  groqSttModel?: string;
+  hasSonioxKey?: boolean;
+  hasTavilyKey?: boolean;
+  tavilyKey?: SecretStatus;
+  sttKeys?: Record<ExternalSttCredentialProvider, SecretStatus>;
+  geminiPreferredModel?: string;
+  groqPreferredModel?: string;
+  openaiPreferredModel?: string;
+  claudePreferredModel?: string;
+  bedrockPreferredModel?: string;
+  groqFetchedModels?: { id: string; label: string }[];
+  bedrockFetchedModels?: BedrockFetchedModel[];
+}
+
 type GoogleAuthUser = {
   name: string;
   email: string;
@@ -230,7 +270,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   setBedrockCredentials: (credentials: BedrockCredentials) => Promise<{ success: boolean; models?: BedrockFetchedModel[]; credentials?: BedrockCredentials; error?: string }>
   setTeamSyncApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   getTeamSyncUsage: () => Promise<{ ok: boolean; error?: string; plan?: string; quota?: { transcription: { used: number; limit: number; remaining: number }; ai: { used: number; limit: number; remaining: number }; search: { used: number; limit: number; remaining: number }; resets_at: string }; member_since?: string }>
-  getStoredCredentials: () => Promise<{ hasTeamSyncKey?: boolean; hasGeminiKey: boolean; hasGroqKey: boolean; hasOpenaiKey: boolean; hasClaudeKey: boolean; hasBedrockCredentials?: boolean; bedrockCredentials?: BedrockCredentials; googleServiceAccountPath: string | null; sttProvider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'teamsync' | 'whisper'; hasSttGroqKey: boolean; hasSttOpenaiKey: boolean; hasDeepgramKey: boolean; hasElevenLabsKey: boolean; hasAzureKey: boolean; azureRegion: string; hasIbmWatsonKey: boolean; ibmWatsonRegion: string; groqSttModel?: string; hasSonioxKey?: boolean; hasTavilyKey?: boolean; geminiPreferredModel?: string; groqPreferredModel?: string; openaiPreferredModel?: string; claudePreferredModel?: string; bedrockPreferredModel?: string; groqFetchedModels?: { id: string; label: string }[]; bedrockFetchedModels?: BedrockFetchedModel[]; sttGroqKey?: string; sttOpenaiKey?: string; sttDeepgramKey?: string; sttElevenLabsKey?: string; sttAzureKey?: string; sttIbmKey?: string; sttSonioxKey?: string }>
+  getStoredCredentials: () => Promise<StoredCredentialsSummary>
   // Permissions
   permissions: PermissionsBridge
   checkPermissions:     () => Promise<{ microphone: 'granted'|'denied'|'not-determined'|'restricted'; screen: 'granted'|'denied'|'not-determined'|'restricted'; platform: string }>
@@ -258,7 +298,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   setGroqSttModel: (model: string) => Promise<{ success: boolean; error?: string }>
   setSonioxApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>
   setIbmWatsonRegion: (region: string) => Promise<{ success: boolean; error?: string }>
-  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey: string, region?: string) => Promise<{ success: boolean; error?: string }>
+  testSttConnection: (provider: 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox', apiKey?: string, region?: string) => Promise<{ success: boolean; error?: string }>
 
   // STT Config Events (fired when STT provider/key changes during a meeting)
   onSttConfigChanged: (callback: (data: { configured: boolean; provider: string }) => void) => () => void
@@ -469,7 +509,6 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   downloadUpdate: () => Promise<void>
   getUpdaterCacheInfo: () => Promise<UpdaterCacheInfo>
   openUpdaterCacheFolder: () => Promise<{ success: boolean; path?: string; error?: string }>
-  testReleaseFetch: () => Promise<{ success: boolean; error?: string }>
 
   // RAG (Retrieval-Augmented Generation) API
   ragQueryMeeting: (meetingId: string, query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
@@ -497,21 +536,21 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   onGlobalShortcut: (callback: (data: { action: string }) => void) => () => void
 
   // Profile Engine API
-  profileUploadResume: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  profileUploadResume: (fileToken: string) => Promise<{ success: boolean; error?: string }>
   profileGetStatus: () => Promise<{ hasProfile: boolean; profileMode: boolean; isReady: boolean; name?: string; role?: string; totalExperienceYears?: number }>
   profileSetMode: (enabled: boolean) => Promise<{ success: boolean; error?: string }>
   profileDelete: () => Promise<{ success: boolean; error?: string }>
   profileGetProfile: () => Promise<any>
-  profileSelectFile: () => Promise<{ success?: boolean; cancelled?: boolean; filePath?: string; error?: string }>
+  profileSelectFile: () => Promise<{ success?: boolean; cancelled?: boolean; fileToken?: string; fileName?: string; error?: string }>
 
   // JD & Research API
-  profileUploadJD: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  profileUploadJD: (fileToken: string) => Promise<{ success: boolean; error?: string }>
   profileDeleteJD: () => Promise<{ success: boolean; error?: string }>
   profileResearchCompany: (companyName: string) => Promise<{ success: boolean; status?: string; research?: any; error?: string }>
   runCompanyResearch: (company: string, role: string, forceRefresh?: boolean) => Promise<{ success: boolean; status?: string; research?: any; error?: string }>
   onProfileUpdated: (callback: (data: any) => void) => () => void
   onProfileModeChanged: (callback: (enabled: boolean) => void) => () => void
-  getTavilyKey: () => Promise<string | null>
+  getTavilyStatus: () => Promise<SecretStatus>
   profileGenerateNegotiation: (force?: boolean) => Promise<{ success: boolean; script?: any; error?: string }>
   profileGetNegotiationState: () => Promise<{ success: boolean; enabled?: boolean; state?: any; isActive?: boolean; error?: string }>
   profileSetNegotiationContextEnabled: (enabled: boolean) => Promise<{ success: boolean; enabled?: boolean; state?: any; isActive?: boolean; hasScript?: boolean; error?: string }>

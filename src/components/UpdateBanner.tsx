@@ -57,17 +57,11 @@ const UpdateBanner: React.FC = () => {
         };
     }, []);
 
-    // Demo/Test mode: Press Cmd+I to trigger backend test-fetch or Cmd+J for UI mock
+    // Demo/Test mode: Press Cmd+J for UI mock
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (!import.meta.env.DEV) return;
-            
-            if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'i') {
-                e.preventDefault();
-                console.log("[UpdateBanner] Cmd+I pressed: Triggering Test Release Fetch...");
-                window.electronAPI.testReleaseFetch().catch(console.error);
-            }
-            
+
             if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
                 e.preventDefault();
                 console.log("[UpdateBanner] Cmd+J pressed: Triggering Instruction UI mock...");

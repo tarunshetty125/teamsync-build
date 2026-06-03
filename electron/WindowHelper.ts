@@ -784,11 +784,13 @@ export class WindowHelper {
 
   private showContextMenu(win: BrowserWindow, point: { x: number; y: number }): void {
     const template: Electron.MenuItemConstructorOptions[] = [
-      {
-        label: 'Developer Console',
-        click: () => { win.webContents.toggleDevTools(); }
-      },
-      { type: 'separator' },
+      ...(!app.isPackaged ? [
+        {
+          label: 'Developer Console',
+          click: () => { win.webContents.toggleDevTools(); }
+        },
+        { type: 'separator' as const },
+      ] : []),
       { role: 'reload' },
       { role: 'forceReload' },
       { type: 'separator' },
