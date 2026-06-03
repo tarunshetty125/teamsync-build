@@ -126,6 +126,7 @@ interface ProInsightsPanelProps {
     contextPreviewByActionId: Partial<Record<OverlayQuickActionId, string>>;
     onToggleTranscript: () => void;
     getQuickActionHandler: (action: OverlayQuickActionDef) => () => void | Promise<void>;
+    widthPx?: number;
 }
 
 const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
@@ -148,6 +149,7 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
     hasProContextAccess,
     onToggleMousePassthrough,
     onToggleCustomContext,
+    widthPx = V2_INSIGHTS_WIDTH,
 }) {
     const panelRef = useRef<HTMLDivElement>(null);
     const [copiedText, setCopiedText] = useState(false);
@@ -173,7 +175,8 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
             transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1], delay: 0.04 }}
             className="v2-surface-insights v2-no-drag"
             style={{
-                width: `${V2_INSIGHTS_WIDTH}px`,
+                width: `${widthPx}px`,
+                maxWidth: '100%',
                 display: 'flex',
                 flexDirection: 'column',
                 willChange: 'transform, opacity',

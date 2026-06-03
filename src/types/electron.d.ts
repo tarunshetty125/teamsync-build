@@ -13,6 +13,7 @@ import type {
   SessionExportSaveRequest,
   SessionExportSaveResult,
 } from '../lib/export/sessionExportDelivery';
+import type { OverlayLayoutConstraints } from '../lib/overlay/v2LayoutContract';
 
 interface PermissionsBridge {
   getStatus: () => Promise<PermissionStatusSnapshot>
@@ -194,6 +195,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
     width: number
     height: number
   }) => Promise<void>
+  getOverlayLayoutConstraints: () => Promise<OverlayLayoutConstraints>
   onToggleExpand: (callback: () => void) => () => void
   getRecognitionLanguages: () => Promise<Record<string, any>>
   getScreenshots: () => Promise<Array<{ path: string; preview: string }>>
@@ -397,6 +399,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   deleteMeeting: (id: string) => Promise<boolean>
   setWindowMode: (mode: 'launcher' | 'overlay', inactive?: boolean) => Promise<void>
   setOverlayV2Layout: (enabled: boolean) => Promise<{ success: boolean }>
+  onOverlayLayoutConstraintsChanged: (callback: (constraints: OverlayLayoutConstraints) => void) => () => void
 
   // Intelligence Mode Events
   onIntelligenceAssistUpdate: (callback: (data: { insight: string; _sessionId?: string; requestId?: string }) => void) => () => void

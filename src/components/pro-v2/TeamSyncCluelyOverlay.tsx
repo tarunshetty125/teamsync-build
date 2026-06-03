@@ -4,7 +4,7 @@
  * Layout: Bar → Rolling transcript strip → Two panels side-by-side
  */
 
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCluelyOverlayBridge } from './useCluelyOverlayBridge';
 import ProFloatingBar from './ProFloatingBar';
@@ -15,8 +15,13 @@ import { useV2OverlayResize } from './useV2OverlayResize';
 import { Image as ImageIcon, X } from 'lucide-react';
 import './pro-v2.css';
 import {
-    getV2PanelsWidth,
-    resolveV2ResponseWidthPx,
+    OVERLAY_MAX_WORK_AREA_RATIO,
+    OVERLAY_MIN_HEIGHT,
+    OVERLAY_MIN_WIDTH,
+    getOverlayMaxHeight,
+    getOverlayMaxWidth,
+    resolveV2ResponsiveLayout,
+    type OverlayLayoutConstraints,
 } from './v2Layout';
 
 function getTranscriptPillText(rollingTranscript: string, lastFinalSentence: string): string {
@@ -105,6 +110,21 @@ const ProAttachmentStrip: React.FC<ProAttachmentStripProps> = ({
     );
 };
 
+function getRendererFallbackConstraints(): OverlayLayoutConstraints {
+    const width = window.screen?.availWidth || window.innerWidth || 1200;
+    const height = window.screen?.availHeight || window.innerHeight || 800;
+    return {
+        displayId: -1,
+        scaleFactor: window.devicePixelRatio || 1,
+        workArea: { x: 0, y: 0, width, height },
+        maxWidth: getOverlayMaxWidth(width),
+        maxHeight: getOverlayMaxHeight(height),
+        minWidth: OVERLAY_MIN_WIDTH,
+        minHeight: OVERLAY_MIN_HEIGHT,
+        maxWorkAreaRatio: OVERLAY_MAX_WORK_AREA_RATIO,
+    };
+}
+
 const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
     onEndMeeting,
     overlayOpacity,
@@ -126,21 +146,32 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
 
     const containerRef = React.useRef<HTMLDivElement>(null);
     const panelsRowRef = React.useRef<HTMLDivElement>(null);
+    const [overlayConstraints, setOverlayConstraints] = React.useState<OverlayLayoutConstraints | null>(null);
 
-    const settledResponseTextRef = useRef<string | undefined>();
-    if (!bridge.activeResponse?.isStreaming && bridge.activeResponse?.text) {
-        settledResponseTextRef.current = bridge.activeResponse.text;
-    }
-    const expandedPanelsWidth = useMemo(
-        () =>
-            getV2PanelsWidth(
-                resolveV2ResponseWidthPx(
-                    bridge.activeResponse?.isStreaming
-                        ? settledResponseTextRef.current
-                        : bridge.activeResponse?.text,
-                ),
-            ),
-        [bridge.activeResponse?.text, bridge.activeResponse?.isStreaming],
+    useEffect(() => {
+        let disposed = false;
+        const applyConstraints = (constraints: OverlayLayoutConstraints) => {
+            if (!disposed) setOverlayConstraints(constraints);
+        };
+
+        if (window.electronAPI?.getOverlayLayoutConstraints) {
+            window.electronAPI.getOverlayLayoutConstraints()
+                .then(applyConstraints)
+                .catch(() => applyConstraints(getRendererFallbackConstraints()));
+        } else {
+            applyConstraints(getRendererFallbackConstraints());
+        }
+
+        const unsubscribe = window.electronAPI?.onOverlayLayoutConstraintsChanged?.(applyConstraints);
+        return () => {
+            disposed = true;
+            unsubscribe?.();
+        };
+    }, []);
+
+    const responsiveLayout = useMemo(
+        () => resolveV2ResponsiveLayout((overlayConstraints ?? getRendererFallbackConstraints()).maxWidth),
+        [overlayConstraints],
     );
 
     const showTranscriptStrip =
@@ -165,11 +196,13 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         containerRef,
         panelsRowRef,
         isExpanded: bridge.isExpanded,
-        expandedPanelsWidth,
+        layout: responsiveLayout,
+        constraints: overlayConstraints,
         isMeetingActive: bridge.isMeetingActive,
         showTranscriptStrip,
         isProcessing: bridge.isProcessing,
         contentRevision: [
+            responsiveLayout.mode,
             showTranscriptStrip,
             bridge.activeQuickActions.length,
             bridge.activeResponse?.id ?? 'none',
@@ -197,6 +230,8 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         <div
             ref={containerRef}
             style={{
+                ['--v2-content-max-width' as '--v2-content-max-width']: `${responsiveLayout.contentWidth}px`,
+                ['--v2-panel-gap' as '--v2-panel-gap']: `${responsiveLayout.panelGap}px`,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -206,7 +241,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 minHeight: 0,
                 background: 'transparent',
                 fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif",
-            }}
+            } as React.CSSProperties}
         >
             {/* ── Surface 1: Floating Command Bar ── */}
             <ProFloatingBar
@@ -256,13 +291,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                         <div
                             style={{
                                 width: '100%',
-                                maxWidth: getV2PanelsWidth(
-                                    resolveV2ResponseWidthPx(
-                                        bridge.activeResponse?.isStreaming
-                                            ? settledResponseTextRef.current
-                                            : bridge.activeResponse?.text,
-                                    ),
-                                ),
+                                maxWidth: responsiveLayout.contentWidth,
                                 margin: '0 auto',
                                 padding: '0 18px',
                             }}
@@ -293,9 +322,17 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 {bridge.isExpanded && (
                     <motion.div
                         ref={panelsRowRef}
-                        className="v2-panels-row"
+                        className={`v2-panels-row v2-panels-row--${responsiveLayout.mode}`}
+                        style={{
+                            width: responsiveLayout.contentWidth,
+                            maxWidth: '100%',
+                            gap: responsiveLayout.panelGap,
+                            flexDirection: responsiveLayout.stacked ? 'column' : 'row',
+                            alignItems: responsiveLayout.stacked ? 'stretch' : 'flex-start',
+                        }}
                     >
                         <ProInsightsPanel
+                            widthPx={responsiveLayout.insightsWidth}
                             contextSummary={bridge.contextSummary}
                             activeQuickActions={bridge.activeQuickActions}
                             recommendedButton={bridge.recommendedButton}
@@ -318,6 +355,9 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                         />
 
                         <ProResponseSurface
+                            widthPx={responsiveLayout.responseWidth}
+                            minWidthPx={responsiveLayout.responseMinWidth}
+                            maxWidthPx={responsiveLayout.responseMaxWidth}
                             activeResponse={bridge.activeResponse}
                             responseHistory={bridge.responseHistory}
                             activeResponseChain={bridge.activeResponseChain}

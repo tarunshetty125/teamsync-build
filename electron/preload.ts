@@ -16,6 +16,7 @@ import {
   type SessionExportSaveRequest,
   type SessionExportSaveResult,
 } from "../src/lib/export/sessionExportDelivery";
+import type { OverlayLayoutConstraints } from "../src/lib/overlay/v2LayoutContract";
 
 const PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC = {
   set: 'provider-analytics:set-session-snapshot',
@@ -184,6 +185,7 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
     width: number
     height: number
   }) => Promise<void>
+  getOverlayLayoutConstraints: () => Promise<OverlayLayoutConstraints>
   getRecognitionLanguages: () => Promise<Record<string, any>>
   getScreenshots: () => Promise<Array<{ path: string; preview: string }>>
   deleteScreenshot: (
@@ -403,6 +405,7 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   getOverlayMousePassthrough: () => Promise<boolean>
   onOverlayMousePassthroughChanged: (callback: (enabled: boolean) => void) => () => void
   onOverlayDragStateChanged: (callback: (dragging: boolean) => void) => () => void
+  onOverlayLayoutConstraintsChanged: (callback: (constraints: OverlayLayoutConstraints) => void) => () => void
 
   // Streaming listeners
   streamGeminiChat: (message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean, ignoreKnowledgeMode?: boolean, requestId?: string }) => Promise<void>
@@ -651,6 +654,7 @@ const trialBridgeStatus = (state: LicenseBridgeState): TrialBridgeState => {
 contextBridge.exposeInMainWorld("electronAPI", {
   updateContentDimensions: (dimensions: { width: number; height: number }) =>
     ipcRenderer.invoke("update-content-dimensions", dimensions),
+  getOverlayLayoutConstraints: () => ipcRenderer.invoke("get-overlay-layout-constraints"),
   saveSessionExportReport: (request: SessionExportSaveRequest) =>
     ipcRenderer.invoke(SESSION_EXPORT_DELIVERY_IPC.save, request),
   saveSessionExportPdfReport: (request: SessionExportPdfSaveRequest) =>
@@ -1368,6 +1372,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on('overlay-drag-state-changed', subscription)
     return () => {
       ipcRenderer.removeListener('overlay-drag-state-changed', subscription)
+    }
+  },
+
+  onOverlayLayoutConstraintsChanged: (callback: (constraints: OverlayLayoutConstraints) => void) => {
+    const subscription = (_: any, constraints: OverlayLayoutConstraints) => callback(constraints)
+    ipcRenderer.on('overlay-layout-constraints-changed', subscription)
+    return () => {
+      ipcRenderer.removeListener('overlay-layout-constraints-changed', subscription)
     }
   },
 

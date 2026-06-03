@@ -482,6 +482,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     return { success: true };
   })
 
+  safeHandle("get-overlay-layout-constraints", async () => {
+    return appState.getWindowHelper().getOverlayLayoutConstraints();
+  })
+
   safeHandle(PROVIDER_ANALYTICS_SESSION_SNAPSHOT_IPC.set, async (_, snapshot: ProviderAnalyticsSessionSnapshot | null): Promise<ProviderAnalyticsSessionSnapshotSetResult> => {
     const validation = validateProviderAnalyticsSessionSnapshot(snapshot);
     const quarantine = applyProviderAnalyticsSessionSnapshotQuarantine({

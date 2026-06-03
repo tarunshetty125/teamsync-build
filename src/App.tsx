@@ -509,6 +509,7 @@ const App: React.FC = () => {
       }
 
       localStorage.setItem('teamsync_last_meeting_start', Date.now().toString());
+      await (window.electronAPI.setOverlayV2Layout?.(useV2Layout) ?? Promise.resolve()).catch(() => { });
       const inputDeviceId = metadata?.audio?.inputDeviceId ?? localStorage.getItem('preferredInputDeviceId');
       let outputDeviceId = metadata?.audio?.outputDeviceId ?? localStorage.getItem('preferredOutputDeviceId');
       const useExperimentalSck = localStorage.getItem('useExperimentalSckBackend') === 'true';
@@ -529,6 +530,7 @@ const App: React.FC = () => {
       if (result.success) {
         setPermissionsError(null);
         analytics.trackMeetingStarted();
+        await (window.electronAPI.setOverlayV2Layout?.(useV2Layout) ?? Promise.resolve()).catch(() => { });
         // Switch to Overlay Mode via IPC
         // The main process handles window switching, but we can reinforce it or just trust main.
         // Actually, main process startMeeting triggers nothing UI-wise unless we tell it to switch window

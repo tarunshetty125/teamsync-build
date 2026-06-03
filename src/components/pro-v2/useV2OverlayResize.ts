@@ -1,6 +1,7 @@
 /**
  * Measures pro-v2 overlay content and pushes dimensions to the Electron window.
- * Handles the v1→v2 width mismatch on meeting start (main defaults to 600px for v1).
+ * Width comes from the shared display-aware layout contract; DOM measurement is
+ * used only for height so animated panel width cannot drive BrowserWindow bounds.
  */
 
 import { useCallback, useEffect, useRef } from 'react';
@@ -8,66 +9,75 @@ import {
     V2_BAR_ONLY_WIDTH,
     V2_OVERLAY_WINDOW_DEFAULT_HEIGHT,
     V2_OVERLAY_WINDOW_MAX_HEIGHT,
-    V2_OVERLAY_WINDOW_MIN_WIDTH,
-    V2_PANELS_WIDTH_DEFAULT,
+    clampNumber,
+    type OverlayLayoutConstraints,
+    type V2ResponsiveLayout,
 } from './v2Layout';
 
 type ResizeOpts = {
     containerRef: React.RefObject<HTMLDivElement | null>;
     panelsRowRef: React.RefObject<HTMLDivElement | null>;
     isExpanded: boolean;
-    expandedPanelsWidth: number;
+    layout: V2ResponsiveLayout;
+    constraints: OverlayLayoutConstraints | null;
     showTranscriptStrip?: boolean;
 };
 
 const RESIZE_THROTTLE_MS = 300;
 const V2_COLLAPSE_HOLD_MS = 380;
+const V2_MEASUREMENT_SETTLE_MS = 180;
 const V2_COLLAPSED_HEIGHT = 60;
 const V2_COLLAPSED_WITH_TRANSCRIPT_HEIGHT = 152;
 
 function computeDimensions(
     container: HTMLDivElement | null,
-    panelsRow: HTMLDivElement | null,
     isExpanded: boolean,
-    expandedPanelsWidth: number,
+    layout: V2ResponsiveLayout,
+    constraints: OverlayLayoutConstraints,
     showTranscriptStrip: boolean,
     shouldHoldExpandedShell: boolean,
 ): { width: number; height: number } {
+    const maxWidth = constraints.maxWidth;
+    const maxHeight = Math.min(constraints.maxHeight, V2_OVERLAY_WINDOW_MAX_HEIGHT);
+    const minWidth = Math.min(constraints.minWidth, maxWidth);
+
     if (!isExpanded) {
         if (shouldHoldExpandedShell) {
             const height = container
                 ? Math.max(Math.ceil(container.scrollHeight) + 16, V2_OVERLAY_WINDOW_DEFAULT_HEIGHT)
                 : V2_OVERLAY_WINDOW_DEFAULT_HEIGHT;
-            return { width: expandedPanelsWidth, height: Math.min(height, V2_OVERLAY_WINDOW_MAX_HEIGHT) };
+            return {
+                width: clampNumber(layout.windowWidth, minWidth, maxWidth),
+                height: clampNumber(height, constraints.minHeight, maxHeight),
+            };
         }
         // Keep collapsed sizing deterministic so AnimatePresence exit frames from the
         // panels cannot re-measure the old expanded stack and force a tall shell.
         const height = showTranscriptStrip
             ? V2_COLLAPSED_WITH_TRANSCRIPT_HEIGHT
             : V2_COLLAPSED_HEIGHT;
-        return { width: V2_BAR_ONLY_WIDTH, height };
+        return {
+            width: clampNumber(Math.min(V2_BAR_ONLY_WIDTH, maxWidth), minWidth, maxWidth),
+            height: clampNumber(height, constraints.minHeight, maxHeight),
+        };
     }
-
-    const measuredWidth = Math.ceil((panelsRow?.scrollWidth ?? container?.scrollWidth ?? 0) + 16);
-    const width = Math.max(
-        measuredWidth,
-        expandedPanelsWidth,
-        V2_PANELS_WIDTH_DEFAULT,
-        V2_OVERLAY_WINDOW_MIN_WIDTH,
-    );
 
     const measuredHeight = container
         ? Math.max(Math.ceil(container.scrollHeight) + 16, V2_OVERLAY_WINDOW_DEFAULT_HEIGHT)
         : V2_OVERLAY_WINDOW_DEFAULT_HEIGHT;
 
-    return { width, height: Math.min(measuredHeight, V2_OVERLAY_WINDOW_MAX_HEIGHT) };
+    return {
+        width: clampNumber(layout.windowWidth, minWidth, maxWidth),
+        height: clampNumber(measuredHeight, constraints.minHeight, maxHeight),
+    };
 }
 
 export function useV2OverlayResize({
     containerRef,
     panelsRowRef,
     isExpanded,
-    expandedPanelsWidth,
+    layout,
+    constraints,
     showTranscriptStrip = false,
     isMeetingActive,
     isProcessing = false,
@@ -82,6 +92,8 @@ export function useV2OverlayResize({
     const burstGenerationRef = useRef(0);
     const lastPushedDimsRef = useRef<{ width: number; height: number } | null>(null);
     const diagramInteractingRef = useRef(false);
+    const overlayDraggingRef = useRef(false);
+    const measurementSettlesAtRef = useRef(0);
 
     const prevExpandedRef = useRef(isExpanded);
     const prevTranscriptRef = useRef(showTranscriptStrip);
@@ -96,28 +108,49 @@ export function useV2OverlayResize({
         prevTranscriptRef.current = showTranscriptStrip;
     }
 
+    const clearPendingResizeWork = useCallback(() => {
+        burstTimersRef.current.forEach(clearTimeout);
+        burstTimersRef.current = [];
+        if (resizeTimerRef.current) {
+            clearTimeout(resizeTimerRef.current);
+            resizeTimerRef.current = null;
+        }
+    }, []);
+
     const pushDimensions = useCallback((generation?: number) => {
         if (typeof generation === 'number' && generation !== burstGenerationRef.current) return;
+        if (!constraints) return;
+        if (overlayDraggingRef.current) return;
         if (diagramInteractingRef.current) return;
         const shouldHoldExpandedShell =
             !isExpanded && Date.now() < collapseHoldUntilRef.current;
-        const dims = computeDimensions(
+        let dims = computeDimensions(
             containerRef.current,
-            panelsRowRef.current,
             isExpanded,
-            expandedPanelsWidth,
+            layout,
+            constraints,
             showTranscriptStrip,
             shouldHoldExpandedShell,
         );
         const previous = lastPushedDimsRef.current;
+        if (
+            previous &&
+            isExpanded &&
+            Date.now() < measurementSettlesAtRef.current &&
+            dims.width === previous.width &&
+            dims.height < previous.height
+        ) {
+            dims = { ...dims, height: previous.height };
+        }
         if (previous && Math.abs(previous.width - dims.width) < 2 && Math.abs(previous.height - dims.height) < 2) {
             return;
         }
         lastPushedDimsRef.current = dims;
         window.electronAPI?.updateContentDimensions?.(dims);
-    }, [containerRef, panelsRowRef, isExpanded, expandedPanelsWidth, showTranscriptStrip]);
+    }, [constraints, containerRef, isExpanded, layout, showTranscriptStrip]);
 
     const pushDimensionsThrottled = useCallback(() => {
+        if (overlayDraggingRef.current) return;
         const now = Date.now();
         const elapsed = now - lastResizeAtRef.current;
         if (elapsed >= RESIZE_THROTTLE_MS) {
@@ -134,26 +167,22 @@ export function useV2OverlayResize({
     }, [pushDimensions]);
 
     const scheduleResizeBurst = useCallback(() => {
-        burstTimersRef.current.forEach(clearTimeout);
-        burstTimersRef.current = [];
-        if (resizeTimerRef.current) {
-            clearTimeout(resizeTimerRef.current);
-            resizeTimerRef.current = null;
-        }
+        if (overlayDraggingRef.current) return;
+        clearPendingResizeWork();
+        measurementSettlesAtRef.current = Date.now() + V2_MEASUREMENT_SETTLE_MS;
         const generation = ++burstGenerationRef.current;
         pushDimensions(generation);
-        for (const ms of [32, 120, 280, 560]) {
+        for (const ms of [V2_MEASUREMENT_SETTLE_MS, 360, 620]) {
             burstTimersRef.current.push(setTimeout(() => pushDimensions(generation), ms));
         }
-    }, [pushDimensions]);
+    }, [clearPendingResizeWork, pushDimensions]);
 
     useEffect(
         () => () => {
-            burstTimersRef.current.forEach(clearTimeout);
-            if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
+            clearPendingResizeWork();
             if (collapseReleaseTimerRef.current) clearTimeout(collapseReleaseTimerRef.current);
         },
-        [],
+        [clearPendingResizeWork],
     );
 
     useEffect(() => {
@@ -180,7 +209,32 @@ export function useV2OverlayResize({
 
     useEffect(() => {
         scheduleResizeBurst();
-    }, [scheduleResizeBurst, isExpanded, expandedPanelsWidth, isMeetingActive, contentRevision, showTranscriptStrip]);
+    }, [
+        scheduleResizeBurst,
+        isExpanded,
+        layout.mode,
+        layout.windowWidth,
+        layout.contentWidth,
+        constraints?.displayId,
+        constraints?.maxWidth,
+        constraints?.maxHeight,
+        isMeetingActive,
+        contentRevision,
+        showTranscriptStrip,
+    ]);
+
+    useEffect(() => {
+        if (!window.electronAPI?.onOverlayDragStateChanged) return;
+        const unsubscribe = window.electronAPI.onOverlayDragStateChanged((dragging) => {
+            overlayDraggingRef.current = dragging;
+            if (dragging) {
+                clearPendingResizeWork();
+            } else {
+                scheduleResizeBurst();
+            }
+        });
+        return () => unsubscribe();
+    }, [clearPendingResizeWork, scheduleResizeBurst]);
 
     useEffect(() => {
         const onDiagramInteraction = (event: Event) => {
@@ -222,14 +276,10 @@ export function useV2OverlayResize({
         if (!container) return;
 
         const observer = new ResizeObserver(() => {
+            measurementSettlesAtRef.current = Date.now() + V2_MEASUREMENT_SETTLE_MS;
             pushDimensionsThrottled();
         });
         observer.observe(container);
-
-        const row = panelsRowRef.current;
-        if (row && isExpanded) {
-            observer.observe(row);
-        }
 
         pushDimensions();
         return () => observer.disconnect();

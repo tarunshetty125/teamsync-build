@@ -19,7 +19,7 @@ import MermaidRenderer from '../ui/MermaidRenderer';
 import type { V2Message } from './useCluelyOverlayBridge';
 import type { ResponseSelectionMode } from '../../lib/overlay/responseHistorySelection';
 import { getProviderModelMetadata } from '../../lib/providers/providerModelMetadata';
-import { resolveV2ResponseWidthPx, V2_RESPONSE_MIN_WIDTH, V2_RESPONSE_MAX_WIDTH } from './v2Layout';
+import { V2_RESPONSE_MAX_WIDTH, V2_RESPONSE_MIN_WIDTH } from './v2Layout';
 import ArchitectureRenderer from './architecture/ArchitectureRenderer';
 import {
     looksLikeSystemDesignResponse,
@@ -80,6 +80,9 @@ interface ProResponseSurfaceProps {
     onJumpLatestResponse: () => void;
     onSelectTimelineResponse: (responseId: string) => void;
     scrollContainerRef: React.RefObject<HTMLDivElement>;
+    widthPx?: number;
+    minWidthPx?: number;
+    maxWidthPx?: number;
 }
 
 // Source icon mapping
@@ -115,6 +118,9 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
     onJumpLatestResponse,
     onSelectTimelineResponse,
     scrollContainerRef,
+    widthPx = V2_RESPONSE_MIN_WIDTH,
+    minWidthPx = V2_RESPONSE_MIN_WIDTH,
+    maxWidthPx = V2_RESPONSE_MAX_WIDTH,
 }) {
     const [copied, setCopied] = useState(false);
     const [isExportPreviewOpen, setIsExportPreviewOpen] = useState(false);
@@ -218,11 +224,6 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         diagramTimeline.items,
     ]);
 
-    const responseWidthPx = useMemo(
-        () => resolveV2ResponseWidthPx(renderedResponse?.text),
-        [renderedResponse?.text],
-    );
-
     const buildCurrentSessionExportReadModel = useCallback(() => {
         const generatedAt = Date.now();
         const activeResponseId = renderedResponse?.id ?? null;
@@ -315,14 +316,13 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
             transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1], delay: 0.06 }}
             className="v2-surface-response v2-draggable"
             style={{
-                minWidth: `${V2_RESPONSE_MIN_WIDTH}px`,
-                maxWidth: `${V2_RESPONSE_MAX_WIDTH}px`,
-                width: `${responseWidthPx}px`,
+                minWidth: `${minWidthPx}px`,
+                maxWidth: `${maxWidthPx}px`,
+                width: `${widthPx}px`,
                 flex: '0 0 auto',
                 display: 'flex',
                 flexDirection: 'column',
                 willChange: 'transform, opacity',
-                transition: 'width 0.35s cubic-bezier(0.22, 1, 0.36, 1)',
             }}
         >
             {/* ── Header ── */}

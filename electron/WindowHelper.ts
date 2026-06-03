@@ -4,6 +4,16 @@ import { AppState } from "./main"
 import { KeybindManager } from "./services/KeybindManager"
 import { redactForPersistentLog } from "./utils/safeLogging"
 import path from "node:path"
+import {
+  OVERLAY_MAX_WORK_AREA_RATIO,
+  OVERLAY_MIN_HEIGHT as OVERLAY_WINDOW_MIN_HEIGHT,
+  OVERLAY_MIN_WIDTH,
+  V2_OVERLAY_WINDOW_DEFAULT_HEIGHT,
+  getOverlayMaxHeight,
+  getOverlayMaxWidth,
+  getV2DefaultOverlayWidth,
+  type OverlayLayoutConstraints,
+} from "../src/lib/overlay/v2LayoutContract"
 
 const isEnvDev = process.env.NODE_ENV === "development"
 const isPackaged = app.isPackaged;
@@ -34,12 +44,12 @@ export class WindowHelper {
   private opacityTimeout: NodeJS.Timeout | null = null
   private overlayDragStateTimeout: NodeJS.Timeout | null = null
   private startupFallbackTimeout: NodeJS.Timeout | null = null
+  private displayChangeDebounceTimeout: NodeJS.Timeout | null = null
+  private displayChangeListenersRegistered = false
 
-  // Constants — v1 overlay content is 600px; pro v2 dual-panel layout needs ~1070px
+  // Constants — v1 overlay content is 600px; pro v2 sizing comes from v2LayoutContract.
   private static readonly OVERLAY_DEFAULT_WIDTH = 600;
-  private static readonly OVERLAY_V2_DEFAULT_WIDTH = 1070;
   private static readonly OVERLAY_MIN_HEIGHT = 216;
-  private static readonly OVERLAY_V2_DEFAULT_HEIGHT = 520;
 
   /** Set by overlay renderer when teamsync_overlay_v2 is enabled. */
   private overlayUsesV2Layout = false;
@@ -62,19 +72,20 @@ export class WindowHelper {
       };
     }
     console.log(`[WindowHelper] Overlay layout profile: ${enabled ? 'pro-v2' : 'v1'}`);
+    this.broadcastOverlayLayoutConstraints();
   }
 
   private getOverlayDefaultWidth(): number {
-    return this.overlayUsesV2Layout
-      ? WindowHelper.OVERLAY_V2_DEFAULT_WIDTH
-      : WindowHelper.OVERLAY_DEFAULT_WIDTH;
+    if (!this.overlayUsesV2Layout) return WindowHelper.OVERLAY_DEFAULT_WIDTH;
+    const workArea = this.getDisplayWorkArea();
+    return getV2DefaultOverlayWidth(getOverlayMaxWidth(workArea.width));
   }
 
   private getOverlayDefaultHeight(currentHeight: number, maxAllowedHeight: number): number {
     const floor = WindowHelper.OVERLAY_MIN_HEIGHT;
     if (this.overlayUsesV2Layout) {
       return Math.min(
-        Math.max(currentHeight, WindowHelper.OVERLAY_V2_DEFAULT_HEIGHT),
+        Math.max(currentHeight, V2_OVERLAY_WINDOW_DEFAULT_HEIGHT),
         maxAllowedHeight,
       );
     }
@@ -94,6 +105,35 @@ export class WindowHelper {
     return screen.getPrimaryDisplay().workArea
   }
 
+  public getOverlayLayoutConstraints(bounds?: Electron.Rectangle): OverlayLayoutConstraints {
+    const referenceBounds =
+      bounds ??
+      this.overlayBounds ??
+      (this.overlayWindow && !this.overlayWindow.isDestroyed()
+        ? this.overlayWindow.getBounds()
+        : undefined);
+    const display = referenceBounds
+      ? screen.getDisplayMatching(referenceBounds)
+      : screen.getPrimaryDisplay();
+    const workArea = display.workArea;
+
+    return {
+      displayId: display.id,
+      scaleFactor: display.scaleFactor,
+      workArea: {
+        x: workArea.x,
+        y: workArea.y,
+        width: workArea.width,
+        height: workArea.height,
+      },
+      maxWidth: getOverlayMaxWidth(workArea.width),
+      maxHeight: getOverlayMaxHeight(workArea.height),
+      minWidth: OVERLAY_MIN_WIDTH,
+      minHeight: OVERLAY_WINDOW_MIN_HEIGHT,
+      maxWorkAreaRatio: OVERLAY_MAX_WORK_AREA_RATIO,
+    };
+  }
+
   public setContentProtection(enable: boolean): void {
     this.contentProtection = enable
     this.applyContentProtection(enable)
@@ -109,6 +149,7 @@ export class WindowHelper {
     if (this.overlayDragStateTimeout) clearTimeout(this.overlayDragStateTimeout)
     this.overlayDragStateTimeout = setTimeout(() => {
       this.broadcastOverlayDragState(false)
+      this.broadcastOverlayLayoutConstraints()
       this.overlayDragStateTimeout = null
     }, 140)
   }
@@ -129,7 +170,7 @@ export class WindowHelper {
     const [currentX, currentY] = activeWindow.getPosition()
     const primaryDisplay = screen.getPrimaryDisplay()
     const workArea = primaryDisplay.workAreaSize
-    const maxAllowedWidth = Math.floor(workArea.width * 0.9)
+    const maxAllowedWidth = getOverlayMaxWidth(workArea.width)
     const newWidth = Math.min(width, maxAllowedWidth)
     const newHeight = Math.ceil(height)
     const maxX = workArea.width - newWidth
@@ -157,10 +198,10 @@ export class WindowHelper {
     const currentX = currentBounds.x
     const currentY = currentBounds.y
     const workArea = this.getDisplayWorkArea(currentBounds)
-    const maxAllowedWidth = Math.floor(workArea.width * 0.9)
-    const maxAllowedHeight = Math.floor(workArea.height * 0.9)
-    const newWidth = Math.min(Math.max(width, 300), maxAllowedWidth) // min 300, max 90%
-    const newHeight = Math.min(Math.max(height, 1), maxAllowedHeight) // min 1, max 90%
+    const maxAllowedWidth = getOverlayMaxWidth(workArea.width)
+    const maxAllowedHeight = getOverlayMaxHeight(workArea.height)
+    const newWidth = Math.min(Math.max(width, OVERLAY_MIN_WIDTH), maxAllowedWidth)
+    const newHeight = Math.min(Math.max(height, OVERLAY_WINDOW_MIN_HEIGHT), maxAllowedHeight)
 
     // Keep horizontal center point aligned when resizing V2 layout to prevent left-side jumping
     let calculatedX = currentX
@@ -373,6 +414,66 @@ export class WindowHelper {
     this.setupWindowListeners()
   }
 
+  private registerDisplayChangeListeners(): void {
+    if (this.displayChangeListenersRegistered) return;
+    this.displayChangeListenersRegistered = true;
+
+    const handleDisplayChange = () => this.scheduleDisplayBoundsReconciliation();
+    screen.on('display-added', handleDisplayChange);
+    screen.on('display-removed', handleDisplayChange);
+    screen.on('display-metrics-changed', handleDisplayChange);
+
+    app.once('before-quit', () => {
+      screen.removeListener('display-added', handleDisplayChange);
+      screen.removeListener('display-removed', handleDisplayChange);
+      screen.removeListener('display-metrics-changed', handleDisplayChange);
+      if (this.displayChangeDebounceTimeout) {
+        clearTimeout(this.displayChangeDebounceTimeout);
+        this.displayChangeDebounceTimeout = null;
+      }
+      this.displayChangeListenersRegistered = false;
+    });
+  }
+
+  private scheduleDisplayBoundsReconciliation(): void {
+    if (this.displayChangeDebounceTimeout) {
+      clearTimeout(this.displayChangeDebounceTimeout);
+    }
+    this.displayChangeDebounceTimeout = setTimeout(() => {
+      this.displayChangeDebounceTimeout = null;
+      this.reconcileOverlayBoundsWithCurrentDisplay();
+      this.broadcastOverlayLayoutConstraints();
+    }, 120);
+  }
+
+  private reconcileOverlayBoundsWithCurrentDisplay(): void {
+    if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return;
+
+    const bounds = this.overlayWindow.getBounds();
+    const workArea = this.getDisplayWorkArea(bounds);
+    const maxWidth = getOverlayMaxWidth(workArea.width);
+    const maxHeight = getOverlayMaxHeight(workArea.height);
+    const width = Math.min(Math.max(bounds.width, OVERLAY_MIN_WIDTH), maxWidth);
+    const height = Math.min(Math.max(bounds.height, OVERLAY_WINDOW_MIN_HEIGHT), maxHeight);
+    const maxX = workArea.x + workArea.width - width;
+    const maxY = workArea.y + workArea.height - height;
+    const x = Math.min(Math.max(bounds.x, workArea.x), maxX);
+    const y = Math.min(Math.max(bounds.y, workArea.y), maxY);
+
+    if (x !== bounds.x || y !== bounds.y || width !== bounds.width || height !== bounds.height) {
+      this.overlayWindow.setBounds({ x, y, width, height });
+    }
+    this.overlayBounds = this.overlayWindow.getBounds();
+  }
+
+  private broadcastOverlayLayoutConstraints(): void {
+    if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return;
+    this.overlayWindow.webContents.send(
+      'overlay-layout-constraints-changed',
+      this.getOverlayLayoutConstraints(),
+    );
+  }
+
   private scheduleStartupPresentationFallback(reason: string, delayMs: number): void {
     if (this.startupFallbackTimeout) {
       clearTimeout(this.startupFallbackTimeout);
@@ -391,6 +492,7 @@ export class WindowHelper {
 
   private setupWindowListeners(): void {
     if (!this.launcherWindow) return
+    this.registerDisplayChangeListeners()
 
     // Suppress Windows system context menu on right-click (title bar)
     this.launcherWindow.on('system-context-menu', (e, point) => {
@@ -658,8 +760,8 @@ export class WindowHelper {
           }
         : null;
       const workArea = this.getDisplayWorkArea(savedBounds ?? currentBounds);
-      const maxAllowedWidth = Math.floor(workArea.width * 0.9);
-      const maxAllowedHeight = Math.floor(workArea.height * 0.9);
+      const maxAllowedWidth = getOverlayMaxWidth(workArea.width);
+      const maxAllowedHeight = getOverlayMaxHeight(workArea.height);
       const targetBounds = savedBounds
         ? {
             x: Math.min(Math.max(savedBounds.x, workArea.x), workArea.x + workArea.width - Math.min(savedBounds.width, maxAllowedWidth)),
@@ -668,12 +770,15 @@ export class WindowHelper {
             height: Math.min(savedBounds.height, maxAllowedHeight)
           }
         : (() => {
-            const defaultWidth = this.getOverlayDefaultWidth();
+            const defaultWidth = this.overlayUsesV2Layout
+              ? getV2DefaultOverlayWidth(maxAllowedWidth)
+              : this.getOverlayDefaultWidth();
+            const defaultHeight = this.getOverlayDefaultHeight(currentBounds.height, maxAllowedHeight);
             return {
               x: Math.floor(workArea.x + (workArea.width - defaultWidth) / 2),
-              y: Math.floor(workArea.y + (workArea.height - defaultWidth) / 2),
+              y: Math.floor(workArea.y + (workArea.height - defaultHeight) / 2),
               width: defaultWidth,
-              height: this.getOverlayDefaultHeight(currentBounds.height, maxAllowedHeight),
+              height: defaultHeight,
             };
           })();
 
