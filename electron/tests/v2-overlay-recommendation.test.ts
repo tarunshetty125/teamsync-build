@@ -67,7 +67,23 @@ test('coding transcript switches quick actions to tech set', () => {
     const actions = getOverlayQuickActions('coding', true);
     assert.deepEqual(
         actions.map((a) => a.id),
-        ['tech_hint', 'tech_optimal_solution', 'tech_complexity', 'tech_edge_case'],
+        ['tech_hint', 'tech_optimal_solution', 'tech_complexity', 'tech_edge_case', 'follow_up_questions', 'job_improvement'],
+    );
+});
+
+test('behavioral interview workflow exposes STAR, Improve, Confidence, Clarify, and Brainstorm together', () => {
+    const actions = getOverlayQuickActions('behavioral', true);
+    assert.deepEqual(
+        actions.map((a) => a.id),
+        ['job_star', 'job_improvement', 'job_confidence', 'clarify', 'brainstorm', 'follow_up_questions'],
+    );
+});
+
+test('looking-for-work workflow keeps job actions and adds clarify and brainstorm', () => {
+    const actions = getOverlayQuickActions('looking-for-work', true);
+    assert.deepEqual(
+        actions.map((a) => a.id),
+        ['job_star', 'job_resume_alignment', 'job_confidence', 'job_improvement', 'clarify', 'brainstorm'],
     );
 });
 

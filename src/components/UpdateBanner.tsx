@@ -11,6 +11,8 @@ const UpdateBanner: React.FC = () => {
     const [instructionsArch, setInstructionsArch] = useState<'arm64' | 'x64' | null>(null);
 
     useEffect(() => {
+        if (!window.electronAPI?.onUpdateAvailable) return;
+
         // Listen for update available
         const unsubAvailable = window.electronAPI.onUpdateAvailable((info: any) => {
             console.log('[UpdateBanner] Update available:', info);

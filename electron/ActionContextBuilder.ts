@@ -137,6 +137,7 @@ export type PromptContextOrderKey = 'rag' | 'supplemental' | 'profile' | 'transc
 export interface PromptObject {
     mode: SessionActionMode;
     intent: UnifiedActionIntent;
+    actionId?: string;
     actionContract?: ActionContract;
     question: string;
     transcript: PromptTranscriptSection;
@@ -157,6 +158,23 @@ export interface BuiltContextLayers {
     transcriptStrategy: TranscriptStrategy;
     transcriptLength: number;
     transcriptApproxTokens: number;
+}
+
+export interface QuestionResponseProfileOptions {
+    suppressSystemDesignAutoUpgrade?: boolean;
+}
+
+function isLectureActionContext(actionId?: string | null, additionalContext?: string | null): boolean {
+    return /^lecture_/.test(actionId?.trim() || '')
+        || /\bLecture mode:/i.test(additionalContext?.trim() || '');
+}
+
+export function buildQuestionResponseProfileOptions(args?: {
+    actionId?: string | null;
+    additionalContext?: string | null;
+}): QuestionResponseProfileOptions | undefined {
+    if (!isLectureActionContext(args?.actionId, args?.additionalContext)) return undefined;
+    return { suppressSystemDesignAutoUpgrade: true };
 }
 
 export interface SerializedPrompt {
@@ -425,14 +443,17 @@ export function buildBaseContext(session: SessionTracker): BaseContextLayer {
 export function getQuestionResponseProfile(
     question: string,
     mode: SessionActionMode,
-    intent: UnifiedActionIntent
+    intent: UnifiedActionIntent,
+    options?: QuestionResponseProfileOptions
 ): QuestionResponseProfile {
     const normalized = question.trim().toLowerCase();
     const wordCount = normalized.split(/\s+/).filter(Boolean).length;
 
-    if (mode === 'system_design'
-        || intent === 'system_design_tradeoffs'
-        || looksLikeSystemDesignInterviewQuestion(question)) {
+    if (intent === 'system_design_tradeoffs'
+        || (!options?.suppressSystemDesignAutoUpgrade && (
+            mode === 'system_design'
+            || looksLikeSystemDesignInterviewQuestion(question)
+        ))) {
         return 'system_design';
     }
 
@@ -1052,10 +1073,14 @@ export function buildIntentPrompt(
     profileApplied: boolean = false,
     actionContract?: ActionContract,
     personalization?: PersonalizationPreferences,
+    profileOptions?: QuestionResponseProfileOptions,
 ): PromptInstruction[] {
     const basePrompt = getIntentPromptBase(intent).trim();
-    const modeAwareRules = buildModeAwareIntentRules(intent, mode);
-    const responseProfile = getQuestionResponseProfile(question?.trim() || '', mode, intent);
+    const promptRuleMode = profileOptions?.suppressSystemDesignAutoUpgrade && mode === 'system_design'
+        ? 'general'
+        : mode;
+    const modeAwareRules = buildModeAwareIntentRules(intent, promptRuleMode);
+    const responseProfile = getQuestionResponseProfile(question?.trim() || '', mode, intent, profileOptions);
     const contextPriorityRules = buildContextPriorityRules(profileApplied, intent);
     const effectiveActionContract = resolveActionContractForResponseProfile({
         intent,
@@ -1495,11 +1520,15 @@ export async function buildContextLayers({
     })();
     const question = normalizeActionQuestion(rawQuestion, mode, intent);
     const transcript = buildTranscriptContext(session, intent, question, mode, { transcriptOverride });
-    const responseProfile = getQuestionResponseProfile(question, mode, intent);
+    const profileOptions = buildQuestionResponseProfileOptions({ actionId, additionalContext });
+    const responseProfile = getQuestionResponseProfile(question, mode, intent, profileOptions);
     const personalizationSnapshot = buildResolvedPersonalizationSnapshot(question, responseProfile, personalization);
+    const promptRuleMode = profileOptions?.suppressSystemDesignAutoUpgrade && mode === 'system_design'
+        ? 'general'
+        : mode;
     const modeInstructions = intent === 'screen_scan'
         ? []
-        : buildModeContext(mode, { includeModeCustomContext: resolvedPolicy.includeModeCustomContext });
+        : buildModeContext(promptRuleMode, { includeModeCustomContext: resolvedPolicy.includeModeCustomContext });
     const profileResult = await buildProfileContext(intent, profile, question, resolvedPolicy.resolvedProfilePreference);
     const effectiveActionContract = resolveActionContractForResponseProfile({
         intent,
@@ -1507,7 +1536,7 @@ export async function buildContextLayers({
         actionContract,
         responseProfile,
     });
-    const intentInstructions = buildIntentPrompt(intent, mode, screenScanMode, question, profileResult.profile?.used === true, effectiveActionContract, personalization);
+    const intentInstructions = buildIntentPrompt(intent, promptRuleMode, screenScanMode, question, profileResult.profile?.used === true, effectiveActionContract, personalization, profileOptions);
     const responseStyleInstruction = buildResponseStyleInstruction(personalizationSnapshot.responseStyle);
     const profileInstruction = profileResult.profile?.instruction?.trim()
         ? [createInstruction('profile_instruction', 'PROFILE INTELLIGENCE', profileResult.profile.instruction.trim())]
@@ -1525,6 +1554,7 @@ export async function buildContextLayers({
     const promptObject: PromptObject = {
         mode,
         intent,
+        actionId,
         actionContract: effectiveActionContract,
         question,
         transcript,

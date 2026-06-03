@@ -1,22 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ToggleLeft, ToggleRight, Search, Zap, Calendar, ArrowRight, ArrowLeft, MoreHorizontal, Globe, Clock, ChevronRight, Settings, LayoutGrid, RefreshCw, Eye, EyeOff, Ghost, Plus, Mail, Link as LinkIcon, ChevronDown, Trash2, Bell, Check, Download, DownloadCloud, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, ArrowLeft, MoreHorizontal, Settings, RefreshCw, Ghost, Download, DownloadCloud, CheckCircle, AlertCircle, Sparkles, Calendar, Users, FileText, BriefcaseBusiness, Code2, MessageSquareText, CircleDot, Video, Clock3, CheckCircle2, PlugZap, Trash2, type LucideIcon } from 'lucide-react';
 import { generateMeetingPDF } from '../utils/pdfGenerator';
 import icon from "./icon.png";
-import mainui from "../UI_comp/mainui.png";
-import calender from "../UI_comp/calender.png";
 import ConnectCalendarButton from './ui/ConnectCalendarButton';
 import MeetingDetails from './MeetingDetails';
 import TopSearchPill from './TopSearchPill';
 import GlobalChatOverlay from './GlobalChatOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FeatureSpotlight } from './FeatureSpotlight';
-import UpcomingEventsPanel from './UpcomingEventsPanel';
 import CalendarModeRecommendationCard from './CalendarModeRecommendationCard';
 import { analytics } from '../lib/analytics/analytics.service'; // Added analytics import
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { isMac } from '../utils/platformUtils';
 import WindowControls from './WindowControls';
+import { getUpcomingEvents, NormalizedEvent } from '../utils/filter';
+import { formatTimeRange } from '../utils/time';
 
 type RecommendationModeId =
     | 'technical-interview'
@@ -42,6 +40,11 @@ interface CalendarModeRecommendation {
     suggestedReferences: string[];
 }
 
+type CalendarParticipant = {
+    email: string;
+    name: string;
+};
+
 interface Meeting {
     id: string;
     title: string;
@@ -66,6 +69,8 @@ interface Meeting {
     }>;
     active?: boolean; // UI state
     time?: string; // Optional for compatibility
+    calendarEventId?: string;
+    source?: 'manual' | 'calendar';
 }
 
 interface LauncherProps {
@@ -103,6 +108,164 @@ const formatTime = (dateStr: string) => {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
 };
 
+const isToday = (dateStr: string) => getGroupLabel(dateStr) === 'Today';
+
+const cleanInlineText = (value?: string) => {
+    if (!value) return '';
+    return value
+        .replace(/<br\s*\/?>(\r?\n)?/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/[#*_`>•-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+const truncateSentence = (value: string, maxLength = 112) => {
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, maxLength - 1).trim()}...`;
+};
+
+const getMeetingSummaryLine = (meeting: Meeting) => {
+    if (meeting.title === 'Processing...') return 'Transcript is being processed into notes.';
+
+    const summary = cleanInlineText(meeting.summary);
+    if (summary) return truncateSentence(summary);
+
+    const firstKeyPoint = meeting.detailedSummary?.keyPoints?.find(Boolean);
+    if (firstKeyPoint) return truncateSentence(cleanInlineText(firstKeyPoint));
+
+    const usageCount = meeting.usage?.length ?? 0;
+    if (usageCount > 0) return `${usageCount} AI assist ${usageCount === 1 ? 'interaction' : 'interactions'} captured.`;
+
+    return 'No AI summary captured yet.';
+};
+
+const getMeetingTypeMeta = (meeting: Meeting): { label: string; Icon: LucideIcon; tone: string } => {
+    const title = meeting.title.toLowerCase();
+    const usageTypes = new Set((meeting.usage ?? []).map((item) => item.type));
+
+    if (meeting.title === 'Processing...') {
+        return { label: 'Processing', Icon: RefreshCw, tone: 'text-blue-500 bg-blue-500/10 border-blue-500/15' };
+    }
+
+    if (title.includes('interview') || title.includes('technical') || title.includes('coding') || usageTypes.has('followup_questions')) {
+        return { label: 'Interview', Icon: Code2, tone: 'text-amber-500 bg-amber-500/10 border-amber-500/15' };
+    }
+
+    if (title.includes('sales') || title.includes('customer') || title.includes('discovery')) {
+        return { label: 'Customer', Icon: BriefcaseBusiness, tone: 'text-sky-500 bg-sky-500/10 border-sky-500/15' };
+    }
+
+    if (title.includes('standup') || title.includes('sync') || title.includes('team') || meeting.source === 'calendar') {
+        return { label: 'Team sync', Icon: Users, tone: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/15' };
+    }
+
+    if (usageTypes.has('chat') || usageTypes.has('assist')) {
+        return { label: 'Assisted', Icon: MessageSquareText, tone: 'text-violet-500 bg-violet-500/10 border-violet-500/15' };
+    }
+
+    return { label: 'Meeting', Icon: FileText, tone: 'text-text-secondary bg-bg-item-surface border-border-subtle' };
+};
+
+const getMeetingStatusMeta = (meeting: Meeting) => {
+    if (meeting.title === 'Processing...') {
+        return { label: 'Processing', className: 'text-blue-500 bg-blue-500/10 border-blue-500/15' };
+    }
+
+    if (cleanInlineText(meeting.summary) || (meeting.detailedSummary?.keyPoints?.length ?? 0) > 0) {
+        return { label: 'Summary ready', className: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/15' };
+    }
+
+    if ((meeting.usage?.length ?? 0) > 0) {
+        return { label: 'Assisted', className: 'text-violet-500 bg-violet-500/10 border-violet-500/15' };
+    }
+
+    return { label: 'Captured', className: 'text-text-secondary bg-bg-item-surface border-border-subtle' };
+};
+
+const inferTopicsFromEvent = (event: NormalizedEvent | null, recommendation: CalendarModeRecommendation | null) => {
+    const topics = new Set<string>();
+
+    recommendation?.matchedSignals?.slice(0, 3).forEach((signal) => {
+        const cleaned = cleanInlineText(signal).replace(/_/g, ' ');
+        if (cleaned) topics.add(cleaned);
+    });
+
+    const text = `${event?.summary ?? ''} ${event?.description ?? ''}`.toLowerCase();
+    const topicMap: Array<[string, string]> = [
+        ['interview', 'Interview loop'],
+        ['technical', 'Technical depth'],
+        ['coding', 'Coding discussion'],
+        ['system design', 'System design'],
+        ['roadmap', 'Roadmap decisions'],
+        ['planning', 'Planning'],
+        ['sales', 'Customer context'],
+        ['demo', 'Demo flow'],
+        ['retro', 'Retrospective'],
+        ['standup', 'Status updates'],
+        ['sync', 'Team alignment'],
+        ['hiring', 'Hiring pipeline'],
+        ['recruit', 'Recruiting'],
+    ];
+
+    topicMap.forEach(([keyword, label]) => {
+        if (text.includes(keyword)) topics.add(label);
+    });
+
+    if (topics.size === 0 && event?.platform) {
+        topics.add(event.isInterview ? 'Interview preparation' : 'Agenda review');
+    }
+
+    return Array.from(topics).slice(0, 4);
+};
+
+const buildPreparationNotes = (event: NormalizedEvent | null, recommendation: CalendarModeRecommendation | null) => {
+    const notes: string[] = [];
+
+    if (recommendation?.summary) {
+        notes.push(truncateSentence(cleanInlineText(recommendation.summary), 92));
+    }
+
+    recommendation?.suggestedReferences?.slice(0, 2).forEach((reference) => {
+        const cleaned = cleanInlineText(reference);
+        if (cleaned) notes.push(truncateSentence(cleaned, 92));
+    });
+
+    if (event?.description && notes.length < 3) {
+        notes.push(truncateSentence(`Review event notes: ${cleanInlineText(event.description)}`, 92));
+    }
+
+    if (notes.length < 3) {
+        notes.push('Confirm the agenda and the first decision you need from the room.');
+    }
+
+    if (notes.length < 3) {
+        notes.push('Keep TeamSync ready for follow-up questions and concise recap capture.');
+    }
+
+    return notes.slice(0, 3);
+};
+
+const getParticipantLabel = (participants: CalendarParticipant[] | null) => {
+    if (participants === null) return 'Checking participants...';
+    if (participants.length === 0) return 'Participant details unavailable';
+
+    const names = participants
+        .slice(0, 3)
+        .map((participant) => participant.name || participant.email)
+        .filter(Boolean);
+
+    const extra = participants.length - names.length;
+    return extra > 0 ? `${names.join(', ')} +${extra}` : names.join(', ');
+};
+
+const getRecommendationConfidenceLabel = (confidence: number) => {
+    if (!Number.isFinite(confidence)) return '0% confidence';
+    const percent = confidence <= 1 ? confidence * 100 : confidence;
+    const clampedPercent = Math.max(0, Math.min(100, Math.round(percent)));
+    return `${clampedPercent}% confidence`;
+};
+
 const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onOpenModes, onPageChange, ollamaPullStatus = 'idle', ollamaPullPercent = 0, ollamaPullMessage = '' }) => {
     const [meetings, setMeetings] = useState<Meeting[]>([]);
     const [isDetectable, setIsDetectable] = useState(false);
@@ -127,6 +290,38 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const [showModesOnboarding, setShowModesOnboarding] = useState(false);
     const launcherScrollRef = useRef<HTMLElement | null>(null);
     const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+    const [nextEventParticipants, setNextEventParticipants] = useState<CalendarParticipant[] | null>(null);
+
+    const upcomingCalendarEvents = useMemo(() => getUpcomingEvents(upcomingEvents), [upcomingEvents]);
+    const nextCalendarEvent = upcomingCalendarEvents[0] ?? null;
+    const nextCalendarEventId = nextCalendarEvent?.id ?? null;
+
+    useEffect(() => {
+        let cancelled = false;
+
+        setNextEventParticipants(null);
+
+        if (!isCalendarConnected || !nextCalendarEventId || !window.electronAPI?.getCalendarAttendees) {
+            setNextEventParticipants([]);
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        window.electronAPI.getCalendarAttendees(nextCalendarEventId)
+            .then((participants) => {
+                if (!cancelled) {
+                    setNextEventParticipants(Array.isArray(participants) ? participants : []);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setNextEventParticipants([]);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isCalendarConnected, nextCalendarEventId]);
 
     const fetchMeetings = () => {
         if (window.electronAPI && window.electronAPI.getRecentMeetings) {
@@ -502,6 +697,21 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         return new Date(b).getTime() - new Date(a).getTime();
     });
     const flattenedMeetings = sortedGroups.flatMap((label) => groupedMeetings[label]);
+    const todayMeetings = meetings.filter((meeting) => isToday(meeting.date));
+    const nextEventTimeLabel = nextCalendarEvent
+        ? new Date(nextCalendarEvent.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
+        : null;
+    const nextEventWindowLabel = nextCalendarEvent
+        ? formatTimeRange(nextCalendarEvent.startTime, nextCalendarEvent.endTime)
+        : null;
+    const likelyTopics = inferTopicsFromEvent(nextCalendarEvent, calendarRecommendation);
+    const preparationNotes = buildPreparationNotes(nextCalendarEvent, calendarRecommendation);
+    const todaySummaryLabel = todayMeetings.length > 0
+        ? `${todayMeetings.length} ${todayMeetings.length === 1 ? 'meeting' : 'meetings'} captured today`
+        : 'No meetings captured today';
+    const nextEventLabel = isCalendarConnected
+        ? (nextCalendarEvent ? `${nextCalendarEvent.summary} at ${nextEventTimeLabel}` : 'No upcoming event')
+        : 'Calendar not connected';
 
 
     const [forwardMeeting, setForwardMeeting] = useState<Meeting | null>(null);
@@ -606,6 +816,26 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         const minutes = parseInt(durationStr.replace('min', '').trim()) || 0;
         const mm = minutes.toString().padStart(2, '0');
         return `${mm}:00`;
+    };
+
+    const handlePrepareMeeting = () => {
+        if (!nextCalendarEvent) {
+            void handleRefresh();
+            return;
+        }
+
+        if (calendarRecommendation) {
+            setIsCalendarRecommendationOpen(true);
+            analytics.trackCommandExecuted('calendar_prepare_meeting');
+            return;
+        }
+
+        analytics.trackCommandExecuted('calendar_prepare_start_meeting');
+        void onStartMeeting({
+            title: nextCalendarEvent.summary,
+            calendarEventId: nextCalendarEvent.id,
+            source: 'calendar',
+        });
     };
 
     return (
@@ -812,352 +1042,334 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                             {/* Main Area - Fixed Top, Scrollable Bottom */}
                             {/* Top Section is now effectively static due to parent flex col */}
 
-                            {/* TOP SECTION: Grey Background (Scrolls with content) */}
-                            <section className={`relative overflow-hidden ${isLight ? 'bg-bg-primary' : 'bg-bg-elevated'} px-8 pt-6 pb-8 border-b border-border-subtle shrink-0`}>
-                                <div
-                                    aria-hidden="true"
-                                    className="pointer-events-none absolute inset-0 overflow-hidden"
-                                >
-                                    <div
-                                        aria-hidden="true"
-                                        className="launcher-hero-studio-glow pointer-events-none absolute left-1/2 top-[86px] h-[330px] w-[min(1120px,94vw)] -translate-x-1/2 rounded-[60px] blur-[28px]"
-                                        style={{
-                                            background: isLight
-                                                ? 'radial-gradient(ellipse at 50% 54%, rgba(255,255,255,0.62) 0%, rgba(186,230,253,0.34) 30%, rgba(216,180,254,0.26) 52%, rgba(253,186,116,0.16) 70%, transparent 84%)'
-                                                : 'radial-gradient(ellipse at 50% 54%, rgba(255,255,255,0.22) 0%, rgba(125,211,252,0.24) 28%, rgba(168,85,247,0.22) 54%, rgba(251,146,60,0.16) 72%, transparent 86%)',
-                                        }}
-                                    />
-                                    <div
-                                        aria-hidden="true"
-                                        className="launcher-hero-studio-sweep pointer-events-none absolute left-1/2 top-[170px] h-[170px] w-[min(980px,82vw)] -translate-x-1/2 rounded-full blur-[54px]"
-                                        style={{
-                                            background: isLight
-                                                ? 'linear-gradient(90deg, transparent 0%, rgba(125,211,252,0.34) 18%, rgba(255,255,255,0.62) 44%, rgba(216,180,254,0.34) 66%, rgba(253,186,116,0.24) 84%, transparent 100%)'
-                                                : 'linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.26) 18%, rgba(255,255,255,0.30) 44%, rgba(168,85,247,0.28) 66%, rgba(251,146,60,0.20) 84%, transparent 100%)',
-                                        }}
-                                    />
-                                    <div
-                                        aria-hidden="true"
-                                        className="launcher-hero-glow-rim pointer-events-none absolute left-1/2 top-[122px] h-[210px] w-[min(1040px,90vw)] -translate-x-1/2 rounded-[44px] blur-[18px]"
-                                        style={{
-                                            background: isLight
-                                                ? 'linear-gradient(110deg, transparent 0%, rgba(125,211,252,0.16) 22%, rgba(255,255,255,0.46) 46%, rgba(216,180,254,0.22) 66%, rgba(253,186,116,0.14) 82%, transparent 100%)'
-                                                : 'linear-gradient(110deg, transparent 0%, rgba(34,211,238,0.14) 22%, rgba(255,255,255,0.28) 46%, rgba(192,132,252,0.22) 66%, rgba(251,146,60,0.13) 82%, transparent 100%)',
-                                        }}
-                                    />
-                                    <div
-                                        aria-hidden="true"
-                                        className="launcher-hero-left-cosmic pointer-events-none absolute left-[-8%] top-[38px] h-[270px] w-[460px] rounded-full blur-[46px]"
-                                        style={{
-                                            background: isLight
-                                                ? 'radial-gradient(circle at 36% 42%, rgba(255,255,255,0.46) 0%, rgba(125,211,252,0.34) 32%, rgba(216,180,254,0.22) 58%, transparent 78%)'
-                                                : 'radial-gradient(circle at 36% 42%, rgba(255,255,255,0.16) 0%, rgba(34,211,238,0.20) 32%, rgba(168,85,247,0.18) 58%, transparent 78%)',
-                                        }}
-                                    />
-                                    <div
-                                        aria-hidden="true"
-                                        className="launcher-hero-top-cosmic pointer-events-none absolute left-[22%] top-[-96px] h-[230px] w-[620px] rounded-full blur-[52px]"
-                                        style={{
-                                            background: isLight
-                                                ? 'linear-gradient(90deg, transparent 0%, rgba(186,230,253,0.34) 24%, rgba(255,255,255,0.44) 50%, rgba(216,180,254,0.26) 78%, transparent 100%)'
-                                                : 'linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.18) 24%, rgba(255,255,255,0.16) 50%, rgba(192,132,252,0.18) 78%, transparent 100%)',
-                                        }}
-                                    />
-	                                    <div
-	                                        aria-hidden="true"
-	                                        className="launcher-hero-top-right-cosmic pointer-events-none absolute right-[-10%] top-[-84px] h-[285px] w-[520px] rounded-full blur-[48px]"
-	                                        style={{
-	                                            background: isLight
-	                                                ? 'radial-gradient(circle at 42% 54%, rgba(255,255,255,0.42) 0%, rgba(216,180,254,0.30) 30%, rgba(253,186,116,0.24) 54%, rgba(125,211,252,0.18) 72%, transparent 84%)'
-	                                                : 'radial-gradient(circle at 42% 54%, rgba(255,255,255,0.14) 0%, rgba(168,85,247,0.24) 30%, rgba(251,146,60,0.20) 54%, rgba(34,211,238,0.12) 72%, transparent 84%)',
-	                                        }}
-	                                    />
-                                    <div
-                                        aria-hidden="true"
-                                        className="launcher-hero-bottom-lamp pointer-events-none absolute left-1/2 bottom-[-148px] h-[310px] w-[min(920px,82vw)] -translate-x-1/2 rounded-full blur-[38px]"
-                                        style={{
-                                            background: isLight
-                                                ? 'radial-gradient(ellipse at 50% 76%, rgba(255,255,255,0.72) 0%, rgba(255,214,165,0.42) 24%, rgba(251,146,60,0.26) 44%, rgba(125,211,252,0.13) 66%, transparent 82%)'
-                                                : 'radial-gradient(ellipse at 50% 76%, rgba(255,236,214,0.24) 0%, rgba(251,191,119,0.30) 26%, rgba(251,146,60,0.22) 48%, rgba(56,189,248,0.09) 68%, transparent 84%)',
-                                        }}
-                                    />
-	                                    <div className={`absolute left-1/2 top-[90px] h-[360px] w-[min(1080px,92vw)] -translate-x-1/2 rounded-[56px] blur-[34px] ${
-	                                        isLight
-	                                            ? 'bg-[radial-gradient(ellipse_at_center,rgba(186,230,253,0.34),rgba(216,180,254,0.20)_42%,transparent_74%)]'
-	                                            : 'bg-[radial-gradient(ellipse_at_center,rgba(56,189,248,0.20),rgba(168,85,247,0.18)_46%,transparent_76%)]'
-                                    }`} />
-                                    <div className={`absolute left-[13%] top-[132px] h-[210px] w-[420px] rounded-full blur-[42px] ${
-                                        isLight ? 'bg-cyan-200/28' : 'bg-cyan-300/16'
-                                    }`} />
-                                    <div className={`absolute right-[7%] top-[118px] h-[240px] w-[470px] rounded-full blur-[44px] ${
-                                        isLight ? 'bg-orange-200/24' : 'bg-orange-300/16'
-                                    }`} />
-                                </div>
-                                <div className="relative z-10 max-w-4xl mx-auto space-y-6">
-                                    {/* 1.5. Hero Header (Title + Controls + CTA) */}
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <h1 className="text-3xl font-celeb-light font-medium text-text-primary tracking-wide drop-shadow-sm">My TeamSync</h1>
-
-                                            {calendarRecommendation && (
-                                                <motion.button
-                                                    type="button"
-                                                    whileTap={{ scale: 0.97 }}
-                                                    onClick={() => setIsCalendarRecommendationOpen(true)}
-                                                    className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold tracking-[0.01em] backdrop-blur-[20px] transition-colors ${
-                                                        isLight
-                                                            ? 'bg-white/58 text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.10),inset_0_1px_0_rgba(255,255,255,0.92)] hover:bg-white/78'
-                                                            : 'bg-white/[0.07] text-white/76 shadow-[0_10px_24px_rgba(2,6,23,0.24),inset_0_1px_0_rgba(255,255,255,0.10)] hover:bg-white/[0.11]'
-                                                    }`}
-                                                    title="Open suggestion"
-                                                >
-                                                    <span className={`flex h-5 w-5 items-center justify-center rounded-full ${
-                                                        isLight ? 'bg-white/72 text-sky-600' : 'bg-white/[0.08] text-sky-200'
-                                                    }`}>
-                                                        <Sparkles size={11} />
-                                                    </span>
-                                                    Suggestion
-                                                </motion.button>
-                                            )}
-
-                                            {/* Refresh Button */}
-                                            <button
-                                                onClick={handleRefresh}
-                                                disabled={isRefreshing}
-                                                className={`p-2 text-text-secondary hover:text-text-primary rounded-full transition-colors ${isRefreshing ? 'animate-spin text-blue-400' : ''} ${isLight ? 'hover:bg-black/8' : 'hover:bg-white/10'}`}
-                                                title="Refresh State"
-                                            >
-                                                <RefreshCw size={18} />
-                                            </button>
-
-
-
-
-                                            {/* Detectable Toggle Pill */}
-                                            <div className={`flex items-center gap-3 border rounded-full px-3 py-1.5 min-w-[140px] transition-colors ${isLight ? 'bg-bg-elevated border-border-muted shadow-sm' : 'bg-[#101011] border-border-muted'}`}>
-                                                {isDetectable ? (
-                                                    <Ghost
-                                                        size={14}
-                                                        strokeWidth={2}
-                                                        className="text-text-secondary transition-colors"
-                                                    />
-                                                ) : (
-                                                    <svg
-                                                        width="14"
-                                                        height="14"
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        xmlns="http://www.w3.org/2000/svg"
-                                                        className="transition-colors"
-                                                    >
-                                                        <path
-                                                            d="M12 2C7.58172 2 4 5.58172 4 10V22L7 19L9.5 21.5L12 19L14.5 21.5L17 19L20 22V10C20 5.58172 16.4183 2 12 2Z"
-                                                            fill={isLight ? '#48484A' : 'white'}
-                                                        />
-                                                        <circle cx="9" cy="10" r="1.5" fill={isLight ? 'white' : 'black'} />
-                                                        <circle cx="15" cy="10" r="1.5" fill={isLight ? 'white' : 'black'} />
-                                                    </svg>
-                                                )}
-                                                <span className="text-xs font-medium flex-1 transition-colors text-text-secondary">
-                                                    {isDetectable ? "Detectable" : "Undetectable"}
+                            {/* TOP SECTION: contextual workspace surface */}
+                            <section className={`relative ${isLight ? 'bg-bg-primary' : 'bg-bg-primary'} px-8 pt-5 pb-6 border-b border-border-subtle shrink-0`}>
+                                <div className="relative z-10 max-w-5xl mx-auto space-y-4">
+                                    <div className="flex items-start justify-between gap-5">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-text-primary">Today</h1>
+                                                <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium ${isCalendarConnected ? 'text-emerald-600 bg-emerald-500/10 border-emerald-500/15' : 'text-text-secondary bg-bg-elevated border-border-subtle'}`}>
+                                                    <CircleDot size={10} className={isCalendarConnected ? 'fill-emerald-500 text-emerald-500' : ''} />
+                                                    {isCalendarConnected ? 'Calendar connected' : 'Calendar off'}
                                                 </span>
-                                                <div
-                                                    className={`w-8 h-4 rounded-full relative transition-colors cursor-pointer ${!isDetectable ? 'bg-accent-primary' : 'bg-bg-toggle-switch'}`}
-                                                    onClick={toggleDetectable}
-                                                >
-                                                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-all ${!isDetectable ? 'left-[18px]' : 'left-0.5'}`} />
-                                                </div>
+                                            </div>
+                                            <p className="mt-1 text-[13px] text-text-secondary">{todaySummaryLabel}</p>
+                                            <div className="mt-3 flex max-w-[620px] flex-wrap items-center gap-2 text-[11px] text-text-secondary">
+                                                <span className="inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-bg-elevated px-2.5 py-1.5">
+                                                    <FileText size={12} />
+                                                    {todayMeetings.length} today
+                                                </span>
+                                                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border-subtle bg-bg-elevated px-2.5 py-1.5">
+                                                    <Clock3 size={12} />
+                                                    <span className="truncate">Next event: {nextEventLabel}</span>
+                                                </span>
                                             </div>
                                         </div>
 
-                                        {/* Center: Ollama Pull Status Pill (flex-1 to center evenly) */}
-                                        <div className="flex-1 flex justify-center mx-4">
+                                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                                             <AnimatePresence>
                                                 {ollamaPullStatus !== 'idle' && (
                                                     <motion.div
-                                                        initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                                                        initial={{ opacity: 0, scale: 0.96, y: 6 }}
                                                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                        exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                                                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                                                        className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-xl ${isLight ? 'bg-bg-elevated border border-border-muted shadow-[0_4px_16px_rgba(0,0,0,0.1)]' : 'bg-bg-elevated/80 border border-white/10 shadow-[0_4px_16px_rgba(0,0,0,0.3)]'}`}
+                                                        exit={{ opacity: 0, scale: 0.96, y: 6 }}
+                                                        transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+                                                        className="flex items-center gap-2 rounded-md border border-border-subtle bg-bg-elevated px-3 py-2"
                                                     >
                                                         {ollamaPullStatus === 'downloading' ? (
-                                                            <DownloadCloud size={14} className="text-blue-400 animate-pulse shrink-0" />
+                                                            <DownloadCloud size={14} className="text-blue-500" />
                                                         ) : ollamaPullStatus === 'complete' ? (
-                                                            <CheckCircle size={14} className="text-emerald-400 shrink-0" />
+                                                            <CheckCircle size={14} className="text-emerald-500" />
                                                         ) : (
-                                                            <AlertCircle size={14} className="text-red-400 shrink-0" />
+                                                            <AlertCircle size={14} className="text-red-500" />
                                                         )}
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[11px] font-medium text-text-secondary whitespace-nowrap">
-                                                                {ollamaPullStatus === 'downloading' ? `Setting up AI memory... ${ollamaPullPercent}%` : ollamaPullMessage}
+                                                        <div className="min-w-[120px]">
+                                                            <span className="block text-[11px] font-medium text-text-secondary">
+                                                                {ollamaPullStatus === 'downloading' ? `Setting up AI memory ${ollamaPullPercent}%` : ollamaPullMessage}
                                                             </span>
                                                             {ollamaPullStatus === 'downloading' && (
-                                                                <div className="w-full h-[3px] bg-white/10 rounded-full mt-1 overflow-hidden">
-                                                                    <div
-                                                                        className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                                                                        style={{ width: `${ollamaPullPercent}%` }}
-                                                                    />
+                                                                <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-bg-item-surface">
+                                                                    <div className="h-full rounded-full bg-blue-500 transition-all duration-300" style={{ width: `${ollamaPullPercent}%` }} />
                                                                 </div>
                                                             )}
                                                         </div>
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
-                                        </div>
 
-                                        {/* Unified CTA pill — same jelly shape, morphs between idle and active-meeting state */}
-                                        <motion.button
-                                            onClick={() => {
-                                                if (isMeetingActive) {
-                                                    // inactive=true: overlay appears on top but doesn't activate
-                                                    // the TeamSync app or steal OS focus — preserves stealth.
-                                                    // setWindowMode (not showWindow) is required because
-                                                    // logo-click set currentWindowMode='launcher', so showWindow()
-                                                    // would re-show the launcher rather than switch to overlay.
-                                                    window.electronAPI?.setWindowMode?.('overlay', true);
-                                                    analytics.trackCommandExecuted('resume_meeting_from_launcher');
-                                                } else {
-                                                    onStartMeeting();
-                                                    analytics.trackCommandExecuted('start_teamsync_cta');
-                                                }
-                                            }}
-                                            whileHover={{ scale: 1.01, filter: 'brightness(1.1)' }}
-                                            whileTap={{ scale: 0.99 }}
-                                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                                            className="group relative overflow-hidden text-white px-6 py-3 rounded-full font-celeb font-medium tracking-normal flex items-center justify-center gap-3 backdrop-blur-xl shrink-0"
-                                            style={{
-                                                boxShadow: isMeetingActive
-                                                    ? 'inset 0 1px 1px rgba(255,255,255,0.7), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 10px rgba(16,185,129,0.45), 0 0 0 1px rgba(255,255,255,0.15)'
-                                                    : 'inset 0 1px 1px rgba(255,255,255,0.7), inset 0 -1px 2px rgba(0,0,0,0.1), 0 2px 10px rgba(14,165,233,0.4), 0 0 0 1px rgba(255,255,255,0.15)',
-                                                transition: 'box-shadow 0.5s ease-out',
-                                            }}
-                                        >
-                                            {/* Blue gradient layer (idle) */}
-                                            <div
-                                                className="absolute inset-0 bg-gradient-to-b from-sky-400 via-sky-500 to-blue-600 transition-opacity duration-500 ease-out"
-                                                style={{ opacity: isMeetingActive ? 0 : 1 }}
-                                            />
-                                            {/* Green gradient layer (meeting active) */}
-                                            <div
-                                                className="absolute inset-0 bg-gradient-to-b from-emerald-400 via-emerald-500 to-green-600 transition-opacity duration-500 ease-out"
-                                                style={{ opacity: isMeetingActive ? 1 : 0 }}
-                                            />
+                                            {calendarRecommendation && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsCalendarRecommendationOpen(true)}
+                                                    className="inline-flex h-9 items-center gap-2 rounded-md border border-border-subtle bg-bg-elevated px-3 text-[12px] font-medium text-text-secondary transition-colors hover:text-text-primary hover:bg-bg-item-surface active:scale-[0.98]"
+                                                    title="Open suggestion"
+                                                >
+                                                    <Sparkles size={14} />
+                                                    Suggestion
+                                                </button>
+                                            )}
 
-                                            {/* Top highlight band — shared between both states */}
-                                            <div className="absolute inset-x-3 top-0 h-[40%] bg-gradient-to-b from-white/40 to-transparent blur-[2px] rounded-b-lg opacity-80 pointer-events-none z-10" />
-                                            {/* Internal suspended-light hover glow */}
-                                            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none z-10" />
+                                            <button
+                                                onClick={handleRefresh}
+                                                disabled={isRefreshing}
+                                                className={`inline-flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle bg-bg-elevated text-text-secondary transition-colors hover:text-text-primary hover:bg-bg-item-surface active:scale-[0.98] ${isRefreshing || isSyncingCalendar ? 'text-blue-500' : ''}`}
+                                                title="Refresh calendar and meetings"
+                                            >
+                                                <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} />
+                                            </button>
 
-                                            {/* Button content — crossfade between idle and meeting states */}
-                                            <div className="relative z-20 flex items-center gap-3">
-                                                <AnimatePresence mode="wait" initial={false}>
-                                                    {isMeetingActive ? (
-                                                        <motion.div
-                                                            key="meeting"
-                                                            initial={{ opacity: 0, y: 6 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -6 }}
-                                                            transition={{ duration: 0.22, ease: 'easeOut' }}
-                                                            className="flex items-center gap-3"
-                                                        >
-                                                            {/* Ping live-indicator dot */}
-                                                            <span className="relative flex h-[9px] w-[9px] shrink-0">
-                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
-                                                                <span className="relative inline-flex rounded-full h-[9px] w-[9px] bg-white" />
-                                                            </span>
-                                                            <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.1)] text-[20px] leading-none">Meeting ongoing</span>
-                                                        </motion.div>
-                                                    ) : (
-                                                        <motion.div
-                                                            key="start"
-                                                            initial={{ opacity: 0, y: 6 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -6 }}
-                                                            transition={{ duration: 0.22, ease: 'easeOut' }}
-                                                            className="flex items-center gap-3 h-[27px]"
-                                                        >
-                                                            <img src={icon} alt="Logo" className="w-[40px] h-[40px] object-contain brightness-0 invert drop-shadow-[0_1px_2px_rgba(0,0,0,0.1)] opacity-90" />
-                                                            <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.1)] text-[20px] leading-none">Start TeamSync</span>
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
+                                            <div className="flex h-9 items-center gap-2 rounded-md border border-border-subtle bg-bg-elevated px-2.5">
+                                                <Ghost size={13} className="text-text-secondary" />
+                                                <span className="text-[12px] font-medium text-text-secondary">{isDetectable ? 'Detectable' : 'Undetectable'}</span>
+                                                <button
+                                                    type="button"
+                                                    aria-label="Toggle detectable mode"
+                                                    className={`relative h-4 w-8 rounded-full transition-colors ${!isDetectable ? 'bg-accent-primary' : 'bg-bg-toggle-switch'}`}
+                                                    onClick={toggleDetectable}
+                                                >
+                                                    <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${!isDetectable ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                </button>
                                             </div>
-                                        </motion.button>
-                                    </div>
 
-                                    {/* 2. Hero Section Cards */}
-                                    <div className="relative isolate grid grid-cols-1 md:grid-cols-3 gap-3 h-[228px]">
-                                        <div className="md:col-span-2 h-full">
-                                            <div className="relative h-full overflow-hidden">
-                                                <AnimatePresence mode="wait">
-                                                    {showEvents ? (
-                                                        <motion.div
-                                                            key="upcoming-events"
-                                                            initial={{ opacity: 0, transform: "translateY(22px) scale(0.98)", filter: "blur(6px)" }}
-                                                            animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
-                                                            exit={{ opacity: 0, transform: "translateY(12px) scale(0.98)", filter: "blur(6px)" }}
-                                                            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-                                                            className="h-full"
-                                                        >
-                                                            <UpcomingEventsPanel
-                                                                events={upcomingEvents}
-                                                                syncing={isSyncingCalendar || isRefreshing}
-                                                                onRefresh={handleRefresh}
-                                                                isLight={isLight}
-                                                            />
-                                                        </motion.div>
-                                                    ) : (
-                                                        <motion.div
-                                                            key="feature-spotlight"
-                                                            initial={{ opacity: 0, transform: "translateY(-12px) scale(0.98)", filter: "blur(6px)" }}
-                                                            animate={{ opacity: 1, transform: "translateY(0px) scale(1)", filter: "blur(0px)" }}
-                                                            exit={{ opacity: 0, transform: "translateY(-12px) scale(0.98)", filter: "blur(6px)" }}
-                                                            transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
-                                                            className="h-full"
-                                                        >
-                                                            <FeatureSpotlight />
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
-                                        </div>
+                                            <motion.button
+                                                onClick={() => {
+                                                    if (isMeetingActive) {
+                                                        window.electronAPI?.setWindowMode?.('overlay', true);
+                                                        analytics.trackCommandExecuted('resume_meeting_from_launcher');
+                                                    } else {
+                                                        onStartMeeting();
+                                                        analytics.trackCommandExecuted('start_teamsync_cta');
+                                                    }
+                                                }}
+                                                whileHover={{ scale: 1.01, filter: 'brightness(1.1)' }}
+                                                whileTap={{ scale: 0.99 }}
+                                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                className="group relative flex h-10 shrink-0 items-center justify-center gap-2 overflow-hidden rounded-full px-4 font-celeb text-white backdrop-blur-xl"
+                                                style={{
+                                                    boxShadow: isMeetingActive
+                                                        ? 'inset 0 1px 1px rgba(255,255,255,0.6), inset 0 -1px 2px rgba(6,78,59,0.32), 0 2px 10px rgba(20,184,166,0.28), 0 0 0 1px rgba(255,255,255,0.14)'
+                                                        : 'inset 0 1px 1px rgba(255,255,255,0.6), inset 0 -1px 2px rgba(8,47,73,0.3), 0 2px 10px rgba(14,165,233,0.32), 0 0 0 1px rgba(255,255,255,0.14)',
+                                                    transition: 'box-shadow 0.5s ease-out',
+                                                }}
+                                            >
+                                                <div
+                                                    className="absolute inset-0 transition-opacity duration-500 ease-out"
+                                                    style={{
+                                                        opacity: isMeetingActive ? 0 : 1,
+                                                        background: 'linear-gradient(135deg, #082f49 0%, #0ea5e9 52%, #2563eb 100%)',
+                                                    }}
+                                                />
+                                                <div
+                                                    className="absolute inset-0 transition-opacity duration-500 ease-out"
+                                                    style={{
+                                                        opacity: isMeetingActive ? 1 : 0,
+                                                        background: 'linear-gradient(135deg, #064e3b 0%, #10b981 52%, #14b8a6 100%)',
+                                                    }}
+                                                />
+                                                <div className="pointer-events-none absolute inset-x-2.5 top-0 z-10 h-[38%] rounded-b-lg bg-gradient-to-b from-white/35 to-transparent opacity-80 blur-[2px]" />
+                                                <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/5 to-cyan-100/15 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
 
-
-
-                                        {/* Right Secondary Card */}
-                                        <div className="md:col-span-1 h-full rounded-xl overflow-hidden bg-bg-elevated relative group flex flex-col items-center pt-6 text-center">
-                                                {/* Backdrop Image */}
-                                                <div className="absolute inset-0">
-                                                    <img src={calender} alt="" className="w-full h-full object-cover opacity-100 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] translate-x--1 translate-y-[1px] scale-105 group-hover:scale-[1.07]" />
-                                                    <div className={`absolute inset-0 ${isLight ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.02))]' : 'bg-[linear-gradient(180deg,rgba(2,6,23,0.24),rgba(2,6,23,0.08))]'}`} />
-                                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(129,140,248,0.28),transparent_34%),radial-gradient(circle_at_50%_70%,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.12),transparent_36%)] opacity-95" />
-                                                    <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16),rgba(255,255,255,0))] opacity-40" />
-                                                </div>
-
-                                                {/* Content Layer */}
-                                                <div className="relative z-10 w-full flex flex-col items-center h-full">
-                                                    <h3 className="text-[19px] leading-tight mb-4 tracking-[-0.02em]">
-                                                        {isCalendarConnected ? (
-                                                            <>
-                                                                <span className="block font-semibold text-white">Calendar linked</span>
-                                                                <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">Events synced</span>
-                                                            </>
+                                                <div className="relative z-20 flex items-center gap-2">
+                                                    <AnimatePresence mode="wait" initial={false}>
+                                                        {isMeetingActive ? (
+                                                            <motion.div
+                                                                key="meeting"
+                                                                initial={{ opacity: 0, y: 6 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -6 }}
+                                                                transition={{ duration: 0.22, ease: 'easeOut' }}
+                                                                className="flex items-center gap-2"
+                                                            >
+                                                                <span className="relative flex h-2 w-2 shrink-0">
+                                                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
+                                                                    <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+                                                                </span>
+                                                                <span className="text-[17px] font-medium leading-none tracking-normal drop-shadow-[0_1px_1px_rgba(0,0,0,0.14)]">Meeting ongoing</span>
+                                                            </motion.div>
                                                         ) : (
-                                                            <>
-                                                                <span className="block font-semibold text-white">Link your calendar to</span>
-                                                                <span className="block font-medium text-white/72 text-[0.95em] tracking-[-0.01em]">see upcoming events</span>
-                                                            </>
+                                                            <motion.div
+                                                                key="start"
+                                                                initial={{ opacity: 0, y: 6 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -6 }}
+                                                                transition={{ duration: 0.22, ease: 'easeOut' }}
+                                                                className="flex h-6 items-center gap-2"
+                                                            >
+                                                                <img src={icon} alt="TeamSync" className="h-[30px] w-[30px] object-contain brightness-0 invert opacity-90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.16)]" />
+                                                                <span className="text-[17px] font-medium leading-none tracking-normal drop-shadow-[0_1px_1px_rgba(0,0,0,0.14)]">Start TeamSync</span>
+                                                            </motion.div>
                                                         )}
-                                                    </h3>
-
-                                                    <ConnectCalendarButton
-                                                        className="-translate-x-0.5"
-                                                        onConnect={() => setIsCalendarConnected(true)}
-                                                    />
+                                                    </AnimatePresence>
                                                 </div>
-                                            </div>
+                                            </motion.button>
+                                        </div>
                                     </div>
+
+                                    <AnimatePresence mode="wait">
+                                        {isCalendarConnected ? (
+                                            <motion.article
+                                                key="calendar-connected"
+                                                initial={{ opacity: 0, y: 8 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -6 }}
+                                                transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                                                className="grid min-h-[246px] grid-cols-[minmax(0,1.8fr)_minmax(250px,0.9fr)] overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated shadow-[0_16px_40px_rgba(15,23,42,0.05)]"
+                                            >
+                                                <div className="min-w-0 p-5">
+                                                    <div className="flex items-center justify-between gap-4">
+                                                        <div className="min-w-0">
+                                                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Next meeting</p>
+                                                            <h2 className="mt-2 truncate text-[24px] font-semibold leading-tight tracking-[-0.025em] text-text-primary">
+                                                                {nextCalendarEvent ? nextCalendarEvent.summary : 'No upcoming meetings'}
+                                                            </h2>
+                                                        </div>
+                                                        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium ${nextCalendarEvent ? 'text-emerald-600 bg-emerald-500/10 border-emerald-500/15' : 'text-text-secondary bg-bg-item-surface border-border-subtle'}`}>
+                                                            <Calendar size={12} />
+                                                            {nextCalendarEvent ? 'Ready' : 'Clear'}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="mt-4 grid grid-cols-3 gap-3">
+                                                        <div className="rounded-lg border border-border-subtle bg-bg-primary p-3">
+                                                            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-text-tertiary">
+                                                                <Clock3 size={12} />
+                                                                Start time
+                                                            </div>
+                                                            <p className="truncate text-[13px] font-semibold text-text-primary">{nextEventWindowLabel ?? 'No time scheduled'}</p>
+                                                        </div>
+                                                        <div className="rounded-lg border border-border-subtle bg-bg-primary p-3">
+                                                            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-text-tertiary">
+                                                                <Users size={12} />
+                                                                Participants
+                                                            </div>
+                                                            <p className="truncate text-[13px] font-semibold text-text-primary">{nextCalendarEvent ? getParticipantLabel(nextEventParticipants) : 'No event selected'}</p>
+                                                        </div>
+                                                        <div className="rounded-lg border border-border-subtle bg-bg-primary p-3">
+                                                            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-text-tertiary">
+                                                                <Video size={12} />
+                                                                Source
+                                                            </div>
+                                                            <p className="truncate text-[13px] font-semibold text-text-primary">{nextCalendarEvent ? nextCalendarEvent.platform.toUpperCase() : 'Calendar'}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-4 grid grid-cols-[0.85fr_1.15fr] gap-4">
+                                                        <div>
+                                                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Likely topics</p>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {(likelyTopics.length > 0 ? likelyTopics : ['Agenda review']).map((topic) => (
+                                                                    <span key={topic} className="rounded-md border border-border-subtle bg-bg-primary px-2 py-1 text-[11px] font-medium text-text-secondary">
+                                                                        {topic}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        <div>
+                                                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Preparation notes</p>
+                                                            <div className="space-y-1.5">
+                                                                {preparationNotes.map((note) => (
+                                                                    <div key={note} className="flex items-start gap-2 text-[12px] leading-[1.35] text-text-secondary">
+                                                                        <CheckCircle2 size={13} className="mt-[1px] shrink-0 text-emerald-500" />
+                                                                        <span className="line-clamp-1">{note}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <aside className="flex min-w-0 flex-col justify-between border-l border-border-subtle bg-bg-primary p-5">
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Calendar window</p>
+                                                            <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary">{upcomingCalendarEvents.length}</p>
+                                                            <p className="text-[12px] text-text-secondary">upcoming {upcomingCalendarEvents.length === 1 ? 'event' : 'events'}</p>
+                                                        </div>
+                                                        <div className="rounded-lg border border-border-subtle bg-bg-elevated p-3">
+                                                            <p className="text-[11px] font-medium text-text-tertiary">Recommendation</p>
+                                                            <p className="mt-1 truncate text-[13px] font-semibold text-text-primary">
+                                                                {calendarRecommendation ? calendarRecommendation.recommendedModeLabel : 'General meeting mode'}
+                                                            </p>
+                                                            <p className="mt-1 text-[12px] text-text-secondary">
+                                                                {calendarRecommendation ? getRecommendationConfidenceLabel(calendarRecommendation.confidence) : 'No mode change suggested'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={handlePrepareMeeting}
+                                                            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md bg-text-primary px-3 text-[13px] font-semibold text-bg-primary transition-opacity hover:opacity-90 active:scale-[0.98]"
+                                                        >
+                                                            <Sparkles size={14} />
+                                                            {nextCalendarEvent ? 'Prepare meeting' : 'Refresh calendar'}
+                                                        </button>
+                                                        {nextCalendarEvent?.meetingLink && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => void window.electronAPI?.openExternal?.(nextCalendarEvent.meetingLink!)}
+                                                                className="inline-flex h-9 items-center justify-center rounded-md border border-border-subtle bg-bg-elevated px-3 text-[12px] font-medium text-text-secondary transition-colors hover:bg-bg-item-surface hover:text-text-primary active:scale-[0.98]"
+                                                            >
+                                                                Join
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </aside>
+                                            </motion.article>
+                                        ) : (
+                                            <motion.article
+                                                key="calendar-onboarding"
+                                                initial={{ opacity: 0, y: 8 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -6 }}
+                                                transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                                                className="grid min-h-[228px] grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated shadow-[0_16px_40px_rgba(15,23,42,0.05)]"
+                                            >
+                                                <div className="p-5">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border-subtle bg-bg-primary text-text-secondary">
+                                                            <PlugZap size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Calendar onboarding</p>
+                                                            <h2 className="mt-1 text-[24px] font-semibold tracking-[-0.025em] text-text-primary">Connect calendar context</h2>
+                                                        </div>
+                                                    </div>
+                                                    <p className="mt-4 max-w-[62ch] text-[13px] leading-6 text-text-secondary">
+                                                        TeamSync can prepare from your next event before the meeting starts and keep saved notes tied to the calendar title.
+                                                    </p>
+                                                </div>
+
+                                                <aside className="flex flex-col justify-between border-l border-border-subtle bg-bg-primary p-5">
+                                                    <div>
+                                                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Benefits</p>
+                                                        <div className="mt-3 space-y-2">
+                                                            {[
+                                                                'See the next meeting before starting capture',
+                                                                'Surface likely topics and prep notes',
+                                                                'Preserve calendar context in saved recaps',
+                                                            ].map((benefit) => (
+                                                                <div key={benefit} className="flex items-start gap-2 text-[12px] leading-[1.35] text-text-secondary">
+                                                                    <CheckCircle2 size={13} className="mt-[1px] shrink-0 text-emerald-500" />
+                                                                    <span>{benefit}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-4">
+                                                        <ConnectCalendarButton
+                                                            className="w-full justify-center"
+                                                            onConnect={() => setIsCalendarConnected(true)}
+                                                        />
+                                                    </div>
+                                                </aside>
+                                            </motion.article>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                             </section>
 
@@ -1170,34 +1382,56 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                         {sortedGroups.map((label) => (
                                             <section key={label}>
                                                 <h3 className="text-[13px] font-medium text-text-secondary mb-3 pl-1">{label}</h3>
-                                                <div className="space-y-1">
-                                                    {groupedMeetings[label].map((m) => (
+                                                <div className="space-y-2">
+                                                    {groupedMeetings[label].map((m) => {
+                                                        const typeMeta = getMeetingTypeMeta(m);
+                                                        const statusMeta = getMeetingStatusMeta(m);
+                                                        const TypeIcon = typeMeta.Icon;
+
+                                                        return (
                                                         <motion.div
                                                             key={m.id}
                                                             data-meeting-id={m.id}
                                                             layoutId={`meeting-${m.id}`}
-                                                            className={`group relative flex items-center justify-between rounded-lg px-3 py-2 transition-colors ${selectedMeetingId === m.id ? 'bg-bg-elevated' : 'bg-transparent hover:bg-bg-elevated'}`}
+                                                            className={`group relative flex items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${selectedMeetingId === m.id ? 'border-border-muted bg-bg-elevated' : 'border-transparent bg-transparent hover:border-border-subtle hover:bg-bg-elevated'}`}
                                                             onClick={() => handleOpenMeeting(m)}
                                                         >
-                                                            <div className={`font-medium text-[14px] max-w-[60%] truncate ${m.title === 'Processing...' ? 'text-blue-400 italic animate-pulse' : 'text-text-primary'}`}>
-                                                                {m.title}
+                                                            <div
+                                                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${typeMeta.tone}`}
+                                                                title={typeMeta.label}
+                                                            >
+                                                                <TypeIcon size={16} className={m.title === 'Processing...' ? 'animate-spin' : ''} />
+                                                            </div>
+
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="flex min-w-0 items-center gap-2">
+                                                                    <div className={`truncate text-[14px] font-semibold ${m.title === 'Processing...' ? 'text-blue-500 italic' : 'text-text-primary'}`}>
+                                                                        {m.title}
+                                                                    </div>
+                                                                    <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium ${statusMeta.className}`}>
+                                                                        {statusMeta.label}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="mt-1 truncate text-[12px] leading-5 text-text-secondary">
+                                                                    {getMeetingSummaryLine(m)}
+                                                                </p>
                                                             </div>
 
                                                             {/* Time & Duration Section */}
-                                                            <div className="flex items-center gap-4">
+                                                            <div className="flex shrink-0 items-center gap-3 pr-8">
                                                                 {m.title === 'Processing...' ? (
-                                                                    <div className="flex items-center gap-2 transition-all duration-200 ease-out group-hover:opacity-0 group-hover:translate-x-2 delayed-hover-exit">
+                                                                    <div className="flex items-center gap-2">
                                                                         <RefreshCw size={12} className="animate-spin text-blue-500" />
                                                                         <span className="text-xs text-blue-500 font-medium">Finalizing...</span>
                                                                     </div>
                                                                 ) : (
                                                                     <>
-                                                                        <span className="relative z-10 bg-bg-elevated text-text-secondary text-[9px] px-1.5 py-0.5 rounded-full font-medium min-w-[35px] text-center tracking-wide">
+                                                                        <span className="relative z-10 rounded-md border border-border-subtle bg-bg-primary px-2 py-1 text-center text-[10px] font-medium tracking-wide text-text-secondary tabular-nums">
                                                                             {formatDurationPill(m.duration)}
                                                                         </span>
 
                                                                         {/* Time Text (Should fade out on hover) */}
-                                                                        <span className="text-[13px] text-text-secondary font-medium min-w-[60px] text-right transition-all duration-200 ease-out group-hover:opacity-0 group-hover:translate-x-2 delayed-hover-exit">
+                                                                        <span className="min-w-[60px] text-right text-[12px] font-medium text-text-secondary tabular-nums">
                                                                             {formatTime(m.date)}
                                                                         </span>
                                                                     </>
@@ -1321,7 +1555,8 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                                 )}
                                                             </AnimatePresence>
                                                         </motion.div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             </section>
                                         ))}

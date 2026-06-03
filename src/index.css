@@ -1182,6 +1182,81 @@ html[data-platform="linux"] body {
   }
 }
 
+/* TeamSync startup cinematic material */
+.teamsync-startup-surface {
+  isolation: isolate;
+  background: #000000;
+  color: #f8fbff;
+}
+
+.teamsync-startup-stage {
+  aspect-ratio: 1376 / 768;
+  width: min(82vw, 1120px);
+  max-height: min(74vh, 640px);
+  background: #000000;
+  box-shadow: 0 30px 110px rgba(18, 74, 180, 0.18);
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 0%, #000 56%, rgba(0, 0, 0, 0.88) 70%, transparent 100%);
+  mask-image: radial-gradient(ellipse at center, #000 0%, #000 56%, rgba(0, 0, 0, 0.88) 70%, transparent 100%);
+  transform-origin: center;
+  will-change: opacity, transform, filter;
+}
+
+.teamsync-startup-material {
+  object-position: center center;
+  transform-origin: center;
+  -webkit-user-drag: none;
+  filter: saturate(1.08) contrast(1.02) brightness(1.05);
+  will-change: opacity, transform;
+}
+
+.teamsync-startup-artwork-lift {
+  background:
+    radial-gradient(ellipse at 50% 2%, rgba(218, 255, 213, 0.36) 0%, rgba(167, 132, 255, 0.24) 20%, transparent 50%),
+    linear-gradient(90deg, rgba(21, 92, 197, 0.24) 0%, transparent 18%, transparent 82%, rgba(20, 184, 166, 0.16) 100%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.teamsync-startup-bloom {
+  background: radial-gradient(ellipse at 50% 45%, rgba(96, 165, 250, 0.22) 0%, rgba(79, 70, 229, 0.13) 34%, transparent 72%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.teamsync-startup-sweep {
+  left: 29%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.18) 42%, rgba(198, 230, 255, 0.24) 50%, transparent 100%);
+  filter: blur(18px);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+
+.teamsync-startup-curtain {
+  background:
+    linear-gradient(180deg, rgba(9, 18, 43, 0.9) 0%, rgba(3, 8, 24, 0.96) 100%),
+    radial-gradient(ellipse at center, rgba(31, 76, 163, 0.2) 0%, transparent 70%);
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+
+.teamsync-startup-curtain-left {
+  border-right: 1px solid rgba(168, 207, 255, 0.12);
+}
+
+.teamsync-startup-curtain-right {
+  border-left: 1px solid rgba(168, 207, 255, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teamsync-startup-stage,
+  .teamsync-startup-material,
+  .teamsync-startup-sweep,
+  .teamsync-startup-curtain {
+    will-change: auto;
+  }
+}
+
 /* ── Launcher hero ambient studio light ─────────────────────────────────── */
 @keyframes launcher-studio-glow {
   0%, 100% {

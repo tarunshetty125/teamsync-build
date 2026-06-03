@@ -153,7 +153,7 @@ test('Sprint 17 Phase F snapshots remaining medium-target action mappings', () =
 
     assertActionSnapshot('job_improvement', {
         actionId: 'job_improvement',
-        displayLabel: 'Behavioral Optimize',
+        displayLabel: 'Improve',
         taxonomyCategory: 'user_intent',
         runtimeIntent: 'what_to_answer',
         actionContractMode: 'none',
@@ -165,7 +165,7 @@ test('Sprint 17 Phase F snapshots remaining medium-target action mappings', () =
 
     assertActionSnapshot('lecture_question', {
         actionId: 'lecture_question',
-        displayLabel: 'Ask Clarification',
+        displayLabel: 'Questions to Ask',
         taxonomyCategory: 'workflow_state',
         runtimeIntent: 'follow_up_questions',
         actionContractMode: 'none',
@@ -249,7 +249,7 @@ test('Sprint 17 Phase C snapshots reference and low-ambiguity action mappings', 
 
     assertActionSnapshot('tech_optimal_solution', {
         actionId: 'tech_optimal_solution',
-        displayLabel: 'Optimal',
+        displayLabel: 'Solution',
         taxonomyCategory: 'contract_mode',
         runtimeIntent: 'what_to_answer',
         actionContractMode: 'optimal_solution',
@@ -273,7 +273,7 @@ test('Sprint 17 Phase C snapshots reference and low-ambiguity action mappings', 
 
     assertActionSnapshot('tech_edge_case', {
         actionId: 'tech_edge_case',
-        displayLabel: 'Edge Case',
+        displayLabel: 'Edge Cases',
         taxonomyCategory: 'contract_mode',
         runtimeIntent: 'brainstorm',
         actionContractMode: 'edge_cases_only',
@@ -325,8 +325,8 @@ test('Sprint 17 Phase C snapshots are deterministic', () => {
 test('Sprint 17 Phase C preserves backward-compatible targeted action aliases', () => {
     const readModel = buildModel();
     const aliases = {
-        behavioral_optimize: 'job_improvement',
-        ask_clarification: 'lecture_question',
+        improve: 'job_improvement',
+        questions_to_ask: 'lecture_question',
         candidate_strength: 'recruiting_strength',
         hint: 'tech_hint',
         optimal: 'tech_optimal_solution',
@@ -338,7 +338,7 @@ test('Sprint 17 Phase C preserves backward-compatible targeted action aliases', 
         assert.ok(readModel.byActionId[actionId], `Expected ${alias} alias target ${actionId} to exist`);
     }
 
-    assert.equal(readModel.byActionId.job_improvement.displayLabel, 'Behavioral Optimize');
-    assert.equal(readModel.byActionId.lecture_question.displayLabel, 'Ask Clarification');
+    assert.equal(readModel.byActionId.job_improvement.displayLabel, 'Improve');
+    assert.equal(readModel.byActionId.lecture_question.displayLabel, 'Questions to Ask');
     assert.equal(readModel.byActionId.recruiting_strength.displayLabel, 'Candidate Strength');
 });

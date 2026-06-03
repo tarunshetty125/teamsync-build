@@ -3,6 +3,7 @@ import {
     getQuestionResponseProfile,
     resolveCodingContractLanguage,
     type CodingContractLanguage,
+    type QuestionResponseProfileOptions,
     type UnifiedActionIntent,
 } from './ActionContextBuilder';
 import {
@@ -830,7 +831,8 @@ export function validateActionOutput(
     mode: SessionMode,
     content: string,
     question?: string,
-    actionContract?: ActionContract
+    actionContract?: ActionContract,
+    profileOptions?: QuestionResponseProfileOptions
 ): ActionOutputValidationResult {
     const trimmed = content.trim();
     if (!trimmed) {
@@ -843,7 +845,7 @@ export function validateActionOutput(
     }
 
     const profile = question
-        ? getQuestionResponseProfile(question, mode, intent)
+        ? getQuestionResponseProfile(question, mode, intent, profileOptions)
         : mode === 'coding'
             ? 'coding'
             : mode === 'system_design'

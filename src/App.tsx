@@ -262,6 +262,9 @@ const App: React.FC = () => {
     (!onboardingCompleted || !isPermissionsReady);
   const shouldHoldLauncherBoot = (isLauncherWindow || isDefault) && !permissionsInitialized;
   const shouldRenderStartup = showStartup && !shouldShowOnboarding;
+  const canRenderLauncherWorkspace = !shouldShowOnboarding && isAuthenticated;
+  const shouldMountLauncherWorkspace = (isLauncherWindow || isDefault) && !shouldHoldLauncherBoot && canRenderLauncherWorkspace;
+  const isStartupCoveringLauncher = shouldMountLauncherWorkspace && shouldRenderStartup;
   const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !shouldRenderStartup && !isSettingsOpen && isLauncherMainView && !shouldShowOnboarding;
   const { activeAd, dismissAd, previewAd } = useAdCampaigns(
     planDetails,
@@ -606,6 +609,80 @@ const App: React.FC = () => {
     </Toast>
   ) : null;
 
+  const renderLauncherWorkspace = (isStartupCovered: boolean) => (
+    <motion.div
+      key="main"
+      className="h-full w-full"
+      aria-hidden={isStartupCovered ? true : undefined}
+      initial={isStartupCovered ? { opacity: 0.01, scale: 0.985, y: 10 } : { opacity: 0, scale: 0.985, y: 10 }}
+      animate={isStartupCovered ? { opacity: 0.01, scale: 0.985, y: 10 } : { opacity: 1, scale: 1, y: 0 }}
+      transition={{
+        duration: isStartupCovered ? 0 : 0.62,
+        ease: [0.19, 1, 0.22, 1],
+        delay: isStartupCovered ? 0 : 0.04,
+      }}
+      style={{ pointerEvents: isStartupCovered ? 'none' : 'auto' }}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <div id="launcher-container" className="h-full w-full relative">
+            <Launcher
+              onStartMeeting={handleStartMeeting}
+              onOpenSettings={(tab = 'general') => {
+                setSettingsInitialTab(tab);
+                setIsSettingsOpen(true);
+              }}
+              onOpenModes={() => setIsModesOpen(true)}
+              onPageChange={setIsLauncherMainView}
+              ollamaPullStatus={ollamaPullStatus}
+              ollamaPullPercent={ollamaPullPercent}
+              ollamaPullMessage={ollamaPullMessage}
+            />
+          </div>
+          <SettingsOverlay
+            isOpen={isSettingsOpen}
+            onClose={() => {
+              setIsSettingsOpen(false);
+            }}
+            initialTab={settingsInitialTab}
+            isTrialActive={!!activeTrial}
+            isPremiumActive={isPremiumActive}
+            isLicenseLoaded={hasLoadedLicense}
+          />
+          {bedrockAuthToast}
+          <AnimatePresence>
+            {isModesOpen && (
+              <motion.div
+                key="modes-panel"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                onClick={(e) => { if (e.target === e.currentTarget) setIsModesOpen(false); }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.97, y: 8 }}
+                  transition={{ duration: 0.18, ease: [0.19, 1, 0.22, 1] }}
+                  className="h-[82vh] w-[70vw] max-h-[820px] max-w-[980px] overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#0c0e14] shadow-2xl"
+                >
+                  {(isPremiumActive || !!activeTrial) ? (
+                    <PremiumModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
+                  ) : (
+                    <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
+                  )}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <ToastViewport />
+        </ToastProvider>
+      </QueryClientProvider>
+    </motion.div>
+  );
+
   // Render Logic
   if (isSettingsWindow) {
     return (
@@ -682,7 +759,9 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary context="Launcher">
       <div className="h-full min-h-0 w-full relative bg-[#000000]">
-        <AnimatePresence>
+        {shouldMountLauncherWorkspace && renderLauncherWorkspace(isStartupCoveringLauncher)}
+
+        <AnimatePresence initial={false}>
           {shouldHoldLauncherBoot ? (
             <motion.div
               key="permissions-bootstrap"
@@ -690,19 +769,12 @@ const App: React.FC = () => {
               animate={{ opacity: 1 }}
               className="flex h-full w-full items-center justify-center bg-[#04070d]"
             >
-              <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/66">
-                <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/70" />
+              <div className="flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/66">
                 Preparing TeamSync
               </div>
             </motion.div>
           ) : shouldRenderStartup ? (
-            <motion.div
-              key="startup"
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0, scale: 1.1, pointerEvents: "none", transition: { duration: 0.6, ease: "easeInOut" } }}
-            >
-              <StartupSequence isReady={bootstrapUiReady} onComplete={() => setShowStartup(false)} />
-            </motion.div>
+            <StartupSequence key="startup" isReady={bootstrapUiReady} onComplete={() => setShowStartup(false)} />
           ) : shouldShowOnboarding ? null : !isAuthenticated ? (
             <motion.div
               key="auth"
@@ -719,77 +791,7 @@ const App: React.FC = () => {
                 }}
               />
             </motion.div>
-          ) : (
-            <motion.div
-              key="main"
-              className="h-full w-full"
-              initial={{ opacity: 0, scale: 0.98, y: 15 }} // "Linear" style entry: slightly down and scaled down
-              animate={{ opacity: 1, scale: 1, y: 0 }}      // Slide up and snap to place
-              transition={{
-                duration: 0.8,
-                ease: [0.19, 1, 0.22, 1], // Expo-out: snappy start, smooth landing
-                delay: 0.1
-              }}
-            >
-              <QueryClientProvider client={queryClient}>
-                <ToastProvider>
-                  <div id="launcher-container" className="h-full w-full relative">
-                    <Launcher
-                      onStartMeeting={handleStartMeeting}
-                      onOpenSettings={(tab = 'general') => {
-                        setSettingsInitialTab(tab);
-                        setIsSettingsOpen(true);
-                      }}
-                      onOpenModes={() => setIsModesOpen(true)}
-                      onPageChange={setIsLauncherMainView}
-                      ollamaPullStatus={ollamaPullStatus}
-                      ollamaPullPercent={ollamaPullPercent}
-                      ollamaPullMessage={ollamaPullMessage}
-                    />
-                  </div>
-                  <SettingsOverlay
-                    isOpen={isSettingsOpen}
-                    onClose={() => {
-                      setIsSettingsOpen(false);
-                    }}
-                    initialTab={settingsInitialTab}
-                    isTrialActive={!!activeTrial}
-                    isPremiumActive={isPremiumActive}
-                    isLicenseLoaded={hasLoadedLicense}
-                  />
-                  {bedrockAuthToast}
-                  <AnimatePresence>
-                    {isModesOpen && (
-                      <motion.div
-                        key="modes-panel"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-                        onClick={(e) => { if (e.target === e.currentTarget) setIsModesOpen(false); }}
-                      >
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.97, y: 8 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.97, y: 8 }}
-                          transition={{ duration: 0.18, ease: [0.19, 1, 0.22, 1] }}
-                          className="h-[82vh] w-[70vw] max-h-[820px] max-w-[980px] overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#0c0e14] shadow-2xl"
-                        >
-                          {(isPremiumActive || !!activeTrial) ? (
-                            <PremiumModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
-                          ) : (
-                            <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
-                          )}
-                        </motion.div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  <ToastViewport />
-                </ToastProvider>
-              </QueryClientProvider>
-            </motion.div>
-          )}
+          ) : null}
         </AnimatePresence>
 
 

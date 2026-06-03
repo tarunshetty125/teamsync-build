@@ -8,6 +8,7 @@ import { SessionTracker, TranscriptSegment, SuggestionTrigger, ContextItem, type
 import {
     type ActionRagContext,
     buildContext,
+    buildQuestionResponseProfileOptions,
     getQuestionResponseProfile,
     serializePromptObject,
     type PromptInstruction,
@@ -95,6 +96,13 @@ import {
 
 type UserControlledMode = 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design';
 const BEDROCK_AUTH_EXPIRED_ROUTING_REASON = 'bedrock_auth_expired_fallback';
+
+function getPromptResponseProfileOptions(prompt: PromptObject) {
+    return buildQuestionResponseProfileOptions({
+        actionId: prompt.actionId,
+        additionalContext: prompt.supplemental?.content,
+    });
+}
 
 // Mode types
 export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm' | 'system_design_tradeoffs' | 'screen_scan' | 'answer_now';
@@ -1042,11 +1050,12 @@ export class IntelligenceEngine extends EventEmitter {
 	                        provider: selectedProvider as any,
                     });
                     contextLayers.promptObject = adaptiveBudget.prompt;
+                    const providerPreviewProfileOptions = getPromptResponseProfileOptions(contextLayers.promptObject);
 	                    const providerPreview = buildProviderPrompt({
 	                        prompt: contextLayers.promptObject,
 	                        model: selectedModel,
 	                        provider: selectedProvider,
-                        isSystemDesign: getQuestionResponseProfile(contextLayers.promptObject.question, contextLayers.promptObject.mode, contextLayers.promptObject.intent) === 'system_design',
+                        isSystemDesign: getQuestionResponseProfile(contextLayers.promptObject.question, contextLayers.promptObject.mode, contextLayers.promptObject.intent, providerPreviewProfileOptions) === 'system_design',
                     });
                     maxPromptTokens = Math.min(adaptiveBudget.maxTokens, providerPreview.maxInputTokens);
 
@@ -1055,11 +1064,12 @@ export class IntelligenceEngine extends EventEmitter {
                         maxTokens: maxPromptTokens,
                     });
                     validatePromptObject(budgeted.prompt, { maxTokens: maxPromptTokens });
+                    const providerPromptProfileOptions = getPromptResponseProfileOptions(budgeted.prompt);
 	                    const providerPrompt = buildProviderPrompt({
 	                        prompt: budgeted.prompt,
 	                        model: selectedModel,
 	                        provider: selectedProvider,
-                        isSystemDesign: getQuestionResponseProfile(budgeted.prompt.question, budgeted.prompt.mode, budgeted.prompt.intent) === 'system_design',
+                        isSystemDesign: getQuestionResponseProfile(budgeted.prompt.question, budgeted.prompt.mode, budgeted.prompt.intent, providerPromptProfileOptions) === 'system_design',
                     });
                     inputTokens = this.session.estimateTokenCount(providerPrompt.finalPrompt);
                     promptAfterTokens = inputTokens;
@@ -1204,7 +1214,7 @@ export class IntelligenceEngine extends EventEmitter {
 	                            actionType: params.intent,
 	                            selectedModel,
 	                            selectedProvider,
-	                            previewStream: getQuestionResponseProfile(budgeted.prompt.question, budgeted.prompt.mode, budgeted.prompt.intent) === 'system_design'
+	                            previewStream: getQuestionResponseProfile(budgeted.prompt.question, budgeted.prompt.mode, budgeted.prompt.intent, getPromptResponseProfileOptions(budgeted.prompt)) === 'system_design'
                                 ? {
                                     intent: params.intent,
                                     mode: sessionMode,
@@ -1316,7 +1326,8 @@ export class IntelligenceEngine extends EventEmitter {
 	                        budgeted.prompt.mode,
 	                        finalContent,
 	                        budgeted.prompt.question,
-	                        budgeted.prompt.actionContract
+	                        budgeted.prompt.actionContract,
+                            getPromptResponseProfileOptions(budgeted.prompt)
 	                    );
                     this.recordBenchmark({
                         activeTemplateType,
@@ -1774,7 +1785,7 @@ export class IntelligenceEngine extends EventEmitter {
         };
     }): Promise<string | null> {
 	        const { prompt, imagePaths, routing, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot, previewStream } = args;
-	        const isSystemDesignOutput = getQuestionResponseProfile(prompt.question, prompt.mode, prompt.intent) === 'system_design';
+	        const isSystemDesignOutput = getQuestionResponseProfile(prompt.question, prompt.mode, prompt.intent, getPromptResponseProfileOptions(prompt)) === 'system_design';
 	  
 	        try {
 	            if (!this.isOwnedActionRequest(requestId, generationId, signal, sessionIdSnapshot)) {
@@ -2077,7 +2088,8 @@ export class IntelligenceEngine extends EventEmitter {
 	        fallbackReason?: string | null;
 	    }): Promise<FinalizedActionOutput | null> {
         const { prompt, content, maxTokens, imagePaths, skipCustomNotesInjection, signal, generationId, requestId, sessionIdSnapshot } = args;
-        const isSystemDesignPrompt = getQuestionResponseProfile(prompt.question, prompt.mode, prompt.intent) === 'system_design';
+        const profileOptions = getPromptResponseProfileOptions(prompt);
+        const isSystemDesignPrompt = getQuestionResponseProfile(prompt.question, prompt.mode, prompt.intent, profileOptions) === 'system_design';
         const logSystemDesignDiagramAudit = (
             stage: string,
             draft: string,
@@ -2102,7 +2114,7 @@ export class IntelligenceEngine extends EventEmitter {
         const validation = this.enforceScreenScanLanguageCompliance(
             prompt,
             content,
-	            validateActionOutput(prompt.intent, prompt.mode, content, prompt.question, prompt.actionContract)
+	            validateActionOutput(prompt.intent, prompt.mode, content, prompt.question, prompt.actionContract, profileOptions)
         );
         if (isSystemDesignPrompt) {
             console.log(`[SYSTEM_DESIGN_RAW_OUTPUT] requestedModel=${args.requestedModel ?? 'unknown'} actualInvokedModel=${args.actualInvokedModel ?? this.llmHelper.getCurrentModel()} fallbackUsed=${args.fallbackUsed === true} fallbackReason=${args.fallbackReason ?? 'none'} intent=${prompt.intent} requestId=${requestId ?? 'none'} length=${content.length} redacted=true [SYSTEM_DESIGN_RAW_OUTPUT_END]`);
@@ -2122,7 +2134,7 @@ export class IntelligenceEngine extends EventEmitter {
             const correctedValidation = this.enforceScreenScanLanguageCompliance(
                 prompt,
                 validation.correctedContent,
-                validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent, prompt.question, prompt.actionContract)
+                validateActionOutput(prompt.intent, prompt.mode, validation.correctedContent, prompt.question, prompt.actionContract, profileOptions)
             );
 	            logSystemDesignDiagramAudit('corrected', correctedValidation.correctedContent || validation.correctedContent, correctedValidation);
 	            if (correctedValidation.valid) {
@@ -2200,7 +2212,7 @@ export class IntelligenceEngine extends EventEmitter {
         const repairedValidation = this.enforceScreenScanLanguageCompliance(
             prompt,
             repaired,
-            validateActionOutput(prompt.intent, prompt.mode, repaired, prompt.question, prompt.actionContract)
+            validateActionOutput(prompt.intent, prompt.mode, repaired, prompt.question, prompt.actionContract, profileOptions)
         );
 	        logSystemDesignDiagramAudit('repair', repairedValidation.correctedContent || repaired, repairedValidation);
 	        if (repairedValidation.valid) {
@@ -2216,7 +2228,7 @@ export class IntelligenceEngine extends EventEmitter {
             const correctedRepairValidation = this.enforceScreenScanLanguageCompliance(
                 prompt,
                 repairedValidation.correctedContent,
-                validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent, prompt.question, prompt.actionContract)
+                validateActionOutput(prompt.intent, prompt.mode, repairedValidation.correctedContent, prompt.question, prompt.actionContract, profileOptions)
             );
 	            logSystemDesignDiagramAudit('corrected_repair', correctedRepairValidation.correctedContent || repairedValidation.correctedContent, correctedRepairValidation);
 	            if (correctedRepairValidation.valid) {

@@ -121,6 +121,7 @@ test('ActionSemanticsReadModel covers lecture actions', () => {
     assert.equal(readModel.byActionId.lecture_summary.outputShape, 'bullet_summary');
 
     assert.equal(readModel.byActionId.lecture_question.taxonomyCategory, 'workflow_state');
+    assert.equal(readModel.byActionId.lecture_question.displayLabel, 'Questions to Ask');
     assert.equal(readModel.byActionId.lecture_question.runtimeIntent, 'follow_up_questions');
     assert.equal(readModel.byActionId.lecture_question.validationShape, 'bullet_questions');
 });
@@ -161,7 +162,7 @@ test('ActionSemanticsReadModel covers behavioral and job actions', () => {
     assert.equal(readModel.byActionId.job_confidence.runtimeIntent, 'brainstorm');
     assert.equal(readModel.byActionId.job_confidence.ambiguityLevel, 'low');
 
-    assert.equal(readModel.byActionId.job_improvement.displayLabel, 'Behavioral Optimize');
+    assert.equal(readModel.byActionId.job_improvement.displayLabel, 'Improve');
     assert.equal(readModel.byActionId.job_improvement.runtimeIntent, 'what_to_answer');
     assert.equal(readModel.byActionId.job_improvement.taxonomyCategory, 'user_intent');
     assert.equal(readModel.byActionId.job_improvement.ambiguityLevel, 'none');

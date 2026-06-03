@@ -5,9 +5,12 @@ const path: typeof import('node:path') = require('node:path');
 const {
     buildContextLayers,
     buildIntentPrompt,
+    buildQuestionResponseProfileOptions,
     buildTranscriptContext,
+    getQuestionResponseProfile,
     serializePromptObject,
 } = require(path.join(process.cwd(), 'electron/ActionContextBuilder')) as typeof import('../ActionContextBuilder');
+const outputValidator = require(path.join(process.cwd(), 'electron/ActionOutputValidator')) as typeof import('../ActionOutputValidator');
 const {
     DEFAULT_PERSONALIZATION_PREFERENCES,
 } = require(path.join(process.cwd(), 'src/lib/personalization/preferences')) as typeof import('../../src/lib/personalization/preferences');
@@ -158,4 +161,80 @@ test('response style preference cannot override restrictive action contract', as
     assert.match(serialized.systemPrompt, /Return hints only/);
     assert.match(serialized.systemPrompt, /must not override ActionContract requirements/i);
     assert.doesNotMatch(serialized.systemPrompt, /FULL working code in one fenced markdown block/i);
+});
+
+test('lecture actions do not auto-upgrade architecture keywords into system-design output', async () => {
+    const question = 'Explain CAP theorem, sharding, and database architecture tradeoffs';
+    const additionalContext = 'Lecture mode: explain the current concept simply, reduce jargon, and make the explanation easy to learn from quickly.';
+    const profileOptions = buildQuestionResponseProfileOptions({
+        actionId: 'lecture_explain',
+        additionalContext,
+    });
+
+    assert.equal(
+        getQuestionResponseProfile(question, 'general', 'what_to_answer', profileOptions),
+        'fresh_general',
+    );
+    assert.equal(
+        getQuestionResponseProfile(question, 'system_design', 'what_to_answer', profileOptions),
+        'general',
+    );
+
+    const instructions = buildIntentPrompt(
+        'what_to_answer',
+        'general',
+        undefined,
+        question,
+        false,
+        undefined,
+        undefined,
+        profileOptions,
+    );
+    const contract = instructions.find((instruction) => instruction.key === 'output_contract');
+
+    assert.ok(contract);
+    assert.match(contract!.content, /strong next answer|moderate answer/i);
+    assert.match(contract!.content, /ready to say aloud/i);
+    assert.doesNotMatch(contract!.content, /architecture_json/i);
+
+    const systemModeInstructions = buildIntentPrompt(
+        'what_to_answer',
+        'system_design',
+        undefined,
+        question,
+        false,
+        undefined,
+        undefined,
+        profileOptions,
+    );
+    const systemModeContract = systemModeInstructions.find((instruction) => instruction.key === 'output_contract');
+
+    assert.ok(systemModeContract);
+    assert.doesNotMatch(systemModeContract!.content, /architecture_json/i);
+
+    const session = createSession('[LECTURE]: CAP theorem covers consistency, availability, and partition tolerance.');
+    const layers = await buildContextLayers({
+        session,
+        intent: 'what_to_answer',
+        mode: 'system_design',
+        message: question,
+        actionId: 'lecture_explain',
+        additionalContext,
+    });
+    const serialized = serializePromptObject(layers.promptObject);
+
+    assert.equal(layers.promptObject.actionId, 'lecture_explain');
+    assert.equal(layers.promptObject.mode, 'system_design');
+    assert.doesNotMatch(serialized.systemPrompt, /architecture_json/i);
+
+    const validation = outputValidator.validateActionOutput(
+        'what_to_answer',
+        'general',
+        'CAP means a distributed system must trade off consistency and availability during partitions.',
+        question,
+        undefined,
+        profileOptions,
+    );
+
+    assert.equal(validation.valid, true);
 });
