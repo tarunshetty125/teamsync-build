@@ -31,45 +31,45 @@ const FEATURES = [
     icon: Eye,
     title: 'Screen understanding',
     description: 'See IDEs, browser tabs, shared decks, and live interview prompts in context.',
-    bg: 'rgba(99,102,241,0.06)',
-    border: 'rgba(129,140,248,0.18)',
-    iconBg: 'rgba(99,102,241,0.12)',
-    iconBorder: 'rgba(129,140,248,0.25)',
-    iconColor: 'rgba(165,180,252,0.85)',
-    dot: '#a5b4fc',
+    bg: 'var(--bg-elevated)',
+    border: 'var(--border-subtle)',
+    iconBg: 'var(--bg-input)',
+    iconBorder: 'var(--border-subtle)',
+    iconColor: 'var(--text-secondary)',
+    dot: 'var(--text-tertiary)',
   },
   {
     icon: AudioLines,
     title: 'Live transcription',
     description: 'Capture microphone and meeting audio in realtime with production STT.',
-    bg: 'rgba(139,92,246,0.06)',
-    border: 'rgba(167,139,250,0.18)',
-    iconBg: 'rgba(139,92,246,0.12)',
-    iconBorder: 'rgba(167,139,250,0.25)',
-    iconColor: 'rgba(196,181,253,0.85)',
-    dot: '#c4b5fd',
+    bg: 'var(--bg-elevated)',
+    border: 'var(--border-subtle)',
+    iconBg: 'var(--bg-input)',
+    iconBorder: 'var(--border-subtle)',
+    iconColor: 'var(--text-secondary)',
+    dot: 'var(--text-tertiary)',
   },
   {
     icon: Sparkles,
     title: 'Interview assistance',
     description: 'Answer faster with contextual prompts, overlays, and instant follow-through.',
-    bg: 'rgba(16,185,129,0.06)',
-    border: 'rgba(52,211,153,0.18)',
-    iconBg: 'rgba(16,185,129,0.12)',
-    iconBorder: 'rgba(52,211,153,0.25)',
-    iconColor: 'rgba(110,231,183,0.85)',
-    dot: '#6ee7b7',
+    bg: 'var(--bg-elevated)',
+    border: 'var(--border-subtle)',
+    iconBg: 'var(--bg-input)',
+    iconBorder: 'var(--border-subtle)',
+    iconColor: 'var(--text-secondary)',
+    dot: 'var(--text-tertiary)',
   },
   {
     icon: FileText,
     title: 'Notes generation',
     description: 'Turn meetings into summaries, action items, and searchable intelligence.',
-    bg: 'rgba(245,158,11,0.06)',
-    border: 'rgba(251,191,36,0.18)',
-    iconBg: 'rgba(245,158,11,0.12)',
-    iconBorder: 'rgba(251,191,36,0.25)',
-    iconColor: 'rgba(253,230,138,0.85)',
-    dot: '#fde68a',
+    bg: 'var(--bg-elevated)',
+    border: 'var(--border-subtle)',
+    iconBg: 'var(--bg-input)',
+    iconBorder: 'var(--border-subtle)',
+    iconColor: 'var(--text-secondary)',
+    dot: 'var(--text-tertiary)',
   },
 ];
 
@@ -110,7 +110,7 @@ const TypewriterText = memo(function TypewriterText({
     <span>
       {displayed}
       {displayed.length < text.length && (
-        <span className="ml-px inline-block h-[1em] w-px animate-pulse bg-white/40 align-middle" />
+        <span className="ml-px inline-block h-[1em] w-px animate-pulse bg-text-tertiary align-middle" />
       )}
     </span>
   );
@@ -129,7 +129,7 @@ function FeatureCard({
   return (
     <motion.div
       variants={cardVariants}
-      className="group relative flex items-center gap-3 overflow-hidden rounded-[18px] p-4 backdrop-blur-[40px] backdrop-saturate-[160%] transition-all"
+      className="group relative flex items-center gap-3 overflow-hidden rounded-xl p-4 shadow-[0_12px_28px_rgba(0,0,0,0.10)] transition-all hover:-translate-y-0.5"
       style={{
         background: feature.bg,
         borderWidth: 1,
@@ -137,17 +137,14 @@ function FeatureCard({
         borderColor: feature.border,
       }}
     >
-      {/* Inner glass shimmer */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/[0.04] via-transparent to-transparent" />
-      {/* Accent dot top-right */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10" />
       <div
-        className="pointer-events-none absolute right-4 top-4 h-1.5 w-1.5 rounded-full opacity-70"
-        style={{ background: feature.dot, boxShadow: `0 0 8px ${feature.dot}` }}
+        className="pointer-events-none absolute right-4 top-4 h-1.5 w-1.5 rounded-full opacity-60"
+        style={{ background: feature.dot }}
       />
 
-      {/* Icon */}
       <div
-        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
+        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
         style={{
           background: feature.iconBg,
           borderWidth: 1,
@@ -159,10 +156,9 @@ function FeatureCard({
         <Icon className="h-4 w-4" strokeWidth={1.5} />
       </div>
 
-      {/* Text */}
       <div className="relative min-w-0">
-        <h2 className="text-[13px] font-medium text-white/90">{feature.title}</h2>
-        <p className="mt-0.5 min-h-[2.5em] text-[11px] leading-relaxed text-white/40">
+        <h2 className="text-[13px] font-medium text-text-primary">{feature.title}</h2>
+        <p className="mt-0.5 min-h-[2.5em] text-[11px] leading-relaxed text-text-secondary">
           <TypewriterText text={feature.description} startDelay={typeDelay} />
         </p>
       </div>
@@ -173,28 +169,25 @@ function FeatureCard({
 export function WelcomeStep({ onContinue }: WelcomeStepProps) {
   return (
     <div className="grid gap-3 lg:grid-cols-[1fr_1.1fr]">
-      {/* Left hero glass panel */}
       <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="relative flex flex-col justify-between overflow-hidden rounded-[24px] border border-white/15 border-t-white/25 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-[50px] backdrop-saturate-[180%]"
-        style={{ background: 'rgba(255,255,255,0.055)' }}
+        className="relative flex flex-col justify-between overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated p-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)]"
       >
-        {/* Inner glass reflection gradient */}
-        <div className="pointer-events-none absolute inset-0 rounded-[24px] bg-gradient-to-br from-white/[0.07] via-transparent to-white/[0.02]" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10" />
 
         <div className="relative">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[9px] font-semibold uppercase tracking-widest text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-md">
+          <div className="inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-bg-input px-2.5 py-1 text-[9px] font-semibold uppercase tracking-widest text-text-secondary">
             <Layers className="h-3 w-3" />
             TeamSync Realtime Intelligence
           </div>
 
-          <h1 className="mt-4 text-[22px] font-medium leading-[1.15] tracking-[-0.03em] text-white">
+          <h1 className="mt-4 text-[22px] font-medium leading-[1.15] tracking-[-0.03em] text-text-primary">
             TeamSync needs permissions to power realtime meeting intelligence.
           </h1>
 
-          <p className="mt-3 text-[13px] leading-relaxed text-white/55">
+          <p className="mt-3 text-[13px] leading-relaxed text-text-secondary">
             Grant these once so TeamSync can capture meetings, understand shared screens, and keep the overlay live while you work.
           </p>
 
@@ -202,7 +195,7 @@ export function WelcomeStep({ onContinue }: WelcomeStepProps) {
             {['meeting capture', 'overlay intelligence', 'context-aware'].map(pill => (
               <span
                 key={pill}
-                className="rounded-full border border-white/15 bg-white/[0.07] px-3 py-1 text-[11px] text-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm"
+                className="rounded-md border border-border-subtle bg-bg-input px-2.5 py-1 text-[11px] text-text-secondary"
               >
                 {pill}
               </span>
@@ -213,13 +206,12 @@ export function WelcomeStep({ onContinue }: WelcomeStepProps) {
         <button
           type="button"
           onClick={onContinue}
-          className="relative mt-6 inline-flex w-fit items-center justify-center gap-2 overflow-hidden rounded-xl border border-emerald-400/30 bg-emerald-500/[0.15] px-5 py-2.5 text-[13px] font-semibold text-emerald-200 shadow-[0_0_20px_rgba(52,211,153,0.12),inset_0_1px_0_rgba(52,211,153,0.2)] backdrop-blur-xl transition-all active:scale-[0.97] hover:bg-emerald-500/25 hover:border-emerald-400/50 hover:shadow-[0_0_28px_rgba(52,211,153,0.2)]"
+          className="relative mt-6 inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md bg-text-primary px-4 text-[13px] font-semibold text-bg-primary shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
         >
           Continue setup
         </button>
       </motion.div>
 
-      {/* Right: feature cards with orchestrated spring stagger */}
       <motion.div
         className="flex flex-col gap-2"
         variants={containerVariants}

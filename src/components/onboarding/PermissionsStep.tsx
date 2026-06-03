@@ -67,8 +67,7 @@ export function PermissionsStep({
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col gap-4 overflow-hidden rounded-[18px] border border-sky-400/20 border-t-sky-400/30 p-4 shadow-[inset_0_1px_0_rgba(125,211,252,0.15)] backdrop-blur-[40px] sm:flex-row sm:items-center sm:justify-between"
-          style={{ background: 'rgba(56,189,248,0.07)' }}
+          className="flex flex-col gap-4 overflow-hidden rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
             <div className="text-[13px] font-medium text-sky-300">Please restart TeamSync to finish enabling screen access.</div>
@@ -79,7 +78,7 @@ export function PermissionsStep({
           <button
             type="button"
             onClick={onQuit}
-            className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-4 py-2 text-[13px] font-medium text-sky-300 backdrop-blur-md transition-all hover:bg-sky-400/20"
+            className="rounded-md border border-sky-400/20 bg-sky-400/10 px-4 py-2 text-[13px] font-medium text-sky-300 transition-all hover:bg-sky-400/20 active:scale-[0.98]"
           >
             Quit TeamSync
           </button>
@@ -87,32 +86,25 @@ export function PermissionsStep({
       ) : null}
 
       {lastError ? (
-        <div
-          className="overflow-hidden rounded-[18px] border border-rose-400/20 border-t-rose-400/30 px-4 py-3 text-[13px] text-rose-300 shadow-[inset_0_1px_0_rgba(251,113,133,0.15)] backdrop-blur-[40px]"
-          style={{ background: 'rgba(244,63,94,0.07)' }}
-        >
+        <div className="overflow-hidden rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-[13px] text-rose-300">
           {lastError}
         </div>
       ) : null}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.1fr]">
-        {/* Left Panel — Tahoe glass */}
-        <div
-          className="relative flex flex-col justify-between overflow-hidden rounded-[24px] border border-white/15 border-t-white/25 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-[50px] backdrop-saturate-[180%]"
-          style={{ background: 'rgba(255,255,255,0.055)' }}
-        >
-          <div className="pointer-events-none absolute inset-0 rounded-[24px] bg-gradient-to-br from-white/[0.07] via-transparent to-white/[0.02]" />
+        <div className="relative flex flex-col justify-between overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated p-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)]">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10" />
           <div className="relative">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[9px] font-semibold uppercase tracking-widest text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-md">
+            <div className="inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-bg-input px-2.5 py-1 text-[9px] font-semibold uppercase tracking-widest text-text-secondary">
               <Layers className="h-3 w-3" />
               TeamSync Realtime Intelligence
             </div>
 
-            <h2 className="mt-4 text-[22px] font-medium leading-[1.15] tracking-[-0.03em] text-white">
+            <h2 className="mt-4 text-[22px] font-medium leading-[1.15] tracking-[-0.03em] text-text-primary">
               TeamSync needs permissions to power realtime meeting intelligence.
             </h2>
 
-            <p className="mt-3 text-[13px] leading-relaxed text-white/55">
+            <p className="mt-3 text-[13px] leading-relaxed text-text-secondary">
               Grant these once so TeamSync can capture meetings, understand shared screens, and keep the overlay live.
             </p>
 
@@ -120,7 +112,7 @@ export function PermissionsStep({
               {['meeting capture', 'overlay intelligence', 'context-aware'].map(pill => (
                 <span
                   key={pill}
-                  className="rounded-full border border-white/15 bg-white/[0.07] px-3 py-1 text-[11px] text-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm"
+                  className="rounded-md border border-border-subtle bg-bg-input px-2.5 py-1 text-[11px] text-text-secondary"
                 >
                   {pill}
                 </span>
@@ -133,14 +125,14 @@ export function PermissionsStep({
               type="button"
               onClick={onContinue}
               disabled={!allReady}
-              className="inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl border border-emerald-400/30 bg-emerald-500/[0.15] px-5 py-2.5 text-[13px] font-semibold text-emerald-200 shadow-[0_0_20px_rgba(52,211,153,0.12),inset_0_1px_0_rgba(52,211,153,0.2)] backdrop-blur-xl transition-all active:scale-[0.97] hover:bg-emerald-500/25 hover:border-emerald-400/50 hover:shadow-[0_0_28px_rgba(52,211,153,0.2)] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/30 disabled:shadow-none"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-text-primary px-4 text-[13px] font-semibold text-bg-primary shadow-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-bg-input disabled:text-text-tertiary disabled:shadow-none"
             >
               Continue setup
             </button>
             <button
               type="button"
               onClick={onRetry}
-              className="text-[12px] font-medium text-white/35 transition-colors hover:text-white/65"
+              className="text-[12px] font-medium text-text-secondary transition-colors hover:text-text-primary"
             >
               Refresh
             </button>
