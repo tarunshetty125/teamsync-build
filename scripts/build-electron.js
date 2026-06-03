@@ -47,6 +47,7 @@ if (fs.existsSync(premiumDir)) {
 const sharedRuntimeDirs = [
   path.resolve(rootDir, 'src/lib/config'),
   path.resolve(rootDir, 'src/lib/modes'),
+  path.resolve(rootDir, 'src/lib/overlay'),
   path.resolve(rootDir, 'src/lib/personalization'),
   path.resolve(rootDir, 'src/lib/permissions'),
 ];
@@ -60,8 +61,6 @@ for (const sharedDir of sharedRuntimeDirs) {
 const sharedRuntimeFiles = [
   path.resolve(rootDir, 'src/utils/transcriptSpeakers.ts'),
   path.resolve(rootDir, 'src/utils/modelUtils.ts'),
-  path.resolve(rootDir, 'src/lib/overlay/actionContextTypes.ts'),
-  path.resolve(rootDir, 'src/lib/overlay/systemDesignEntityNormalizer.ts'),
   path.resolve(rootDir, 'src/lib/providers/providerFallbackCandidatePolicy.ts'),
   path.resolve(rootDir, 'src/lib/providers/providerAnalyticsSessionSnapshot.ts'),
   path.resolve(rootDir, 'src/lib/providers/providerModelMetadata.ts'),
