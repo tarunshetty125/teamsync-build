@@ -56,7 +56,6 @@ const SettingsPopup = () => {
         if (window.electronAPI?.onUndetectableChanged) {
             const unsubscribe = window.electronAPI.onUndetectableChanged((newState: boolean) => {
                 setIsUndetectable(newState);
-                localStorage.setItem('teamsync_undetectable', String(newState));
             });
             return () => unsubscribe();
         }
@@ -236,7 +235,6 @@ const SettingsPopup = () => {
                             onClick={() => {
                                 const newState = !isUndetectable;
                                 setIsUndetectable(newState);
-                                localStorage.setItem('teamsync_undetectable', String(newState));
                                 window.electronAPI?.setUndetectable(newState);
                             }}
                             className={`w-[30px] h-[18px] rounded-full p-[1.5px] transition-all duration-300 ease-spring active:scale-[0.92] ${isUndetectable

@@ -34,6 +34,8 @@ export interface StealthState {
   dockHidden: boolean;
   eventsBlocked: boolean;
   watchdogActive: boolean;
+  /** Platform-specific warnings about stealth limitations (e.g. no capture protection on Linux) */
+  platformWarnings: string[];
 }
 
 export interface StealthConfig {
@@ -294,6 +296,24 @@ export class StealthManager {
    * Returns the current stealth state for UI/diagnostics.
    */
   public getState(): StealthState {
+    const warnings: string[] = [];
+    if (process.platform === 'linux') {
+      warnings.push('Screen capture protection is not available on Linux. Your window may be visible during screen shares.');
+    }
+    if (process.platform === 'win32') {
+      const osRelease = require('os').release();
+      const build = parseInt(osRelease.split('.')[2], 10) || 0;
+      if (build < 19041) { // Windows 10 2004 = build 19041
+        warnings.push('Screen capture protection requires Windows 10 version 2004 or later. Your current version may not fully protect the window.');
+      }
+    }
+    if (process.platform === 'darwin') {
+      const osRelease = require('os').release();
+      const majorKernel = parseInt(osRelease.split('.')[0], 10) || 0;
+      if (majorKernel >= 22) { // macOS Ventura = Darwin 22
+        warnings.push('Stage Manager may still show the overlay in its sidebar. Consider disabling Stage Manager during sensitive sessions.');
+      }
+    }
     return {
       level: this.config.level,
       processDisguised: this._engaged,
@@ -301,6 +321,7 @@ export class StealthManager {
       dockHidden: this._engaged,
       eventsBlocked: this._engaged && this.config.blockAppleEvents,
       watchdogActive: this._watchdogTimer !== null,
+      platformWarnings: warnings,
     };
   }
 
@@ -606,6 +627,17 @@ export class StealthManager {
       try {
         win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
       } catch { /* ignore */ }
+
+      // Stage Manager mitigation: keep the window out of the taskbar and
+      // ensure floating z-order.  True Stage Manager hiding requires private
+      // NSWindowCollectionBehavior.auxiliary which Electron does not expose,
+      // but these reduce sidebar visibility.
+      try {
+        win.setSkipTaskbar(true);
+        if (!win.isAlwaysOnTop()) {
+          win.setAlwaysOnTop(true, 'floating');
+        }
+      } catch { /* ignore */ }
     }
 
     return true;
@@ -655,12 +687,19 @@ export class StealthManager {
     this._removeWindowCreatedListener();
 
     this._windowCreatedHandler = (_event: Electron.Event, win: BrowserWindow) => {
-      // Delay slightly to let Electron finish window setup
+      // Apply content protection IMMEDIATELY — no gap.
+      // setContentProtection works even before the window is fully ready.
+      if (this._engaged && win && !win.isDestroyed()) {
+        try { win.setContentProtection(true); } catch { /* window not ready — covered by retry below */ }
+      }
+      // Follow-up: apply full protection (Mission Control hiding, workspace
+      // visibility) after Electron finishes window setup.  50 ms is enough
+      // and halves the previous 100 ms delay.
       setTimeout(() => {
         if (this._engaged && win && !win.isDestroyed()) {
           this.protectWindow(win);
         }
-      }, 100);
+      }, 50);
     };
 
     app.on('browser-window-created', this._windowCreatedHandler);
@@ -892,7 +931,7 @@ export class StealthManager {
       try { this._applyWindowProtection(); } catch (e) { this._warn(`L5: window reassert failed after ${reason}:`, e); }
       try { this._platformAdapter.reassertAfterLifecycle(reason); } catch (e) { this._warn(`L5: OS visibility reassert failed after ${reason}:`, e); }
       this._markRuntimeEngaged();
-    }, 250);
+    }, 50);
 
     if (this._reassertTimer.unref) {
       this._reassertTimer.unref();

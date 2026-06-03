@@ -18,8 +18,8 @@ export const DEFAULT_KEYBINDS: KeybindConfig[] = [
     { id: 'general:toggle-mouse-passthrough', label: 'Toggle Mouse Passthrough', accelerator: 'CommandOrControl+Shift+B', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+B' },
     { id: 'general:process-screenshots', label: 'Process Screenshots', accelerator: 'CommandOrControl+Enter', isGlobal: true, defaultAccelerator: 'CommandOrControl+Enter' },
     { id: 'general:capture-and-process', label: 'Capture Screen & Ask AI (Global)', accelerator: 'CommandOrControl+Shift+Enter', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+Enter' },
-    { id: 'general:reset-cancel', label: 'Reset / Cancel', accelerator: 'CommandOrControl+R', isGlobal: true, defaultAccelerator: 'CommandOrControl+R' },
-    { id: 'general:take-screenshot', label: 'Take Screenshot', accelerator: 'CommandOrControl+H', isGlobal: true, defaultAccelerator: 'CommandOrControl+H' },
+    { id: 'general:reset-cancel', label: 'Reset / Cancel', accelerator: 'CommandOrControl+Shift+R', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+R' },
+    { id: 'general:take-screenshot', label: 'Take Screenshot', accelerator: 'CommandOrControl+Shift+1', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+1' },
     { id: 'general:selective-screenshot', label: 'Selective Screenshot', accelerator: 'CommandOrControl+Shift+H', isGlobal: true, defaultAccelerator: 'CommandOrControl+Shift+H' },
 
     // Chat - Global shortcuts (work even when app is not focused - stealth mode)
@@ -374,8 +374,8 @@ export class KeybindManager {
                     { type: 'separator' },
                     { role: 'services' },
                     { type: 'separator' },
-                    { role: 'hide', accelerator: 'CommandOrControl+Option+H' },
-                    { role: 'hideOthers', accelerator: 'CommandOrControl+Option+Shift+H' },
+                    { role: 'hide' },
+                    { role: 'hideOthers' },
                     { role: 'unhide' },
                     { type: 'separator' },
                     { role: 'quit' }

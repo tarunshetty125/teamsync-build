@@ -3191,6 +3191,41 @@ export class AppState {
       this._disguiseTimers = [];
     }
 
+    // --- DOCK HIDE: fire BEFORE StealthManager.engage() to eliminate
+    // the previous 150ms gap where the dock icon was visible while the
+    // process was already disguised as "System Settings". ---
+    if (state && process.platform === 'darwin') {
+      // Cancel any pending dock debounce from a rapid toggle
+      if (this._dockDebounceTimer) {
+        clearTimeout(this._dockDebounceTimer);
+        this._dockDebounceTimer = null;
+      }
+
+      // Capture focus state BEFORE dock.hide() — that call triggers an
+      // implicit macOS app-deactivation which shifts keyboard focus.
+      const activeWindow = this.windowHelper.getMainWindow();
+      const settingsWindow = this.settingsWindowHelper.getSettingsWindow();
+      let targetFocusWindow = activeWindow;
+      if (settingsWindow && !settingsWindow.isDestroyed() && settingsWindow.isVisible()) {
+        targetFocusWindow = settingsWindow;
+      }
+      const teamsyncWasFocused =
+        targetFocusWindow != null &&
+        !targetFocusWindow.isDestroyed() &&
+        targetFocusWindow.isFocused();
+
+      console.log('[Stealth] Calling app.dock.hide() BEFORE engage');
+      app.dock.hide();
+      this.hideTray();
+
+      // Restore focus after dock.hide()
+      if (teamsyncWasFocused && targetFocusWindow && !targetFocusWindow.isDestroyed()) {
+        targetFocusWindow.focus();
+      }
+    } else if (state && process.platform === 'win32') {
+      this.hideTray();
+    }
+
     // --- Advanced Stealth Manager: engage/disengage ---
     // The StealthManager handles L0-L4 hardening layers (process identity,
     // env scrubbing, window protection, OS hiding, event blocking).
@@ -3208,13 +3243,10 @@ export class AppState {
     // Broadcast state change to all relevant windows
     this._broadcastToAllWindows('undetectable-changed', state);
 
-    // --- STEALTH MODE LOGIC ---
-    // The dock hide/show is debounced: rapid toggles update isUndetectable immediately
-    // (so content protection, IPC broadcasts and the guard above are always current),
-    // but the actual macOS dock/tray/focus operation only fires once the user stops
-    // toggling. This eliminates the race where dock.show() + NSApp.activate() lingers
-    // after a subsequent dock.hide() call.
-    if (process.platform === 'darwin') {
+    // --- DOCK SHOW (disengage only): debounced to prevent flicker from
+    // rapid toggles. The dock hide path above is NOT debounced — stealth
+    // engagement must be instantaneous. ---
+    if (!state && process.platform === 'darwin') {
       if (this._dockDebounceTimer) {
         clearTimeout(this._dockDebounceTimer);
         this._dockDebounceTimer = null;
@@ -3244,33 +3276,14 @@ export class AppState {
           this.modelSelectorWindowHelper.setIgnoreBlur(true);
         }
 
-        if (settled) {
-          // Capture whether TeamSync is currently the frontmost app BEFORE
-          // dock.hide() — that call triggers an implicit macOS app-deactivation
-          // which shifts keyboard focus to the next frontmost app (Chrome, etc.).
-          const teamsyncWasFocused =
-            targetFocusWindow != null &&
-            !targetFocusWindow.isDestroyed() &&
-            targetFocusWindow.isFocused();
-
-          console.log('[Stealth] Calling app.dock.hide()');
-          app.dock.hide();
-          this.hideTray();
-
-          // If TeamSync was the focused window when the user toggled stealth,
-          // restore focus to our window after dock.hide() so macOS does not
-          // hand control to Chrome / whatever is behind us.
-          // We use win.focus() (not app.focus()) to avoid the heavy-handed
-          // [NSApp activateIgnoringOtherApps:YES] side-effect.
-          if (teamsyncWasFocused && targetFocusWindow && !targetFocusWindow.isDestroyed()) {
-            targetFocusWindow.focus();
-          }
-        } else {
+        if (!settled) {
           console.log('[Stealth] Calling app.dock.show()');
           app.dock.show();
           this.showTray();
           // Do NOT call focus() — let the user's current app retain focus
         }
+        // If settled is now true (user re-engaged during debounce), do nothing —
+        // dock is already hidden from the synchronous hide above.
 
         if (targetFocusWindow && targetFocusWindow === settingsWindow) {
           setTimeout(() => { this.settingsWindowHelper.setIgnoreBlur(false); }, 500);
@@ -3279,12 +3292,8 @@ export class AppState {
           setTimeout(() => { this.modelSelectorWindowHelper.setIgnoreBlur(false); }, 500);
         }
       }, 150);
-    } else if (process.platform === 'win32') {
-      if (state) {
-        this.hideTray();
-      } else {
-        this.showTray();
-      }
+    } else if (!state && process.platform === 'win32') {
+      this.showTray();
     }
   }
 
@@ -3421,6 +3430,14 @@ export class AppState {
     // the app and re-show the dock icon even after dock.hide()
     if (!this.isUndetectable) {
       app.setName(appName);
+    }
+
+    // Sync StealthManager's process name with the current disguise so the
+    // watchdog reasserts the user's chosen disguise, not "System Settings".
+    if (this.isUndetectable) {
+      try {
+        StealthManager.getInstance().updateConfig({ processName: appName.trim() });
+      } catch { /* StealthManager may not be available yet */ }
     }
 
     if (isMac) {

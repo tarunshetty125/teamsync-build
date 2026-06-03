@@ -1498,11 +1498,11 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         }
     }, []);
 
-    // Persist Settings
+    // Persist Settings (stealth state is NOT mirrored to localStorage —
+    // the main process IPC is the single source of truth)
     useEffect(() => {
-        localStorage.setItem('teamsync_undetectable', String(isUndetectable));
         localStorage.setItem('teamsync_hideChatHidesWidget', String(hideChatHidesWidget));
-    }, [isUndetectable, hideChatHidesWidget]);
+    }, [hideChatHidesWidget]);
 
     // Mouse Passthrough State
     const [isOverlayDragging, setIsOverlayDragging] = useState(false);

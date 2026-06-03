@@ -196,6 +196,17 @@ export function initializeIpcHandlers(appState: AppState): void {
         webSecurity: true,
       },
     });
+
+    // Stealth: protect from screen capture even though window is hidden.
+    // Without this, the PDF render window is the only BrowserWindow that
+    // leaks content to screen capture tools during stealth mode.
+    try {
+      const { StealthManager } = require('./services/StealthManager');
+      if (StealthManager.getInstance().isEngaged()) {
+        pdfWindow.setContentProtection(true);
+      }
+    } catch { /* StealthManager may not be initialised yet */ }
+
     let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
     try {
@@ -1233,6 +1244,27 @@ export function initializeIpcHandlers(appState: AppState): void {
       return StealthManager.getInstance().isEngaged();
     } catch {
       return false;
+    }
+  })
+
+  safeHandle("stealth:get-health", async () => {
+    try {
+      const sm = StealthManager.getInstance();
+      const state = sm.getState();
+      const config = sm.getConfig();
+      const os = require('os');
+      return {
+        ...state,
+        config,
+        platform: process.platform,
+        electronVersion: process.versions.electron,
+        osVersion: os.release(),
+        protectionLevel: process.platform === 'linux' ? 'none'
+          : process.platform === 'win32' ? 'partial'
+          : 'full',
+      };
+    } catch (e: any) {
+      return { error: e.message, protectionLevel: 'unknown', platformWarnings: [] };
     }
   })
 
