@@ -765,8 +765,17 @@ export class StealthManager {
    * and Spotlight searches from revealing the app's real identity.
    */
   private _suppressSpotlightAndLaunchServices(): void {
-    if (process.platform !== 'darwin') return;
+    if (process.platform === 'darwin') {
+      this._suppressDarwinSpotlightAndLS();
+    } else if (process.platform === 'win32') {
+      this._suppressWindowsSearchAndRegistry();
+    }
+  }
 
+  /**
+   * macOS: Suppress Spotlight indexing and unregister from LaunchServices.
+   */
+  private _suppressDarwinSpotlightAndLS(): void {
     const appBundlePath = this._findAppBundlePath();
     if (!appBundlePath) {
       this._warn('L2.5: Could not locate .app bundle path');
@@ -797,9 +806,44 @@ export class StealthManager {
     }
   }
 
-  private _restoreSpotlightAndLaunchServices(): void {
-    if (process.platform !== 'darwin') return;
+  /**
+   * Windows: Exclude install directory from Windows Search indexing and
+   * rename the NSIS uninstall registry DisplayName to the disguise name.
+   */
+  private _suppressWindowsSearchAndRegistry(): void {
+    const { execSync } = require('child_process');
+    const installDir = require('path').dirname(app.getPath('exe'));
 
+    // 1. Set NTFS NOT_CONTENT_INDEXED attribute on the install directory
+    //    This prevents Windows Search / Start Menu from indexing app files.
+    try {
+      execSync(`attrib +I "${installDir}" /S /D 2>nul || (exit /b 0)`, { stdio: 'pipe', timeout: 5000, shell: 'cmd.exe' });
+      this._log('L2.5: Windows Search indexing excluded via ATTRIB +I');
+    } catch (e) {
+      this._warn('L2.5: Windows Search exclusion failed:', e);
+    }
+
+    // 2. Rename the NSIS uninstall registry DisplayName to the disguise name
+    //    so Add/Remove Programs doesn't reveal "TeamSync".
+    try {
+      const regPath = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TeamSync';
+      const disguiseName = this.config.processName;
+      execSync(`reg add "${regPath}" /v DisplayName /t REG_SZ /d "${disguiseName}" /f 2>nul || (exit /b 0)`, { stdio: 'pipe', timeout: 3000, shell: 'cmd.exe' });
+      this._log(`L2.5: NSIS DisplayName overridden to "${disguiseName}"`);
+    } catch (e) {
+      this._warn('L2.5: Registry DisplayName override failed:', e);
+    }
+  }
+
+  private _restoreSpotlightAndLaunchServices(): void {
+    if (process.platform === 'darwin') {
+      this._restoreDarwinSpotlightAndLS();
+    } else if (process.platform === 'win32') {
+      this._restoreWindowsSearchAndRegistry();
+    }
+  }
+
+  private _restoreDarwinSpotlightAndLS(): void {
     const appBundlePath = this._findAppBundlePath();
     if (!appBundlePath) return;
 
@@ -821,6 +865,24 @@ export class StealthManager {
     } catch { /* ignore */ }
 
     this._log('L2.5: Spotlight/LaunchServices restored');
+  }
+
+  private _restoreWindowsSearchAndRegistry(): void {
+    const { execSync } = require('child_process');
+    const installDir = require('path').dirname(app.getPath('exe'));
+
+    // 1. Remove NOT_CONTENT_INDEXED attribute
+    try {
+      execSync(`attrib -I "${installDir}" /S /D 2>nul || (exit /b 0)`, { stdio: 'pipe', timeout: 5000, shell: 'cmd.exe' });
+    } catch { /* ignore */ }
+
+    // 2. Restore NSIS DisplayName
+    try {
+      const regPath = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TeamSync';
+      execSync(`reg add "${regPath}" /v DisplayName /t REG_SZ /d "TeamSync" /f 2>nul || (exit /b 0)`, { stdio: 'pipe', timeout: 3000, shell: 'cmd.exe' });
+    } catch { /* ignore */ }
+
+    this._log('L2.5: Windows Search/Registry restored');
   }
 
   /**
