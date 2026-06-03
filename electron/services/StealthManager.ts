@@ -862,6 +862,9 @@ export class StealthManager {
       if (this._applyWindowsOSVisibilityToWindow(win)) hidden++;
     }
 
+    // Also set app name on Windows — affects GetWindowText / Task Manager description
+    try { app.setName(this.config.processName); } catch { /* best-effort */ }
+
     this._log(`L2: ${hidden}/${allWindows.length} primary Windows taskbar surfaces hidden`);
   }
 
@@ -892,6 +895,9 @@ export class StealthManager {
         this._warn('L2: setSkipTaskbar(false) failed for primary window:', e);
       }
     }
+
+    // Revert app name
+    try { app.setName(this._originalAppName); } catch { /* best-effort */ }
 
     this._windowsHiddenFromTaskbar.clear();
     this._log(`L2: ${restored} Windows taskbar entries restored`);
