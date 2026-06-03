@@ -2269,12 +2269,6 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             intelligenceExplanationRef.current = data;
         }));
 
-        // Intelligence Dev Mode activation (HIGH-002)
-        // Gate: localStorage.setItem('teamsync_intelligence_dev', 'true') in DevTools
-        if (typeof localStorage !== 'undefined' && localStorage.getItem('teamsync_intelligence_dev') === 'true') {
-            window.electronAPI.enableIntelligenceDevMode?.().catch(() => {});
-        }
-
         return () => cleanups.forEach(fn => fn());
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [appendTokenToRequest, clearProcessingForRequest, finalizeRequestMessage, rememberIntentRequest, resolveSuggestedAnswerRequest]); // C2 Fix: mount-only — listeners must survive expand/collapse to prevent dropped tokens

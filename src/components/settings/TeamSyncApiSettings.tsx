@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     CheckCircle, AlertCircle,
-    Mic, Brain, Search, Shield, Loader2,
-    RefreshCw, CalendarClock, Trash2, ArrowUpRight, Info,
-    Zap, Clock, Sparkles
+    Mic, Brain, Search, Loader2,
+    RefreshCw, CalendarClock, Trash2, ArrowUpRight,
+    Zap, Clock
 } from 'lucide-react';
 import { TeamSyncLogoMark } from '../TeamSyncLogoMark';
 import { FreeTrialModal } from '../trial/FreeTrialModal';
@@ -21,11 +21,6 @@ interface UsageData {
         resets_at:     string;
     };
 }
-
-const PLAN_STANDARD_URL = 'https://checkout.dodopayments.com/buy/pdt_0NbFixGmD8CSeawb5qvVl';
-const PLAN_PRO_URL      = 'https://checkout.dodopayments.com/buy/pdt_0NcM6Aw0IWdspbsgUeCLA';
-const PLAN_MAX_URL      = 'https://checkout.dodopayments.com/buy/pdt_0NcM7JElX4Af6LNVFS1Yf';
-const PLAN_ULTRA_URL    = 'https://checkout.dodopayments.com/buy/pdt_0NcM7rC2kAb69TFKsZnUU';
 
 // ─── Quota bar ───────────────────────────────────────────────
 function QuotaBar({ label, icon: Icon, bucket, barColor }: {
@@ -165,7 +160,7 @@ export const TeamSyncApiSettings: React.FC = () => {
                 setUsageData(r as UsageData);
             } else {
                 setUsageError(
-                    r.error === 'subscription_inactive' ? 'Subscription inactive — renew to restore access.'
+                    r.error === 'subscription_inactive' ? 'Access inactive — contact your administrator to restore access.'
                     : r.error === 'key_not_found'       ? 'Key not recognised by server.'
                     : r.error === 'invalid_key_format'  ? 'Invalid key format.'
                     : r.error === 'network_error' || r.error?.includes('fetch')
@@ -318,119 +313,20 @@ export const TeamSyncApiSettings: React.FC = () => {
 
     const PlansCard = (
         <Card>
-            <div className="px-5 pt-5 pb-2">
-                <div className="flex flex-col gap-2.5 mb-4">
-                    <div className="flex items-center justify-between">
-                        <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-widest">Choose a Plan</p>
-                        <span className="text-[10px] text-text-tertiary">Pro, Max &amp; Ultra include TeamSync Pro app</span>
+            <div className="px-5 py-5">
+                <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-[11px] bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
+                        <TeamSyncLogoMark size={18} className="text-violet-400" />
                     </div>
-                    <div className="w-full flex items-center justify-center py-2 bg-violet-500/10 border border-violet-500/20 rounded-[10px]">
-                        <span className="text-[11.5px] font-medium text-violet-400/90">
-                            Use code <span className="font-bold text-violet-400">INSIDER25</span> for 25% off
-                        </span>
+                    <div className="min-w-0">
+                        <p className="text-[13.5px] font-semibold text-text-primary tracking-tight">License access</p>
+                        <p className="text-[12px] text-text-secondary leading-relaxed mt-1">
+                            Licensing available through administrator-issued license keys.
+                        </p>
+                        <p className="text-[11px] text-text-tertiary leading-relaxed mt-2">
+                            Enter the key below once it has been issued for your workspace.
+                        </p>
                     </div>
-                </div>
-
-                {/* Plan rows */}
-                <div className="space-y-2 pb-3">
-                    {([
-                        {
-                            name: 'Standard',
-                            price: '$8',
-                            url: PLAN_STANDARD_URL,
-                            color: 'text-slate-400',
-                            bg: 'bg-slate-500/10',
-                            border: 'border-slate-500/20',
-                            btnBg: 'bg-slate-700 hover:bg-slate-600',
-                            includesPro: false,
-                            features: ['500 AI req / mo', '200 min STT', '20 searches'],
-                        },
-                        {
-                            name: 'Pro',
-                            price: '$15',
-                            url: PLAN_PRO_URL,
-                            color: 'text-violet-400',
-                            bg: 'bg-violet-500/10',
-                            border: 'border-violet-500/20',
-                            btnBg: 'bg-violet-600 hover:bg-violet-500',
-                            includesPro: true,
-                            features: ['1,000 AI req / mo', '500 min STT', '100 searches'],
-                        },
-                        {
-                            name: 'Max',
-                            price: '$25',
-                            url: PLAN_MAX_URL,
-                            color: 'text-blue-400',
-                            bg: 'bg-blue-500/10',
-                            border: 'border-blue-500/20',
-                            btnBg: 'bg-blue-600 hover:bg-blue-500',
-                            includesPro: true,
-                            features: ['2,000 AI req / mo', '1,000 min STT', '200 searches'],
-                        },
-                        {
-                            name: 'Ultra',
-                            price: '$35',
-                            url: PLAN_ULTRA_URL,
-                            color: 'text-orange-400',
-                            bg: 'bg-orange-500/10',
-                            border: 'border-orange-500/20',
-                            btnBg: 'bg-orange-600 hover:bg-orange-500',
-                            includesPro: true,
-                            features: ['3,000 AI req / mo', '2,000 min STT', '300 searches'],
-                        },
-                    ] as const).map((plan) => (
-                        <div
-                            key={plan.name}
-                            className={`flex items-center gap-3 px-3.5 py-3 rounded-xl border ${plan.bg} ${plan.border}`}
-                        >
-                            {/* Name + features */}
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className={`text-[13px] font-semibold ${plan.color}`}>{plan.name}</span>
-                                    {plan.includesPro && (
-                                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 tracking-wide">
-                                            + Pro App
-                                        </span>
-                                    )}
-                                </div>
-                                <p className="text-[10px] text-text-tertiary leading-relaxed">
-                                    {plan.features.join(' · ')}
-                                </p>
-                            </div>
-                            {/* Price + button */}
-                            <div className="flex items-center gap-2.5 shrink-0">
-                                <span className="text-[13px] font-semibold text-text-primary tabular-nums">{plan.price}<span className="text-[10px] font-normal text-text-tertiary">/mo</span></span>
-                                {(() => {
-                                    const currentPlan = usageData?.plan?.toLowerCase();
-                                    const rowPlan     = plan.name.toLowerCase();
-                                    // 'starter' is the legacy name for the $8 Standard plan
-                                    const isActive =
-                                        currentPlan === rowPlan ||
-                                        (rowPlan === 'standard' && currentPlan === 'starter');
-                                    return isActive ? (
-                                    <div className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
-                                        Active
-                                    </div>
-                                ) : (
-                                    <button
-                                        onClick={() => openExternal(plan.url)}
-                                        className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white ${plan.btnBg} transition-all duration-150 flex items-center gap-1 cursor-pointer active:scale-[0.98]`}
-                                    >
-                                        Get <ArrowUpRight size={10} strokeWidth={2.5} />
-                                    </button>
-                                );
-                                })()}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* AI quota note */}
-                <div className="flex items-start gap-2 mb-4 px-3 py-2.5 bg-bg-input rounded-xl border border-border-subtle">
-                    <Info size={11} className="text-text-tertiary shrink-0 mt-[1px]" strokeWidth={2} />
-                    <p className="text-[11px] text-text-tertiary leading-relaxed">
-                        AI requests include chat replies, meeting title &amp; summary generation, and embeddings — not just manual messages.
-                    </p>
                 </div>
             </div>
         </Card>
@@ -527,7 +423,7 @@ export const TeamSyncApiSettings: React.FC = () => {
                             
                             <h3 className="text-[14.5px] font-bold text-text-primary tracking-tight mb-1">TeamSync API. Try it free.</h3>
                             <p className="text-[12px] text-text-secondary leading-snug px-4 mb-4">
-                                Experience managed text-to-speech, AI models, and real-time research without a subscription.
+                                Experience managed text-to-speech, AI models, and real-time research without adding a license key.
                             </p>
 
                             {/* Clean limits grid container */}
@@ -589,7 +485,7 @@ export const TeamSyncApiSettings: React.FC = () => {
                 );
             })()}
 
-            {/* ── Plans ────────────────────────────────────────── */}
+            {/* ── License access ───────────────────────────────── */}
             {!isSaved && PlansCard}
 
             {/* ── API Key card ─────────────────────────────────── */}
@@ -603,7 +499,7 @@ export const TeamSyncApiSettings: React.FC = () => {
                     <div className="min-w-0">
                         <p className="text-[13px] font-semibold text-text-primary">API Key</p>
                         <p className="text-[11px] text-text-tertiary leading-snug mt-0.5">
-                            Your TeamSync API key from your subscription email
+                            Your administrator-issued TeamSync API key
                         </p>
                     </div>
                 </div>
@@ -680,13 +576,7 @@ export const TeamSyncApiSettings: React.FC = () => {
 
                     {/* Hint */}
                     <p className="text-[11px] text-text-secondary leading-relaxed text-center">
-                        Don't have a key?{' '}
-                        <span
-                            onClick={() => openExternal(PLAN_STANDARD_URL)}
-                            className="text-blue-400 hover:text-blue-300 cursor-pointer transition-colors duration-150"
-                        >
-                            Subscribe to get one
-                        </span>
+                        Licensing available through administrator-issued license keys.
                     </p>
                 </div>
             </Card>
@@ -761,7 +651,7 @@ export const TeamSyncApiSettings: React.FC = () => {
                 </Card>
             )}
 
-            {/* ── Plans ────────────────────────────────────────── */}
+            {/* ── License access ───────────────────────────────── */}
             {isSaved && PlansCard}
 
             {/* ── How it works ─────────────────────────────────── */}
@@ -780,9 +670,9 @@ export const TeamSyncApiSettings: React.FC = () => {
                     </div>
                     <div className="space-y-3">
                         {[
-                            { step: '1', text: 'Subscribe above and complete checkout on Dodo Payments.' },
-                            { step: '2', text: 'Your API key is emailed instantly to your inbox.'        },
-                            { step: '3', text: 'Paste it here — TeamSync handles the rest automatically.' },
+                            { step: '1', text: 'Request an administrator-issued license key.' },
+                            { step: '2', text: 'Paste the key here once it has been issued.'  },
+                            { step: '3', text: 'TeamSync syncs usage and access automatically.' },
                         ].map(({ step, text }) => (
                             <div key={step} className="flex items-start gap-3">
                                 <div className="w-5 h-5 rounded-full bg-bg-input border border-border-subtle flex items-center justify-center text-[10px] font-bold text-text-tertiary shrink-0 mt-[1px]">
@@ -791,52 +681,6 @@ export const TeamSyncApiSettings: React.FC = () => {
                                 <p className="text-[12px] text-text-secondary leading-relaxed">{text}</p>
                             </div>
                         ))}
-                    </div>
-                </div>
-            </Card>
-
-            {/* ── Refund Policy ────────────────────────────────── */}
-            <Card>
-                <div className="flex items-center gap-3 px-5 pt-5 pb-4">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                        <Shield size={18} className="text-emerald-400" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-text-primary">Refund Policy</p>
-                        <p className="text-[11px] text-text-tertiary leading-snug mt-0.5">
-                            Transparency on our billing and 3-day refund window
-                        </p>
-                    </div>
-                </div>
-
-                <div className="h-px bg-border-subtle mx-5" />
-
-                <div className="px-5 pt-4 pb-4">
-                    <div className="space-y-3">
-                        <div className="flex items-start gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary/40 shrink-0 mt-[6px]" />
-                            <p className="text-[11.5px] text-text-secondary leading-relaxed">
-                                Refunds are available within 3 days of purchase if you have used less than 10% of your monthly quota.
-                            </p>
-                        </div>
-                        <div className="flex items-start gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary/40 shrink-0 mt-[6px]" />
-                            <p className="text-[11.5px] text-text-secondary leading-relaxed">
-                                If you have used more than 10% of your quota, refunds are not available as API costs are incurred immediately on usage.
-                            </p>
-                        </div>
-                        <div className="flex items-start gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-text-tertiary/40 shrink-0 mt-[6px]" />
-                            <p className="text-[11.5px] text-text-secondary leading-relaxed">
-                                No refunds on partial months after the first billing cycle.
-                            </p>
-                        </div>
-                        
-                        <div className="h-px bg-border-subtle mt-4 mb-3" />
-                        
-                        <p className="text-[11.5px] text-text-secondary leading-relaxed">
-                            To request a refund contact <span onClick={() => openExternal('mailto:teamsync.contact@gmail.com')} className="text-text-primary hover:text-text-secondary underline decoration-border-subtle underline-offset-[3px] cursor-pointer transition-colors">teamsync.contact@gmail.com</span> with your order ID.
-                        </p>
                     </div>
                 </div>
             </Card>

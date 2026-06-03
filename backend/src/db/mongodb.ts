@@ -105,7 +105,6 @@ export async function connectToMongoDB(): Promise<Db> {
     await safeCreateIndex('licenseverify', { deviceId: 1 });
     await safeCreateIndex('licenses', { licenseId: 1 }, { unique: true });
     await safeCreateIndex('licenses', { licenseKeyHash: 1 }, { unique: true });
-    await safeCreateIndex('licenses', { providerSubscriptionId: 1 });
     await safeCreateIndex('devices', { deviceId: 1, licenseId: 1 }, { unique: true });
     await safeCreateIndex('devices', { licenseId: 1, status: 1 });
     await safeCreateIndex('entitlements', { licenseId: 1, version: 1, deviceId: 1 });

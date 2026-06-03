@@ -1363,22 +1363,6 @@ CRITICAL RULES:
     }
   }
 
-  public async analyzeImageFiles(imagePaths: string[]) {
-    try {
-      const prompt = `Describe the content of ${imagePaths.length > 1 ? 'these images' : 'this image'} in a short, concise answer. If it contains code or a problem, solve it.`;
-      const text = await this.generateWithVisionFallback(HARD_SYSTEM_PROMPT, prompt, imagePaths);
-
-      return { text: text, timestamp: Date.now() };
-
-    } catch (error: any) {
-      console.error("Error analyzing image files:", error);
-      return {
-        text: `I couldn't analyze the screen right now (${error.message}). Please try again.`,
-        timestamp: Date.now()
-      };
-    }
-  }
-
   /**
    * Extract visible on-screen text and layout cues from screenshots.
    * This is intentionally stateless: no transcript, no knowledge mode, no RAG.

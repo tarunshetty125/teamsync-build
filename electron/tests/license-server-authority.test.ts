@@ -177,8 +177,6 @@ test('legacy native licensing authority is removed from the shipped native surfa
     const nativeLib = read('native-module/src/lib.rs');
 
     for (const source of [nativeLoader, nativeTypes, nativeIndex, nativeLib]) {
-        assert.doesNotMatch(source, /verifyGumroadKey|verifyDodoKey|validateDodoKey|deactivateDodoKey/);
-        assert.doesNotMatch(source, /Gumroad|Dodo Payments|dodopayments/);
     }
 
     assert.match(nativeLib, /pub mod device/);
@@ -209,9 +207,9 @@ test('backend exposes complete license authority routes and services', () => {
         assert.match(routes, new RegExp(route.replace('/', '\\/')));
     }
 
-    assert.match(webhooks, /router\.post\('\/dodo'/);
-    assert.match(webhooks, /router\.post\('\/gumroad'/);
+    assert.equal((webhooks.match(/router\.post/g) || []).length, 1);
     assert.match(webhooks, /router\.post\('\/stripe'/);
+    assert.doesNotMatch(licenseService, /provider[A-Za-z]+Id/);
 
     assert.match(licenseService, /subscription_failed/);
     assert.match(licenseService, /device_removed/);

@@ -24,8 +24,6 @@ export interface BackendConfig {
   licenseEntitlementTtlMs: number;
   licenseOfflineGraceMs: number;
   licenseWebhookSecret: string;
-  dodoWebhookSecret: string;
-  gumroadWebhookSecret: string;
   stripeWebhookSecret: string;
   teamSyncGeminiApiKeys: string[];
   teamSyncGroqApiKeys: string[];
@@ -114,8 +112,6 @@ export function loadBackendConfig(env: NodeJS.ProcessEnv = process.env): Backend
     licenseEntitlementTtlMs: parsePositiveMs(env.LICENSE_ENTITLEMENT_TTL_MS, 10 * 60 * 1000, 'LICENSE_ENTITLEMENT_TTL_MS'),
     licenseOfflineGraceMs: parsePositiveMs(env.LICENSE_OFFLINE_GRACE_MS, 72 * 60 * 60 * 1000, 'LICENSE_OFFLINE_GRACE_MS'),
     licenseWebhookSecret: env.LICENSE_WEBHOOK_SECRET?.trim() || '',
-    dodoWebhookSecret: env.DODO_WEBHOOK_SECRET?.trim() || '',
-    gumroadWebhookSecret: env.GUMROAD_WEBHOOK_SECRET?.trim() || '',
     stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() || '',
     teamSyncGeminiApiKeys: parseEnvList(env.TEAMSYNC_GEMINI_API_KEYS, env.GEMINI_API_KEY, env.GOOGLE_AI_API_KEY),
     teamSyncGroqApiKeys: parseEnvList(env.TEAMSYNC_GROQ_API_KEYS, env.GROQ_API_KEYS, env.GROQ_API_KEY),

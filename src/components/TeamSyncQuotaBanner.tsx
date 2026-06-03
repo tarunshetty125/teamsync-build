@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, X, ArrowUpRight } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 
 interface QuotaBucket { used: number; limit: number; remaining: number; }
 
@@ -17,7 +17,6 @@ interface NearLimitBucket {
 
 const STARTUP_DELAY_MS = 3000;
 const THRESHOLD_PCT    = 90;
-const UPGRADE_URL      = 'https://checkout.dodopayments.com/buy/pdt_0NbFixGmD8CSeawb5qvVl';
 
 export const TeamSyncQuotaBanner: React.FC = () => {
     const [nearLimitBuckets, setNearLimitBuckets] = useState<NearLimitBucket[]>([]);
@@ -114,14 +113,10 @@ export const TeamSyncQuotaBanner: React.FC = () => {
                     </div>
 
                     {/* Footer */}
-                    <div className="flex items-center justify-between pt-0.5">
-                        <span className="text-[11px] text-white/30">Resets on your next billing date</span>
-                        <button
-                            onClick={() => (window.electronAPI as any)?.openExternal?.(UPGRADE_URL)}
-                            className="flex items-center gap-1 text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
-                        >
-                            Upgrade <ArrowUpRight size={11} strokeWidth={2.5} />
-                        </button>
+                    <div className="flex items-center pt-0.5">
+                        <span className="text-[11px] text-white/35 leading-snug">
+                            Licensing available through administrator-issued license keys.
+                        </span>
                     </div>
                 </div>
             </motion.div>

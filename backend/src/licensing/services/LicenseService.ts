@@ -113,19 +113,12 @@ export class LicenseService {
     return { success: true };
   }
 
-  async markProviderStatus(params: {
-    provider: 'dodo' | 'gumroad' | 'stripe';
-    providerSubscriptionId?: string;
+  async markSubscriptionStatus(params: {
     licenseId?: string;
     status: string;
     revoked?: boolean;
   }): Promise<void> {
-    const query = params.licenseId
-      ? { licenseId: params.licenseId }
-      : params.providerSubscriptionId
-        ? { provider: params.provider, providerSubscriptionId: params.providerSubscriptionId }
-        : null;
-    if (!query) return;
+    if (!params.licenseId) return;
 
     const now = new Date();
     const update: Partial<LicenseDocument> = {
@@ -138,7 +131,7 @@ export class LicenseService {
       update.revokedAt = now;
     }
 
-    await getLicensesCollection().updateOne(query, {
+    await getLicensesCollection().updateOne({ licenseId: params.licenseId }, {
       $set: update,
       $inc: { entitlementVersion: 1 },
     });

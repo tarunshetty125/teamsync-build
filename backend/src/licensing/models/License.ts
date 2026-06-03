@@ -13,9 +13,6 @@ export interface LicenseDocument {
   expiresAt?: Date;
   revokedAt?: Date;
   entitlementVersion: number;
-  provider?: 'dodo' | 'gumroad' | 'stripe' | 'manual' | 'trial';
-  providerCustomerId?: string;
-  providerSubscriptionId?: string;
   createdAt: Date;
   updatedAt: Date;
 }

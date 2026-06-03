@@ -6,55 +6,25 @@ import { LicenseService } from '../services/LicenseService';
 const router = Router();
 const service = new LicenseService();
 
-router.post('/dodo', async (req, res) => {
-  if (!verifyProviderWebhook('dodo', req)) {
-    return res.status(401).json({ success: false, error: 'invalid_webhook_signature' });
-  }
-
-  await handleProviderWebhook('dodo', req.body).catch(error => {
-    console.error('[LicenseWebhook] Dodo webhook failed:', error);
-  });
-  res.json({ success: true });
-});
-
-router.post('/gumroad', async (req, res) => {
-  if (!verifyProviderWebhook('gumroad', req)) {
-    return res.status(401).json({ success: false, error: 'invalid_webhook_signature' });
-  }
-
-  await handleProviderWebhook('gumroad', req.body).catch(error => {
-    console.error('[LicenseWebhook] Gumroad webhook failed:', error);
-  });
-  res.json({ success: true });
-});
-
 router.post('/stripe', async (req, res) => {
-  if (!verifyProviderWebhook('stripe', req)) {
+  if (!verifyStripeWebhook(req)) {
     return res.status(401).json({ success: false, error: 'invalid_webhook_signature' });
   }
 
-  await handleProviderWebhook('stripe', req.body).catch(error => {
+  await handleStripeWebhook(req.body).catch(error => {
     console.error('[LicenseWebhook] Stripe webhook failed:', error);
   });
   res.json({ success: true });
 });
 
-async function handleProviderWebhook(provider: 'dodo' | 'gumroad' | 'stripe', body: any): Promise<void> {
+async function handleStripeWebhook(body: any): Promise<void> {
   const eventType = String(body?.type || body?.event || body?.event_type || '').toLowerCase();
   const data = body?.data?.object || body?.data || body || {};
-  const providerSubscriptionId = stringValue(
-    data.subscription_id ||
-    data.subscriptionId ||
-    data.id ||
-    data.license_key_id
-  );
   const licenseId = stringValue(data.licenseId || data.license_id || data.metadata?.licenseId);
   const status = stringValue(data.status || data.subscription_status || eventType) || 'failed';
   const revoked = /revok|refund|chargeback|cancel|expire|delete|disable|fail/.test(`${eventType} ${status}`);
 
-  await service.markProviderStatus({
-    provider,
-    providerSubscriptionId,
+  await service.markSubscriptionStatus({
     licenseId,
     status,
     revoked,
@@ -65,12 +35,9 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function verifyProviderWebhook(provider: 'dodo' | 'gumroad' | 'stripe', req: any): boolean {
+function verifyStripeWebhook(req: any): boolean {
   const config = getBackendConfig();
-  const secret =
-    provider === 'dodo' ? config.dodoWebhookSecret || config.licenseWebhookSecret :
-    provider === 'gumroad' ? config.gumroadWebhookSecret || config.licenseWebhookSecret :
-    config.stripeWebhookSecret || config.licenseWebhookSecret;
+  const secret = config.stripeWebhookSecret || config.licenseWebhookSecret;
 
   if (!secret) {
     return config.nodeEnv !== 'production';
@@ -80,18 +47,7 @@ function verifyProviderWebhook(provider: 'dodo' | 'gumroad' | 'stripe', req: any
     ? req.rawBody.toString('utf8')
     : JSON.stringify(req.body ?? {});
 
-  if (provider === 'stripe') {
-    return verifyStripeSignature(secret, rawBody, req.headers?.['stripe-signature']);
-  }
-
-  const signature = headerValue(
-    req.headers?.[`x-${provider}-signature`] ||
-    req.headers?.['x-webhook-signature'] ||
-    req.headers?.['x-signature'] ||
-    req.headers?.['x-teamsync-signature']
-  );
-
-  return verifyHmac(secret, rawBody, signature);
+  return verifyStripeSignature(secret, rawBody, req.headers?.['stripe-signature']);
 }
 
 function verifyStripeSignature(secret: string, rawBody: string, header: unknown): boolean {

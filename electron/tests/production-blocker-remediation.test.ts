@@ -74,14 +74,15 @@ remediationTest('mac packaging enables hardened runtime and removes dyld entitle
     remediationAssert.match(signingScript, /codesign --verify --strict --deep/);
 });
 
-remediationTest('system design validator warns without fabricating architecture json or final answers', () => {
+remediationTest('system design validator reports repairable architecture json issues without fabricating output', () => {
     const validator = readRemediationRepoFile('electron/ActionOutputValidator.ts');
 
     remediationAssert.doesNotMatch(validator, /function buildSystemDesignArchitectureDiagram/);
     remediationAssert.doesNotMatch(validator, /appendArchitectureJsonFallback/);
     remediationAssert.doesNotMatch(validator, /system_design_architecture_json_appended/);
     remediationAssert.doesNotMatch(validator, /Interview-Ready Final Answer\\nI would design/);
-    remediationAssert.match(validator, /warnings: architectureJson\.issues/);
+    remediationAssert.match(validator, /issues: architectureJson\.issues/);
+    remediationAssert.match(validator, /const architectureJsonRepair = intent !== 'system_design_tradeoffs' && issues\.some\(isArchitectureJsonIssue\)/);
 });
 
 remediationTest('stt pending user and interviewer fragments flush before lifecycle transitions', () => {

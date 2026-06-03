@@ -59,31 +59,34 @@ test('production CSP removes localhost backend and campaign-sand while dev CSP k
   assert.match(developmentCsp, /localhost:3456/);
 });
 
-test('production-only unsafe IPCs are development gated and seed-demo is preserved', () => {
+test('release debug IPC cleanup preserves seed-demo and release-feed test gate', () => {
   const ipc = readRepoFile('electron/ipcHandlers.ts');
   const main = readRepoFile('electron/main.ts');
+  const processingHelper = readRepoFile('electron/ProcessingHelper.ts');
+
+  assert.match(ipc, /safeDevelopmentHandle\("test-release-fetch"/);
+  assert.match(ipc, /isDevelopmentOnlyIpcAllowed/);
+  assert.match(ipc, /unavailable_in_production/);
+  assert.match(ipc, /safeHandle\("seed-demo"/);
 
   for (const channel of [
     'flush-database',
     'stt:debug-simulate-failure',
     'stt:debug-prime-replay-buffer',
     'stt:set-debug-enabled',
+    'stt:get-debug-enabled',
     'stt:run-failover-validation',
     'stt:run-load-test',
-    'test-release-fetch',
+    'analyze-image-file',
   ]) {
-    assert.match(ipc, new RegExp(`safeDevelopmentHandle\\("${escapeRegex(channel)}"`));
+    assert.doesNotMatch(ipc, new RegExp(escapeRegex(channel)));
   }
 
-  assert.match(ipc, /isDevelopmentOnlyIpcAllowed/);
-  assert.match(ipc, /unavailable_in_production/);
-  assert.match(ipc, /safeHandle\("seed-demo"/);
-
-  const devModeStart = main.indexOf("ipcMain.handle('intelligence:enable-dev-mode'");
-  assert.ok(devModeStart > 0);
-  const devModeBody = main.slice(devModeStart, devModeStart + 650);
-  assert.match(devModeBody, /app\.isPackaged/);
-  assert.match(devModeBody, /unavailable_in_production/);
+  assert.doesNotMatch(main, /intelligence:enable-dev-mode/);
+  assert.doesNotMatch(main, /PROCESSING_EVENTS/);
+  assert.doesNotMatch(processingHelper, /processScreenshots\(/);
+  assert.doesNotMatch(processingHelper, /currentProcessingAbortController/);
+  assert.doesNotMatch(processingHelper, /currentExtraProcessingAbortController/);
 });
 
 test('OAuth callback no longer writes legacy natively_auth_result localStorage fallback', () => {

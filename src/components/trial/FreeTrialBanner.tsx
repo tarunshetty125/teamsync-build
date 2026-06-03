@@ -4,9 +4,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Zap, Mic, Search, ArrowUpRight } from 'lucide-react';
-
-const PLAN_PRO_URL = 'https://checkout.dodopayments.com/buy/pdt_0NcM6Aw0IWdspbsgUeCLA';
+import { Clock, Zap, Mic, Search, Key } from 'lucide-react';
 
 interface TrialBannerProps {
     expiresAt:   string;            // ISO timestamp
@@ -92,13 +90,13 @@ export const FreeTrialBanner: React.FC<TrialBannerProps> = ({ expiresAt, usage, 
                         <UsagePip icon={Search} pct={searchPct} label={`${usage.search}/2 search`}    />
                     </div>
 
-                    {/* Upgrade CTA */}
+                    {/* License CTA */}
                     <button
                         onClick={onUpgrade}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-violet-500/15 text-violet-400 hover:bg-violet-500/25 border border-violet-500/30 transition-colors shrink-0"
                     >
-                        Upgrade
-                        <ArrowUpRight size={10} strokeWidth={2.5} />
+                        License key
+                        <Key size={10} strokeWidth={2.5} />
                     </button>
                 </div>
             </motion.div>

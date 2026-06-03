@@ -169,17 +169,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   onCaptureAndProcess: (
     callback: (data: { path: string; preview: string }) => void
   ) => () => void
-  onSolutionsReady: (callback: (solutions: string) => void) => () => void
   onResetView: (callback: () => void) => () => void
-  onSolutionStart: (callback: () => void) => () => void
-  onDebugStart: (callback: () => void) => () => void
-  onDebugSuccess: (callback: (data: any) => void) => () => void
-  onSolutionError: (callback: (error: string) => void) => () => void
-  onProcessingNoScreenshots: (callback: () => void) => () => void
-  onProblemExtracted: (callback: (data: any) => void) => () => void
-  onSolutionSuccess: (callback: (data: any) => void) => () => void
-  onUnauthorized: (callback: () => void) => () => void
-  onDebugError: (callback: (error: string) => void) => () => void
   takeScreenshot: (options?: { requireVision?: boolean }) => Promise<{ path: string; preview: string }>
   captureScreen: () => Promise<string>
   takeSelectiveScreenshot: (options?: { requireVision?: boolean }) => Promise<{ path: string; preview: string; cancelled?: boolean }>
@@ -191,8 +181,6 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   windowMaximize: () => Promise<void>
   windowClose: () => Promise<void>
   windowIsMaximized: () => Promise<boolean>
-
-  analyzeImageFile: (path: string) => Promise<void>
   quitApp: () => Promise<void>
   toggleWindow: () => Promise<void>
   showWindow: (inactive?: boolean) => Promise<void>
@@ -302,13 +290,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   onSttStatusChanged: (callback: (data: { state: 'connected' | 'reconnecting' | 'failed'; provider: string; error?: string; channel: 'user' | 'interviewer'; reconnectAttempts?: number }) => void) => () => void
   onSttTelemetry: (callback: (data: { type: 'provider_started' | 'provider_failed' | 'failover_triggered' | 'debug_failure_injected'; provider: string; channel: 'user' | 'interviewer'; sourceLabel: string; timestamp: number; reason?: string; nextProvider?: string; consecutiveFailures?: number; disabledUntil?: number | null; replayBufferEntries?: number; replayBufferDurationMs?: number }) => void) => () => void
   onSttMetrics: (callback: (data: { channel: 'user' | 'interviewer'; sourceLabel: string; activeProvider: string; started: boolean; replayInProgress: boolean; pendingWrites: number; replayBufferEntries: number; replayBufferDurationMs: number; failoverCount: number; totalTranscripts: number; totalFinalTranscripts: number; transcriptsPerSecond: number; providers: Array<{ provider: string; starts: number; transcripts: number; finalTranscripts: number; failures: number; failovers: number; successRate: number; cooldownUntil: number | null; lastLatencyMs?: number; averageLatencyMs?: number }> }) => void) => () => void
-  sttDebugSimulateFailure: (channel: 'user' | 'interviewer', provider?: string, reason?: string) => Promise<{ success: boolean; error?: string; channel?: 'user' | 'interviewer'; provider?: string }>
-  sttDebugPrimeReplayBuffer: (channel: 'user' | 'interviewer', durationMs?: number) => Promise<{ success: boolean; entryCount?: number; durationMs?: number; error?: string }>
   getSttRuntimeState: () => Promise<{ user: any; interviewer: any; error?: string }>
-  setSttDebugEnabled: (enabled: boolean) => Promise<{ success: boolean; enabled?: boolean; error?: string }>
-  getSttDebugEnabled: () => Promise<boolean>
-  runSttFailoverValidation: (channel?: 'user' | 'interviewer') => Promise<{ success: boolean; channel: 'user' | 'interviewer'; assertions: Record<string, boolean>; beforeProvider: string; afterProvider: string; replayBuffer: { entryCount: number; durationMs: number } | null; logs: string[] }>
-  runSttLoadTest: (channel?: 'user' | 'interviewer', options?: { durationMinutes?: number; chunkMs?: number; sampleRate?: number; audioChannelCount?: number; failureEveryMs?: number; metricsSampleEveryMs?: number }) => Promise<any>
 
   getNativeAudioStatus: () => Promise<{ connected: boolean }>
 
@@ -407,9 +389,6 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   dismissAdaptiveModeSuggestion: () => Promise<any>;
   requestExplanation: (params?: { instructionKey?: string }) => Promise<any>;
 
-  // Intelligence Dev Mode
-  enableIntelligenceDevMode: () => Promise<{ success: boolean }>;
-
   // Session Management
   onSessionReset: (callback: (payload?: { sessionId: string }) => void) => () => void;
   onSessionModeChanged: (callback: (data: { mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design' }) => void) => () => void;
@@ -453,9 +432,6 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   startAudioTest: (deviceId?: string) => Promise<{ success: boolean }>;
   stopAudioTest: () => Promise<{ success: boolean }>;
   onAudioTestLevel: (callback: (level: number) => void) => () => void;
-
-  // Database
-  flushDatabase: () => Promise<{ success: boolean }>;
 
   onUndetectableChanged: (callback: (state: boolean) => void) => () => void;
   onGroqFastTextChanged: (callback: (enabled: boolean) => void) => () => void;

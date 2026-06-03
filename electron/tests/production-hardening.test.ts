@@ -91,7 +91,7 @@ test('legacy AI wrappers bridge through runAction instead of direct LLM streams'
 
 test('final action result always hydrates streamed V2 output with validated content', () => {
     const streams = readRepoFile('src/components/pro-v2/useOverlayIpcStreams.ts');
-    assert.match(streams, /if \(typeof data\.content === 'string'\) \{\s*hydrateFinalMessage\(ctx, requestId, data\.content\);/s);
+    assert.match(streams, /if \(typeof data\.content === 'string'\) \{\s*hydrateFinalMessage\(ctx, requestId, data\.content, data\.debugMetadata\);/s);
     assert.doesNotMatch(streams, /if \(isScreenScan && typeof data\.content === 'string'\)/);
 });
 

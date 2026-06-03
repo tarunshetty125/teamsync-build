@@ -126,7 +126,6 @@ import { WhisperFallbackSttAdapter } from "./audio/stt/WhisperFallbackSttAdapter
 import { ElevenLabsShadowProbe } from "./audio/stt/ElevenLabsShadowProbe"
 import type { SttMetricsSnapshot, StreamingSttAdapter, SttTelemetryEvent } from "./audio/stt/SttAdapter"
 import { assertValidSttRuntimeConfig, loadSttRuntimeConfig, validateSttRuntimeConfig } from "./audio/stt/SttRuntimeConfig"
-import { runSttLoadTest, type SttLoadTestResult } from "./audio/stt/SttLoadTester"
 import { SpeakerDiarizer } from "./audio/SpeakerDiarizer"
 import { ThemeManager } from "./ThemeManager"
 import { RAGManager } from "./rag/RAGManager"
@@ -299,25 +298,6 @@ export class AppState {
       questions: false
     }
   };
-
-
-  // Processing events
-  public readonly PROCESSING_EVENTS = {
-    //global states
-    UNAUTHORIZED: "procesing-unauthorized",
-    NO_SCREENSHOTS: "processing-no-screenshots",
-
-    //states for generating the initial solution
-    INITIAL_START: "initial-start",
-    PROBLEM_EXTRACTED: "problem-extracted",
-    SOLUTION_SUCCESS: "solution-success",
-    INITIAL_SOLUTION_ERROR: "solution-error",
-
-    //states for processing the debugging
-    DEBUG_START: "debug-start",
-    DEBUG_SUCCESS: "debug-success",
-    DEBUG_ERROR: "debug-error"
-  } as const
 
   constructor() {
     // 1. Load boot-critical settings first (used by WindowHelpers)
@@ -1608,10 +1588,6 @@ export class AppState {
     this.elevenLabsShadowProbe = null;
   }
 
-  private getSttProviderForChannel(channel: 'user' | 'interviewer'): STTProvider | null {
-    return channel === 'user' ? this.googleSTT_User : this.googleSTT;
-  }
-
   private isSttDebugEnabled(): boolean {
     return process.env.STT_DEBUG === "true";
   }
@@ -2058,22 +2034,6 @@ export class AppState {
     }
   }
 
-  public debugSimulateSttFailure(channel: 'user' | 'interviewer', provider?: string, reason?: string): boolean {
-    const stt = this.getSttProviderForChannel(channel);
-    if (!stt) {
-      return false;
-    }
-    return stt.debugSimulateFailure(provider, reason);
-  }
-
-  public debugPrimeSttReplayBuffer(channel: 'user' | 'interviewer', durationMs?: number): { entryCount: number; durationMs: number } | null {
-    const stt = this.getSttProviderForChannel(channel);
-    if (!stt) {
-      return null;
-    }
-    return stt.debugPrimeReplayBuffer(durationMs);
-  }
-
   public getSttRuntimeState(): {
     user: SttMetricsSnapshot | null;
     interviewer: SttMetricsSnapshot | null;
@@ -2082,100 +2042,6 @@ export class AppState {
       user: this.googleSTT_User?.getMetricsSnapshot() || null,
       interviewer: this.googleSTT?.getMetricsSnapshot() || null,
     };
-  }
-
-  public setSttDebugEnabled(enabled: boolean): void {
-    process.env.STT_DEBUG = enabled ? "true" : "false";
-    this.broadcast("stt-debug-enabled", enabled);
-  }
-
-  public getSttDebugEnabled(): boolean {
-    return this.isSttDebugEnabled();
-  }
-
-  public async runSttFailoverValidation(channel: 'user' | 'interviewer' = 'interviewer'): Promise<{
-    success: boolean;
-    channel: 'user' | 'interviewer';
-    assertions: Record<string, boolean>;
-    beforeProvider: string;
-    afterProvider: string;
-    replayBuffer: { entryCount: number; durationMs: number } | null;
-    logs: string[];
-  }> {
-    const stt = this.getSttProviderForChannel(channel);
-    const logs: string[] = [];
-    if (!stt) {
-      return {
-        success: false,
-        channel,
-        assertions: {
-          sttAvailable: false,
-        },
-        beforeProvider: "inactive",
-        afterProvider: "inactive",
-        replayBuffer: null,
-      logs: ["No STT supervisor available for validation"],
-      };
-    }
-
-    const before = stt.getMetricsSnapshot();
-    const beforeProvider = stt.getActiveProviderName();
-    const replayBuffer = stt.debugPrimeReplayBuffer(4_000);
-    logs.push(`Primed replay buffer with ${replayBuffer.entryCount} chunks (${replayBuffer.durationMs}ms)`);
-
-    const injected = stt.debugSimulateFailure("deepgram", "validation_forced_deepgram_failure");
-    logs.push(`Injected Deepgram failure: ${injected}`);
-
-    const timeoutMs = 6_000;
-    const pollStart = Date.now();
-    while (Date.now() - pollStart < timeoutMs) {
-      if (stt.getActiveProviderName() === "google") {
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-
-    const after = stt.getMetricsSnapshot();
-    const afterProvider = stt.getActiveProviderName();
-    const assertions = {
-      sttAvailable: true,
-      deepgramWasActive: beforeProvider === "deepgram",
-      failureInjected: injected,
-      googleActivated: afterProvider === "google",
-      failoverCountIncremented: after.failoverCount > before.failoverCount,
-      replayBufferPrimed: replayBuffer.entryCount > 0,
-      replayDurationCaptured: after.replayBufferDurationMs >= Math.max(0, replayBuffer.durationMs - 50),
-    };
-
-    logs.push(`Before provider: ${beforeProvider}`);
-    logs.push(`After provider: ${afterProvider}`);
-    logs.push(`Failover count: ${before.failoverCount} -> ${after.failoverCount}`);
-    logs.push(`Replay duration after failover: ${after.replayBufferDurationMs}ms`);
-
-    return {
-      success: Object.values(assertions).every(Boolean),
-      channel,
-      assertions,
-      beforeProvider,
-      afterProvider,
-      replayBuffer,
-      logs,
-    };
-  }
-
-  public async runSttLoadTest(channel: 'user' | 'interviewer' = 'interviewer', options?: {
-    durationMinutes?: number;
-    chunkMs?: number;
-    sampleRate?: number;
-    audioChannelCount?: number;
-    failureEveryMs?: number;
-    metricsSampleEveryMs?: number;
-  }): Promise<SttLoadTestResult | null> {
-    const stt = this.getSttProviderForChannel(channel);
-    if (!stt) {
-      return null;
-    }
-    return runSttLoadTest(stt, options);
   }
 
   private _isStarting = false;
@@ -2647,32 +2513,6 @@ export class AppState {
         }
     });
 
-    // Enable all intelligence feature flags (dev-only, localStorage-gated in renderer)
-    // Premium gate still applies — this only flips featureFlags, does NOT bypass license.
-    ipcMain.handle('intelligence:enable-dev-mode', () => {
-        if (app.isPackaged && process.env.NODE_ENV !== 'development') {
-            console.warn('[Intelligence] Blocked development-only dev-mode IPC in packaged production');
-            return { success: false, error: 'unavailable_in_production' };
-        }
-        try {
-            const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
-            const registry = CapabilityRegistry.getInstance();
-            const keys: string[] = [
-                'adaptiveMode', 'adaptiveModeUI', 'multiBrain', 'timeline', 'timelineUI',
-                'confidenceEngine', 'evidenceLayer', 'modeMemory', 'explainability',
-                'explainabilityUI', 'multiBrainTelemetry', 'predictorV2',
-                'brainQualityScoring', 'promptOptimization', 'latencyOptimization',
-            ];
-            for (const key of keys) {
-                registry.setFeatureFlag(key as any, true);
-            }
-            console.log('[Intelligence] Dev mode enabled — all feature flags ON (premium gate still applies)');
-            return { success: true };
-        } catch (err: unknown) {
-            console.warn('[Intelligence] Failed to enable dev mode:', err);
-            return { success: false };
-        }
-    });
   }
 
 

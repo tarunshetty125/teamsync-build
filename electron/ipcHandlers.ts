@@ -776,23 +776,6 @@ export function initializeIpcHandlers(appState: AppState): void {
     await appState.finalizeMicSTT();
   });
 
-  // IPC handler for analyzing image from file path
-  safeHandle("analyze-image-file", async (event, filePath: string) => {
-    // Guard: only allow reading files within the app's own userData directory
-    const userDataDir = app.getPath('userData');
-    const resolved = path.resolve(filePath);
-    if (!resolved.startsWith(userDataDir + path.sep)) {
-      console.warn('[IPC] analyze-image-file: path outside userData rejected:', filePath);
-      throw new Error('Path not allowed');
-    }
-    try {
-      const result = await appState.processingHelper.getLLMHelper().analyzeImageFiles([resolved])
-      return result
-    } catch (error: any) {
-      throw error
-    }
-  })
-
   safeHandle("gemini-chat", async (event, message: string, imagePaths?: string[], context?: string, options?: { skipSystemPrompt?: boolean }) => {
     try {
       const result = await appState.processingHelper.getLLMHelper().chatWithGemini(message, imagePaths, context, options?.skipSystemPrompt);
@@ -2179,65 +2162,11 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeDevelopmentHandle("stt:debug-simulate-failure", async (_, channel: 'user' | 'interviewer', provider?: string, reason?: string) => {
-    try {
-      const triggered = appState.debugSimulateSttFailure(channel, provider, reason);
-      return { success: triggered, channel, provider: provider || 'active' };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  safeDevelopmentHandle("stt:debug-prime-replay-buffer", async (_, channel: 'user' | 'interviewer', durationMs?: number) => {
-    try {
-      const result = appState.debugPrimeSttReplayBuffer(channel, durationMs);
-      return { success: !!result, ...(result || {}) };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  });
-
   safeHandle("stt:get-runtime-state", async () => {
     try {
       return appState.getSttRuntimeState();
     } catch (error: any) {
       return { user: null, interviewer: null, error: error.message };
-    }
-  });
-
-  safeDevelopmentHandle("stt:set-debug-enabled", async (_, enabled: boolean) => {
-    try {
-      appState.setSttDebugEnabled(!!enabled);
-      return { success: true, enabled: appState.getSttDebugEnabled() };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  });
-
-  safeHandle("stt:get-debug-enabled", async () => {
-    return appState.getSttDebugEnabled();
-  });
-
-  safeDevelopmentHandle("stt:run-failover-validation", async (_, channel: 'user' | 'interviewer' = 'interviewer') => {
-    try {
-      return await appState.runSttFailoverValidation(channel);
-    } catch (error: any) {
-      return { success: false, channel, assertions: {}, logs: [error.message] };
-    }
-  });
-
-  safeDevelopmentHandle("stt:run-load-test", async (_, channel: 'user' | 'interviewer' = 'interviewer', options?: {
-    durationMinutes?: number;
-    chunkMs?: number;
-    sampleRate?: number;
-    audioChannelCount?: number;
-    failureEveryMs?: number;
-    metricsSampleEveryMs?: number;
-  }) => {
-    try {
-      return await appState.runSttLoadTest(channel, options);
-    } catch (error: any) {
-      return { success: false, error: error.message };
     }
   });
 
@@ -2891,11 +2820,6 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
 
     return { success: true };
-  });
-
-  safeDevelopmentHandle("flush-database", async () => {
-    const result = DatabaseManager.getInstance().clearAllData();
-    return { success: result };
   });
 
   safeHandle("open-external", async (event, url: string) => {

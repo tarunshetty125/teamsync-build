@@ -193,18 +193,7 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   onCaptureAndProcess: (
     callback: (data: { path: string; preview: string }) => void
   ) => () => void
-  onSolutionsReady: (callback: (solutions: string) => void) => () => void
   onResetView: (callback: () => void) => () => void
-  onSolutionStart: (callback: () => void) => () => void
-  onDebugStart: (callback: () => void) => () => void
-  onDebugSuccess: (callback: (data: any) => void) => () => void
-  onSolutionError: (callback: (error: string) => void) => () => void
-  onProcessingNoScreenshots: (callback: () => void) => () => void
-  onProblemExtracted: (callback: (data: any) => void) => () => void
-  onSolutionSuccess: (callback: (data: any) => void) => () => void
-
-  onUnauthorized: (callback: () => void) => () => void
-  onDebugError: (callback: (error: string) => void) => () => void
   takeScreenshot: (options?: { requireVision?: boolean }) => Promise<{ path: string; preview: string }>
   captureScreen: () => Promise<string>
   takeSelectiveScreenshot: (options?: { requireVision?: boolean }) => Promise<{ path: string; preview: string; cancelled?: boolean }>
@@ -216,8 +205,6 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   windowMaximize: () => Promise<void>
   windowClose: () => Promise<void>
   windowIsMaximized: () => Promise<boolean>
-
-  analyzeImageFile: (path: string) => Promise<void>
   quitApp: () => Promise<void>
 
   // LLM Model Management
@@ -301,13 +288,7 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   onSttStatusChanged: (callback: (data: { state: 'connected' | 'reconnecting' | 'failed'; provider: string; error?: string; channel: 'user' | 'interviewer'; reconnectAttempts?: number }) => void) => () => void
   onSttTelemetry: (callback: (data: { type: 'provider_started' | 'provider_failed' | 'failover_triggered' | 'debug_failure_injected'; provider: string; channel: 'user' | 'interviewer'; sourceLabel: string; timestamp: number; reason?: string; nextProvider?: string; consecutiveFailures?: number; disabledUntil?: number | null; replayBufferEntries?: number; replayBufferDurationMs?: number }) => void) => () => void
   onSttMetrics: (callback: (data: { channel: 'user' | 'interviewer'; sourceLabel: string; activeProvider: string; started: boolean; replayInProgress: boolean; pendingWrites: number; replayBufferEntries: number; replayBufferDurationMs: number; failoverCount: number; totalTranscripts: number; totalFinalTranscripts: number; transcriptsPerSecond: number; providers: Array<{ provider: string; starts: number; transcripts: number; finalTranscripts: number; failures: number; failovers: number; successRate: number; cooldownUntil: number | null; lastLatencyMs?: number; averageLatencyMs?: number }> }) => void) => () => void
-  sttDebugSimulateFailure: (channel: 'user' | 'interviewer', provider?: string, reason?: string) => Promise<{ success: boolean; error?: string; channel?: 'user' | 'interviewer'; provider?: string }>
-  sttDebugPrimeReplayBuffer: (channel: 'user' | 'interviewer', durationMs?: number) => Promise<{ success: boolean; entryCount?: number; durationMs?: number; error?: string }>
   getSttRuntimeState: () => Promise<{ user: any; interviewer: any; error?: string }>
-  setSttDebugEnabled: (enabled: boolean) => Promise<{ success: boolean; enabled?: boolean; error?: string }>
-  getSttDebugEnabled: () => Promise<boolean>
-  runSttFailoverValidation: (channel?: 'user' | 'interviewer') => Promise<{ success: boolean; channel: 'user' | 'interviewer'; assertions: Record<string, boolean>; beforeProvider: string; afterProvider: string; replayBuffer: { entryCount: number; durationMs: number } | null; logs: string[] }>
-  runSttLoadTest: (channel?: 'user' | 'interviewer', options?: { durationMinutes?: number; chunkMs?: number; sampleRate?: number; audioChannelCount?: number; failureEveryMs?: number; metricsSampleEveryMs?: number }) => Promise<any>
 
   // Intelligence Mode IPC
   generateAssist: () => Promise<{ insight: string | null }>
@@ -399,8 +380,6 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   stopAudioTest: () => Promise<{ success: boolean }>
   onAudioTestLevel: (callback: (level: number) => void) => () => void
 
-  // Database
-  flushDatabase: () => Promise<{ success: boolean }>
   showWindow: () => Promise<void>
   hideWindow: () => Promise<void>
   showOverlay: () => Promise<void>
@@ -619,23 +598,6 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   modesResetNoteSections: (modeId: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
 }
 
-export const PROCESSING_EVENTS = {
-  //global states
-  UNAUTHORIZED: "procesing-unauthorized",
-  NO_SCREENSHOTS: "processing-no-screenshots",
-
-  //states for generating the initial solution
-  INITIAL_START: "initial-start",
-  PROBLEM_EXTRACTED: "problem-extracted",
-  SOLUTION_SUCCESS: "solution-success",
-  INITIAL_SOLUTION_ERROR: "solution-error",
-
-  //states for processing the debugging
-  DEBUG_START: "debug-start",
-  DEBUG_SUCCESS: "debug-success",
-  DEBUG_ERROR: "debug-error"
-} as const
-
 function toLegacyPermissionStatus(status: PermissionStatusSnapshot["microphone"]): 'granted' | 'denied' | 'not-determined' | 'restricted' {
   switch (status) {
     case 'granted':
@@ -731,92 +693,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("capture-and-process", subscription)
     }
   },
-  onSolutionsReady: (callback: (solutions: string) => void) => {
-    const subscription = (_: any, solutions: string) => callback(solutions)
-    ipcRenderer.on("solutions-ready", subscription)
-    return () => {
-      ipcRenderer.removeListener("solutions-ready", subscription)
-    }
-  },
   onResetView: (callback: () => void) => {
     const subscription = () => callback()
     ipcRenderer.on("reset-view", subscription)
     return () => {
       ipcRenderer.removeListener("reset-view", subscription)
-    }
-  },
-  onSolutionStart: (callback: () => void) => {
-    const subscription = () => callback()
-    ipcRenderer.on(PROCESSING_EVENTS.INITIAL_START, subscription)
-    return () => {
-      ipcRenderer.removeListener(PROCESSING_EVENTS.INITIAL_START, subscription)
-    }
-  },
-  onDebugStart: (callback: () => void) => {
-    const subscription = () => callback()
-    ipcRenderer.on(PROCESSING_EVENTS.DEBUG_START, subscription)
-    return () => {
-      ipcRenderer.removeListener(PROCESSING_EVENTS.DEBUG_START, subscription)
-    }
-  },
-
-  onDebugSuccess: (callback: (data: any) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on("debug-success", subscription)
-    return () => {
-      ipcRenderer.removeListener("debug-success", subscription)
-    }
-  },
-  onDebugError: (callback: (error: string) => void) => {
-    const subscription = (_: any, error: string) => callback(error)
-    ipcRenderer.on(PROCESSING_EVENTS.DEBUG_ERROR, subscription)
-    return () => {
-      ipcRenderer.removeListener(PROCESSING_EVENTS.DEBUG_ERROR, subscription)
-    }
-  },
-  onSolutionError: (callback: (error: string) => void) => {
-    const subscription = (_: any, error: string) => callback(error)
-    ipcRenderer.on(PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR, subscription)
-    return () => {
-      ipcRenderer.removeListener(
-        PROCESSING_EVENTS.INITIAL_SOLUTION_ERROR,
-        subscription
-      )
-    }
-  },
-  onProcessingNoScreenshots: (callback: () => void) => {
-    const subscription = () => callback()
-    ipcRenderer.on(PROCESSING_EVENTS.NO_SCREENSHOTS, subscription)
-    return () => {
-      ipcRenderer.removeListener(PROCESSING_EVENTS.NO_SCREENSHOTS, subscription)
-    }
-  },
-
-  onProblemExtracted: (callback: (data: any) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on(PROCESSING_EVENTS.PROBLEM_EXTRACTED, subscription)
-    return () => {
-      ipcRenderer.removeListener(
-        PROCESSING_EVENTS.PROBLEM_EXTRACTED,
-        subscription
-      )
-    }
-  },
-  onSolutionSuccess: (callback: (data: any) => void) => {
-    const subscription = (_: any, data: any) => callback(data)
-    ipcRenderer.on(PROCESSING_EVENTS.SOLUTION_SUCCESS, subscription)
-    return () => {
-      ipcRenderer.removeListener(
-        PROCESSING_EVENTS.SOLUTION_SUCCESS,
-        subscription
-      )
-    }
-  },
-  onUnauthorized: (callback: () => void) => {
-    const subscription = () => callback()
-    ipcRenderer.on(PROCESSING_EVENTS.UNAUTHORIZED, subscription)
-    return () => {
-      ipcRenderer.removeListener(PROCESSING_EVENTS.UNAUTHORIZED, subscription)
     }
   },
   moveWindowLeft: () => ipcRenderer.invoke("move-window-left"),
@@ -827,8 +708,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowMaximize: () => ipcRenderer.invoke("window-maximize"),
   windowClose: () => ipcRenderer.invoke("window-close"),
   windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
-
-  analyzeImageFile: (path: string) => ipcRenderer.invoke("analyze-image-file", path),
   quitApp: () => ipcRenderer.invoke("quit-app"),
   toggleWindow: () => ipcRenderer.invoke("toggle-window"),
   showWindow: (inactive?: boolean) => ipcRenderer.invoke("show-window", inactive),
@@ -1118,13 +997,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on('stt-metrics', subscription);
     return () => { ipcRenderer.removeListener('stt-metrics', subscription); };
   },
-  sttDebugSimulateFailure: (channel: 'user' | 'interviewer', provider?: string, reason?: string) => ipcRenderer.invoke("stt:debug-simulate-failure", channel, provider, reason),
-  sttDebugPrimeReplayBuffer: (channel: 'user' | 'interviewer', durationMs?: number) => ipcRenderer.invoke("stt:debug-prime-replay-buffer", channel, durationMs),
   getSttRuntimeState: () => ipcRenderer.invoke("stt:get-runtime-state"),
-  setSttDebugEnabled: (enabled: boolean) => ipcRenderer.invoke("stt:set-debug-enabled", enabled),
-  getSttDebugEnabled: () => ipcRenderer.invoke("stt:get-debug-enabled"),
-  runSttFailoverValidation: (channel: 'user' | 'interviewer' = 'interviewer') => ipcRenderer.invoke("stt:run-failover-validation", channel),
-  runSttLoadTest: (channel: 'user' | 'interviewer' = 'interviewer', options?: { durationMinutes?: number; chunkMs?: number; sampleRate?: number; audioChannelCount?: number; failureEveryMs?: number; metricsSampleEveryMs?: number }) => ipcRenderer.invoke("stt:run-load-test", channel, options),
 
   // Intelligence Mode IPC
   generateAssist: () => ipcRenderer.invoke("generate-assist"),
@@ -1399,7 +1272,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   dismissAdaptiveModeSuggestion: () => ipcRenderer.invoke("intelligence:dismiss-suggestion"),
   requestExplanation: (params?: { instructionKey?: string }) => ipcRenderer.invoke("intelligence:request-explanation", params),
-  enableIntelligenceDevMode: () => ipcRenderer.invoke("intelligence:enable-dev-mode"),
 
 
   // Streaming Chat
@@ -1470,11 +1342,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener('audio-test-level', subscription)
     }
   },
-
-  // Database
-  flushDatabase: () => ipcRenderer.invoke('flush-database'),
-
-
 
   onUndetectableChanged: (callback: (state: boolean) => void) => {
     const subscription = (_: any, state: boolean) => callback(state)
