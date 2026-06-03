@@ -4338,7 +4338,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                 if (!contentRef.current) return;
                                                 const contentRect = contentRef.current.getBoundingClientRect();
                                                 const buttonRect = e.currentTarget.getBoundingClientRect();
-                                                const GAP = 8;
+                                                const GAP = 6;
 
                                                 const x = window.screenX + buttonRect.left;
                                                 const y = window.screenY + contentRect.bottom + GAP;

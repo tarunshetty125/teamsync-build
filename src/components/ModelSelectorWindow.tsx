@@ -12,7 +12,6 @@ import {
     type ProviderModelAccessState,
     type UiProviderModelMetadata,
 } from '../lib/providers/providerModelMetadata';
-import { useResolvedTheme } from '../hooks/useResolvedTheme';
 
 // Define Model Types
 interface ModelOption {
@@ -67,7 +66,7 @@ function getBedrockBadges(metadata: UiProviderModelMetadata): string[] {
 
 
 const ModelSelectorWindow = () => {
-    const isLight = useResolvedTheme() === 'light';
+    const isLight = false;
     const [currentModel, setCurrentModel] = useState<string>(() => localStorage.getItem('cached-current-model') || '');
     const [availableModels, setAvailableModels] = useState<ModelOption[]>(() => {
         try {
@@ -386,9 +385,7 @@ const ModelSelectorWindow = () => {
         }
     };
 
-    const panelClass = isLight
-        ? 'bg-[#F3F4F6]/92 border-black/10 shadow-black/10'
-        : 'bg-[#1E1E1E]/80 border-white/10 shadow-black/40';
+    const panelClass = 'model-selector-panel-dark text-white/80';
     const providerAccents: Record<string, { dot: string; header: string; rule: string; chip: string }> = {
         teamsync: { dot: 'bg-cyan-400', header: 'text-cyan-300', rule: 'bg-cyan-400/30', chip: 'border-cyan-400/25 bg-cyan-400/10 text-cyan-200' },
         gemini: { dot: 'bg-sky-400', header: 'text-sky-300', rule: 'bg-sky-400/30', chip: 'border-sky-400/25 bg-sky-400/10 text-sky-200' },
@@ -410,7 +407,7 @@ const ModelSelectorWindow = () => {
     return (
         <div
             ref={comboboxRef}
-            className="w-fit h-fit bg-transparent flex flex-col"
+            className="model-selector-combobox w-fit h-fit bg-transparent flex flex-col outline-none focus:outline-none focus-visible:outline-none"
             role="combobox"
             aria-expanded="true"
             aria-haspopup="listbox"
@@ -419,7 +416,9 @@ const ModelSelectorWindow = () => {
             tabIndex={0}
             onKeyDown={handleModelListKeyDown}
         >
-            <div className={`w-[360px] max-w-[calc(100vw-24px)] h-[320px] backdrop-blur-md border rounded-[16px] overflow-hidden shadow-2xl p-2 flex flex-col animate-scale-in origin-top-left ${panelClass}`}>
+            <div className={`model-selector-panel relative w-[360px] max-w-[calc(100vw-24px)] h-[320px] overflow-hidden rounded-[22px] border p-2.5 flex flex-col animate-scale-in origin-top-left ${panelClass}`}>
+                <div className="model-selector-attached-seam" aria-hidden="true" />
+                <div className="model-selector-panel-sheen" aria-hidden="true" />
 
                 {isLoading ? (
                     <div className={`flex items-center justify-center py-4 ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -431,7 +430,7 @@ const ModelSelectorWindow = () => {
                         id={listboxId}
                         role="listbox"
                         aria-label="Available AI models"
-                        className="flex-1 overflow-y-auto scrollbar-hide flex flex-col gap-0.5"
+                        className="relative z-10 flex-1 overflow-y-auto scrollbar-hide flex flex-col gap-1 pr-0.5"
                     >
                         {availableModels.length === 0 ? (
                             <div className={`px-4 py-3 text-center text-xs ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -457,10 +456,10 @@ const ModelSelectorWindow = () => {
                                 return (
                                     <React.Fragment key={model.id}>
                                         {showProviderHeader && (
-                                            <div className="flex items-center gap-2 px-3 pt-2 pb-1">
-                                                <span className={`h-px w-4 ${accent?.rule || 'bg-white/10'}`} />
+                                            <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+                                                <span className={`h-px w-4 ${isLight ? 'bg-black/10' : 'bg-white/[0.12]'}`} />
                                                 <span className={`h-1.5 w-1.5 rounded-full ${accent?.dot || 'bg-slate-400'}`} />
-                                                <span className={`text-[10px] font-semibold uppercase tracking-wide ${isLight ? 'text-slate-400' : (accent?.header || 'text-[#FDE68A]/35')}`}>
+                                                <span className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-slate-500/80' : 'text-white/[0.42]'}`}>
                                                     {MODEL_PROVIDER_LABELS[provider]}
                                                 </span>
                                             </div>
@@ -479,10 +478,10 @@ const ModelSelectorWindow = () => {
                                             aria-selected={isSelected}
                                             tabIndex={-1}
                                             className={`
-                                                w-full text-left px-3 py-2 flex items-center justify-between group transition-colors duration-200 rounded-lg
+                                                w-full text-left px-3 py-2.5 flex items-center justify-between group transition-colors duration-200 rounded-[14px]
                                                 ${isSelected
-                                                    ? (isLight ? 'bg-black/[0.07] text-slate-900' : 'bg-white/10 text-[#FDE68A]')
-                                                    : (isLight ? 'text-slate-500 hover:bg-black/[0.04] hover:text-slate-800' : 'text-[#FDE68A]/60 hover:bg-white/5 hover:text-[#FDE68A]')
+                                                    ? (isLight ? 'bg-white/70 text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]' : 'bg-white/[0.115] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]')
+                                                    : (isLight ? 'text-slate-600 hover:bg-white/50 hover:text-slate-950' : 'text-white/60 hover:bg-white/[0.07] hover:text-white')
                                                 }
                                             `}
                                         >
@@ -505,10 +504,10 @@ const ModelSelectorWindow = () => {
                                                 </span>
                                             </span>
                                             <span className="ml-2 flex shrink-0 items-center gap-1.5">
-                                                <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${isLight ? 'border-black/10 bg-black/[0.035] text-slate-500' : (accent?.chip || 'border-white/10 bg-white/5 text-white/60')}`}>
+                                                <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${isLight ? 'border-black/10 bg-white/60 text-slate-500' : (accent?.chip || 'border-white/10 bg-white/5 text-white/60')}`}>
                                                     {MODEL_PROVIDER_SHORT_LABELS[provider]}
                                                 </span>
-                                                {isSelected && <Check className={`w-3.5 h-3.5 shrink-0 ${isLight ? 'text-emerald-600' : 'text-[#FDE68A]'}`} />}
+                                                {isSelected && <Check className={`w-3.5 h-3.5 shrink-0 ${isLight ? 'text-emerald-600' : 'text-white/80'}`} />}
                                             </span>
                                         </button>
                                     </React.Fragment>

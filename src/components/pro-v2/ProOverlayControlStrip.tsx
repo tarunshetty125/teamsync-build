@@ -14,7 +14,7 @@ import {
 } from '../../utils/modelUtils';
 import { getProviderModelMetadata } from '../../lib/providers/providerModelMetadata';
 
-const POPUP_GAP = 8;
+const POPUP_GAP = 6;
 
 export interface ProOverlayControlStripProps {
     panelRef: React.RefObject<HTMLDivElement | null>;

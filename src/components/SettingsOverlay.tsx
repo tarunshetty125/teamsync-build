@@ -2461,6 +2461,20 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const todayStatusLabel = readyTodayCount === todayReadinessItems.length
         ? 'Ready for today'
         : `${readyTodayCount}/${todayReadinessItems.length} ready`;
+    const settingsHeaderBadge = isPremium
+        ? {
+            label: 'Activated',
+            className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-500',
+        }
+        : isTrialActive
+            ? {
+                label: 'Trial active',
+                className: 'border-sky-500/25 bg-sky-500/10 text-sky-500',
+            }
+            : {
+                label: todayStatusLabel,
+                className: 'border-border-subtle bg-bg-item-active text-text-secondary',
+            };
     const overviewQuickLinks = [
         {
             id: 'interface',
@@ -2548,7 +2562,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const switchTransition = shouldReduceMotion
         ? { duration: 0 }
         : { type: 'spring' as const, stiffness: 560, damping: 34, mass: 0.72 };
-    const statusChipBaseClass = 'inline-flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-md border px-2 text-[10px] font-semibold leading-none whitespace-nowrap';
+    const statusChipBaseClass = 'inline-flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-full border px-2.5 text-[10px] font-semibold leading-none whitespace-nowrap';
     const skeletonLineClass = 'rounded-full bg-bg-input/80 animate-pulse';
     const getSwitchTrackClass = (checked: boolean, tone: 'accent' | 'sky' | 'purple' | 'amber' = 'accent') => {
         if (!checked) return 'bg-bg-toggle-switch border border-border-muted';
@@ -2619,33 +2633,42 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             damping: 32,
                             mass: 1
                         }}
-                        className="relative h-[80vh] max-h-[760px] w-[92vw] max-w-[980px] overflow-hidden rounded-2xl border border-border-subtle bg-bg-elevated shadow-2xl"
+                        className="relative h-[74vh] max-h-[680px] w-[84vw] max-w-[860px] overflow-hidden rounded-[22px] border border-border-subtle bg-bg-elevated shadow-[0_28px_88px_rgba(0,0,0,0.40),inset_0_1px_0_rgba(255,255,255,0.06)]"
                     >
                         <div
                             id="settings-panel"
-                            className="flex h-full w-full min-w-0"
+                            className="relative z-10 flex h-full w-full min-w-0"
                             style={{ visibility: isPreviewingOpacity ? 'hidden' : 'visible' }}
                         >
+                            <div
+                                aria-hidden="true"
+                                className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_0%,rgba(59,130,246,0.10),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.035),transparent_26%)]"
+                            />
+                            <div
+                                aria-hidden="true"
+                                className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                            />
                             {/* Sidebar */}
-                            <div className="flex w-[236px] shrink-0 flex-col border-r border-border-subtle bg-bg-sidebar">
-                                <div className="px-5 pt-5 pb-4 border-b border-border-subtle">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">TeamSync</p>
-                                    <div className="mt-1 flex items-center justify-between gap-3">
+                            <div className="flex w-[210px] shrink-0 flex-col border-r border-border-subtle bg-bg-sidebar/95">
+                                <div className="px-4 pt-4 pb-3 border-b border-border-subtle">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">TeamSync</p>
+                                    <div className="mt-1.5 flex items-center justify-between gap-3">
                                         <h2 className="text-[17px] font-semibold tracking-tight text-text-primary">Settings</h2>
-                                        <span className="rounded-md border border-border-subtle bg-bg-item-active px-2 py-1 text-[10px] font-medium text-text-secondary">
-                                            {todayStatusLabel}
+                                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${settingsHeaderBadge.className}`}>
+                                            {isPremium && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                                            {settingsHeaderBadge.label}
                                         </span>
                                     </div>
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto px-3 py-4">
-                                    <nav className="space-y-5" aria-label="Settings sections">
+                                <div className="flex-1 overflow-y-auto px-2.5 py-3.5">
+                                    <nav className="space-y-4" aria-label="Settings sections">
                                         {sidebarGroups.map((group) => (
                                             <div key={group.label}>
-                                                <div className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+                                                <div className="px-2 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">
                                                     {group.label}
                                                 </div>
-                                                <div className="space-y-1">
+                                                <div className="space-y-0.5">
                                                     {group.items.map((item) => {
                                                         const isActive = activeTab === item.id;
                                                         return (
@@ -2653,7 +2676,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 key={item.id}
                                                                 onClick={() => openSettingsSection(item.id)}
                                                                 aria-current={isActive ? 'page' : undefined}
-                                                                className={`group relative w-full overflow-hidden rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition-colors duration-200 flex items-center gap-2.5 active:scale-[0.99] ${isActive
+                                                                className={`group relative w-full overflow-hidden rounded-xl px-2.5 py-2.5 text-left text-[12.5px] font-medium transition-colors duration-200 flex items-center gap-2.5 active:scale-[0.99] ${isActive
                                                                     ? 'text-text-primary'
                                                                     : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'
                                                                     }`}
@@ -2661,11 +2684,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 {isActive && (
                                                                     <motion.span
                                                                         layoutId="settings-sidebar-active"
-                                                                        className="absolute inset-0 rounded-lg bg-bg-item-active shadow-sm"
+                                                                        className="absolute inset-0 rounded-xl border border-border-subtle bg-bg-item-active shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
                                                                         transition={sidebarIndicatorTransition}
                                                                     />
                                                                 )}
-                                                                <span className={`relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${isActive ? 'bg-bg-elevated text-text-primary' : 'text-text-tertiary group-hover:text-text-primary'}`}>
+                                                                <span className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-bg-elevated text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]' : 'text-text-tertiary group-hover:text-text-primary'}`}>
                                                                     {item.icon}
                                                                 </span>
                                                                 <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
@@ -2683,7 +2706,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                     </nav>
                                 </div>
 
-                                <div className="mt-auto p-6 border-t border-border-subtle">
+                                <div className="mt-auto p-4 border-t border-border-subtle">
 
                                     <AnimatePresence mode="wait" initial={false}>
                                         {showQuitConfirm ? (
@@ -2736,43 +2759,43 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         window.electronAPI.quitApp();
                                                     }
                                                 }}
-                                                className="w-full text-left px-3 py-2 mt-1 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3"
+                                                className="w-full text-left px-3 py-2 mt-1 rounded-xl text-[13px] font-medium text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3"
                                             >
                                                 <LogOut size={16} /> Quit TeamSync
                                             </motion.button>
                                         )}
                                     </AnimatePresence>
-                                    <button onClick={onClose} className="group mt-2 w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors flex items-center gap-3">
+                                    <button onClick={onClose} className="group mt-2 w-full text-left px-3 py-2 rounded-xl text-[13px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors flex items-center gap-3">
                                         <X size={18} className="group-hover:text-red-500 transition-colors" /> Close
                                     </button>
                                 </div>
                             </div>
 
                             {/* Content */}
-                            <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-4 py-5 sm:px-5 lg:px-6">
+                            <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-5 py-5 sm:px-6 lg:px-7">
                                 <AnimatePresence mode="wait" initial={false}>
                                     <motion.div
                                         key={activeTab}
                                         {...sectionMotionProps}
-                                        className="min-h-full min-w-0"
+                                        className="mx-auto min-h-full min-w-0 max-w-[720px]"
                                     >
                                 {activeTab === 'overview' && (
-                                    <div className="space-y-6 animated fadeIn select-text pb-4">
+                                    <div className="space-y-5 animated fadeIn select-text pb-4">
                                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                             <div className="min-w-0">
-                                                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Today</p>
-                                                <h3 className="mt-1 text-[24px] font-semibold tracking-tight text-text-primary">Control center</h3>
+                                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">Today</p>
+                                                <h3 className="mt-1 text-[23px] font-semibold tracking-tight text-text-primary">Control center</h3>
                                                 <p className="mt-2 max-w-[560px] text-[13px] leading-relaxed text-text-secondary">
                                                     A quick read on whether TeamSync is ready for meetings, capture, and screen sharing.
                                                 </p>
                                             </div>
-                                            <div className="shrink-0 self-start rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-right shadow-sm">
-                                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Readiness</p>
+                                            <div className="shrink-0 self-start rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-tertiary">Readiness</p>
                                                 <p className="mt-1 text-[18px] font-semibold tabular-nums text-text-primary">{readyTodayCount}/{todayReadinessItems.length}</p>
                                             </div>
                                         </div>
 
-                                        <div className="rounded-2xl border border-border-subtle bg-bg-item-surface overflow-hidden">
+                                        <div className="overflow-hidden rounded-2xl border border-border-subtle bg-bg-card shadow-[0_12px_32px_rgba(0,0,0,0.10),inset_0_1px_0_rgba(255,255,255,0.05)]">
                                             <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
                                                 <div className="flex items-start gap-3">
                                                     <div className={`mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl border ${readyTodayCount === todayReadinessItems.length ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-amber-500/20 bg-amber-500/10 text-amber-400'}`}>
@@ -2789,7 +2812,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 </div>
                                                 <button
                                                     onClick={() => openSettingsSection(calendarStatus.connected ? 'general' : 'calendar')}
-                                                    className="shrink-0 rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98]"
+                                                    className="shrink-0 rounded-full border border-border-subtle bg-bg-input px-3.5 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98]"
                                                 >
                                                     {calendarStatus.connected ? 'Review controls' : 'Connect calendar'}
                                                 </button>
@@ -2800,7 +2823,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     <button
                                                         key={item.id}
                                                         onClick={() => openSettingsSection(item.tab)}
-                                                        className="group flex min-h-[118px] items-start gap-3 p-5 text-left transition-colors hover:bg-bg-input/40"
+                                                        className="group flex min-h-[112px] items-start gap-3 p-4 text-left transition-colors hover:bg-bg-input/40 sm:p-5"
                                                     >
                                                         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors ${item.ready ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-border-subtle bg-bg-input text-text-tertiary group-hover:text-text-primary'}`}>
                                                             {item.icon}
@@ -2820,8 +2843,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 gap-4">
-                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                                                 <div className="flex items-center justify-between gap-4">
                                                     <div>
                                                         <h4 className="text-[14px] font-semibold text-text-primary">Daily workspace</h4>
@@ -2834,7 +2857,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         <button
                                                             key={item.id}
                                                             onClick={() => openSettingsSection(item.tab)}
-                                                            className="group flex w-full items-center gap-3 py-3 text-left transition-colors"
+                                                            className="group flex w-full items-center gap-3 rounded-xl px-1 py-3 text-left transition-colors hover:bg-bg-input/45"
                                                         >
                                                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-bg-input text-text-tertiary transition-colors group-hover:text-text-primary">
                                                                 {item.icon}
@@ -2849,7 +2872,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 </div>
                                             </section>
 
-                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
+                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                                                 <div className="flex items-center justify-between gap-4">
                                                     <div>
                                                         <h4 className="text-[14px] font-semibold text-text-primary">Current session</h4>

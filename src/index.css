@@ -717,6 +717,51 @@ body {
   box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
 }
 
+.model-selector-combobox,
+.model-selector-combobox:focus,
+.model-selector-combobox:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.model-selector-panel {
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  backdrop-filter: blur(10px) saturate(150%);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.08),
+    0 14px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.model-selector-panel-dark {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 16%, transparent 28%),
+    rgba(10, 10, 14, 0.74);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.model-selector-attached-seam {
+  position: absolute;
+  top: 0;
+  left: 18px;
+  width: 112px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34), transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.model-selector-panel-sheen {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.08), transparent 34%),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.035), transparent 18%, transparent 82%, rgba(124, 108, 220, 0.04));
+  pointer-events: none;
+  z-index: 1;
+}
+
 .overlay-icon-surface {
   background: var(--overlay-icon-bg);
 }
@@ -1199,6 +1244,18 @@ html[data-platform="linux"] body {
   mask-image: radial-gradient(ellipse at center, #000 0%, #000 56%, rgba(0, 0, 0, 0.88) 70%, transparent 100%);
   transform-origin: center;
   will-change: opacity, transform, filter;
+}
+
+.teamsync-startup-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 0%, transparent 62%, rgba(0, 0, 0, 0.14) 84%, rgba(0, 0, 0, 0.34) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.16) 9%, transparent 20%, transparent 80%, rgba(0, 0, 0, 0.16) 91%, rgba(0, 0, 0, 0.42) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0.08) 14%, transparent 34%, transparent 72%, rgba(0, 0, 0, 0.14) 88%, rgba(0, 0, 0, 0.42) 100%);
 }
 
 .teamsync-startup-material {
