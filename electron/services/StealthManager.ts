@@ -546,6 +546,14 @@ export class StealthManager {
         try {
           app.setAppUserModelId(this._getWindowsAumid(targetName));
         } catch { /* best-effort */ }
+        // Reassert app name — can drift after window focus changes
+        try { app.setName(targetName); } catch { /* best-effort */ }
+        // Reassert window titles — Task Manager shows these in the Apps tab
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed() && win.getTitle() !== targetName) {
+            try { win.setTitle(targetName); } catch { /* best-effort */ }
+          }
+        }
       }
     }, this.config.watchdogIntervalMs);
 
@@ -927,6 +935,13 @@ export class StealthManager {
     // Also set app name on Windows — affects GetWindowText / Task Manager description
     try { app.setName(this.config.processName); } catch { /* best-effort */ }
 
+    // Set all window titles to disguise name — Task Manager "Apps" tab reads these
+    const disguiseName = this.config.processName;
+    for (const win of allWindows) {
+      if (win.isDestroyed()) continue;
+      try { win.setTitle(disguiseName); } catch { /* best-effort */ }
+    }
+
     this._log(`L2: ${hidden}/${allWindows.length} primary Windows taskbar surfaces hidden`);
   }
 
@@ -960,6 +975,12 @@ export class StealthManager {
 
     // Revert app name
     try { app.setName(this._originalAppName); } catch { /* best-effort */ }
+
+    // Restore window titles
+    for (const win of allWindows) {
+      if (win.isDestroyed()) continue;
+      try { win.setTitle(this._originalAppName); } catch { /* best-effort */ }
+    }
 
     this._windowsHiddenFromTaskbar.clear();
     this._log(`L2: ${restored} Windows taskbar entries restored`);
