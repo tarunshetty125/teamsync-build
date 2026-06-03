@@ -24,7 +24,7 @@
   },
   "build": {
     "generateUpdatesFilesForAllChannels": true,
-    "appId": "com.electron.meeting-notes",
+    "appId": "com.natively.app",
     "productName": "TeamSync",
     "afterPack": "./scripts/ad-hoc-sign.js",
     "compression": "normal",

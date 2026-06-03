@@ -3447,7 +3447,7 @@ export class AppState {
     // 3. Update App User Model ID (Windows Taskbar grouping)
     if (isWin) {
       // Use unique AUMID per disguise to avoid grouping with the real app
-      app.setAppUserModelId(`com.teamsync.assistant.${mode}`);
+      app.setAppUserModelId(`com.natively.app.${mode}`);
     }
 
     // 4. Update Icons

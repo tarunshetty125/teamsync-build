@@ -51,6 +51,40 @@ function disguiseHelperPlists(appOutDir, appName) {
     console.log('[Helper Disguise] All helper plists updated successfully.');
 }
 
+/**
+ * Sanitize the main app's Info.plist to remove keys that fingerprint
+ * the application as an Electron app.  Proctoring software that inspects
+ * Info.plist for Electron-specific metadata will no longer find it.
+ */
+function sanitizeMainAppPlist(appOutDir, appName) {
+    const plistPath = path.join(appOutDir, `${appName}.app`, 'Contents', 'Info.plist');
+
+    if (!fs.existsSync(plistPath)) {
+        console.log('[Plist Sanitize] Main app plist not found, skipping.');
+        return;
+    }
+
+    // Keys that identify the app as Electron-based
+    const keysToRemove = [
+        'ElectronTeamID',
+        'DTSDKName',
+        'DTXcodeBuild',
+        'DTCompiler',
+        'BuildMachineOSBuild',
+    ];
+
+    for (const key of keysToRemove) {
+        try {
+            execSync(`/usr/libexec/PlistBuddy -c "Delete :${key}" "${plistPath}"`, { stdio: 'pipe' });
+            console.log(`[Plist Sanitize] Removed ${key}`);
+        } catch {
+            // Key may not exist — skip
+        }
+    }
+
+    console.log('[Plist Sanitize] Main app Info.plist sanitized.');
+}
+
 exports.default = async function (context) {
     // Only process on macOS
     if (process.platform !== 'darwin') {
@@ -66,6 +100,14 @@ exports.default = async function (context) {
         disguiseHelperPlists(appOutDir, appName);
     } catch (error) {
         console.error('[Helper Disguise] Failed to update helper plists:', error);
+        // Non-fatal: continue to signing
+    }
+
+    // ── Step 1b: Sanitize main app Info.plist (remove Electron fingerprints) ──
+    try {
+        sanitizeMainAppPlist(appOutDir, appName);
+    } catch (error) {
+        console.error('[Plist Sanitize] Failed to sanitize main plist:', error);
         // Non-fatal: continue to signing
     }
 

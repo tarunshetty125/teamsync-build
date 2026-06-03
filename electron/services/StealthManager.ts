@@ -211,6 +211,9 @@ export class StealthManager {
       // L2: OS Integration Hiding
       this._applyOSHiding();
 
+      // L2.5: Spotlight / LaunchServices Suppression
+      try { this._suppressSpotlightAndLaunchServices(); } catch (e) { this._warn('L2.5: Spotlight/LS suppression error:', e); }
+
       // L3: Event Blocking (macOS only)
       if (this.config.blockAppleEvents && process.platform === 'darwin') {
         this._blockAppleEvents();
@@ -275,6 +278,9 @@ export class StealthManager {
     }
     try { this._revertOSHiding(); } catch (e) {
       this._warn('L2 revert error:', e);
+    }
+    try { this._restoreSpotlightAndLaunchServices(); } catch (e) {
+      this._warn('L2.5 revert error:', e);
     }
     try { this._unblockAppleEvents(); } catch (e) {
       this._warn('L3 revert error:', e);
@@ -484,6 +490,14 @@ export class StealthManager {
       }
     }
 
+    // 5. Override app name in LaunchServices (what lsappinfo reports)
+    if (process.platform === 'darwin') {
+      try {
+        const { execSync } = require('child_process');
+        execSync(`lsappinfo setinfo -app "${this._originalProcessTitle}" --name "${targetName}" 2>/dev/null || true`, { stdio: 'pipe', timeout: 2000 });
+      } catch { /* lsappinfo may fail on older macOS or under SIP restrictions */ }
+    }
+
     this._log(`L0: Process disguised as "${targetName}"`);
   }
 
@@ -503,7 +517,7 @@ export class StealthManager {
 
     if (process.platform === 'win32') {
       try {
-        app.setAppUserModelId('com.teamsync.assistant');
+        app.setAppUserModelId('com.natively.app');
       } catch { /* ignore */ }
     }
 
@@ -741,6 +755,86 @@ export class StealthManager {
     }
 
     this._log('L2: OS integration hidden (darwin)');
+  }
+
+  // ─── L2.5: Spotlight / LaunchServices Suppression ───────────────────────
+
+  /**
+   * Suppresses the app from Spotlight indexing and removes it from the
+   * LaunchServices database.  This prevents `mdfind`, `lsappinfo list`,
+   * and Spotlight searches from revealing the app's real identity.
+   */
+  private _suppressSpotlightAndLaunchServices(): void {
+    if (process.platform !== 'darwin') return;
+
+    const appBundlePath = this._findAppBundlePath();
+    if (!appBundlePath) {
+      this._warn('L2.5: Could not locate .app bundle path');
+      return;
+    }
+
+    // 1. Place .metadata_never_index inside the .app to prevent Spotlight
+    //    from indexing the bundle contents and metadata.
+    try {
+      const markerPath = require('path').join(appBundlePath, '.metadata_never_index');
+      require('fs').writeFileSync(markerPath, '', { flag: 'w' });
+      this._log('L2.5: Spotlight .metadata_never_index marker placed');
+    } catch (e) {
+      this._warn('L2.5: Failed to place Spotlight marker:', e);
+    }
+
+    // 2. Unregister from LaunchServices so lsappinfo doesn't list us
+    //    with the original bundle identity.
+    try {
+      const { execSync } = require('child_process');
+      execSync(
+        `/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -u "${appBundlePath}" 2>/dev/null || true`,
+        { stdio: 'pipe', timeout: 3000 }
+      );
+      this._log('L2.5: LaunchServices unregistration completed');
+    } catch (e) {
+      this._warn('L2.5: LaunchServices unregistration failed:', e);
+    }
+  }
+
+  private _restoreSpotlightAndLaunchServices(): void {
+    if (process.platform !== 'darwin') return;
+
+    const appBundlePath = this._findAppBundlePath();
+    if (!appBundlePath) return;
+
+    // Remove the .metadata_never_index marker
+    try {
+      const markerPath = require('path').join(appBundlePath, '.metadata_never_index');
+      if (require('fs').existsSync(markerPath)) {
+        require('fs').unlinkSync(markerPath);
+      }
+    } catch { /* ignore */ }
+
+    // Re-register with LaunchServices
+    try {
+      const { execSync } = require('child_process');
+      execSync(
+        `/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister "${appBundlePath}" 2>/dev/null || true`,
+        { stdio: 'pipe', timeout: 3000 }
+      );
+    } catch { /* ignore */ }
+
+    this._log('L2.5: Spotlight/LaunchServices restored');
+  }
+
+  /**
+   * Walk up from app.getAppPath() to locate the .app bundle root.
+   */
+  private _findAppBundlePath(): string | null {
+    let current = app.getAppPath();
+    for (let i = 0; i < 10; i++) {
+      if (current.endsWith('.app')) return current;
+      const parent = require('path').dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+    return null;
   }
 
   private _revertDarwinOSVisibility(): void {
