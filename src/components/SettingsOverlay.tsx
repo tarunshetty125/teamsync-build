@@ -465,6 +465,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 }) => {
     const isLight = useResolvedTheme() === 'light';
     const [activeTab, setActiveTab] = useState(initialTab);
+    const [showQuitConfirm, setShowQuitConfirm] = useState(false);
     const refreshProfileStateRef = React.useRef<((expectedGenerationId?: number) => Promise<void>) | null>(null);
 
     // Sync active tab when modal opens
@@ -2144,12 +2145,63 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                                 <div className="mt-auto p-6 border-t border-border-subtle">
 
-                                    <button
-                                        onClick={() => window.electronAPI.quitApp()}
-                                        className="w-full text-left px-3 py-2 mt-1 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3"
-                                    >
-                                        <LogOut size={16} /> Quit TeamSync
-                                    </button>
+                                    <AnimatePresence mode="wait" initial={false}>
+                                        {showQuitConfirm ? (
+                                            <motion.div
+                                                key="quit-confirm"
+                                                initial={{ opacity: 0, y: 4 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: 4 }}
+                                                transition={{ duration: 0.15 }}
+                                                className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 mb-2"
+                                            >
+                                                <div className="flex items-center gap-2 text-[13px] font-semibold text-red-400">
+                                                    <AlertCircle size={15} />
+                                                    Meeting in progress
+                                                </div>
+                                                <p className="text-[12px] text-text-secondary mt-1">
+                                                    Quitting will end the active session and stop recording.
+                                                </p>
+                                                <div className="flex justify-end gap-2 mt-3">
+                                                    <button
+                                                        onClick={() => setShowQuitConfirm(false)}
+                                                        className="text-[12px] px-3 py-1.5 text-text-secondary hover:text-text-primary transition-colors rounded-lg"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        onClick={() => window.electronAPI.quitApp()}
+                                                        className="text-[12px] px-3 py-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg font-medium transition-colors"
+                                                    >
+                                                        Quit Anyway
+                                                    </button>
+                                                </div>
+                                            </motion.div>
+                                        ) : (
+                                            <motion.button
+                                                key="quit-button"
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                transition={{ duration: 0.1 }}
+                                                onClick={async () => {
+                                                    // Query meeting state directly via IPC
+                                                    let isActive = false;
+                                                    try {
+                                                        isActive = await window.electronAPI?.getMeetingActive?.() ?? false;
+                                                    } catch { /* fallback to false */ }
+                                                    if (isActive) {
+                                                        setShowQuitConfirm(true);
+                                                    } else {
+                                                        window.electronAPI.quitApp();
+                                                    }
+                                                }}
+                                                className="w-full text-left px-3 py-2 mt-1 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3"
+                                            >
+                                                <LogOut size={16} /> Quit TeamSync
+                                            </motion.button>
+                                        )}
+                                    </AnimatePresence>
                                     <button onClick={onClose} className="group mt-2 w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors flex items-center gap-3">
                                         <X size={18} className="group-hover:text-red-500 transition-colors" /> Close
                                     </button>

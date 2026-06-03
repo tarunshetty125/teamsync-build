@@ -133,9 +133,16 @@ const EditableTextBlock: React.FC<EditableTextBlockProps> = ({
             onBlur={handleBlur}
             onInput={handleChange}
             onKeyDown={handleKeyDown}
+            role="textbox"
+            aria-label={placeholder ? `Edit: ${placeholder}` : 'Editable text'}
+            tabIndex={0}
             className={`
-                outline-none min-w-[10px] cursor-text transition-colors duration-200
-                bg-transparent
+                outline-none min-w-[10px] transition-all duration-150
+                bg-transparent rounded-md
+                ${isEditing
+                    ? 'cursor-text bg-[rgba(10,132,255,0.06)] shadow-[inset_0_0_0_1px_rgba(10,132,255,0.12)]'
+                    : 'cursor-text hover:bg-[rgba(10,132,255,0.04)]'
+                }
                 ${!localValue && placeholder ? 'empty:before:content-[attr(data-placeholder)] empty:before:text-white/20' : ''}
                 ${className}
             `}

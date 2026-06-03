@@ -107,6 +107,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const [meetings, setMeetings] = useState<Meeting[]>([]);
     const [isDetectable, setIsDetectable] = useState(false);
     const [isMeetingActive, setIsMeetingActive] = useState(false);
+    const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
     const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
     const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
     const [isCalendarConnected, setIsCalendarConnected] = useState(false);
@@ -1224,56 +1225,97 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                                                         exit={{ opacity: 0, scale: 0.95, y: 5 }}
                                                                         transition={{ duration: 0.1 }}
-                                                                        className={`absolute right-0 top-full mt-1 w-[90px] backdrop-blur-xl rounded-lg shadow-2xl z-50 overflow-hidden border ${isLight ? 'bg-bg-elevated border-border-muted shadow-[0_8px_24px_rgba(0,0,0,0.12)]' : 'bg-[#1E1E1E]/80 border-white/10'}`}
+                                                                        layout
+                                                                        className={`absolute right-0 top-full mt-1 backdrop-blur-xl rounded-lg shadow-2xl z-50 overflow-hidden border ${isLight ? 'bg-bg-elevated border-border-muted shadow-[0_8px_24px_rgba(0,0,0,0.12)]' : 'bg-[#1E1E1E]/80 border-white/10'}`}
+                                                                        style={{ width: confirmingDeleteId === m.id ? 200 : 90 }}
                                                                         onClick={(e) => e.stopPropagation()}
                                                                         onMouseEnter={() => setMenuEntered(true)}
                                                                         onMouseLeave={() => {
-                                                                            if (menuEntered) setActiveMenuId(null);
+                                                                            if (menuEntered && confirmingDeleteId !== m.id) setActiveMenuId(null);
                                                                         }}
                                                                     >
                                                                         <div className="p-1 flex flex-col gap-0.5">
-                                                                            <button
-                                                                                className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-primary rounded-lg transition-colors text-left ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/10'}`}
-                                                                                onClick={async () => {
-                                                                                    setActiveMenuId(null);
-                                                                                    analytics.trackPdfExported();
-                                                                                    // Fetch full details if needed
-                                                                                    if (window.electronAPI && window.electronAPI.getMeetingDetails) {
-                                                                                        try {
-                                                                                            const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
-                                                                                            if (fullMeeting) {
-                                                                                                generateMeetingPDF(fullMeeting);
-                                                                                            } else {
-                                                                                                generateMeetingPDF(m);
-                                                                                            }
-                                                                                        } catch (e) {
-                                                                                            console.error("Failed to fetch details for PDF", e);
-                                                                                            generateMeetingPDF(m);
-                                                                                        }
-                                                                                    } else {
-                                                                                        generateMeetingPDF(m);
-                                                                                    }
-                                                                                }}
-                                                                            >
-                                                                                <Download size={13} />
-                                                                                Export
-                                                                            </button>
-                                                                            <button
-                                                                                className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors text-left"
-                                                                                onClick={async () => {
-                                                                                    if (window.electronAPI && window.electronAPI.deleteMeeting) {
-                                                                                        const success = await window.electronAPI.deleteMeeting(m.id);
-                                                                                        if (success) {
-                                                                                            // Optimistic update or refetch
-                                                                                            setMeetings(prev => prev.filter(meeting => meeting.id !== m.id));
-                                                                                        }
-                                                                                    }
-                                                                                    setActiveMenuId(null);
-                                                                                }}
-                                                                            >
-                                                                                <Trash2 size={13} />
-                                                                                Delete
-                                                                            </button>
+                                                                            <AnimatePresence mode="wait" initial={false}>
+                                                                                {confirmingDeleteId === m.id ? (
+                                                                                    <motion.div
+                                                                                        key="confirm"
+                                                                                        initial={{ opacity: 0 }}
+                                                                                        animate={{ opacity: 1 }}
+                                                                                        exit={{ opacity: 0 }}
+                                                                                        transition={{ duration: 0.12 }}
+                                                                                        className="px-3 py-2"
+                                                                                    >
+                                                                                        <p className={`text-[12px] font-medium text-center mb-2 ${isLight ? 'text-text-primary' : 'text-white/90'}`}>Delete this meeting?</p>
+                                                                                        <div className="flex justify-between gap-2">
+                                                                                            <button
+                                                                                                className={`flex-1 text-[12px] px-2 py-1.5 rounded-md transition-colors ${isLight ? 'text-text-secondary hover:text-text-primary hover:bg-bg-item-surface' : 'text-white/50 hover:text-white/80 hover:bg-white/10'}`}
+                                                                                                onClick={() => {
+                                                                                                    setConfirmingDeleteId(null);
+                                                                                                    setActiveMenuId(null);
+                                                                                                }}
+                                                                                            >
+                                                                                                Cancel
+                                                                                            </button>
+                                                                                            <button
+                                                                                                className="flex-1 text-[12px] px-2 py-1.5 rounded-md font-semibold text-red-400 bg-red-500/15 hover:bg-red-500/25 transition-colors"
+                                                                                                onClick={async () => {
+                                                                                                    if (window.electronAPI && window.electronAPI.deleteMeeting) {
+                                                                                                        const success = await window.electronAPI.deleteMeeting(m.id);
+                                                                                                        if (success) {
+                                                                                                            setMeetings(prev => prev.filter(meeting => meeting.id !== m.id));
+                                                                                                        }
+                                                                                                    }
+                                                                                                    setConfirmingDeleteId(null);
+                                                                                                    setActiveMenuId(null);
+                                                                                                }}
+                                                                                            >
+                                                                                                Delete
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </motion.div>
+                                                                                ) : (
+                                                                                    <motion.div
+                                                                                        key="menu"
+                                                                                        initial={{ opacity: 0 }}
+                                                                                        animate={{ opacity: 1 }}
+                                                                                        exit={{ opacity: 0 }}
+                                                                                        transition={{ duration: 0.12 }}
+                                                                                    >
+                                                                                        <button
+                                                                                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-primary rounded-lg transition-colors text-left ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/10'}`}
+                                                                                            onClick={async () => {
+                                                                                                setActiveMenuId(null);
+                                                                                                analytics.trackPdfExported();
+                                                                                                if (window.electronAPI && window.electronAPI.getMeetingDetails) {
+                                                                                                    try {
+                                                                                                        const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
+                                                                                                        if (fullMeeting) {
+                                                                                                            generateMeetingPDF(fullMeeting);
+                                                                                                        } else {
+                                                                                                            generateMeetingPDF(m);
+                                                                                                        }
+                                                                                                    } catch (e) {
+                                                                                                        console.error("Failed to fetch details for PDF", e);
+                                                                                                        generateMeetingPDF(m);
+                                                                                                    }
+                                                                                                } else {
+                                                                                                    generateMeetingPDF(m);
+                                                                                                }
+                                                                                            }}
+                                                                                        >
+                                                                                            <Download size={13} />
+                                                                                            Export PDF
+                                                                                        </button>
+                                                                                        <button
+                                                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors text-left"
+                                                                                            onClick={() => setConfirmingDeleteId(m.id)}
+                                                                                        >
+                                                                                            <Trash2 size={13} />
+                                                                                            Delete
+                                                                                        </button>
+                                                                                    </motion.div>
+                                                                                )}
+                                                                            </AnimatePresence>
                                                                         </div>
                                                                     </motion.div>
                                                                 )}

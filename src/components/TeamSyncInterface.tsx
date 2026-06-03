@@ -25,12 +25,19 @@ import {
     Ghost,
     Link,
     Code,
+    Code2,
     Copy,
     Check,
     PointerOff,
     BookOpen,
     Cpu,
-    FileText
+    FileText,
+    Layers,
+    DollarSign,
+    TrendingUp,
+    Target,
+    Users,
+    Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -61,6 +68,7 @@ import {
     getOverlayQuickActions,
     getRecommendedOverlayAction,
     resolveOverlayCopilotMode,
+    MODE_DISPLAY_LABELS,
     type OverlayQuickActionDef,
     type OverlayRecommendationId,
 } from '../lib/modes/overlayCopilotConfig';
@@ -4059,6 +4067,37 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                 return (
                                     <div className={`flex flex-nowrap justify-center items-center gap-2 px-3 pb-3 overflow-x-auto scrollbar-none transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity, width: '95%', margin: '0 auto' }}>
                                         <AnimatePresence mode="popLayout">
+                                            {/* Mode Indicator Pill — inline with action buttons */}
+                                            {(() => {
+                                                const modeDisplay = MODE_DISPLAY_LABELS[overlayCopilotMode];
+                                                if (!modeDisplay?.label) return null;
+
+                                                const MODE_ICONS: Record<string, React.ComponentType<any>> = {
+                                                    Code2, MessageSquare, Layers, DollarSign, TrendingUp,
+                                                    BookOpen, Target, Users, Briefcase, Sparkles,
+                                                };
+                                                const IconComponent = MODE_ICONS[modeDisplay.icon];
+
+                                                return (
+                                                    <motion.div
+                                                        key={`mode-pill-${overlayCopilotMode}`}
+                                                        initial={{ opacity: 0, x: 8, scale: 0.9 }}
+                                                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                                                        exit={{ opacity: 0, x: -8, scale: 0.9 }}
+                                                        transition={{ duration: 0.15, ease: [0.25, 1, 0.5, 1] }}
+                                                        className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-full flex-none whitespace-nowrap pointer-events-none"
+                                                        style={{
+                                                            background: modeDisplay.color.replace(/[\d.]+\)$/, '0.08)'),
+                                                            border: `1px solid ${modeDisplay.color}`,
+                                                        }}
+                                                    >
+                                                        {IconComponent && <IconComponent className="w-3 h-3" style={{ color: modeDisplay.color.replace(/[\d.]+\)$/, '0.9)') }} />}
+                                                        <span className={`text-[10px] font-semibold tracking-wide ${isLightTheme ? 'text-gray-600' : 'text-white/70'}`}>
+                                                            {modeDisplay.label}
+                                                        </span>
+                                                    </motion.div>
+                                                );
+                                            })()}
                                             {(() => {
                                                 // macOS Control Center glassmorphism — Apple-style tinted glass per button
                                                 const glassColors: Record<string, { bg: string; border: string; tint: string }> = {
@@ -4438,7 +4477,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                 <Ghost className={`w-3.5 h-3.5 ${localOpacity < 1.0 ? 'animate-flame' : ''}`} />
                                             </button>
                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
-                                                Overlay Opacity
+                                                {localOpacity >= 0.9 ? 'Opacity: Full' : `Opacity: ${Math.round(localOpacity * 100)}%`}
                                             </div>
                                         </div>
 

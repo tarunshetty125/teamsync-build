@@ -135,7 +135,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
   },
   tech_optimal_solution: {
     id: 'tech_optimal_solution',
-    label: 'Optimal',
+    label: 'Solution',
     icon: '⚙️',
     intent: 'what_to_answer',
     contextTarget: 'latest_turn',
@@ -365,7 +365,7 @@ const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
   },
   job_improvement: {
     id: 'job_improvement',
-    label: 'Behavioral Optimize',
+    label: 'Improve',
     icon: '📈',
     intent: 'what_to_answer',
     contextTarget: 'active_context',
@@ -653,3 +653,28 @@ export function getRecommendedOverlayAction(
 }
 
 export { resolveRecommendedOverlayAction } from '../overlay/overlayRecommendationResolver.ts';
+
+/**
+ * Display metadata for the inline mode indicator pill in the overlay.
+ * Maps each resolved OverlayCopilotModeId to a human-readable label,
+ * a lucide-react icon name, and a tint color for the pill border/background.
+ *
+ * Modes with `null` label are hidden (no pill shown).
+ *
+ * Note on intent architecture: Intent is a transport key. Label semantics
+ * are enforced by `additionalContext` + `actionContract`, not by intent.
+ */
+export const MODE_DISPLAY_LABELS: Record<OverlayCopilotModeId, { label: string | null; icon: string; color: string }> = {
+  general:               { label: null,              icon: 'Sparkles',       color: 'rgba(142,142,147,0.3)' },
+  behavioral:            { label: 'Behavioral',      icon: 'MessageSquare',  color: 'rgba(10,132,255,0.3)' },
+  coding:                { label: 'Coding',          icon: 'Code2',          color: 'rgba(175,82,222,0.3)' },
+  system_design:         { label: 'System Design',   icon: 'Layers',         color: 'rgba(48,209,88,0.3)' },
+  salary:                { label: 'Negotiation',     icon: 'DollarSign',     color: 'rgba(255,159,10,0.3)' },
+  follow_up:             { label: null,              icon: 'ArrowRight',     color: 'rgba(142,142,147,0.3)' },
+  sales:                 { label: 'Sales',           icon: 'TrendingUp',     color: 'rgba(48,209,88,0.3)' },
+  lecture:               { label: 'Lecture',         icon: 'BookOpen',       color: 'rgba(10,132,255,0.3)' },
+  recruiting:            { label: 'Recruiting',      icon: 'Target',         color: 'rgba(255,159,10,0.3)' },
+  'team-meet':           { label: 'Team',            icon: 'Users',          color: 'rgba(142,142,147,0.3)' },
+  'looking-for-work':    { label: 'Interview',       icon: 'Briefcase',      color: 'rgba(175,82,222,0.3)' },
+  'technical-interview': { label: 'Technical',       icon: 'Code2',          color: 'rgba(175,82,222,0.3)' },
+};
