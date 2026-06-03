@@ -118,7 +118,7 @@ const App: React.FC = () => {
   const [authUser, setAuthUser] = useState<GoogleAuthUser | null>(null);
   const [hasLoadedAuth, setHasLoadedAuth] = useState<boolean>(() => !(isLauncherWindow || isDefault));
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState('general');
+  const [settingsInitialTab, setSettingsInitialTab] = useState('overview');
   const [isModesOpen, setIsModesOpen] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremiumActive, setIsPremiumActive] = useState(false);
@@ -628,7 +628,7 @@ const App: React.FC = () => {
           <div id="launcher-container" className="h-full w-full relative">
             <Launcher
               onStartMeeting={handleStartMeeting}
-              onOpenSettings={(tab = 'general') => {
+              onOpenSettings={(tab = 'overview') => {
                 setSettingsInitialTab(tab);
                 setIsSettingsOpen(true);
               }}

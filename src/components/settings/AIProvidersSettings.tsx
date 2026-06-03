@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Trash2, Edit2, AlertCircle, CheckCircle, Save, ChevronDown, Check, RefreshCw, ExternalLink, Loader2 } from 'lucide-react';
+import {
+    Plus, Trash2, Edit2, AlertCircle, CheckCircle, Save, ChevronDown, Check,
+    RefreshCw, ExternalLink, Loader2, Zap, Brain, Server, ShieldCheck,
+    SlidersHorizontal, Activity,
+} from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { STANDARD_CLOUD_MODELS, prettifyModelId } from '../../utils/modelUtils';
 import { validateCurl } from '../../lib/curl-validator';
 import { buildProviderHealthReadModel } from '../../lib/providers/providerHealthReadModel';
@@ -302,7 +307,70 @@ function getBedrockVisionWarning(models?: BedrockFetchedModel[]): string {
     return models.some(isBedrockVisionCandidate) ? '' : BEDROCK_VISION_WARNING;
 }
 
+type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+const providerMotionEase = [0.22, 1, 0.36, 1] as const;
+
+function statusToneClassName(tone: StatusTone): string {
+    if (tone === 'success') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400';
+    if (tone === 'warning') return 'border-amber-500/20 bg-amber-500/10 text-amber-400';
+    if (tone === 'danger') return 'border-red-500/20 bg-red-500/10 text-red-400';
+    if (tone === 'info') return 'border-sky-500/20 bg-sky-500/10 text-sky-400';
+    return 'border-border-subtle bg-bg-input text-text-secondary';
+}
+
+function StatusChip({ label, tone = 'neutral' }: { label: string; tone?: StatusTone }) {
+    return (
+        <span className={`inline-flex h-6 items-center justify-center whitespace-nowrap rounded-md border px-2 text-[10px] font-semibold leading-none ${statusToneClassName(tone)}`}>
+            {label}
+        </span>
+    );
+}
+
+function ProviderOutcomeCard({
+    icon,
+    outcome,
+    provider,
+    description,
+    status,
+    tone,
+    onOpen,
+}: {
+    icon: React.ReactNode;
+    outcome: string;
+    provider: string;
+    description: string;
+    status: string;
+    tone: StatusTone;
+    onOpen: () => void;
+}) {
+    const shouldReduceMotion = useReducedMotion();
+
+    return (
+        <motion.button
+            type="button"
+            onClick={onOpen}
+            whileHover={shouldReduceMotion ? undefined : { y: -1 }}
+            whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
+            transition={{ duration: 0.16, ease: providerMotionEase }}
+            className="group min-h-[132px] rounded-xl border border-border-subtle bg-bg-card p-4 text-left transition-colors duration-200 hover:bg-bg-item-surface focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
+        >
+            <div className="flex items-start justify-between gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-bg-input text-text-tertiary transition-colors group-hover:text-text-primary">
+                    {icon}
+                </span>
+                <StatusChip label={status} tone={tone} />
+            </div>
+            <div className="mt-4">
+                <p className="text-[13px] font-semibold text-text-primary">{outcome}</p>
+                <p className="mt-1 text-[11px] font-medium text-text-tertiary">{provider}</p>
+                <p className="mt-2 text-[12px] leading-relaxed text-text-secondary">{description}</p>
+            </div>
+        </motion.button>
+    );
+}
+
 export const AIProvidersSettings: React.FC = () => {
+    const shouldReduceMotion = useReducedMotion();
     // --- Standard Providers ---
     const [apiKey, setApiKey] = useState('');
     const [groqApiKey, setGroqApiKey] = useState('');
@@ -331,6 +399,7 @@ export const AIProvidersSettings: React.FC = () => {
     const [customCurl, setCustomCurl] = useState('');
     const [customResponsePath, setCustomResponsePath] = useState('');
     const [curlError, setCurlError] = useState<string | null>(null);
+    const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
     // --- Local (Ollama) ---
     const [ollamaModels, setOllamaModels] = useState<string[]>([]);
@@ -1003,101 +1072,410 @@ export const AIProvidersSettings: React.FC = () => {
         }
     };
 
+    const activeModelOptions = useMemo<ModelOption[]>(() => {
+        const opts: ModelOption[] = [];
+
+        if (hasStoredKey.teamsync) {
+            opts.push({ id: 'teamsync', name: 'TeamSync API', provider: 'teamsync' });
+        }
+
+        for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
+            if (!hasStoredKey[prov as keyof typeof hasStoredKey]) continue;
+
+            if (dynamicModels[prov] && dynamicModels[prov].length > 0) {
+                dynamicModels[prov].forEach(m => {
+                    if (!opts.find(o => o.id === m.id)) {
+                        opts.push({ id: m.id, name: m.name, provider: prov });
+                    }
+                });
+            } else {
+                cfg.ids.forEach((id, i) => {
+                    if (!opts.find(o => o.id === id)) {
+                        opts.push({ id, name: cfg.names[i], provider: prov });
+                    }
+                });
+            }
+
+            const pm = preferredModels[prov as keyof typeof preferredModels];
+            if (pm && !opts.find(o => o.id === pm)) {
+                opts.push({ id: pm, name: prettifyModelId(pm), provider: prov });
+            }
+        }
+
+        customProviders.forEach(p => opts.push({ id: p.id, name: p.name, provider: 'custom' }));
+        ollamaModels.forEach(m => opts.push({ id: `ollama-${m}`, name: `${m} (Local)`, provider: 'ollama' }));
+
+        if (defaultModel && !opts.find(o => o.id === defaultModel)) {
+            opts.unshift({ id: defaultModel, name: prettifyModelId(defaultModel), provider: 'custom' });
+        }
+
+        return opts;
+    }, [customProviders, defaultModel, dynamicModels, hasStoredKey, ollamaModels, preferredModels]);
+
+    const activeModelOption = activeModelOptions.find(option => option.id === defaultModel);
+    const connectedProviderCount =
+        providerHealthReadModel.configuredCount +
+        (hasStoredKey.teamsync ? 1 : 0) +
+        customProviders.length;
+    const hasConfiguredProvider = connectedProviderCount > 0;
+    const activeModelLabel = hasConfiguredProvider
+        ? (activeModelOption?.name || prettifyModelId(defaultModel))
+        : 'Not configured';
+    const activeProviderKey = activeModelOption?.provider || 'custom';
+    const activeProviderLabels: Record<string, string> = {
+        teamsync: 'TeamSync API',
+        gemini: 'Gemini',
+        groq: 'Groq',
+        openai: 'OpenAI',
+        claude: 'Claude',
+        bedrock: 'Amazon Bedrock',
+        ollama: 'Ollama',
+        custom: 'Custom endpoint',
+    };
+    const activeProviderLabel = hasConfiguredProvider ? (activeProviderLabels[activeProviderKey] || 'Provider') : 'None';
+    const activeProviderHealth = providerHealthReadModel.orderedProviders.find(entry => entry.provider === activeProviderKey);
+    const healthTone: StatusTone = !hasConfiguredProvider
+        ? 'warning'
+        : providerDiagnosticsReadModel.summary.errorCount > 0
+            ? 'danger'
+            : activeProviderHealth?.degraded || providerHealthReadModel.degradedCount > 0
+                ? 'warning'
+                : 'success';
+    const healthLabel = !hasConfiguredProvider
+        ? 'Needs setup'
+        : providerDiagnosticsReadModel.summary.errorCount > 0
+            ? 'Failed'
+            : activeProviderHealth?.degraded || providerHealthReadModel.degradedCount > 0
+                ? 'Degraded'
+                : 'Healthy';
+    const openAdvancedConfiguration = () => {
+        setIsAdvancedOpen(true);
+        setTimeout(() => {
+            document.getElementById('ai-provider-advanced')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        }, 0);
+    };
+    const quickTestProvider =
+        activeProviderKey === 'gemini' || activeProviderKey === 'openai' || activeProviderKey === 'claude'
+            ? activeProviderKey
+            : null;
+    const quickTestStatus = quickTestProvider
+        ? (testStatus[quickTestProvider] || 'idle')
+        : activeProviderKey === 'bedrock'
+            ? (testStatus.bedrock || 'idle')
+            : activeProviderKey === 'ollama'
+                ? (isRefreshingOllama ? 'testing' : ollamaStatus === 'detected' ? 'success' : ollamaStatus === 'not-found' ? 'error' : 'idle')
+                : 'idle';
+    const handleQuickTest = async () => {
+        if (quickTestProvider) {
+            await handleTestConnection(quickTestProvider, '');
+            return;
+        }
+        if (activeProviderKey === 'bedrock') {
+            await handleBedrockConnect();
+            return;
+        }
+        if (activeProviderKey === 'ollama') {
+            setIsRefreshingOllama(true);
+            await checkOllama(false);
+            setTimeout(() => setIsRefreshingOllama(false), 500);
+            return;
+        }
+        openAdvancedConfiguration();
+    };
+    const providerOutcomeCards = [
+        {
+            outcome: 'Recommended Setup',
+            provider: 'Gemini',
+            description: 'A balanced default for fast everyday answers with broad model coverage.',
+            status: hasStoredKey.gemini ? 'Connected' : 'Start here',
+            tone: hasStoredKey.gemini ? 'success' as StatusTone : 'info' as StatusTone,
+            icon: <CheckCircle size={16} />,
+        },
+        {
+            outcome: 'Fastest Responses',
+            provider: 'Groq',
+            description: 'Use when latency matters most and short text answers should feel instant.',
+            status: hasStoredKey.groq ? 'Connected' : 'Optional',
+            tone: hasStoredKey.groq ? 'success' as StatusTone : 'neutral' as StatusTone,
+            icon: <Zap size={16} />,
+        },
+        {
+            outcome: 'Best Reasoning',
+            provider: 'OpenAI or Claude',
+            description: 'Use for harder reasoning, nuanced writing, and complex screen context.',
+            status: hasStoredKey.openai || hasStoredKey.claude ? 'Connected' : 'Optional',
+            tone: hasStoredKey.openai || hasStoredKey.claude ? 'success' as StatusTone : 'neutral' as StatusTone,
+            icon: <Brain size={16} />,
+        },
+        {
+            outcome: 'Private Local Models',
+            provider: 'Ollama',
+            description: 'Run local models on your machine when privacy and offline control matter.',
+            status: ollamaStatus === 'detected' ? 'Detected' : 'Not detected',
+            tone: ollamaStatus === 'detected' ? 'success' as StatusTone : 'neutral' as StatusTone,
+            icon: <ShieldCheck size={16} />,
+        },
+        {
+            outcome: 'AWS Managed',
+            provider: 'Amazon Bedrock',
+            description: 'Connect AWS-managed model access for enterprise cloud environments.',
+            status: hasStoredKey.bedrock ? 'Connected' : 'Advanced',
+            tone: hasStoredKey.bedrock ? 'success' as StatusTone : 'neutral' as StatusTone,
+            icon: <Server size={16} />,
+        },
+        {
+            outcome: 'Custom Endpoint',
+            provider: 'Custom Providers',
+            description: 'Attach an OpenAI-compatible router, local server, or proprietary endpoint.',
+            status: customProviders.length > 0 ? `${customProviders.length} saved` : 'Advanced',
+            tone: customProviders.length > 0 ? 'success' as StatusTone : 'neutral' as StatusTone,
+            icon: <SlidersHorizontal size={16} />,
+        },
+    ];
+    const disclosureMotionProps = shouldReduceMotion
+        ? {
+            initial: { opacity: 0 },
+            animate: { opacity: 1 },
+            exit: { opacity: 0 },
+            transition: { duration: 0.12 },
+        }
+        : {
+            initial: { opacity: 0, y: 6 },
+            animate: { opacity: 1, y: 0 },
+            exit: { opacity: 0, y: -6 },
+            transition: { duration: 0.18, ease: providerMotionEase },
+        };
+    const providerSwitchTransition = shouldReduceMotion
+        ? { duration: 0 }
+        : { type: 'spring' as const, stiffness: 560, damping: 34, mass: 0.72 };
+    const renderProviderSwitch = ({
+        checked,
+        onToggle,
+        label,
+        disabled = false,
+        tone = 'accent',
+    }: {
+        checked: boolean;
+        onToggle: () => void;
+        label: string;
+        disabled?: boolean;
+        tone?: 'accent' | 'orange';
+    }) => (
+        <motion.button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            aria-label={label}
+            onClick={disabled ? undefined : onToggle}
+            disabled={disabled}
+            whileTap={shouldReduceMotion || disabled ? undefined : { scale: 0.97 }}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent-primary/25 disabled:cursor-not-allowed disabled:opacity-60 ${
+                checked
+                    ? tone === 'orange'
+                        ? 'bg-orange-500'
+                        : 'bg-accent-primary'
+                    : 'bg-bg-toggle-switch border border-border-muted'
+            }`}
+        >
+            <motion.span
+                className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm"
+                animate={{ x: checked ? 20 : 0 }}
+                transition={providerSwitchTransition}
+            />
+        </motion.button>
+    );
+
     return (
         <div className="space-y-5 animated fadeIn pb-10">
-            {/* Default Model for Chat */}
-            <div className="space-y-5">
+            <div className="flex items-start justify-between gap-5">
                 <div>
-                    <h3 className="text-sm font-bold text-text-primary mb-1">Default Model for Chat</h3>
-                    <p className="text-xs text-text-secondary mb-2">Primary model for new chats. Other configured models act as fallbacks.</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">AI setup</p>
+                    <h3 className="mt-1 text-[22px] font-semibold tracking-tight text-text-primary">Provider experience</h3>
+                    <p className="mt-2 max-w-[560px] text-[13px] leading-relaxed text-text-secondary">
+                        Choose the kind of AI behavior you want first. Provider-specific keys and diagnostics stay available when you need them.
+                    </p>
                 </div>
+                <StatusChip label={healthLabel} tone={healthTone} />
+            </div>
 
-                <div className="bg-bg-item-surface rounded-xl p-5 border border-border-subtle flex items-center justify-between">
-                    <div>
-                        <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-0">Active Model</label>
-                        <p className="text-[10px] text-text-secondary">Applies to new chats instantly.</p>
+            <section className="overflow-hidden rounded-2xl border border-border-subtle bg-bg-item-surface">
+                <div className="flex flex-col gap-5 p-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="text-[15px] font-semibold text-text-primary">Current AI setup</h4>
+                            <StatusChip label={hasConfiguredProvider ? 'Connected' : 'Disconnected'} tone={hasConfiguredProvider ? 'success' : 'warning'} />
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="rounded-xl border border-border-subtle bg-bg-input/55 px-3.5 py-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Connected providers</p>
+                                <p className="mt-1 text-[18px] font-semibold tabular-nums text-text-primary">{connectedProviderCount}</p>
+                            </div>
+                            <div className="rounded-xl border border-border-subtle bg-bg-input/55 px-3.5 py-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Active provider</p>
+                                <p className="mt-1 truncate text-[13px] font-semibold text-text-primary" title={activeProviderLabel}>{activeProviderLabel}</p>
+                            </div>
+                            <div className="rounded-xl border border-border-subtle bg-bg-input/55 px-3.5 py-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Active model</p>
+                                <p className="mt-1 truncate text-[13px] font-semibold text-text-primary" title={activeModelLabel}>{activeModelLabel}</p>
+                            </div>
+                            <div className="rounded-xl border border-border-subtle bg-bg-input/55 px-3.5 py-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Model status</p>
+                                <p className="mt-1 text-[13px] font-semibold text-text-primary">{healthLabel}</p>
+                            </div>
+                        </div>
                     </div>
-                    <ModelSelect
-                        value={defaultModel}
-                        options={(() => {
-                            const opts: ModelOption[] = [];
-
-                            if (hasStoredKey.teamsync) {
-                                opts.push({ id: 'teamsync', name: 'TeamSync API', provider: 'teamsync' });
-                            }
-
-                            for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
-                                if (!hasStoredKey[prov as keyof typeof hasStoredKey]) continue;
-                                
-                                // Use dynamic models if available, otherwise fallback to static
-                                if (dynamicModels[prov] && dynamicModels[prov].length > 0) {
-                                    dynamicModels[prov].forEach(m => {
-                                        if (!opts.find(o => o.id === m.id)) {
-                                            opts.push({ id: m.id, name: m.name, provider: prov });
-                                        }
-                                    });
-                                } else {
-                                    cfg.ids.forEach((id, i) => {
-                                        if (!opts.find(o => o.id === id)) {
-                                            opts.push({ id, name: cfg.names[i], provider: prov });
-                                        }
-                                    });
-                                }
-                                
-                                const pm = preferredModels[prov as keyof typeof preferredModels];
-                                if (pm && !opts.find(o => o.id === pm)) {
-                                    opts.push({ id: pm, name: prettifyModelId(pm), provider: prov });
-                                }
-                            }
-                            customProviders.forEach(p => opts.push({ id: p.id, name: p.name, provider: 'custom' }));
-                            ollamaModels.forEach(m => opts.push({ id: `ollama-${m}`, name: `${m} (Local)`, provider: 'ollama' }));
-                            
-                            if (defaultModel && !opts.find(o => o.id === defaultModel)) {
-                                opts.unshift({ id: defaultModel, name: prettifyModelId(defaultModel), provider: 'custom' });
-                            }
-                            return opts;
-                        })()}
-                        onChange={(val) => {
-                            setDefaultModel(val);
-                            // @ts-ignore - persist as default + update runtime + broadcast
-                            window.electronAPI?.setDefaultModel(val).catch(console.error);
-                        }}
-                    />
+                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
+                        <button
+                            type="button"
+                            onClick={handleQuickTest}
+                            disabled={quickTestStatus === 'testing'}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated disabled:cursor-wait disabled:opacity-70 active:scale-[0.98]"
+                        >
+                            {quickTestStatus === 'testing' ? <Activity size={13} /> : <Activity size={13} />}
+                            {quickTestStatus === 'testing'
+                                ? 'Testing'
+                                : quickTestProvider || activeProviderKey === 'bedrock' || activeProviderKey === 'ollama'
+                                    ? 'Quick test'
+                                    : 'Open setup'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={openAdvancedConfiguration}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent-primary px-3 py-2 text-[12px] font-semibold text-white transition-all hover:bg-accent-secondary active:scale-[0.98]"
+                        >
+                            <SlidersHorizontal size={13} />
+                            {hasConfiguredProvider ? 'Change provider' : 'Start setup'}
+                        </button>
+                    </div>
                 </div>
 
-                {/* Fast Response Mode */}
-                <div
-                    className={`bg-bg-item-surface rounded-xl p-5 border border-border-subtle flex items-center justify-between ${!canUseFastMode ? 'opacity-50 grayscale' : ''}`}
-                    title={!canUseFastMode ? "Requires a Groq API Key or TeamSync API to be configured" : ""}
+                {!hasConfiguredProvider && (
+                    <div className="border-t border-border-subtle bg-bg-input/35 px-5 py-4">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p className="text-[13px] font-semibold text-text-primary">Start with a recommended setup</p>
+                                <p className="mt-1 max-w-[560px] text-[12px] leading-relaxed text-text-secondary">
+                                    Add one provider key to unlock active model selection, health checks, fallbacks, and personalized AI responses.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={openAdvancedConfiguration}
+                                className="shrink-0 rounded-lg border border-border-subtle bg-bg-item-surface px-3 py-2 text-[12px] font-semibold text-text-primary transition-colors hover:bg-bg-elevated"
+                            >
+                                Configure recommended provider
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </section>
+
+            <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="text-sm font-semibold text-text-primary">Choose by outcome</h4>
+                        <p className="mt-1 text-xs text-text-secondary">Provider brands stay visible, but the decision starts with what you want TeamSync to do.</p>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {providerOutcomeCards.map((card) => (
+                        <ProviderOutcomeCard
+                            key={card.outcome}
+                            icon={card.icon}
+                            outcome={card.outcome}
+                            provider={card.provider}
+                            description={card.description}
+                            status={card.status}
+                            tone={card.tone}
+                            onOpen={openAdvancedConfiguration}
+                        />
+                    ))}
+                </div>
+            </section>
+
+            <motion.section
+                id="ai-provider-advanced"
+                layout={!shouldReduceMotion}
+                transition={{ duration: 0.18, ease: providerMotionEase }}
+                className="overflow-hidden rounded-2xl border border-border-subtle bg-bg-item-surface"
+            >
+                <button
+                    type="button"
+                    onClick={() => setIsAdvancedOpen((open) => !open)}
+                    className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-bg-input/45"
                 >
                     <div>
-                        <div className="flex items-center gap-2">
-                            <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-0">Fast Response Mode</label>
-                            <span className="bg-orange-500/10 text-orange-500 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-500/20">NEW</span>
-                        </div>
-                        <p className="text-[10px] text-text-secondary mt-0.5">Super fast responses using Groq Llama 3 for text. Multimodal requests still use your Default Model.</p>
-                        {!canUseFastMode && (
-                            <p className="text-[10px] text-orange-500 mt-0.5 font-medium">Requires a Groq API Key or TeamSync API to be configured.</p>
-                        )}
+                        <p className="text-[14px] font-semibold text-text-primary">Advanced provider configuration</p>
+                        <p className="mt-1 text-[12px] text-text-secondary">
+                            Keys, model discovery, local models, custom endpoints, routing, fallback, and telemetry.
+                        </p>
                     </div>
-                    <div
-                        onClick={async () => {
-                            if (!canUseFastMode) {
-                                alert("Please configure a Groq API Key or TeamSync API first to enable Fast Response Mode.");
-                                return;
-                            }
-                            const newState = !fastResponseMode;
-                            setFastResponseMode(newState);
-                            localStorage.setItem('teamsync_groq_fast_text', String(newState));
-                            // @ts-ignore
-                            await window.electronAPI?.setGroqFastTextMode(newState);
-                        }}
-                        className={`w-11 h-6 rounded-full relative transition-colors ${!canUseFastMode ? 'cursor-not-allowed bg-bg-toggle-switch' : fastResponseMode ? 'bg-orange-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
+                    <ChevronDown size={18} className={`shrink-0 text-text-tertiary transition-transform ${isAdvancedOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                <AnimatePresence initial={false}>
+                    {isAdvancedOpen && (
+                    <motion.div
+                        key="ai-provider-advanced-content"
+                        {...disclosureMotionProps}
+                        className="space-y-6 border-t border-border-subtle p-5 animated fadeIn"
                     >
-                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${fastResponseMode ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </div>
-                </div>
-            </div>
+                        {/* Default Model for Chat */}
+                        <div className="space-y-5">
+                            <div>
+                                <h3 className="text-sm font-bold text-text-primary mb-1">Default Model for Chat</h3>
+                                <p className="text-xs text-text-secondary mb-2">Primary model for new chats. Other configured models act as fallbacks.</p>
+                            </div>
+
+                            <div className="bg-bg-input/40 rounded-xl p-5 border border-border-subtle flex items-center justify-between">
+                                <div>
+                                    <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-0">Active Model</label>
+                                    <p className="text-[10px] text-text-secondary">Applies to new chats instantly.</p>
+                                </div>
+                                <ModelSelect
+                                    value={defaultModel}
+                                    options={activeModelOptions}
+                                    onChange={(val) => {
+                                        setDefaultModel(val);
+                                        // @ts-ignore - persist as default + update runtime + broadcast
+                                        window.electronAPI?.setDefaultModel(val).catch(console.error);
+                                    }}
+                                />
+                            </div>
+
+                            {/* Fast Response Mode */}
+                            <div
+                                className={`bg-bg-input/40 rounded-xl p-5 border border-border-subtle flex items-center justify-between ${!canUseFastMode ? 'opacity-50 grayscale' : ''}`}
+                                title={!canUseFastMode ? "Requires a Groq API Key or TeamSync API to be configured" : ""}
+                            >
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-0">Fast Response Mode</label>
+                                        <span className="bg-orange-500/10 text-orange-500 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-500/20">NEW</span>
+                                    </div>
+                                    <p className="text-[10px] text-text-secondary mt-0.5">Super fast responses using Groq Llama 3 for text. Multimodal requests still use your Default Model.</p>
+                                    {!canUseFastMode && (
+                                        <p className="text-[10px] text-orange-500 mt-0.5 font-medium">Requires a Groq API Key or TeamSync API to be configured.</p>
+                                    )}
+                                </div>
+                                {renderProviderSwitch({
+                                    checked: fastResponseMode,
+                                    label: 'Toggle Fast Response Mode',
+                                    tone: 'orange',
+                                    onToggle: async () => {
+                                        if (!canUseFastMode) {
+                                            alert("Please configure a Groq API Key or TeamSync API first to enable Fast Response Mode.");
+                                            return;
+                                        }
+                                        const newState = !fastResponseMode;
+                                        setFastResponseMode(newState);
+                                        localStorage.setItem('teamsync_groq_fast_text', String(newState));
+                                        // @ts-ignore
+                                        await window.electronAPI?.setGroqFastTextMode(newState);
+                                    },
+                                })}
+                            </div>
+                        </div>
 
             <section aria-label="Provider operations" className="space-y-4">
                 <div className="rounded-xl border border-border-subtle bg-bg-item-surface/70 p-4">
@@ -1388,13 +1766,13 @@ export const AIProvidersSettings: React.FC = () => {
                 <div className="bg-bg-item-surface rounded-xl p-5 border border-border-subtle">
                     {ollamaStatus === 'checking' && (
                         <div className="flex items-center gap-2 text-xs text-text-secondary">
-                            <span className="animate-spin">⏳</span> Checking for Ollama...
+                            <Loader2 size={12} className="animate-spin" /> Checking for Ollama...
                         </div>
                     )}
 
                     {ollamaStatus === 'fixing' && (
                         <div className="flex items-center gap-2 text-xs text-text-secondary">
-                            <span className="animate-spin">🔧</span> Attempting to auto-fix connection...
+                            <Loader2 size={12} className="animate-spin" /> Attempting to auto-fix connection...
                         </div>
                     )}
 
@@ -1636,6 +2014,10 @@ export const AIProvidersSettings: React.FC = () => {
                     </div>
                 )}
             </div>
+                    </motion.div>
+                    )}
+                </AnimatePresence>
+            </motion.section>
         </div>
     );
 };

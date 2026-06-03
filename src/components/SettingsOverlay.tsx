@@ -13,7 +13,7 @@ import { AboutSection } from './AboutSection';
 import { HelpSettings } from './settings/HelpSettings';
 import { AIProvidersSettings } from './settings/AIProvidersSettings';
 import { TeamSyncApiSettings } from './settings/TeamSyncApiSettings';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import {
@@ -33,6 +33,10 @@ import {
 } from '../lib/personalization/preferences';
 import { KeyRecorder } from './ui/KeyRecorder';
 import { ProfileVisualizer, PremiumUpgradeModal, ResearchPanel } from '../premium';
+import { usePermissionsStore } from '../stores/usePermissionsStore';
+import type { PermissionKind, PermissionState } from '../lib/permissions/types';
+import { isPermissionGranted } from '../lib/permissions/utils';
+import { getUpcomingEvents, type NormalizedEvent } from '../utils/filter';
 import icon from './icon.png';
 
 type GoogleAuthUser = {
@@ -66,6 +70,62 @@ const formatUpdaterBytes = (bytes: number): string => {
     const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
     const value = bytes / Math.pow(1024, exponent);
     return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
+};
+
+type TrustState = 'healthy' | 'needs_attention' | 'disabled';
+
+const getTrustStateLabel = (state: TrustState): string => {
+    switch (state) {
+        case 'healthy':
+            return 'Healthy';
+        case 'needs_attention':
+            return 'Needs Attention';
+        case 'disabled':
+            return 'Disabled';
+        default:
+            return 'Needs Attention';
+    }
+};
+
+const getTrustChipClass = (state: TrustState): string => {
+    switch (state) {
+        case 'healthy':
+            return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500';
+        case 'needs_attention':
+            return 'border-amber-500/25 bg-amber-500/10 text-amber-500';
+        case 'disabled':
+            return 'border-border-subtle bg-bg-input text-text-tertiary';
+        default:
+            return 'border-border-subtle bg-bg-input text-text-tertiary';
+    }
+};
+
+const getPermissionTrustState = (
+    permissionState: PermissionState | undefined,
+    restartRequired = false,
+): TrustState => {
+    if (restartRequired) return 'needs_attention';
+    if (!permissionState) return 'needs_attention';
+    if (isPermissionGranted(permissionState)) return 'healthy';
+    if (permissionState === 'unsupported') return 'disabled';
+    return 'needs_attention';
+};
+
+const formatTrustTimestamp = (value?: string | null): string => {
+    if (!value) return 'Not checked yet';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Not checked yet';
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+};
+
+const formatCalendarWindow = (event: NormalizedEvent | null): string => {
+    if (!event) return 'No upcoming meeting';
+    const start = new Date(event.startTime);
+    const end = new Date(event.endTime);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return event.summary;
+    }
+    return `${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()} - ${end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()}`;
 };
 
 // ---------------------------------------------------------------------------
@@ -458,12 +518,13 @@ interface SettingsOverlayProps {
 const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     isOpen,
     onClose,
-    initialTab = 'general',
+    initialTab = 'overview',
     isTrialActive = false,
     isPremiumActive = false,
     isLicenseLoaded = false,
 }) => {
     const isLight = useResolvedTheme() === 'light';
+    const shouldReduceMotion = useReducedMotion();
     const [activeTab, setActiveTab] = useState(initialTab);
     const [showQuitConfirm, setShowQuitConfirm] = useState(false);
     const refreshProfileStateRef = React.useRef<((expectedGenerationId?: number) => Promise<void>) | null>(null);
@@ -484,6 +545,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     }, [isOpen, initialTab]);
 
     const { shortcuts, updateShortcut, resetShortcuts } = useShortcuts();
+    const permissionStatus = usePermissionsStore((state) => state.status);
+    const permissionsChecking = usePermissionsStore((state) => state.isChecking);
+    const permissionsInitialized = usePermissionsStore((state) => state.hasInitialized);
+    const permissionError = usePermissionsStore((state) => state.lastError);
+    const activePermission = usePermissionsStore((state) => state.activePermission);
+    const initializePermissions = usePermissionsStore((state) => state.initialize);
+    const refreshPermissions = usePermissionsStore((state) => state.refreshPermissions);
+    const requestPermission = usePermissionsStore((state) => state.requestPermission);
+    const openPermissionSettings = usePermissionsStore((state) => state.openSettings);
     const [isUndetectable, setIsUndetectable] = useState(false);
     const [isMousePassthrough, setIsMousePassthrough] = useState(false);
     const [disguiseMode, setDisguiseMode] = useState<'terminal' | 'settings' | 'activity' | 'none'>('none');
@@ -565,6 +635,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             window.dispatchEvent(new CustomEvent('teamsync-overlay-v2-changed', { detail: false }));
         }
     }, [hasProAccess, isLicenseLoaded, useProUI]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        initializePermissions().catch(() => { });
+    }, [initializePermissions, isOpen]);
 
     const updateProfileViewStatus = React.useCallback((nextStatus: 'idle' | 'processing' | 'ready' | 'empty' | 'error') => {
         profileViewStatusRef.current = nextStatus;
@@ -1717,6 +1792,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const [authUser, setAuthUser] = useState<GoogleAuthUser | null>(null);
     const [calendarStatus, setCalendarStatus] = useState<{ connected: boolean; email?: string }>({ connected: false });
     const [isCalendarsLoading, setIsCalendarsLoading] = useState(false);
+    const [isCalendarSyncing, setIsCalendarSyncing] = useState(false);
+    const [calendarLastSyncedAt, setCalendarLastSyncedAt] = useState<string | null>(null);
+    const [calendarSyncError, setCalendarSyncError] = useState<string | null>(null);
+    const [settingsCalendarEvents, setSettingsCalendarEvents] = useState<NormalizedEvent[]>([]);
 
 
     // Load stored credentials on mount
@@ -1737,6 +1816,95 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             setTimeout(() => setUpdateStatus('idle'), 3000);
         }
     };
+
+    const refreshCalendarEvents = React.useCallback(async () => {
+        if (!window.electronAPI?.googleGetCalendarEvents) {
+            setSettingsCalendarEvents([]);
+            return;
+        }
+
+        setIsCalendarSyncing(true);
+        setCalendarSyncError(null);
+        try {
+            const result = await window.electronAPI.googleGetCalendarEvents();
+            if (result?.success) {
+                setSettingsCalendarEvents(getUpcomingEvents(Array.isArray(result.events) ? result.events : []));
+                setCalendarLastSyncedAt(new Date().toISOString());
+                if (result.authState) {
+                    setAuthUser(result.authState.user || null);
+                    setCalendarStatus({
+                        connected: Boolean(result.authState.calendarConnected),
+                        email: result.authState.user?.email,
+                    });
+                }
+            } else {
+                setSettingsCalendarEvents([]);
+                setCalendarSyncError(result?.error || 'Calendar sync failed.');
+                if (result?.authState) {
+                    setAuthUser(result.authState.user || null);
+                    setCalendarStatus({
+                        connected: Boolean(result.authState.calendarConnected),
+                        email: result.authState.user?.email,
+                    });
+                } else if (result?.error === 'Calendar not connected') {
+                    setCalendarStatus((status) => ({ connected: false, email: status.email }));
+                }
+            }
+        } catch (error) {
+            setSettingsCalendarEvents([]);
+            setCalendarSyncError(error instanceof Error ? error.message : 'Calendar sync failed.');
+        } finally {
+            setIsCalendarSyncing(false);
+        }
+    }, []);
+
+    const handleConnectCalendar = React.useCallback(async () => {
+        setIsCalendarsLoading(true);
+        try {
+            const result = await window.electronAPI?.googleConnectCalendar?.(authUser?.email);
+            if (result?.success && result.user?.calendarConnected) {
+                setAuthUser(result.user);
+                window.dispatchEvent(
+                    new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: true } })
+                );
+                setCalendarStatus({ connected: true, email: result.user.email });
+                setCalendarSyncError(null);
+                await refreshCalendarEvents();
+            } else if (result?.error) {
+                setCalendarSyncError(result.error);
+                console.error(result.error);
+            }
+        } catch (e) {
+            setCalendarSyncError(e instanceof Error ? e.message : 'Calendar connection failed.');
+            console.error(e);
+        } finally {
+            setIsCalendarsLoading(false);
+        }
+    }, [authUser?.email, refreshCalendarEvents]);
+
+    const handleDisconnectCalendar = React.useCallback(async () => {
+        setIsCalendarsLoading(true);
+        try {
+            const result = await window.electronAPI?.googleDisconnectCalendar?.();
+            if (result?.user) {
+                setAuthUser(result.user);
+            } else {
+                setAuthUser((user) => user ? { ...user, calendarConnected: false } : user);
+            }
+            window.dispatchEvent(
+                new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: false } })
+            );
+            setCalendarStatus({ connected: false, email: result?.user?.email || authUser?.email });
+            setSettingsCalendarEvents([]);
+            setCalendarSyncError(null);
+            setCalendarLastSyncedAt(null);
+        } catch (e) {
+            setCalendarSyncError(e instanceof Error ? e.message : 'Calendar disconnect failed.');
+            console.error(e);
+        } finally {
+            setIsCalendarsLoading(false);
+        }
+    }, [authUser?.email]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -1844,6 +2012,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                         connected: Boolean(state?.calendarConnected),
                         email: state?.user?.email,
                     });
+                    setCalendarLastSyncedAt(new Date().toISOString());
                 })
                 .catch(() => {
                     window.electronAPI?.googleGetAuthState?.()
@@ -1853,10 +2022,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                 connected: Boolean(state?.calendarConnected),
                                 email: state?.user?.email,
                             });
+                            setCalendarLastSyncedAt(new Date().toISOString());
                         })
                         .catch(() => {
                             setAuthUser(null);
                             setCalendarStatus({ connected: false });
+                            setSettingsCalendarEvents([]);
+                            setCalendarLastSyncedAt(null);
                         });
                 });
 
@@ -1864,6 +2036,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             const unsubCalendar = window.electronAPI?.onCalendarStatusChanged?.((status) => {
                 setCalendarStatus({ connected: status.connected, email: status.email || undefined });
                 setAuthUser((user) => user ? { ...user, calendarConnected: status.connected } : user);
+                setCalendarLastSyncedAt(new Date().toISOString());
+                if (!status.connected) {
+                    setSettingsCalendarEvents([]);
+                    setCalendarSyncError(null);
+                }
                 window.dispatchEvent(
                     new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: status.connected } })
                 );
@@ -1873,6 +2050,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 localStorage.removeItem('teamsync_auth_user');
                 setAuthUser(null);
                 setCalendarStatus({ connected: false });
+                setSettingsCalendarEvents([]);
+                setCalendarLastSyncedAt(null);
+                setCalendarSyncError(null);
             });
 
             return () => {
@@ -1881,6 +2061,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             };
         }
     }, [isOpen, selectedInput, selectedOutput]); // Re-run if isOpen changes, or if selected devices are cleared
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (!calendarStatus.connected) {
+            setSettingsCalendarEvents([]);
+            setCalendarSyncError(null);
+            return;
+        }
+        refreshCalendarEvents().catch(() => { });
+    }, [calendarStatus.connected, isOpen, refreshCalendarEvents]);
 
     // Use the native mic test path so device IDs stay consistent with the meeting runtime.
     // Gated behind micTestActive to prevent eager mic activation (macOS orange indicator).
@@ -2042,6 +2232,370 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const updateDiagnosticsSize = formatUpdaterBytes(updateDiagnosticsFile?.size ?? updaterCacheInfo?.totalSize ?? 0);
     const updateDiagnosticsCurrentVersion = updaterCacheInfo?.currentVersion || packageJson.version;
     const updateDiagnosticsLatestVersion = latestUpdateVersion || updaterCacheInfo?.latestVersion || 'Unknown';
+    const sttProviderLabel = sttProviderOptions.find((option) => option.id === sttProvider)?.label || 'Speech provider';
+    const selectedInputLabel = inputDevices.find((device) => device.deviceId === selectedInput)?.label || 'System default microphone';
+    const calendarIdentity = calendarStatus.email || authUser?.email || 'Google Calendar';
+    const nextSettingsCalendarEvent = settingsCalendarEvents[0] ?? null;
+    const permissionLastCheckedLabel = permissionsChecking
+        ? 'Checking now'
+        : permissionsInitialized
+            ? formatTrustTimestamp(permissionStatus?.checkedAt)
+            : 'Not checked yet';
+    const calendarLastSyncLabel = isCalendarSyncing
+        ? 'Checking now'
+        : calendarStatus.connected
+            ? formatTrustTimestamp(calendarLastSyncedAt)
+            : 'Not connected';
+    const screenRecordingTrustState = getPermissionTrustState(
+        permissionStatus?.screenRecording,
+        Boolean(permissionStatus?.restartRequired)
+    );
+    const accessibilityTrustState = getPermissionTrustState(permissionStatus?.accessibility);
+    const microphoneTrustState: TrustState = sttProvider === 'none'
+        ? 'disabled'
+        : getPermissionTrustState(permissionStatus?.microphone);
+    const calendarTrustState: TrustState = calendarStatus.connected ? 'healthy' : 'needs_attention';
+    const stealthTrustState: TrustState = isUndetectable ? 'healthy' : 'disabled';
+    const trustReadinessItems = [
+        {
+            id: 'screen-recording',
+            label: 'Screen Recording',
+            state: screenRecordingTrustState,
+            detail: permissionStatus?.restartRequired
+                ? 'Restart TeamSync to finish applying screen access.'
+                : 'Lets TeamSync read visible meeting context when you ask for help.',
+            icon: <Monitor size={16} />,
+        },
+        {
+            id: 'accessibility',
+            label: 'Accessibility',
+            state: accessibilityTrustState,
+            detail: 'Keeps global shortcuts and overlay controls reliable during calls.',
+            icon: <Keyboard size={16} />,
+        },
+        {
+            id: 'microphone',
+            label: 'Microphone',
+            state: microphoneTrustState,
+            detail: sttProvider === 'none'
+                ? 'Speech capture is disabled in Audio settings.'
+                : `${sttProviderLabel} listens through ${selectedInputLabel}.`,
+            icon: <Mic size={16} />,
+        },
+        {
+            id: 'calendar',
+            label: 'Calendar',
+            state: calendarTrustState,
+            detail: calendarStatus.connected
+                ? `Connected as ${calendarIdentity}.`
+                : 'Connect Calendar for meeting-aware preparation.',
+            icon: <Calendar size={16} />,
+        },
+        {
+            id: 'stealth',
+            label: 'Stealth Status',
+            state: stealthTrustState,
+            detail: isUndetectable
+                ? 'Privacy during screen sharing is active.'
+                : 'Screen sharing privacy is currently disabled.',
+            icon: <Ghost size={16} />,
+        },
+    ];
+    const trustHealthyCount = trustReadinessItems.filter((item) => item.state === 'healthy').length;
+    const trustNeedsAttentionCount = trustReadinessItems.filter((item) => item.state === 'needs_attention').length;
+    const trustStatusLabel = trustNeedsAttentionCount > 0
+        ? `${trustNeedsAttentionCount} needs attention`
+        : `${trustHealthyCount}/${trustReadinessItems.length} healthy`;
+    const trustSidebarLabel = trustNeedsAttentionCount > 0
+        ? `${trustNeedsAttentionCount} needs`
+        : `${trustHealthyCount}/${trustReadinessItems.length}`;
+    const permissionChecklistItems: Array<{
+        id: PermissionKind;
+        label: string;
+        state: TrustState;
+        why: string;
+        unlocks: string;
+        fix: string;
+        icon: React.ReactNode;
+    }> = [
+        {
+            id: 'screenRecording',
+            label: 'Screen Recording',
+            state: screenRecordingTrustState,
+            why: 'TeamSync needs permission before it can inspect the screen you are already viewing.',
+            unlocks: 'Screen-aware answers, code context, and visible-meeting notes.',
+            fix: permissionStatus?.restartRequired
+                ? 'Restart TeamSync after macOS finishes granting access.'
+                : 'Open Privacy & Security and allow TeamSync under Screen Recording.',
+            icon: <Monitor size={16} />,
+        },
+        {
+            id: 'accessibility',
+            label: 'Accessibility',
+            state: accessibilityTrustState,
+            why: 'TeamSync uses this to keep keyboard controls available while another app is focused.',
+            unlocks: 'Reliable show, hide, capture, movement, and recovery shortcuts.',
+            fix: 'Open Accessibility settings and allow TeamSync.',
+            icon: <Keyboard size={16} />,
+        },
+        {
+            id: 'microphone',
+            label: 'Microphone',
+            state: getPermissionTrustState(permissionStatus?.microphone),
+            why: 'TeamSync listens to your selected microphone only when capture is active.',
+            unlocks: 'Live transcript, better meeting memory, and speech-aware suggestions.',
+            fix: 'Allow microphone access, then test your input in Audio settings.',
+            icon: <Mic size={16} />,
+        },
+    ];
+    const handleToggleUndetectable = () => {
+        const newState = !isUndetectable;
+        setIsUndetectable(newState);
+        window.electronAPI?.setUndetectable(newState);
+        analytics.trackModeSelected(newState ? 'undetectable' : 'overlay');
+    };
+    const handleToggleMousePassthrough = () => {
+        const newState = !isMousePassthrough;
+        setIsMousePassthrough(newState);
+        window.electronAPI?.setOverlayMousePassthrough(newState);
+    };
+    const handlePermissionAction = (permission: PermissionKind) => {
+        if (permissionStatus?.[permission] === 'not_requested') {
+            requestPermission(permission).catch(() => { });
+            return;
+        }
+        openPermissionSettings(permission).catch(() => { });
+    };
+    const handleSelectResume = async () => {
+        let uploadGenerationId = 0;
+        setProfileError('');
+        try {
+            const fileResult = await window.electronAPI?.profileSelectFile?.();
+            if (fileResult?.cancelled || !fileResult?.fileToken) return;
+
+            setLastResumeFileToken(fileResult.fileToken);
+            setLastUploadKind('resume');
+            uploadGenerationId = Date.now();
+            uploadGenerationRef.current = uploadGenerationId;
+            setProfileUploading(true);
+            updateProfileViewStatus('processing');
+            setProfileData(null);
+            profileGenerationRef.current = 0;
+            setNegotiationScript(null);
+            setProfileStatus({
+                hasProfile: false,
+                profileMode: false,
+                isReady: false
+            });
+            const result = await window.electronAPI?.profileUploadResume?.(fileResult.fileToken);
+            if (uploadGenerationRef.current !== uploadGenerationId) return;
+            if (result?.success) {
+                await refreshProfileStateRef.current?.(uploadGenerationId);
+            } else if (result?.error === 'STALE_GENERATION') {
+                return;
+            } else {
+                updateProfileViewStatus('error');
+                setProfileError(result?.error || 'Upload failed');
+            }
+        } catch (e: any) {
+            updateProfileViewStatus('error');
+            setProfileError(e.message || 'Upload failed');
+        } finally {
+            if (uploadGenerationRef.current === uploadGenerationId) {
+                setProfileUploading(false);
+            }
+        }
+    };
+    const openSettingsSection = (tab: string) => {
+        setActiveTab(tab);
+        if (tab === 'profile') {
+            refreshProfileStateRef.current?.().catch(() => { });
+            window.electronAPI?.profileGetNotes?.().then(res => {
+                if (res?.success) setCustomNotes(res.content ?? '');
+            }).catch(() => { });
+        }
+    };
+    const todayReadinessItems = [
+        {
+            id: 'calendar',
+            label: 'Calendar',
+            title: calendarStatus.connected ? 'Calendar context is connected' : 'Calendar context is not connected',
+            detail: calendarStatus.connected ? calendarIdentity : 'Connect Google Calendar for meeting-aware context.',
+            status: calendarStatus.connected ? 'Connected' : 'Needs setup',
+            ready: calendarStatus.connected,
+            tab: 'calendar',
+            icon: <Calendar size={16} />,
+        },
+        {
+            id: 'audio',
+            label: 'Audio',
+            title: sttProvider === 'none' ? 'Speech capture is disabled' : `${sttProviderLabel} is selected`,
+            detail: selectedInputLabel,
+            status: sttProvider === 'none' ? 'Off' : 'Ready',
+            ready: sttProvider !== 'none',
+            tab: 'audio',
+            icon: <Mic size={16} />,
+        },
+        {
+            id: 'privacy',
+            label: 'Privacy',
+            title: isUndetectable ? 'Screen sharing privacy is on' : 'Overlay is visible to screen sharing',
+            detail: isMousePassthrough ? 'Mouse passthrough is enabled.' : 'Mouse passthrough is off.',
+            status: isUndetectable ? 'Private' : 'Visible',
+            ready: isUndetectable,
+            tab: 'privacy-trust',
+            icon: <Ghost size={16} />,
+        },
+        {
+            id: 'profile',
+            label: 'Profile',
+            title: profileStatus.hasProfile ? 'Profile intelligence is prepared' : 'Profile intelligence is not initialized',
+            detail: profileStatus.profileMode ? 'Personal context is active.' : 'Upload a resume to personalize responses.',
+            status: profileStatus.hasProfile ? (profileStatus.profileMode ? 'Active' : 'Ready') : 'Optional',
+            ready: profileStatus.hasProfile,
+            tab: 'profile',
+            icon: <User size={16} />,
+        },
+    ];
+    const readyTodayCount = todayReadinessItems.filter((item) => item.ready).length;
+    const todayStatusLabel = readyTodayCount === todayReadinessItems.length
+        ? 'Ready for today'
+        : `${readyTodayCount}/${todayReadinessItems.length} ready`;
+    const overviewQuickLinks = [
+        {
+            id: 'interface',
+            label: 'Interface',
+            detail: `Theme follows ${themeMode === 'system' ? 'system' : themeMode}. Opacity is ${Math.round(overlayOpacity * 100)}%.`,
+            tab: 'general',
+            icon: <SlidersHorizontal size={16} />,
+        },
+        {
+            id: 'shortcuts',
+            label: 'Shortcuts',
+            detail: 'Review global commands for visibility, capture, and movement.',
+            tab: 'keybinds',
+            icon: <Keyboard size={16} />,
+        },
+        {
+            id: 'startup',
+            label: 'Startup',
+            detail: openOnLogin ? 'TeamSync opens when you log in.' : 'Manual launch is currently selected.',
+            tab: 'general',
+            icon: <Power size={16} />,
+        },
+    ];
+    type SettingsSidebarItem = {
+        id: string;
+        label: string;
+        icon: React.ReactNode;
+        meta?: string;
+    };
+    const sidebarGroups: Array<{ label: string; items: SettingsSidebarItem[] }> = [
+        {
+            label: 'Today',
+            items: [
+                { id: 'overview', label: 'Overview', icon: <Activity size={16} />, meta: todayStatusLabel },
+                { id: 'privacy-trust', label: 'Privacy & Trust', icon: <BadgeCheck size={16} />, meta: trustSidebarLabel },
+            ],
+        },
+        {
+            label: 'Workspace',
+            items: [
+                { id: 'general', label: 'General', icon: <Monitor size={16} /> },
+                { id: 'audio', label: 'Audio', icon: <Mic size={16} /> },
+                { id: 'keybinds', label: 'Keybinds', icon: <Keyboard size={16} /> },
+            ],
+        },
+        {
+            label: 'Intelligence',
+            items: [
+                { id: 'profile', label: 'Profile Intelligence', icon: <User size={16} /> },
+                { id: 'calendar', label: 'Calendar', icon: <Calendar size={16} />, meta: calendarStatus.connected ? 'Connected' : undefined },
+                { id: 'ai-providers', label: 'AI Providers', icon: <FlaskConical size={16} /> },
+            ],
+        },
+        {
+            label: 'Account',
+            items: [
+                { id: 'account', label: 'Account', icon: <User size={16} /> },
+            ],
+        },
+        {
+            label: 'Support',
+            items: [
+                { id: 'help', label: 'Setup & Help', icon: <HelpCircle size={16} /> },
+                { id: 'about', label: 'About', icon: <Info size={16} /> },
+            ],
+        },
+    ];
+    const settingsMotionEase = [0.22, 1, 0.36, 1] as const;
+    const sectionMotionProps = shouldReduceMotion
+        ? {
+            initial: { opacity: 0 },
+            animate: { opacity: 1 },
+            exit: { opacity: 0 },
+            transition: { duration: 0.12 },
+        }
+        : {
+            initial: { opacity: 0, y: 6 },
+            animate: { opacity: 1, y: 0 },
+            exit: { opacity: 0, y: -6 },
+            transition: { duration: 0.18, ease: settingsMotionEase },
+        };
+    const sidebarIndicatorTransition = shouldReduceMotion
+        ? { duration: 0 }
+        : { type: 'spring' as const, stiffness: 520, damping: 42, mass: 0.75 };
+    const switchTransition = shouldReduceMotion
+        ? { duration: 0 }
+        : { type: 'spring' as const, stiffness: 560, damping: 34, mass: 0.72 };
+    const statusChipBaseClass = 'inline-flex h-6 items-center justify-center overflow-hidden rounded-md border px-2 text-[10px] font-semibold leading-none whitespace-nowrap';
+    const skeletonLineClass = 'rounded-full bg-bg-input/80 animate-pulse';
+    const getSwitchTrackClass = (checked: boolean, tone: 'accent' | 'sky' | 'purple' | 'amber' = 'accent') => {
+        if (!checked) return 'bg-bg-toggle-switch border border-border-muted';
+        if (tone === 'sky') return 'bg-sky-500';
+        if (tone === 'purple') return 'bg-purple-500';
+        if (tone === 'amber') return 'bg-amber-500';
+        return 'bg-accent-primary';
+    };
+    const renderSettingsSwitch = ({
+        checked,
+        onToggle,
+        label,
+        tone = 'accent',
+        disabled = false,
+        size = 'default',
+    }: {
+        checked: boolean;
+        onToggle: () => void;
+        label: string;
+        tone?: 'accent' | 'sky' | 'purple' | 'amber';
+        disabled?: boolean;
+        size?: 'default' | 'small';
+    }) => {
+        const isSmall = size === 'small';
+        const thumbSize = isSmall ? 'h-3 w-3' : 'h-4 w-4';
+        const trackSize = isSmall ? 'h-5 w-9' : 'h-6 w-11';
+        const thumbOffset = isSmall ? 16 : 20;
+
+        return (
+            <motion.button
+                type="button"
+                role="switch"
+                aria-checked={checked}
+                aria-label={label}
+                onClick={disabled ? undefined : onToggle}
+                disabled={disabled}
+                whileTap={shouldReduceMotion || disabled ? undefined : { scale: 0.97 }}
+                className={`relative shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent-primary/25 disabled:cursor-not-allowed disabled:opacity-50 ${trackSize} ${getSwitchTrackClass(checked, tone)}`}
+            >
+                <motion.span
+                    className={`absolute left-1 top-1 rounded-full bg-white shadow-sm ${thumbSize}`}
+                    animate={{ x: checked ? thumbOffset : 0 }}
+                    transition={switchTransition}
+                />
+            </motion.button>
+        );
+    };
 
     return (
         <AnimatePresence>
@@ -2074,72 +2628,58 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                         >
                             {/* Sidebar */}
                             <div className="w-64 bg-bg-sidebar flex flex-col border-r border-border-subtle">
-                                <div className="p-6">
-                                    <h2 className="font-semibold text-gray-400 text-xs uppercase tracking-wider mb-2">Settings</h2>
-                                    <nav className="space-y-1">
-                                        <button
-                                            onClick={() => setActiveTab('general')}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'general' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                        >
-                                            <Monitor size={16} /> General
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('account')}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'account' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                        >
-                                            <User size={16} /> Account
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setActiveTab('profile');
-                                                // Load profile status when switching to this tab
-                                                refreshProfileStateRef.current?.().catch(() => { });
-                                                window.electronAPI?.profileGetNotes?.().then(res => {
-                                                    if (res?.success) setCustomNotes(res.content ?? '');
-                                                }).catch(() => { });
-                                            }}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'profile' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                        >
-                                            <User size={16} /> Profile Intelligence
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('ai-providers')}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'ai-providers' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                        >
-                                            <FlaskConical size={16} /> AI Providers
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('calendar')}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'calendar' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                        >
-                                            <Calendar size={16} /> Calendar
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('audio')}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'audio' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                        >
-                                            <Mic size={16} /> Audio
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveTab('keybinds')}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'keybinds' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                        >
-                                            <Keyboard size={16} /> Keybinds
-                                        </button>
+                                <div className="px-5 pt-5 pb-4 border-b border-border-subtle">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">TeamSync</p>
+                                    <div className="mt-1 flex items-center justify-between gap-3">
+                                        <h2 className="text-[17px] font-semibold tracking-tight text-text-primary">Settings</h2>
+                                        <span className="rounded-md border border-border-subtle bg-bg-item-active px-2 py-1 text-[10px] font-medium text-text-secondary">
+                                            {todayStatusLabel}
+                                        </span>
+                                    </div>
+                                </div>
 
-                                        <button
-                                            onClick={() => setActiveTab('help')}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-3 ${activeTab === 'help' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                        >
-                                            <HelpCircle size={16} /> Setup & Help
-                                        </button>
-
-                                        <button
-                                            onClick={() => setActiveTab('about')}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-3 ${activeTab === 'about' ? 'bg-bg-item-active text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'}`}
-                                        >
-                                            <Info size={16} /> About
-                                        </button>
+                                <div className="flex-1 overflow-y-auto px-3 py-4">
+                                    <nav className="space-y-5" aria-label="Settings sections">
+                                        {sidebarGroups.map((group) => (
+                                            <div key={group.label}>
+                                                <div className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+                                                    {group.label}
+                                                </div>
+                                                <div className="space-y-1">
+                                                    {group.items.map((item) => {
+                                                        const isActive = activeTab === item.id;
+                                                        return (
+                                                            <button
+                                                                key={item.id}
+                                                                onClick={() => openSettingsSection(item.id)}
+                                                                aria-current={isActive ? 'page' : undefined}
+                                                                className={`group relative w-full overflow-hidden rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition-colors duration-200 flex items-center gap-2.5 active:scale-[0.99] ${isActive
+                                                                    ? 'text-text-primary'
+                                                                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'
+                                                                    }`}
+                                                            >
+                                                                {isActive && (
+                                                                    <motion.span
+                                                                        layoutId="settings-sidebar-active"
+                                                                        className="absolute inset-0 rounded-lg bg-bg-item-active shadow-sm"
+                                                                        transition={sidebarIndicatorTransition}
+                                                                    />
+                                                                )}
+                                                                <span className={`relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${isActive ? 'bg-bg-elevated text-text-primary' : 'text-text-tertiary group-hover:text-text-primary'}`}>
+                                                                    {item.icon}
+                                                                </span>
+                                                                <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
+                                                                {item.meta && (
+                                                                    <span className={`relative z-10 max-w-[78px] truncate ${statusChipBaseClass} ${isActive ? 'border-border-subtle bg-bg-elevated text-text-secondary' : 'border-border-subtle/70 bg-bg-input/40 text-text-tertiary'}`}>
+                                                                        {item.meta}
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </nav>
                                 </div>
 
@@ -2210,6 +2750,459 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                             {/* Content */}
                             <div className="flex-1 bg-bg-main overflow-y-auto p-8">
+                                <AnimatePresence mode="wait" initial={false}>
+                                    <motion.div
+                                        key={activeTab}
+                                        {...sectionMotionProps}
+                                        className="min-h-full"
+                                    >
+                                {activeTab === 'overview' && (
+                                    <div className="space-y-6 animated fadeIn select-text pb-4">
+                                        <div className="flex items-start justify-between gap-6">
+                                            <div>
+                                                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Today</p>
+                                                <h3 className="mt-1 text-[24px] font-semibold tracking-tight text-text-primary">Control center</h3>
+                                                <p className="mt-2 max-w-[560px] text-[13px] leading-relaxed text-text-secondary">
+                                                    A quick read on whether TeamSync is ready for meetings, capture, and screen sharing.
+                                                </p>
+                                            </div>
+                                            <div className="rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-right shadow-sm">
+                                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Readiness</p>
+                                                <p className="mt-1 text-[18px] font-semibold tabular-nums text-text-primary">{readyTodayCount}/{todayReadinessItems.length}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="rounded-2xl border border-border-subtle bg-bg-item-surface overflow-hidden">
+                                            <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="flex items-start gap-3">
+                                                    <div className={`mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl border ${readyTodayCount === todayReadinessItems.length ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-amber-500/20 bg-amber-500/10 text-amber-400'}`}>
+                                                        {readyTodayCount === todayReadinessItems.length ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-[15px] font-semibold text-text-primary">{todayStatusLabel}</h4>
+                                                        <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-text-secondary">
+                                                            {calendarStatus.connected
+                                                                ? 'Calendar context is available. Review the remaining controls before a live session.'
+                                                                : 'Connect Calendar when you want TeamSync to understand upcoming meetings and attendees.'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => openSettingsSection(calendarStatus.connected ? 'general' : 'calendar')}
+                                                    className="shrink-0 rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98]"
+                                                >
+                                                    {calendarStatus.connected ? 'Review controls' : 'Connect calendar'}
+                                                </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 divide-y divide-border-subtle border-t border-border-subtle md:grid-cols-2 md:divide-x md:divide-y-0">
+                                                {todayReadinessItems.map((item) => (
+                                                    <button
+                                                        key={item.id}
+                                                        onClick={() => openSettingsSection(item.tab)}
+                                                        className="group flex min-h-[118px] items-start gap-3 p-5 text-left transition-colors hover:bg-bg-input/40"
+                                                    >
+                                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors ${item.ready ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-border-subtle bg-bg-input text-text-tertiary group-hover:text-text-primary'}`}>
+                                                            {item.icon}
+                                                        </span>
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className="flex items-center justify-between gap-3">
+                                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">{item.label}</span>
+                                                                <span className={`${statusChipBaseClass} ${item.ready ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-border-subtle bg-bg-input text-text-tertiary'}`}>
+                                                                    {item.status}
+                                                                </span>
+                                                            </span>
+                                                            <span className="mt-2 block text-[13px] font-semibold text-text-primary">{item.title}</span>
+                                                            <span className="mt-1 block text-[12px] leading-relaxed text-text-secondary">{item.detail}</span>
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <div>
+                                                        <h4 className="text-[14px] font-semibold text-text-primary">Daily workspace</h4>
+                                                        <p className="mt-1 text-[12px] text-text-secondary">The controls most likely to matter before a call.</p>
+                                                    </div>
+                                                    <Activity size={18} className="text-text-tertiary" />
+                                                </div>
+                                                <div className="mt-4 divide-y divide-border-subtle">
+                                                    {overviewQuickLinks.map((item) => (
+                                                        <button
+                                                            key={item.id}
+                                                            onClick={() => openSettingsSection(item.tab)}
+                                                            className="group flex w-full items-center gap-3 py-3 text-left transition-colors"
+                                                        >
+                                                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-bg-input text-text-tertiary transition-colors group-hover:text-text-primary">
+                                                                {item.icon}
+                                                            </span>
+                                                            <span className="min-w-0 flex-1">
+                                                                <span className="block text-[13px] font-medium text-text-primary">{item.label}</span>
+                                                                <span className="mt-0.5 block truncate text-[11px] text-text-secondary">{item.detail}</span>
+                                                            </span>
+                                                            <ChevronDown size={14} className="-rotate-90 text-text-tertiary transition-transform group-hover:translate-x-0.5 group-hover:text-text-primary" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </section>
+
+                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <div>
+                                                        <h4 className="text-[14px] font-semibold text-text-primary">Current session</h4>
+                                                        <p className="mt-1 text-[12px] text-text-secondary">A compact view of the app state Settings can control.</p>
+                                                    </div>
+                                                    <CheckCircle size={18} className="text-text-tertiary" />
+                                                </div>
+                                                <div className="mt-4 space-y-3">
+                                                    {[
+                                                        ['Account', authUser?.email || 'Not signed in'],
+                                                        ['Calendar', calendarStatus.connected ? 'Connected' : 'Not connected'],
+                                                        ['Capture', sttProvider === 'none' ? 'Speech off' : sttProviderLabel],
+                                                        ['Privacy', isUndetectable ? 'Screen sharing privacy on' : 'Visible overlay'],
+                                                    ].map(([label, value]) => (
+                                                        <div key={label} className="flex items-center justify-between gap-4 rounded-lg bg-bg-input/60 px-3 py-2">
+                                                            <span className="text-[11px] font-medium text-text-secondary">{label}</span>
+                                                            <span className="min-w-0 truncate text-right text-[12px] font-semibold text-text-primary">{value}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </section>
+                                        </div>
+                                    </div>
+                                )}
+                                {activeTab === 'privacy-trust' && (
+                                    <div className="space-y-6 animated fadeIn select-text pb-4">
+                                        <div className="flex items-start justify-between gap-6">
+                                            <div>
+                                                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Privacy & Trust</p>
+                                                <h3 className="mt-1 text-[24px] font-semibold tracking-tight text-text-primary">Trusted control center</h3>
+                                                <p className="mt-2 max-w-[560px] text-[13px] leading-relaxed text-text-secondary">
+                                                    One place to review capture permissions, Calendar readiness, and privacy controls before sharing your screen.
+                                                </p>
+                                            </div>
+                                            <div className="rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-right shadow-sm">
+                                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Trust status</p>
+                                                <p className="mt-1 text-[15px] font-semibold text-text-primary">{trustStatusLabel}</p>
+                                            </div>
+                                        </div>
+
+                                        <section className="rounded-2xl border border-border-subtle bg-bg-item-surface overflow-hidden">
+                                            <div className="flex flex-col gap-3 border-b border-border-subtle p-5 sm:flex-row sm:items-center sm:justify-between">
+                                                <div>
+                                                    <h4 className="text-[15px] font-semibold text-text-primary">Readiness checklist</h4>
+                                                    <p className="mt-1 text-[12px] text-text-secondary">
+                                                        Last permission check: {permissionLastCheckedLabel}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => refreshPermissions().catch(() => { })}
+                                                    disabled={permissionsChecking}
+                                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:opacity-50"
+                                                >
+                                                    {permissionsChecking ? <Activity size={13} /> : <RefreshCw size={13} />}
+                                                    {permissionsChecking ? 'Checking' : 'Refresh'}
+                                                </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-px bg-border-subtle md:grid-cols-2 lg:grid-cols-5">
+                                                {trustReadinessItems.map((item) => (
+                                                    <div key={item.id} className="min-h-[150px] bg-bg-item-surface p-4">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(item.state)}`}>
+                                                                {item.icon}
+                                                            </span>
+                                                            <span className={`${statusChipBaseClass} ${getTrustChipClass(item.state)}`}>
+                                                                {getTrustStateLabel(item.state)}
+                                                            </span>
+                                                        </div>
+                                                        <h5 className="mt-3 text-[13px] font-semibold text-text-primary">{item.label}</h5>
+                                                        <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.detail}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </section>
+
+                                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="flex items-start gap-3">
+                                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(calendarTrustState)}`}>
+                                                            <Calendar size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-[15px] font-semibold text-text-primary">Calendar trust</h4>
+                                                            <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
+                                                                Meeting context stays connected to your signed-in Google account.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`${statusChipBaseClass} ${getTrustChipClass(calendarTrustState)}`}>
+                                                        {calendarStatus.connected ? 'Connected' : 'Needs Setup'}
+                                                    </span>
+                                                </div>
+
+                                                {calendarStatus.connected ? (
+                                                    <div className="mt-5 space-y-4">
+                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                            {[
+                                                                ['Account', calendarIdentity],
+                                                                ['Sync status', calendarSyncError ? 'Needs attention' : 'Available'],
+                                                                ['Last sync', calendarLastSyncLabel],
+                                                                ['Next meeting', nextSettingsCalendarEvent ? nextSettingsCalendarEvent.summary : 'No upcoming meeting'],
+                                                            ].map(([label, value]) => (
+                                                                <div key={label} className="rounded-xl border border-border-subtle bg-bg-input/60 px-3 py-2.5">
+                                                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">{label}</p>
+                                                                    <p className="mt-1 truncate text-[12px] font-semibold text-text-primary">{value}</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+
+                                                        <div className="rounded-xl border border-border-subtle bg-bg-input/50 p-4">
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <div>
+                                                                    <p className="text-[12px] font-semibold text-text-primary">
+                                                                        {nextSettingsCalendarEvent ? formatCalendarWindow(nextSettingsCalendarEvent) : 'Calendar is clear'}
+                                                                    </p>
+                                                                    <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">
+                                                                        {nextSettingsCalendarEvent
+                                                                            ? 'TeamSync can use this upcoming meeting for preparation context in Launcher.'
+                                                                            : 'No upcoming event is currently available from Calendar.'}
+                                                                    </p>
+                                                                </div>
+                                                                <span className="shrink-0 rounded-md border border-border-subtle bg-bg-card px-2 py-1 text-[10px] font-medium text-text-secondary">
+                                                                    Next
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                                            {['Meeting-aware setup', 'Attendee context', 'Preparation notes'].map((benefit) => (
+                                                                <div key={benefit} className="flex items-center gap-2 rounded-lg bg-bg-input/50 px-3 py-2 text-[11px] font-medium text-text-secondary">
+                                                                    <CheckCircle size={13} className="text-emerald-500" />
+                                                                    <span className="truncate">{benefit}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+
+                                                        {calendarSyncError && (
+                                                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-500">
+                                                                {calendarSyncError}
+                                                            </div>
+                                                        )}
+
+                                                        <div className="flex flex-wrap items-center justify-end gap-2">
+                                                            <button
+                                                                onClick={() => refreshCalendarEvents().catch(() => { })}
+                                                                disabled={isCalendarSyncing}
+                                                                className="rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:opacity-50"
+                                                            >
+                                                                {isCalendarSyncing ? 'Checking' : 'Refresh calendar'}
+                                                            </button>
+                                                            <button
+                                                                onClick={handleDisconnectCalendar}
+                                                                disabled={isCalendarsLoading}
+                                                                className="rounded-lg border border-border-subtle bg-transparent px-3 py-2 text-[12px] font-semibold text-text-secondary transition-all hover:bg-red-500/10 hover:text-red-400 active:scale-[0.98] disabled:opacity-50"
+                                                            >
+                                                                {isCalendarsLoading ? 'Disconnecting' : 'Disconnect'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="mt-5 rounded-2xl border border-border-subtle bg-bg-input/50 p-5">
+                                                        <div className="max-w-[460px]">
+                                                            <h5 className="text-[14px] font-semibold text-text-primary">Connect Calendar for trusted meeting context</h5>
+                                                            <p className="mt-2 text-[12px] leading-relaxed text-text-secondary">
+                                                                TeamSync can show the next meeting, prepare from event details, and keep Launcher focused on the call that matters now.
+                                                            </p>
+                                                        </div>
+                                                        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                                            {['Next meeting awareness', 'Relevant participants', 'Less manual setup'].map((benefit) => (
+                                                                <div key={benefit} className="flex items-center gap-2 rounded-lg bg-bg-card px-3 py-2 text-[11px] font-medium text-text-secondary">
+                                                                    <CheckCircle size={13} className="text-emerald-500" />
+                                                                    <span className="truncate">{benefit}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        {calendarSyncError && (
+                                                            <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-500">
+                                                                {calendarSyncError}
+                                                            </div>
+                                                        )}
+                                                        <button
+                                                            onClick={handleConnectCalendar}
+                                                            disabled={isCalendarsLoading}
+                                                            className={`mt-5 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-[12px] font-semibold transition-all active:scale-[0.98] disabled:opacity-50 ${isLight ? 'bg-bg-component hover:bg-bg-item-surface text-text-primary border border-border-subtle' : 'bg-[#303033] hover:bg-[#3A3A3D] text-white'}`}
+                                                        >
+                                                            <Calendar size={14} />
+                                                            {isCalendarsLoading ? 'Connecting' : 'Connect Google Calendar'}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </section>
+
+                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="flex items-start gap-3">
+                                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(stealthTrustState)}`}>
+                                                            <Ghost size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-[15px] font-semibold text-text-primary">Privacy during screen sharing</h4>
+                                                            <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
+                                                                Controls how TeamSync windows behave when another app is sharing or recording the screen.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`${statusChipBaseClass} ${getTrustChipClass(stealthTrustState)}`}>
+                                                        {isUndetectable ? 'Protected' : 'Disabled'}
+                                                    </span>
+                                                </div>
+
+                                                <div className="mt-5 space-y-3">
+                                                    <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle bg-bg-input/60 px-3 py-3">
+                                                        <div>
+                                                            <p className="text-[12px] font-semibold text-text-primary">Screen sharing privacy</p>
+                                                            <p className="mt-0.5 text-[11px] text-text-secondary">
+                                                                {isUndetectable ? 'TeamSync applies content protection to supported windows.' : 'TeamSync windows may be visible in screen sharing.'}
+                                                            </p>
+                                                        </div>
+                                                        {renderSettingsSwitch({
+                                                            checked: isUndetectable,
+                                                            onToggle: handleToggleUndetectable,
+                                                            label: 'Toggle screen sharing privacy',
+                                                        })}
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle bg-bg-input/60 px-3 py-3">
+                                                        <div>
+                                                            <p className="text-[12px] font-semibold text-text-primary">Mouse passthrough</p>
+                                                            <p className="mt-0.5 text-[11px] text-text-secondary">
+                                                                {isMousePassthrough ? 'Clicks pass through TeamSync to the app underneath.' : 'TeamSync keeps normal overlay interaction.'}
+                                                            </p>
+                                                        </div>
+                                                        {renderSettingsSwitch({
+                                                            checked: isMousePassthrough,
+                                                            onToggle: handleToggleMousePassthrough,
+                                                            label: 'Toggle mouse passthrough',
+                                                            tone: 'sky',
+                                                        })}
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                        {[
+                                                            ['Limitations', 'Protection depends on the meeting app and macOS capture path.'],
+                                                            ['Recovery shortcut', shortcuts.toggleVisibility.length ? shortcuts.toggleVisibility.join(' ') : 'Set in Keybinds'],
+                                                            ['Platform notes', permissionStatus?.platform === 'darwin' ? 'macOS privacy controls are active.' : 'Permission handling follows this OS.'],
+                                                            ['Interaction', isMousePassthrough ? 'Pointer clicks pass through the overlay.' : 'Overlay controls remain clickable.'],
+                                                        ].map(([label, value]) => (
+                                                            <div key={label} className="rounded-xl border border-border-subtle bg-bg-input/50 px-3 py-2.5">
+                                                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">{label}</p>
+                                                                <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{value}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </section>
+                                        </div>
+
+                                        <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                <div>
+                                                    <h4 className="text-[15px] font-semibold text-text-primary">Permission checklist</h4>
+                                                    <p className="mt-1 max-w-[540px] text-[12px] leading-relaxed text-text-secondary">
+                                                        Each permission has a clear reason, benefit, and repair path. Nothing here changes how permissions are requested.
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => refreshPermissions().catch(() => { })}
+                                                    disabled={permissionsChecking}
+                                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:opacity-50"
+                                                >
+                                                    {permissionsChecking ? <Activity size={13} /> : <RefreshCw size={13} />}
+                                                    {permissionsChecking ? 'Checking' : 'Check again'}
+                                                </button>
+                                            </div>
+
+                                            {permissionError && (
+                                                <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-500">
+                                                    {permissionError}
+                                                </div>
+                                            )}
+
+                                            <div className="mt-5 divide-y divide-border-subtle overflow-hidden rounded-2xl border border-border-subtle">
+                                                {!permissionsInitialized && permissionsChecking ? (
+                                                    <div className="space-y-4 bg-bg-item-surface p-4" aria-live="polite" aria-label="Checking permissions">
+                                                        {[0, 1, 2].map((item) => (
+                                                            <div key={item} className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.25fr_auto] lg:items-center">
+                                                                <div className="flex items-start gap-3">
+                                                                    <div className="h-9 w-9 shrink-0 rounded-xl bg-bg-input animate-pulse" />
+                                                                    <div className="min-w-0 flex-1 space-y-2">
+                                                                        <div className={`h-2.5 w-36 ${skeletonLineClass}`} />
+                                                                        <div className={`h-2.5 w-56 max-w-full ${skeletonLineClass}`} />
+                                                                    </div>
+                                                                </div>
+                                                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                                    <div className={`h-12 ${skeletonLineClass} rounded-lg`} />
+                                                                    <div className={`h-12 ${skeletonLineClass} rounded-lg`} />
+                                                                </div>
+                                                                <div className={`h-9 w-20 ${skeletonLineClass} rounded-lg lg:justify-self-end`} />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : permissionChecklistItems.map((item) => {
+                                                    const isBusy = activePermission === item.id || permissionsChecking;
+                                                    const rawState = permissionStatus?.[item.id];
+                                                    const actionLabel = item.state === 'healthy'
+                                                        ? 'Review'
+                                                        : rawState === 'not_requested'
+                                                            ? 'Allow'
+                                                            : item.state === 'disabled'
+                                                                ? 'Unavailable'
+                                                                : 'Fix';
+                                                    return (
+                                                        <div key={item.id} className="grid grid-cols-1 gap-4 bg-bg-item-surface p-4 lg:grid-cols-[1fr_1.25fr_auto] lg:items-center">
+                                                            <div className="flex items-start gap-3">
+                                                                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(item.state)}`}>
+                                                                    {item.icon}
+                                                                </span>
+                                                                <div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <h5 className="text-[13px] font-semibold text-text-primary">{item.label}</h5>
+                                                                        <span className={`${statusChipBaseClass} ${getTrustChipClass(item.state)}`}>
+                                                                            {getTrustStateLabel(item.state)}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.why}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                                <div className="rounded-lg bg-bg-input/60 px-3 py-2">
+                                                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Unlocks</p>
+                                                                    <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.unlocks}</p>
+                                                                </div>
+                                                                <div className="rounded-lg bg-bg-input/60 px-3 py-2">
+                                                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">How to fix</p>
+                                                                    <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.fix}</p>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handlePermissionAction(item.id)}
+                                                                disabled={item.state === 'disabled' || isBusy}
+                                                                className="justify-self-start rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 lg:justify-self-end"
+                                                            >
+                                                                {isBusy ? 'Checking' : actionLabel}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </section>
+                                    </div>
+                                )}
                                 {activeTab === 'general' && (
                                     <div className="space-y-6 animated fadeIn">
                                         <div className="space-y-3.5">
@@ -2242,18 +3235,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         TeamSync is currently {isUndetectable ? 'undetectable' : 'detectable'} by screen-sharing. <button className="text-blue-400 hover:underline">Supported apps here</button>
                                                     </p>
                                                 </div>
-                                                <div
-                                                    onClick={() => {
-                                                        const newState = !isUndetectable;
-                                                        setIsUndetectable(newState);
-                                                        window.electronAPI?.setUndetectable(newState);
-                                                        // Analytics: Undetectable Mode Toggle
-                                                        analytics.trackModeSelected(newState ? 'undetectable' : 'overlay');
-                                                    }}
-                                                    className={`w-11 h-6 rounded-full relative transition-colors ${isUndetectable ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                >
-                                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${isUndetectable ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                </div>
+                                                {renderSettingsSwitch({
+                                                    checked: isUndetectable,
+                                                    onToggle: handleToggleUndetectable,
+                                                    label: 'Toggle undetectable mode',
+                                                })}
                                             </div>
 
                                             {/* Mouse Passthrough Toggle — Adapted from public PR #113 */}
@@ -2267,16 +3253,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         Overlay stays visible but lets all mouse clicks pass through to the app beneath.
                                                     </p>
                                                 </div>
-                                                <div
-                                                    onClick={() => {
-                                                        const newState = !isMousePassthrough;
-                                                        setIsMousePassthrough(newState);
-                                                        window.electronAPI?.setOverlayMousePassthrough(newState);
-                                                    }}
-                                                    className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${isMousePassthrough ? 'bg-sky-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                >
-                                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${isMousePassthrough ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                </div>
+                                                {renderSettingsSwitch({
+                                                    checked: isMousePassthrough,
+                                                    onToggle: handleToggleMousePassthrough,
+                                                    label: 'Toggle mouse passthrough',
+                                                    tone: 'sky',
+                                                })}
                                             </div>
 
                                             {/* Pro UI Toggle — Premium/Trial only */}
@@ -2296,17 +3278,17 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     </p>
                                                 </div>
                                                 {hasProAccess ? (
-                                                    <div
-                                                        onClick={() => {
+                                                    renderSettingsSwitch({
+                                                        checked: useProUI,
+                                                        onToggle: () => {
                                                             const newState = !useProUI;
                                                             setUseProUI(newState);
                                                             localStorage.setItem('teamsync_overlay_v2', String(newState));
                                                             window.dispatchEvent(new CustomEvent('teamsync-overlay-v2-changed', { detail: newState }));
-                                                        }}
-                                                        className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${useProUI ? 'bg-purple-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                    >
-                                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${useProUI ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                    </div>
+                                                        },
+                                                        label: 'Toggle Pro UI',
+                                                        tone: 'purple',
+                                                    })
                                                 ) : (
                                                     <button
                                                         onClick={() => setIsPremiumModalOpen(true)}
@@ -2334,16 +3316,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     <p className="text-xs text-text-secondary mt-0.5">TeamSync will open automatically when you log in to your computer</p>
                                                                 </div>
                                                             </div>
-                                                            <div
-                                                                onClick={() => {
+                                                            {renderSettingsSwitch({
+                                                                checked: openOnLogin,
+                                                                onToggle: () => {
                                                                     const newState = !openOnLogin;
                                                                     setOpenOnLogin(newState);
                                                                     window.electronAPI?.setOpenAtLogin(newState);
-                                                                }}
-                                                                className={`w-11 h-6 rounded-full relative transition-colors ${openOnLogin ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                            >
-                                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${openOnLogin ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                            </div>
+                                                                },
+                                                                label: 'Toggle open TeamSync at login',
+                                                            })}
                                                         </div>
 
                                                         {/* Debug Logging */}
@@ -2357,19 +3338,19 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     <p className="text-xs text-text-secondary mt-0.5">Print detailed audio, STT, and pipeline diagnostics</p>
                                                                 </div>
                                                             </div>
-                                                            <div
-                                                                onClick={() => {
+                                                            {renderSettingsSwitch({
+                                                                checked: verboseLogging,
+                                                                onToggle: () => {
                                                                     const newState = !verboseLogging;
                                                                     setVerboseLogging(newState);
                                                                     window.electronAPI?.setVerboseLogging?.(newState);
                                                                     if (newState) {
                                                                         setShowVerboseToast(true);
                                                                     }
-                                                                }}
-                                                                className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${verboseLogging ? 'bg-amber-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                            >
-                                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${verboseLogging ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                            </div>
+                                                                },
+                                                                label: 'Toggle verbose debug logging',
+                                                                tone: 'amber',
+                                                            })}
                                                         </div>
 
                                                         {/* Verbose logging toast */}
@@ -2419,17 +3400,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     <p className="text-xs text-text-secondary mt-0.5">Show real-time transcription of the interviewer</p>
                                                                 </div>
                                                             </div>
-                                                            <div
-                                                                onClick={() => {
+                                                            {renderSettingsSwitch({
+                                                                checked: showTranscript,
+                                                                onToggle: () => {
                                                                     const newState = !showTranscript;
                                                                     setShowTranscript(newState);
                                                                     localStorage.setItem('teamsync_interviewer_transcript', String(newState));
                                                                     window.dispatchEvent(new Event('storage'));
-                                                                }}
-                                                                className={`w-11 h-6 rounded-full relative transition-colors ${showTranscript ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                            >
-                                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${showTranscript ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                            </div>
+                                                                },
+                                                                label: 'Toggle interviewer transcript',
+                                                            })}
                                                         </div>
 
 
@@ -2936,8 +3916,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 title={!hasProfileAccess ? 'Requires Pro license' : !profileStatus.hasProfile ? 'Upload a resume to enable Profile Intelligence' : ''}
                                                             >
                                                                 <span className="text-xs font-medium text-text-secondary">Profile Intelligence</span>
-                                                                <div
-                                                                    onClick={async () => {
+                                                                {renderSettingsSwitch({
+                                                                    checked: Boolean(profileStatus.profileMode && canEnableProfileIntelligence),
+                                                                    disabled: !canEnableProfileIntelligence,
+                                                                    size: 'small',
+                                                                    label: 'Toggle profile intelligence',
+                                                                    onToggle: async () => {
                                                                         if (!canEnableProfileIntelligence) return;
                                                                         const newState = !profileStatus.profileMode;
                                                                         // Optimistic update — reflect change immediately
@@ -2953,11 +3937,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                             setProfileStatus((prev) => ({ ...prev, profileMode: !newState }));
                                                                             console.error('Failed to toggle profile intelligence:', e);
                                                                         }
-                                                                    }}
-                                                                    className={`w-9 h-5 rounded-full relative transition-colors ${!canEnableProfileIntelligence ? 'opacity-40 cursor-not-allowed bg-bg-toggle-switch' : profileStatus.profileMode ? 'bg-accent-primary' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                                >
-                                                                    <div className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${profileStatus.profileMode && canEnableProfileIntelligence ? 'translate-x-4' : 'translate-x-0'}`} />
-                                                                </div>
+                                                                    },
+                                                                })}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -3041,46 +4022,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     </div>
 
                                                     <button
-                                                        onClick={async () => {
-                                                            let uploadGenerationId = 0;
-                                                            setProfileError('');
-                                                            try {
-                                                                const fileResult = await window.electronAPI?.profileSelectFile?.();
-                                                                if (fileResult?.cancelled || !fileResult?.fileToken) return;
-
-                                                                setLastResumeFileToken(fileResult.fileToken);
-                                                                setLastUploadKind('resume');
-                                                                uploadGenerationId = Date.now();
-                                                                uploadGenerationRef.current = uploadGenerationId;
-                                                                setProfileUploading(true);
-                                                                updateProfileViewStatus('processing');
-                                                                setProfileData(null);
-                                                                profileGenerationRef.current = 0;
-                                                                setNegotiationScript(null);
-                                                                setProfileStatus({
-                                                                    hasProfile: false,
-                                                                    profileMode: false,
-                                                                    isReady: false
-                                                                });
-                                                                const result = await window.electronAPI?.profileUploadResume?.(fileResult.fileToken);
-                                                                if (uploadGenerationRef.current !== uploadGenerationId) return;
-                                                                if (result?.success) {
-                                                                    await refreshProfileStateRef.current?.(uploadGenerationId);
-                                                                } else if (result?.error === 'STALE_GENERATION') {
-                                                                    return;
-                                                                } else {
-                                                                    updateProfileViewStatus('error');
-                                                                    setProfileError(result?.error || 'Upload failed');
-                                                                }
-                                                            } catch (e: any) {
-                                                                updateProfileViewStatus('error');
-                                                                setProfileError(e.message || 'Upload failed');
-                                                            } finally {
-                                                                if (uploadGenerationRef.current === uploadGenerationId) {
-                                                                    setProfileUploading(false);
-                                                                }
-                                                            }
-                                                        }}
+                                                        onClick={handleSelectResume}
                                                         disabled={profileViewStatus === 'processing'}
                                                         className={`px-4 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 ${profileViewStatus === 'processing' ? 'bg-bg-input text-text-tertiary cursor-wait border border-border-subtle' : 'bg-text-primary text-bg-main hover:opacity-90 shadow-sm'}`}
                                                     >
@@ -3403,8 +4345,25 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             </div>
                                         )}
                                         {profileViewStatus === 'processing' ? (
-                                            <div className="mt-6 rounded-2xl border border-border-subtle bg-bg-item-surface p-5 text-sm text-text-secondary shadow-sm">
-                                                {profileUploading ? 'Processing new profile...' : 'Refreshing role intelligence...'}
+                                            <div className="mt-6 rounded-2xl border border-border-subtle bg-bg-item-surface p-5 shadow-sm" aria-live="polite">
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <div>
+                                                        <p className="text-[13px] font-semibold text-text-primary">
+                                                            {profileUploading ? 'Building profile intelligence' : 'Refreshing role intelligence'}
+                                                        </p>
+                                                        <p className="mt-1 text-[12px] text-text-secondary">
+                                                            TeamSync is preparing the context surface for your meetings.
+                                                        </p>
+                                                    </div>
+                                                    <span className={`${statusChipBaseClass} border-border-subtle bg-bg-input text-text-secondary`}>
+                                                        Processing
+                                                    </span>
+                                                </div>
+                                                <div className="mt-4 space-y-2">
+                                                    <div className={`h-2.5 w-3/4 ${skeletonLineClass}`} />
+                                                    <div className={`h-2.5 w-1/2 ${skeletonLineClass}`} />
+                                                    <div className={`h-2.5 w-2/3 ${skeletonLineClass}`} />
+                                                </div>
                                             </div>
                                         ) : profileViewStatus === 'error' ? (
                                             <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-600 shadow-sm">
@@ -3426,8 +4385,28 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 currentGenerationId={profileData?.generationId}
                                             />
                                         ) : (
-                                            <div className="mt-6 rounded-2xl border border-dashed border-border-subtle bg-bg-item-surface p-6 text-sm text-text-secondary shadow-sm">
-                                                Upload a resume to build your candidate profile. Uploading a new resume or JD will automatically replace the previous intelligence state.
+                                            <div className="mt-6 rounded-2xl border border-dashed border-border-subtle bg-bg-item-surface p-6 shadow-sm">
+                                                <div className="max-w-[520px]">
+                                                    <p className="text-[14px] font-semibold text-text-primary">Create your profile intelligence</p>
+                                                    <p className="mt-2 text-[12px] leading-relaxed text-text-secondary">
+                                                        Add a resume once so TeamSync can personalize answers, interview framing, and role-specific preparation.
+                                                    </p>
+                                                </div>
+                                                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                                    {['Personal context', 'Role-aware answers', 'Reusable memory'].map((benefit) => (
+                                                        <div key={benefit} className="flex items-center gap-2 rounded-lg bg-bg-input/60 px-3 py-2 text-[11px] font-medium text-text-secondary">
+                                                            <CheckCircle size={13} className="text-emerald-500" />
+                                                            <span className="truncate">{benefit}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSelectResume}
+                                                    className="mt-5 rounded-lg bg-text-primary px-4 py-2 text-[12px] font-semibold text-bg-main transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+                                                >
+                                                    Select resume
+                                                </button>
                                             </div>
                                         )}
 
@@ -4208,16 +5187,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        <div
-                                                            onClick={() => {
+                                                        {renderSettingsSwitch({
+                                                            checked: useExperimentalSck,
+                                                            onToggle: () => {
                                                                 const newState = !useExperimentalSck;
                                                                 setUseExperimentalSck(newState);
                                                                 window.localStorage.setItem('useExperimentalSckBackend', newState ? 'true' : 'false');
-                                                            }}
-                                                            className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${useExperimentalSck ? 'bg-amber-500' : 'bg-bg-toggle-switch border border-border-muted'}`}
-                                                        >
-                                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${useExperimentalSck ? 'translate-x-5' : 'translate-x-0'}`} />
-                                                        </div>
+                                                            },
+                                                            label: 'Toggle ScreenCaptureKit backend',
+                                                            tone: 'amber',
+                                                        })}
                                                     </div>
                                                 </div>
                                             </div>
@@ -4247,25 +5226,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     </div>
 
                                                     <button
-                                                        onClick={async () => {
-                                                            setIsCalendarsLoading(true);
-                                                            try {
-                                                                const result = await window.electronAPI?.googleDisconnectCalendar?.();
-                                                                if (result?.user) {
-                                                                    setAuthUser(result.user);
-                                                                } else {
-                                                                    setAuthUser((user) => user ? { ...user, calendarConnected: false } : user);
-                                                                }
-                                                                window.dispatchEvent(
-                                                                    new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: false } })
-                                                                );
-                                                                setCalendarStatus({ connected: false, email: result?.user?.email || authUser?.email });
-                                                            } catch (e) {
-                                                                console.error(e);
-                                                            } finally {
-                                                                setIsCalendarsLoading(false);
-                                                            }
-                                                        }}
+                                                        onClick={handleDisconnectCalendar}
                                                         disabled={isCalendarsLoading}
                                                         className="px-3 py-1.5 bg-bg-input hover:bg-bg-elevated border border-border-subtle text-text-primary rounded-md text-xs font-medium transition-colors"
                                                     >
@@ -4273,35 +5234,29 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div className="w-full py-4">
-                                                    <div className="mb-4">
-                                                        <Calendar size={24} className="text-text-tertiary mb-3" />
-                                                        <h4 className="text-sm font-bold text-text-primary mb-1">No calendars</h4>
-                                                        <p className="text-xs text-text-secondary">Get started by connecting a Google account.</p>
+                                                <div className="w-full rounded-2xl border border-dashed border-border-subtle bg-bg-input/35 p-5">
+                                                    <div className="max-w-[480px]">
+                                                        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border-subtle bg-bg-card text-text-tertiary">
+                                                            <Calendar size={20} />
+                                                        </div>
+                                                        <h4 className="text-sm font-bold text-text-primary mb-1">Connect Calendar for meeting context</h4>
+                                                        <p className="text-xs leading-relaxed text-text-secondary">
+                                                            TeamSync can surface your next meeting, attendees, and preparation context before capture starts.
+                                                        </p>
+                                                    </div>
+                                                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                                        {['Next meeting', 'Participants', 'Preparation notes'].map((benefit) => (
+                                                            <div key={benefit} className="flex items-center gap-2 rounded-lg bg-bg-card px-3 py-2 text-[11px] font-medium text-text-secondary">
+                                                                <CheckCircle size={13} className="text-emerald-500" />
+                                                                <span className="truncate">{benefit}</span>
+                                                            </div>
+                                                        ))}
                                                     </div>
 
                                                     <button
-                                                        onClick={async () => {
-                                                            setIsCalendarsLoading(true);
-                                                            try {
-                                                                const result = await window.electronAPI?.googleConnectCalendar?.(authUser?.email);
-                                                                if (result?.success && result.user?.calendarConnected) {
-                                                                    setAuthUser(result.user);
-                                                                    window.dispatchEvent(
-                                                                        new CustomEvent('teamsync:calendar-status-changed', { detail: { connected: true } })
-                                                                    );
-                                                                    setCalendarStatus({ connected: true, email: result.user.email });
-                                                                } else if (result?.error) {
-                                                                    console.error(result.error);
-                                                                }
-                                                            } catch (e) {
-                                                                console.error(e);
-                                                            } finally {
-                                                                setIsCalendarsLoading(false);
-                                                            }
-                                                        }}
+                                                        onClick={handleConnectCalendar}
                                                         disabled={isCalendarsLoading}
-                                                        className={`px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2.5 ${isLight ? 'bg-bg-component hover:bg-bg-item-surface text-text-primary border border-border-subtle' : 'bg-[#303033] hover:bg-[#3A3A3D] text-white'}`}
+                                                        className={`mt-5 px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2.5 active:scale-[0.98] disabled:opacity-60 ${isLight ? 'bg-bg-component hover:bg-bg-item-surface text-text-primary border border-border-subtle' : 'bg-[#303033] hover:bg-[#3A3A3D] text-white'}`}
                                                     >
                                                         <svg viewBox="0 0 24 24" width="14" height="14" xmlns="http://www.w3.org/2000/svg">
                                                             <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
@@ -4326,6 +5281,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                 {activeTab === 'about' && (
                                     <AboutSection />
                                 )}
+                                    </motion.div>
+                                </AnimatePresence>
                             </div>
                         </div>
                     </motion.div>
