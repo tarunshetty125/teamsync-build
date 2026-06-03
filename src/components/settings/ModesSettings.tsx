@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import clsx from 'clsx';
 import {
   ArrowUpRight,
@@ -31,6 +31,7 @@ interface ModeCardProps {
   layout: CardLayout;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   centered?: boolean;
+  className?: string;
 }
 
 const toneStyles: Record<CardTone, {
@@ -38,42 +39,49 @@ const toneStyles: Record<CardTone, {
   hoverGlow: string;
   iconWrap: string;
   icon: string;
+  accent: string;
 }> = {
   purple: {
     glow: 'bg-[radial-gradient(circle_at_16%_18%,rgba(132,109,206,0.26),transparent_44%),linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]',
     hoverGlow: 'group-hover:bg-[radial-gradient(circle_at_18%_18%,rgba(145,119,230,0.34),transparent_46%),linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]',
     iconWrap: 'bg-[#5d4e86]/[0.62] border-[#806bbc]/65',
     icon: 'text-[#f1effa]',
+    accent: '#a996ff',
   },
   green: {
     glow: 'bg-[radial-gradient(circle_at_86%_22%,rgba(56,109,86,0.28),transparent_48%),linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]',
     hoverGlow: 'group-hover:bg-[radial-gradient(circle_at_84%_24%,rgba(72,132,105,0.36),transparent_48%),linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]',
     iconWrap: 'bg-[#3d5e55]/[0.65] border-[#4b9b83]/70',
     icon: 'text-[#eff8f4]',
+    accent: '#63d6b8',
   },
   gold: {
     glow: 'bg-[radial-gradient(circle_at_28%_28%,rgba(138,111,47,0.24),transparent_50%),linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]',
     hoverGlow: 'group-hover:bg-[radial-gradient(circle_at_28%_28%,rgba(158,128,56,0.33),transparent_50%),linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]',
     iconWrap: 'bg-[#5c4b28]/[0.66] border-[#d7aa2f]/70',
     icon: 'text-[#ffc83c]',
+    accent: '#f0c94c',
   },
   rose: {
     glow: 'bg-[radial-gradient(circle_at_78%_22%,rgba(112,72,82,0.28),transparent_48%),linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]',
     hoverGlow: 'group-hover:bg-[radial-gradient(circle_at_78%_22%,rgba(136,84,98,0.36),transparent_48%),linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]',
     iconWrap: 'bg-[#594048]/[0.67] border-[#e46a80]/65',
     icon: 'text-[#ff6d86]',
+    accent: '#ff6f94',
   },
   blue: {
     glow: 'bg-[radial-gradient(circle_at_12%_50%,rgba(50,99,126,0.25),transparent_48%),linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]',
     hoverGlow: 'group-hover:bg-[radial-gradient(circle_at_12%_50%,rgba(63,125,159,0.35),transparent_48%),linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]',
     iconWrap: 'bg-[#34566c]/[0.66] border-[#4389b8]/65',
     icon: 'text-[#f1f7fb]',
+    accent: '#7cc6ff',
   },
   cyan: {
     glow: 'bg-[radial-gradient(circle_at_84%_36%,rgba(47,104,118,0.26),transparent_48%),linear-gradient(135deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]',
     hoverGlow: 'group-hover:bg-[radial-gradient(circle_at_84%_36%,rgba(60,128,145,0.36),transparent_48%),linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]',
     iconWrap: 'bg-[#355867]/[0.66] border-[#46abc9]/65',
     icon: 'text-[#eefaff]',
+    accent: '#5bd4e7',
   },
 };
 
@@ -122,72 +130,193 @@ const cards: ModeCardProps[] = [
   },
 ];
 
-function ModeCard({ title, description, tone, layout, icon: Icon, centered = false }: ModeCardProps) {
+function SignalBars({ accent }: { accent: string }) {
+  const prefersReducedMotion = useReducedMotion();
+
+  return (
+    <div className="flex h-6 items-end justify-center gap-1.5 rounded-full border border-white/[0.08] bg-black/20 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
+      {[7, 13, 9, 18, 12].map((height, index) => (
+        <motion.span
+          key={`${height}-${index}`}
+          className="w-1 rounded-full"
+          style={{ height, background: accent }}
+          animate={prefersReducedMotion ? undefined : { opacity: [0.36, 0.88, 0.36], scaleY: [0.82, 1, 0.82] }}
+          transition={{ duration: 2.4, delay: index * 0.12, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ModeMicroDetail({
+  title,
+  tone,
+}: {
+  title: string;
+  tone: CardTone;
+}) {
+  const accent = toneStyles[tone].accent;
+
+  if (title === 'Interview') {
+    return (
+      <div className="h-[64px] w-[178px] rounded-[14px] border border-white/[0.09] bg-black/18 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <div className="mb-2.5 flex items-center justify-between gap-3">
+          <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-white/34">Answer cue</span>
+          <span className="rounded-full border px-2 py-0.5 text-[7.5px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: `${accent}38`, color: accent }}>
+            STAR
+          </span>
+        </div>
+        <div className="space-y-2">
+          <div className="h-1.5 w-[78%] rounded-full bg-white/14" />
+          <div className="h-1.5 w-[52%] rounded-full" style={{ background: `${accent}58` }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (title === 'Sales Copilot') {
+    return (
+      <div className="w-[108px] space-y-1.5">
+        <div className="rounded-full border border-white/[0.08] bg-black/16 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <div className="flex items-center justify-center gap-1.5 text-[7.5px] uppercase tracking-[0.16em] text-white/32">
+            <span>Signal</span>
+            <span style={{ color: accent }}>ready</span>
+          </div>
+        </div>
+        <SignalBars accent={accent} />
+      </div>
+    );
+  }
+
+  if (title === 'Technical') {
+    return (
+      <div className="rounded-[12px] border border-white/[0.08] bg-black/18 px-3 py-2 font-mono text-[9px] leading-relaxed text-white/46 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <div style={{ color: accent }}>O(log n)</div>
+        <div className="text-white/28">cache memo</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5 rounded-[12px] border border-white/[0.08] bg-black/18 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <div className="h-1.5 w-[78%] rounded-full bg-white/16" />
+      <div className="h-1.5 w-[54%] rounded-full" style={{ background: `${accent}55` }} />
+    </div>
+  );
+}
+
+function ModeCard({ title, description, tone, layout, icon: Icon, centered = false, className }: ModeCardProps) {
   const toneStyle = toneStyles[tone];
   const isSquare = layout === 'square';
+  const isWide = layout === 'wide';
+  const isTall = layout === 'tall';
+  const prefersReducedMotion = useReducedMotion();
 
   return (
     <motion.article
-      whileHover={{ y: -2, scale: 1.01 }}
+      whileHover={prefersReducedMotion ? undefined : { y: -2, scale: 1.01 }}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
       className={clsx(
-        'group relative overflow-hidden rounded-[28px] border border-white/[0.055] bg-[#1c1c1d] shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_18px_44px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.02)]',
-        layout === 'tall' && 'min-h-[180px] md:min-h-[203px]',
-        layout === 'wide' && 'min-h-[102px] md:min-h-[90px]',
-        layout === 'square' && 'min-h-[78px] md:min-h-[84px]',
+        'group relative overflow-hidden rounded-[28px] border-[2px] border-white/[0.14] bg-[#1c1c1d] shadow-[0_0_0_1px_rgba(255,255,255,0.055),0_18px_44px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.10)]',
+        isTall && 'min-h-[206px] md:min-h-[210px]',
+        isWide && 'min-h-[98px] md:min-h-[96px]',
+        isSquare && 'min-h-[84px]',
+        className,
       )}
     >
       <div className={clsx('pointer-events-none absolute inset-0 opacity-100 transition-all duration-200', toneStyle.glow, toneStyle.hoverGlow)} />
       <div className="pointer-events-none absolute inset-[1px] rounded-[27px] border border-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_-40px_80px_rgba(0,0,0,0.12)]" />
-
       <div
-        className={clsx(
-          'relative z-10 flex h-full rounded-[27px] px-5 py-4 md:px-6 md:py-5',
-          centered ? 'items-center gap-3' : 'flex-col justify-between',
-          centered && isSquare && 'pl-5 md:pl-6',
-          layout === 'wide' && !centered && 'items-start gap-4 sm:flex-row sm:items-center sm:gap-4',
-        )}
-      >
+        className="pointer-events-none absolute inset-[6px] rounded-[21px] border-2 border-white/[0.10]"
+        style={{
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(255,255,255,0.045), inset 0 0 0 1px ${toneStyle.accent}22`,
+        }}
+      />
+      <motion.div
+        className="pointer-events-none absolute -left-24 top-0 h-full w-24 rotate-12 bg-white/[0.10] blur-xl"
+        animate={prefersReducedMotion ? undefined : { x: [-80, 430], opacity: [0, 0.36, 0] }}
+        transition={{ duration: 4.8, repeat: Infinity, repeatDelay: 2.2, ease: 'easeInOut' }}
+      />
+      {isSquare && (
         <div
-          className={clsx(
-            'flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[14px] border backdrop-blur-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] md:h-[46px] md:w-[46px]',
-            isSquare && 'h-[40px] w-[40px] rounded-[12px] md:h-[42px] md:w-[42px]',
-            toneStyle.iconWrap,
-          )}
-        >
-          <Icon className={clsx('h-[20px] w-[20px] stroke-[2]', isSquare && 'h-[18px] w-[18px]', toneStyle.icon)} />
-        </div>
+          className="pointer-events-none absolute bottom-6 right-7 z-[1] hidden h-[3px] w-14 rounded-full opacity-65 sm:block"
+          style={{ background: `linear-gradient(90deg, transparent, ${toneStyle.accent}88, transparent)` }}
+        />
+      )}
+      {isSquare && (
+        <div
+          className="pointer-events-none absolute right-7 top-7 z-[1] hidden h-1.5 w-1.5 rounded-full opacity-90 sm:block"
+          style={{ background: toneStyle.accent, boxShadow: `0 0 18px ${toneStyle.accent}55` }}
+        />
+      )}
+      {isSquare && (
+        <div
+          className="pointer-events-none absolute bottom-7 right-12 z-[1] hidden h-1.5 w-7 rounded-full opacity-35 sm:block"
+          style={{ background: toneStyle.accent }}
+        />
+      )}
 
-        <div
-          className={clsx(
-            'min-w-0',
-            centered && 'flex flex-col justify-center',
-            centered && isSquare && 'items-start',
-            layout === 'wide' && !centered && 'sm:flex-1',
-          )}
-        >
-          <h3
+		      <div
+	        className={clsx(
+	          'relative z-10 h-full rounded-[27px]',
+	          isTall && 'grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 px-5 py-4 md:px-6 md:py-5',
+	          isWide && 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 py-3.5 md:px-6',
+	          isSquare && 'grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 py-3 md:px-5',
+	        )}
+	      >
+	        <div
+	          className={clsx(
+	            'flex min-w-0',
+	            isTall ? 'flex-col' : 'contents',
+	          )}
+	        >
+          <div
             className={clsx(
-              'font-semibold tracking-[-0.04em] text-white',
-              centered ? 'text-[16px]' : 'text-[18px] md:text-[19px]',
-              isSquare && 'text-[15px] md:text-[16px]',
+              'flex shrink-0 items-center justify-center rounded-[14px] border backdrop-blur-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]',
+              isSquare ? 'h-[40px] w-[40px] rounded-[12px]' : 'h-[44px] w-[44px] md:h-[46px] md:w-[46px]',
+              toneStyle.iconWrap,
             )}
           >
-            {title}
-          </h3>
-          {description ? (
-            <p
-              className={clsx(
-                'mt-1 max-w-[15ch] text-[13px] leading-[1.28] tracking-[-0.02em] text-white/50 md:text-[14px]',
-                layout === 'wide' && 'max-w-none leading-[1.2]',
-                layout === 'tall' && 'max-w-[16ch]',
+            <Icon className={clsx('h-[20px] w-[20px] stroke-[2]', isSquare && 'h-[18px] w-[18px]', toneStyle.icon)} />
+          </div>
+
+		          <div className={clsx('min-w-0', isTall && 'mt-4')}>
+		            <h3
+		              className={clsx(
+		                'font-semibold tracking-[-0.04em] text-white',
+		                isSquare ? 'whitespace-nowrap' : 'truncate',
+		                centered ? 'text-[16px]' : 'text-[18px] md:text-[19px]',
+		                isSquare && 'text-[15px] md:text-[16px]',
               )}
             >
-              {description}
-            </p>
-          ) : null}
+              {title}
+            </h3>
+            {description ? (
+              <p
+                className={clsx(
+                  'mt-1 max-w-[15ch] text-[13px] leading-[1.28] tracking-[-0.02em] text-white/50 md:text-[14px]',
+                  isWide && 'max-w-none leading-[1.2]',
+                  isTall && 'max-w-[22ch]',
+                )}
+              >
+                {description}
+              </p>
+            ) : null}
+          </div>
         </div>
-      </div>
+
+	        {!isSquare && (
+	          <div
+	            className={clsx(
+	              'relative z-10 shrink-0',
+	              isTall && 'w-[178px] self-end',
+	              isWide && 'hidden w-[118px] sm:block',
+	            )}
+	          >
+	            <ModeMicroDetail title={title} tone={tone} />
+	          </div>
+	        )}
+	      </div>
     </motion.article>
   );
 }
@@ -202,7 +331,7 @@ function LockedFooter({
   };
 
   return (
-    <footer className="border-t border-white/[0.07] px-6 py-4 md:px-8 md:py-5">
+    <footer className="border-t border-white/[0.07] px-6 py-3 md:px-8 md:py-3.5">
       <div className="grid gap-4 md:grid-cols-[auto_1fr_auto] md:items-center">
         <button
           type="button"
@@ -225,11 +354,11 @@ function LockedFooter({
         <button
           type="button"
           onClick={handleUnlockPro}
-          className="inline-flex h-[58px] items-center justify-between rounded-full bg-white pl-6 pr-3 text-[16px] font-semibold tracking-[-0.035em] text-[#141414] shadow-[0_22px_50px_rgba(0,0,0,0.25)] transition-transform duration-200 hover:scale-[1.01] active:scale-[0.99]"
+          className="inline-flex h-[52px] items-center justify-between rounded-full bg-white pl-6 pr-3 text-[16px] font-semibold tracking-[-0.035em] text-[#141414] shadow-[0_22px_50px_rgba(0,0,0,0.25)] transition-transform duration-200 hover:scale-[1.01] active:scale-[0.99]"
         >
           <span className="min-w-[108px] text-left">Unlock Pro</span>
-          <span className="ml-3 flex h-[44px] w-[44px] items-center justify-center rounded-full bg-[#ececec] text-[#161616]">
-            <ArrowUpRight className="h-4.5 w-4.5 stroke-[2.3]" />
+          <span className="ml-3 flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[#ececec] text-[#161616]">
+            <ArrowUpRight className="h-[18px] w-[18px] stroke-[2.3]" />
           </span>
         </button>
       </div>
@@ -287,7 +416,7 @@ const ModesSettings: React.FC<ModesSettingsProps> = ({
         <X className="h-5 w-5 stroke-[2]" />
       </button>
 
-      <div className="flex-1 overflow-y-auto px-6 pb-4 pt-[60px] md:px-8">
+      <div className="flex-1 overflow-y-auto px-6 pb-4 pt-[48px] md:px-8">
         <div className="mx-auto flex max-w-[820px] flex-col">
           <header className="mx-auto max-w-[650px] text-center">
             <h1 className="text-[36px] font-semibold leading-[0.94] tracking-[-0.06em] text-white md:text-[42px]">
@@ -299,21 +428,16 @@ const ModesSettings: React.FC<ModesSettingsProps> = ({
             </p>
           </header>
 
-          <div className="mx-auto mt-6 w-full max-w-[820px]">
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-4">
-              <div className="flex flex-col gap-3 lg:gap-4">
-                <ModeCard {...cards[0]} />
-                <ModeCard {...cards[4]} />
+          <div className="mx-auto mt-5 w-full max-w-[820px]">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-[108px_112px_96px]">
+              <ModeCard {...cards[0]} className="lg:row-span-2 lg:h-full" />
+              <ModeCard {...cards[1]} className="lg:h-full" />
+              <div className="grid gap-3 sm:grid-cols-2 lg:h-full">
+                <ModeCard {...cards[2]} className="lg:h-full" />
+                <ModeCard {...cards[3]} className="lg:h-full" />
               </div>
-
-              <div className="flex flex-col gap-3 lg:gap-4">
-                <ModeCard {...cards[1]} />
-                <div className="grid gap-3 sm:grid-cols-2 lg:gap-4">
-                  <ModeCard {...cards[2]} />
-                  <ModeCard {...cards[3]} />
-                </div>
-                <ModeCard {...cards[5]} />
-              </div>
+              <ModeCard {...cards[4]} className="lg:h-full" />
+              <ModeCard {...cards[5]} className="lg:h-full" />
             </div>
           </div>
         </div>

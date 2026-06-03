@@ -2548,7 +2548,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const switchTransition = shouldReduceMotion
         ? { duration: 0 }
         : { type: 'spring' as const, stiffness: 560, damping: 34, mass: 0.72 };
-    const statusChipBaseClass = 'inline-flex h-6 items-center justify-center overflow-hidden rounded-md border px-2 text-[10px] font-semibold leading-none whitespace-nowrap';
+    const statusChipBaseClass = 'inline-flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-md border px-2 text-[10px] font-semibold leading-none whitespace-nowrap';
     const skeletonLineClass = 'rounded-full bg-bg-input/80 animate-pulse';
     const getSwitchTrackClass = (checked: boolean, tone: 'accent' | 'sky' | 'purple' | 'amber' = 'accent') => {
         if (!checked) return 'bg-bg-toggle-switch border border-border-muted';
@@ -2606,7 +2606,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
                     id="settings-backdrop"
-                    className={`fixed inset-0 z-50 flex items-center justify-center p-8 transition-colors duration-150 ${isPreviewingOpacity ? 'bg-transparent backdrop-blur-none' : 'bg-black/60 backdrop-blur-sm'}`}
+                    className={`fixed inset-0 z-[3000] flex items-center justify-center p-4 transition-colors duration-150 sm:p-6 lg:p-8 ${isPreviewingOpacity ? 'bg-transparent backdrop-blur-none' : 'bg-black/60 backdrop-blur-sm'}`}
                 >
                     <motion.div
                         id="settings-panel-wrapper"
@@ -2619,15 +2619,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             damping: 32,
                             mass: 1
                         }}
-                        className="bg-bg-elevated w-full max-w-4xl h-[80vh] rounded-2xl border border-border-subtle shadow-2xl overflow-hidden relative"
+                        className="relative h-[80vh] max-h-[760px] w-[92vw] max-w-[980px] overflow-hidden rounded-2xl border border-border-subtle bg-bg-elevated shadow-2xl"
                     >
                         <div
                             id="settings-panel"
-                            className="flex w-full h-full"
+                            className="flex h-full w-full min-w-0"
                             style={{ visibility: isPreviewingOpacity ? 'hidden' : 'visible' }}
                         >
                             {/* Sidebar */}
-                            <div className="w-64 bg-bg-sidebar flex flex-col border-r border-border-subtle">
+                            <div className="flex w-[236px] shrink-0 flex-col border-r border-border-subtle bg-bg-sidebar">
                                 <div className="px-5 pt-5 pb-4 border-b border-border-subtle">
                                     <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">TeamSync</p>
                                     <div className="mt-1 flex items-center justify-between gap-3">
@@ -2670,7 +2670,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 </span>
                                                                 <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
                                                                 {item.meta && (
-                                                                    <span className={`relative z-10 max-w-[78px] truncate ${statusChipBaseClass} ${isActive ? 'border-border-subtle bg-bg-elevated text-text-secondary' : 'border-border-subtle/70 bg-bg-input/40 text-text-tertiary'}`}>
+                                                                    <span className={`relative z-10 max-w-[72px] truncate ${statusChipBaseClass} ${isActive ? 'border-border-subtle bg-bg-elevated text-text-secondary' : 'border-border-subtle/70 bg-bg-input/40 text-text-tertiary'}`}>
                                                                         {item.meta}
                                                                     </span>
                                                                 )}
@@ -2749,24 +2749,24 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             </div>
 
                             {/* Content */}
-                            <div className="flex-1 bg-bg-main overflow-y-auto p-8">
+                            <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-4 py-5 sm:px-5 lg:px-6">
                                 <AnimatePresence mode="wait" initial={false}>
                                     <motion.div
                                         key={activeTab}
                                         {...sectionMotionProps}
-                                        className="min-h-full"
+                                        className="min-h-full min-w-0"
                                     >
                                 {activeTab === 'overview' && (
                                     <div className="space-y-6 animated fadeIn select-text pb-4">
-                                        <div className="flex items-start justify-between gap-6">
-                                            <div>
+                                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                            <div className="min-w-0">
                                                 <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Today</p>
                                                 <h3 className="mt-1 text-[24px] font-semibold tracking-tight text-text-primary">Control center</h3>
                                                 <p className="mt-2 max-w-[560px] text-[13px] leading-relaxed text-text-secondary">
                                                     A quick read on whether TeamSync is ready for meetings, capture, and screen sharing.
                                                 </p>
                                             </div>
-                                            <div className="rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-right shadow-sm">
+                                            <div className="shrink-0 self-start rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-right shadow-sm">
                                                 <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Readiness</p>
                                                 <p className="mt-1 text-[18px] font-semibold tabular-nums text-text-primary">{readyTodayCount}/{todayReadinessItems.length}</p>
                                             </div>
@@ -2795,7 +2795,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 </button>
                                             </div>
 
-                                            <div className="grid grid-cols-1 divide-y divide-border-subtle border-t border-border-subtle md:grid-cols-2 md:divide-x md:divide-y-0">
+                                            <div className="grid grid-cols-1 divide-y divide-border-subtle border-t border-border-subtle xl:grid-cols-2 xl:divide-x xl:divide-y-0">
                                                 {todayReadinessItems.map((item) => (
                                                     <button
                                                         key={item.id}
@@ -2820,7 +2820,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                                        <div className="grid grid-cols-1 gap-4">
                                             <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
                                                 <div className="flex items-center justify-between gap-4">
                                                     <div>
@@ -2876,15 +2876,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                 )}
                                 {activeTab === 'privacy-trust' && (
                                     <div className="space-y-6 animated fadeIn select-text pb-4">
-                                        <div className="flex items-start justify-between gap-6">
-                                            <div>
+                                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                            <div className="min-w-0">
                                                 <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Privacy & Trust</p>
                                                 <h3 className="mt-1 text-[24px] font-semibold tracking-tight text-text-primary">Trusted control center</h3>
                                                 <p className="mt-2 max-w-[560px] text-[13px] leading-relaxed text-text-secondary">
                                                     One place to review capture permissions, Calendar readiness, and privacy controls before sharing your screen.
                                                 </p>
                                             </div>
-                                            <div className="rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-right shadow-sm">
+                                            <div className="w-full max-w-[180px] shrink-0 self-start rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-right shadow-sm">
                                                 <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Trust status</p>
                                                 <p className="mt-1 text-[15px] font-semibold text-text-primary">{trustStatusLabel}</p>
                                             </div>
@@ -2908,10 +2908,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 </button>
                                             </div>
 
-                                            <div className="grid grid-cols-1 gap-px bg-border-subtle md:grid-cols-2 lg:grid-cols-5">
+                                            <div className="grid grid-cols-1 gap-px bg-border-subtle xl:grid-cols-2">
                                                 {trustReadinessItems.map((item) => (
-                                                    <div key={item.id} className="min-h-[150px] bg-bg-item-surface p-4">
-                                                        <div className="flex items-start justify-between gap-3">
+                                                    <div key={item.id} className="min-w-0 bg-bg-item-surface p-4">
+                                                        <div className="flex flex-wrap items-start justify-between gap-3">
                                                             <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(item.state)}`}>
                                                                 {item.icon}
                                                             </span>
@@ -2920,20 +2920,20 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             </span>
                                                         </div>
                                                         <h5 className="mt-3 text-[13px] font-semibold text-text-primary">{item.label}</h5>
-                                                        <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.detail}</p>
+                                                        <p className="mt-1 text-[11px] leading-relaxed text-text-secondary break-words">{item.detail}</p>
                                                     </div>
                                                 ))}
                                             </div>
                                         </section>
 
-                                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+                                        <div className="grid grid-cols-1 gap-4">
                                             <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
-                                                <div className="flex items-start justify-between gap-4">
-                                                    <div className="flex items-start gap-3">
+                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                    <div className="flex min-w-0 items-start gap-3">
                                                         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(calendarTrustState)}`}>
                                                             <Calendar size={18} />
                                                         </div>
-                                                        <div>
+                                                        <div className="min-w-0">
                                                             <h4 className="text-[15px] font-semibold text-text-primary">Calendar trust</h4>
                                                             <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
                                                                 Meeting context stays connected to your signed-in Google account.
@@ -3045,12 +3045,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             </section>
 
                                             <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
-                                                <div className="flex items-start justify-between gap-4">
-                                                    <div className="flex items-start gap-3">
+                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                    <div className="flex min-w-0 items-start gap-3">
                                                         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(stealthTrustState)}`}>
                                                             <Ghost size={18} />
                                                         </div>
-                                                        <div>
+                                                        <div className="min-w-0">
                                                             <h4 className="text-[15px] font-semibold text-text-primary">Privacy during screen sharing</h4>
                                                             <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
                                                                 Controls how TeamSync windows behave when another app is sharing or recording the screen.
@@ -3137,7 +3137,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 {!permissionsInitialized && permissionsChecking ? (
                                                     <div className="space-y-4 bg-bg-item-surface p-4" aria-live="polite" aria-label="Checking permissions">
                                                         {[0, 1, 2].map((item) => (
-                                                            <div key={item} className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.25fr_auto] lg:items-center">
+                                                            <div key={item} className="grid grid-cols-1 gap-4">
                                                                 <div className="flex items-start gap-3">
                                                                     <div className="h-9 w-9 shrink-0 rounded-xl bg-bg-input animate-pulse" />
                                                                     <div className="min-w-0 flex-1 space-y-2">
@@ -3145,11 +3145,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                         <div className={`h-2.5 w-56 max-w-full ${skeletonLineClass}`} />
                                                                     </div>
                                                                 </div>
-                                                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                                                                     <div className={`h-12 ${skeletonLineClass} rounded-lg`} />
                                                                     <div className={`h-12 ${skeletonLineClass} rounded-lg`} />
                                                                 </div>
-                                                                <div className={`h-9 w-20 ${skeletonLineClass} rounded-lg lg:justify-self-end`} />
+                                                                <div className={`h-9 w-20 ${skeletonLineClass} rounded-lg`} />
                                                             </div>
                                                         ))}
                                                     </div>
@@ -3164,13 +3164,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 ? 'Unavailable'
                                                                 : 'Fix';
                                                     return (
-                                                        <div key={item.id} className="grid grid-cols-1 gap-4 bg-bg-item-surface p-4 lg:grid-cols-[1fr_1.25fr_auto] lg:items-center">
-                                                            <div className="flex items-start gap-3">
+                                                        <div key={item.id} className="grid grid-cols-1 gap-4 bg-bg-item-surface p-4">
+                                                            <div className="flex min-w-0 items-start gap-3">
                                                                 <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(item.state)}`}>
                                                                     {item.icon}
                                                                 </span>
-                                                                <div>
-                                                                    <div className="flex items-center gap-2">
+                                                                <div className="min-w-0">
+                                                                    <div className="flex flex-wrap items-center gap-2">
                                                                         <h5 className="text-[13px] font-semibold text-text-primary">{item.label}</h5>
                                                                         <span className={`${statusChipBaseClass} ${getTrustChipClass(item.state)}`}>
                                                                             {getTrustStateLabel(item.state)}
@@ -3179,7 +3179,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.why}</p>
                                                                 </div>
                                                             </div>
-                                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                            <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-2">
                                                                 <div className="rounded-lg bg-bg-input/60 px-3 py-2">
                                                                     <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Unlocks</p>
                                                                     <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.unlocks}</p>
@@ -3192,7 +3192,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             <button
                                                                 onClick={() => handlePermissionAction(item.id)}
                                                                 disabled={item.state === 'disabled' || isBusy}
-                                                                className="justify-self-start rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 lg:justify-self-end"
+                                                                className="justify-self-start rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                                                             >
                                                                 {isBusy ? 'Checking' : actionLabel}
                                                             </button>
