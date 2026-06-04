@@ -2,6 +2,33 @@ const { test }: typeof import('node:test') = require('node:test');
 const assert: typeof import('node:assert').strict = require('node:assert').strict;
 const fs: typeof import('node:fs') = require('node:fs');
 const path: typeof import('node:path') = require('node:path');
+const Module = require('node:module');
+const ts: typeof import('typescript') = require('typescript');
+
+const originalResolveFilename = Module._resolveFilename;
+Module._resolveFilename = function resolveWithTsExtension(request: string, parent: any, isMain: boolean, options: any) {
+    try {
+        return originalResolveFilename.call(this, request, parent, isMain, options);
+    } catch (error) {
+        if ((request.startsWith('.') || request.startsWith('/')) && !path.extname(request)) {
+            return originalResolveFilename.call(this, `${request}.ts`, parent, isMain, options);
+        }
+        throw error;
+    }
+};
+
+(require as any).extensions['.ts'] = function compileTsForNodeTest(module: any, filename: string) {
+    const source = fs.readFileSync(filename, 'utf8');
+    const output = ts.transpileModule(source, {
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2022,
+            esModuleInterop: true,
+        },
+    }).outputText;
+    module._compile(output, filename);
+};
+
 const { auditPromptText, emitModelSelection } = require('../ActionTelemetry') as typeof import('../ActionTelemetry');
 
 const repoRoot = path.resolve(__dirname, '..', '..');

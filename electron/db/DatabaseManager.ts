@@ -716,6 +716,15 @@ export class DatabaseManager {
         }
     }
 
+    public clearCustomNotes(): void {
+        if (!this.db) return;
+        try {
+            this.db.prepare('DELETE FROM profile_custom_notes').run();
+        } catch (e) {
+            console.error('[DatabaseManager] clearCustomNotes failed:', e);
+        }
+    }
+
     // ============================================
     // Modes CRUD
     // ============================================

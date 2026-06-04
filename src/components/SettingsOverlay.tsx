@@ -118,6 +118,18 @@ const formatTrustTimestamp = (value?: string | null): string => {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
 };
 
+const CALENDAR_REFRESH_GATE_MESSAGE = 'Connect Google Calendar before refreshing calendar events.';
+
+const deleteProfileScopeItems = [
+    'Resume',
+    'Job Description',
+    'AOT results',
+    'Snapshots',
+    'Dossiers',
+    'Notes',
+    'Profile Intelligence',
+];
+
 const formatCalendarWindow = (event: NormalizedEvent | null): string => {
     if (!event) return 'No upcoming meeting';
     const start = new Date(event.startTime);
@@ -602,6 +614,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         title: string;
         description: string;
     }>(null);
+    const [deleteProfileConfirmOpen, setDeleteProfileConfirmOpen] = useState(false);
+    const [deleteProfileDeleting, setDeleteProfileDeleting] = useState(false);
+    const [deleteProfileStatus, setDeleteProfileStatus] = useState<null | {
+        variant: 'success' | 'error';
+        message: string;
+    }>(null);
     const [tavilyApiKey, setTavilyApiKey] = useState('');
     const [hasStoredTavilyKey, setHasStoredTavilyKey] = useState(false);
     const [tavilySaving, setTavilySaving] = useState(false);
@@ -613,6 +631,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const uploadGenerationRef = React.useRef(0);
     const profileGenerationRef = React.useRef(0);
     const profileViewStatusRef = React.useRef<'idle' | 'processing' | 'ready' | 'empty' | 'error'>('idle');
+    const profileHardDeleteUiGuardRef = React.useRef(false);
     const [customNotes, setCustomNotes] = useState('');
     const [customNotesSaved, setCustomNotesSaved] = useState(false);
     const customNotesDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -624,6 +643,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     useEffect(() => {
         setIsPremium(isPremiumActive);
     }, [isPremiumActive]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setDeleteProfileConfirmOpen(false);
+        }
+    }, [isOpen]);
 
     // Auto-disable Pro UI if premium/trial access is lost
     const hasProAccess = isPremium || isTrialActive;
@@ -656,6 +681,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         try {
             uploadGenerationId = Date.now();
             uploadGenerationRef.current = uploadGenerationId;
+            profileHardDeleteUiGuardRef.current = false;
             setProfileError('');
             setJdError('');
             setProfileData(null);
@@ -723,6 +749,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         }
 
         if (data) {
+            profileHardDeleteUiGuardRef.current = false;
             profileGenerationRef.current = typeof data?.generationId === 'number' ? data.generationId : profileGenerationRef.current;
             setNegotiationScript(data?.aot?.negotiation_script ?? data?.negotiationScript ?? null);
             setProfileData(data);
@@ -734,6 +761,79 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             updateProfileViewStatus('empty');
         }
     };
+
+    const openDeleteProfileConfirmation = React.useCallback(() => {
+        setDeleteProfileStatus(null);
+        setDeleteProfileConfirmOpen(true);
+    }, []);
+
+    const handleDeleteProfileIntelligence = React.useCallback(async () => {
+        if (deleteProfileDeleting) return;
+
+        setDeleteProfileDeleting(true);
+        setDeleteProfileStatus(null);
+        profileHardDeleteUiGuardRef.current = true;
+
+        try {
+            const result = await window.electronAPI?.profileHardDeleteAll?.('manual-ui');
+            if (!result?.success) {
+                throw new Error(result?.error || 'Delete failed');
+            }
+
+            const deleteGenerationId = Date.now();
+            uploadGenerationRef.current = deleteGenerationId;
+            profileGenerationRef.current = 0;
+            setProfileUploading(false);
+            setJdUploading(false);
+            setCompanyResearching(false);
+            setNegotiationGenerating(false);
+            setProfileError('');
+            setJdError('');
+            setNegotiationError('');
+            setLastResumeFileToken(null);
+            setLastJdFileToken(null);
+            setLastUploadKind(null);
+            if (customNotesDebounceRef.current) {
+                clearTimeout(customNotesDebounceRef.current);
+                customNotesDebounceRef.current = null;
+            }
+            if (companyResearchToastTimerRef.current) {
+                clearTimeout(companyResearchToastTimerRef.current);
+                companyResearchToastTimerRef.current = null;
+            }
+            setProfileData(null);
+            setNegotiationScript(null);
+            setCustomNotes('');
+            setCustomNotesSaved(false);
+            setCompanyResearchToast(null);
+            setProfileStatus({
+                hasProfile: false,
+                profileMode: false,
+                isReady: true,
+            });
+            updateProfileViewStatus('empty');
+
+            try {
+                await refreshProfileStateRef.current?.();
+            } catch {
+                // The local reset above keeps the profile surface in fresh-install state.
+            }
+
+            setDeleteProfileConfirmOpen(false);
+            setDeleteProfileStatus({
+                variant: 'success',
+                message: 'Profile Intelligence deleted.',
+            });
+        } catch (error) {
+            profileHardDeleteUiGuardRef.current = false;
+            setDeleteProfileStatus({
+                variant: 'error',
+                message: 'Delete failed',
+            });
+        } finally {
+            setDeleteProfileDeleting(false);
+        }
+    }, [deleteProfileDeleting, updateProfileViewStatus]);
 
     const refreshUpdaterCacheInfo = React.useCallback(async () => {
         if (!window.electronAPI?.getUpdaterCacheInfo) {
@@ -937,11 +1037,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         }
         if (window.electronAPI?.onProfileResearchUpdated) {
             unsubscribers.push(window.electronAPI.onProfileResearchUpdated(() => {
+                if (profileHardDeleteUiGuardRef.current) return;
                 refreshProfileStateRef.current?.().catch(() => { });
             }));
         }
         if (window.electronAPI?.onCompanyResearchReady) {
             unsubscribers.push(window.electronAPI.onCompanyResearchReady((research) => {
+                if (profileHardDeleteUiGuardRef.current) return;
                 if (typeof research?.generationId === 'number' && profileGenerationRef.current > 0 && research.generationId < profileGenerationRef.current) {
                     return;
                 }
@@ -956,6 +1058,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         }
         if (window.electronAPI?.onProfileUpdated) {
             unsubscribers.push(window.electronAPI.onProfileUpdated((profile) => {
+                if (profileHardDeleteUiGuardRef.current && profile) return;
+                if (profile) profileHardDeleteUiGuardRef.current = false;
                 if (typeof profile?.generationId === 'number' && uploadGenerationRef.current > 0 && profile.generationId !== uploadGenerationRef.current && profileViewStatusRef.current === 'processing') {
                     return;
                 }
@@ -1817,9 +1921,17 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         }
     };
 
-    const refreshCalendarEvents = React.useCallback(async () => {
+    const refreshCalendarEvents = React.useCallback(async (options: { allowWhenDisconnected?: boolean } = {}) => {
+        if (!options.allowWhenDisconnected && !calendarStatus.connected) {
+            setSettingsCalendarEvents([]);
+            setCalendarLastSyncedAt(null);
+            setCalendarSyncError(CALENDAR_REFRESH_GATE_MESSAGE);
+            return;
+        }
+
         if (!window.electronAPI?.googleGetCalendarEvents) {
             setSettingsCalendarEvents([]);
+            setCalendarSyncError('Calendar refresh is unavailable in this build.');
             return;
         }
 
@@ -1856,7 +1968,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         } finally {
             setIsCalendarSyncing(false);
         }
-    }, []);
+    }, [calendarStatus.connected]);
 
     const handleConnectCalendar = React.useCallback(async () => {
         setIsCalendarsLoading(true);
@@ -1869,7 +1981,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 );
                 setCalendarStatus({ connected: true, email: result.user.email });
                 setCalendarSyncError(null);
-                await refreshCalendarEvents();
+                await refreshCalendarEvents({ allowWhenDisconnected: true });
             } else if (result?.error) {
                 setCalendarSyncError(result.error);
                 console.error(result.error);
@@ -2377,6 +2489,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             setLastUploadKind('resume');
             uploadGenerationId = Date.now();
             uploadGenerationRef.current = uploadGenerationId;
+            profileHardDeleteUiGuardRef.current = false;
             setProfileUploading(true);
             updateProfileViewStatus('processing');
             setProfileData(null);
@@ -2611,6 +2724,60 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         );
     };
 
+    const renderDeleteProfileIntelligenceCard = (surface: 'profile' | 'privacy-trust') => (
+        <section
+            data-profile-delete-surface={surface}
+            className="rounded-xl border border-red-500/20 bg-red-500/5 p-5"
+        >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
+                            <Trash2 size={16} />
+                        </span>
+                        <div className="min-w-0">
+                            <h4 className="text-[14px] font-semibold text-text-primary">Delete Profile Intelligence</h4>
+                            <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
+                                Permanently removes profile data and generated intelligence from this device.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                        {deleteProfileScopeItems.map((item) => (
+                            <span
+                                key={item}
+                                className="rounded-md border border-red-500/15 bg-bg-input/60 px-2 py-1 text-[10px] font-medium text-text-secondary"
+                            >
+                                {item}
+                            </span>
+                        ))}
+                    </div>
+                    {deleteProfileStatus && (
+                        <div
+                            className={`mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-[11px] font-medium ${deleteProfileStatus.variant === 'success'
+                                ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500'
+                                : 'border-red-500/25 bg-red-500/10 text-red-400'
+                                }`}
+                            role="status"
+                        >
+                            {deleteProfileStatus.variant === 'success' ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
+                            {deleteProfileStatus.message}
+                        </div>
+                    )}
+                </div>
+                <button
+                    type="button"
+                    onClick={openDeleteProfileConfirmation}
+                    disabled={deleteProfileDeleting}
+                    className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-3.5 py-2 text-[12px] font-semibold text-red-400 transition-all hover:bg-red-500/15 hover:text-red-300 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                >
+                    {deleteProfileDeleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    {deleteProfileDeleting ? 'Deleting...' : 'Delete Profile Intelligence'}
+                </button>
+            </div>
+        </section>
+    );
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -2649,12 +2816,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                 className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"
                             />
                             {/* Sidebar */}
-                            <div className="flex w-[210px] shrink-0 flex-col border-r border-border-subtle bg-bg-sidebar/95">
-                                <div className="px-4 pt-4 pb-3 border-b border-border-subtle">
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">TeamSync</p>
+                            <div className="flex w-[210px] shrink-0 flex-col border-r border-white/10 bg-black text-white">
+                                <div className="px-4 pt-4 pb-3 border-b border-white/10">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white">TeamSync</p>
                                     <div className="mt-1.5 flex items-center justify-between gap-3">
-                                        <h2 className="text-[17px] font-semibold tracking-tight text-text-primary">Settings</h2>
-                                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${settingsHeaderBadge.className}`}>
+                                        <h2 className="text-[17px] font-semibold tracking-tight text-white">Settings</h2>
+                                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${settingsHeaderBadge.className} !text-white`}>
                                             {isPremium && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
                                             {settingsHeaderBadge.label}
                                         </span>
@@ -2665,7 +2832,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                     <nav className="space-y-4" aria-label="Settings sections">
                                         {sidebarGroups.map((group) => (
                                             <div key={group.label}>
-                                                <div className="px-2 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">
+                                                <div className="px-2 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-white">
                                                     {group.label}
                                                 </div>
                                                 <div className="space-y-0.5">
@@ -2677,23 +2844,23 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 onClick={() => openSettingsSection(item.id)}
                                                                 aria-current={isActive ? 'page' : undefined}
                                                                 className={`group relative w-full overflow-hidden rounded-xl px-2.5 py-2.5 text-left text-[12.5px] font-medium transition-colors duration-200 flex items-center gap-2.5 active:scale-[0.99] ${isActive
-                                                                    ? 'text-text-primary'
-                                                                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'
+                                                                    ? 'text-white'
+                                                                    : 'text-white hover:bg-white/10'
                                                                     }`}
                                                             >
                                                                 {isActive && (
                                                                     <motion.span
                                                                         layoutId="settings-sidebar-active"
-                                                                        className="absolute inset-0 rounded-xl border border-border-subtle bg-bg-item-active shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                                                                        className="absolute inset-0 rounded-xl border border-white/15 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]"
                                                                         transition={sidebarIndicatorTransition}
                                                                     />
                                                                 )}
-                                                                <span className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-bg-elevated text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]' : 'text-text-tertiary group-hover:text-text-primary'}`}>
+                                                                <span className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white transition-colors ${isActive ? 'bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'group-hover:bg-white/10'}`}>
                                                                     {item.icon}
                                                                 </span>
                                                                 <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
                                                                 {item.meta && (
-                                                                    <span className={`relative z-10 max-w-[72px] truncate ${statusChipBaseClass} ${isActive ? 'border-border-subtle bg-bg-elevated text-text-secondary' : 'border-border-subtle/70 bg-bg-input/40 text-text-tertiary'}`}>
+                                                                    <span className={`relative z-10 max-w-[72px] truncate ${statusChipBaseClass} ${isActive ? 'border-white/20 bg-white/10 text-white' : 'border-white/15 bg-white/10 text-white'}`}>
                                                                         {item.meta}
                                                                     </span>
                                                                 )}
@@ -2706,7 +2873,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                     </nav>
                                 </div>
 
-                                <div className="mt-auto p-4 border-t border-border-subtle">
+                                <div className="mt-auto p-4 border-t border-white/10">
 
                                     <AnimatePresence mode="wait" initial={false}>
                                         {showQuitConfirm ? (
@@ -2716,19 +2883,19 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 animate={{ opacity: 1, y: 0 }}
                                                 exit={{ opacity: 0, y: 4 }}
                                                 transition={{ duration: 0.15 }}
-                                                className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 mb-2"
+                                                className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-2"
                                             >
                                                 <div className="flex items-center gap-2 text-[13px] font-semibold text-red-400">
                                                     <AlertCircle size={15} />
                                                     Meeting in progress
                                                 </div>
-                                                <p className="text-[12px] text-text-secondary mt-1">
+                                                <p className="text-[12px] text-white mt-1">
                                                     Quitting will end the active session and stop recording.
                                                 </p>
                                                 <div className="flex justify-end gap-2 mt-3">
                                                     <button
                                                         onClick={() => setShowQuitConfirm(false)}
-                                                        className="text-[12px] px-3 py-1.5 text-text-secondary hover:text-text-primary transition-colors rounded-lg"
+                                                        className="text-[12px] px-3 py-1.5 text-white hover:bg-white/10 transition-colors rounded-lg"
                                                     >
                                                         Cancel
                                                     </button>
@@ -2759,14 +2926,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         window.electronAPI.quitApp();
                                                     }
                                                 }}
-                                                className="w-full text-left px-3 py-2 mt-1 rounded-xl text-[13px] font-medium text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-3"
+                                                className="w-full text-left px-3 py-2 mt-1 rounded-xl text-[13px] font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-3"
                                             >
-                                                <LogOut size={16} /> Quit TeamSync
+                                                <LogOut size={16} className="text-red-400" /> Quit TeamSync
                                             </motion.button>
                                         )}
                                     </AnimatePresence>
-                                    <button onClick={onClose} className="group mt-2 w-full text-left px-3 py-2 rounded-xl text-[13px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors flex items-center gap-3">
-                                        <X size={18} className="group-hover:text-red-500 transition-colors" /> Close
+                                    <button onClick={onClose} className="group mt-2 w-full text-left px-3 py-2 rounded-xl text-[13px] font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-3">
+                                        <X size={18} className="text-white group-hover:text-red-400 transition-colors" /> Close
                                     </button>
                                 </div>
                             </div>
@@ -3224,6 +3391,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 })}
                                             </div>
                                         </section>
+
+                                        {hasResumeAndJd && renderDeleteProfileIntelligenceCard('privacy-trust')}
                                     </div>
                                 )}
                                 {activeTab === 'general' && (
@@ -4125,6 +4294,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     setLastUploadKind('jd');
                                                                     uploadGenerationId = Date.now();
                                                                     uploadGenerationRef.current = uploadGenerationId;
+                                                                    profileHardDeleteUiGuardRef.current = false;
                                                                     setJdUploading(true);
                                                                     updateProfileViewStatus('processing');
                                                                     setProfileData(null);
@@ -4170,6 +4340,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 )}
                                             </div>
                                         </div>
+
+                                        {hasResumeAndJd && (
+                                            <div className="mt-5">
+                                                {renderDeleteProfileIntelligenceCard('profile')}
+                                            </div>
+                                        )}
 
                                         {/* Custom Context Card — Pro only */}
                                         {hasProfileAccess && (
@@ -5312,6 +5488,78 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 </motion.div>
             )
             }
+            {isOpen && deleteProfileConfirmOpen && (
+                <motion.div
+                    key="delete-profile-intelligence-confirmation"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.16 }}
+                    className="fixed inset-0 z-[3200] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
+                >
+                    <motion.div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="delete-profile-intelligence-title"
+                        aria-describedby="delete-profile-intelligence-description"
+                        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                        transition={{ duration: 0.16 }}
+                        className="w-full max-w-[460px] rounded-2xl border border-red-500/25 bg-bg-elevated p-5 shadow-[0_24px_70px_rgba(0,0,0,0.45)]"
+                    >
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/10 text-red-400">
+                                <AlertCircle size={18} />
+                            </div>
+                            <div className="min-w-0">
+                                <h3 id="delete-profile-intelligence-title" className="text-[16px] font-semibold text-text-primary">
+                                    Delete Profile Intelligence?
+                                </h3>
+                                <p id="delete-profile-intelligence-description" className="mt-2 text-[12px] leading-relaxed text-text-secondary">
+                                    This permanently removes Resume, Job Description, AOT results, Snapshots, Dossiers, Notes, and Profile Intelligence from this device.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {deleteProfileScopeItems.map((item) => (
+                                <div key={item} className="flex items-center gap-2 rounded-lg border border-border-subtle bg-bg-input/60 px-3 py-2 text-[11px] font-medium text-text-secondary">
+                                    <CheckCircle size={12} className="text-text-tertiary" />
+                                    <span>{item}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {deleteProfileStatus?.variant === 'error' && (
+                            <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-[12px] font-medium text-red-400" role="alert">
+                                <AlertCircle size={13} />
+                                {deleteProfileStatus.message}
+                            </div>
+                        )}
+
+                        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteProfileConfirmOpen(false)}
+                                disabled={deleteProfileDeleting}
+                                className="rounded-lg border border-border-subtle bg-bg-input px-4 py-2 text-[12px] font-semibold text-text-secondary transition-all hover:bg-bg-item-surface hover:text-text-primary active:scale-[0.98] disabled:opacity-60"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDeleteProfileIntelligence}
+                                disabled={deleteProfileDeleting}
+                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500 px-4 py-2 text-[12px] font-semibold text-white transition-all hover:bg-red-400 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                {deleteProfileDeleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                                {deleteProfileDeleting ? 'Deleting...' : 'Delete Profile Intelligence'}
+                            </button>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
             <PremiumUpgradeModal
                 isOpen={isPremiumModalOpen}
                 onClose={() => setIsPremiumModalOpen(false)}

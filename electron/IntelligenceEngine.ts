@@ -3047,6 +3047,10 @@ export class IntelligenceEngine extends EventEmitter {
         return this.activeMode;
     }
 
+    clearActionResponseCache(): void {
+        this.actionResponseCache.clear();
+    }
+
     /**
      * Reset engine state (cancels any in-flight operations)
      */

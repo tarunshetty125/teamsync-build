@@ -540,10 +540,12 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
 
   // Profile Engine API
   profileUploadResume: (fileToken: string) => Promise<{ success: boolean; error?: string }>
-  profileGetStatus: () => Promise<{ hasProfile: boolean; profileMode: boolean; isReady: boolean; name?: string; role?: string; totalExperienceYears?: number }>
+  profileGetStatus: () => Promise<{ hasProfile: boolean; profileMode: boolean; isReady: boolean; activeResumeId?: number | null; activeJDId?: number | null; activeProfilePairId?: number | null; activeGenerationToken?: string | null; generationId?: number | null; name?: string; role?: string; totalExperienceYears?: number }>
   profileSetMode: (enabled: boolean) => Promise<{ success: boolean; error?: string }>
   profileDelete: () => Promise<{ success: boolean; error?: string }>
+  profileHardDeleteAll: (reason?: string) => Promise<{ success: boolean; generationId?: number; reason?: string; error?: string }>
   profileGetProfile: () => Promise<any>
+  profileGetActiveState: () => Promise<{ activeResumeId: number | null; activeJDId: number | null; activeProfilePairId: number | null; generationId: number; activeGenerationToken: string | null; updatedAt: string | null }>
   profileSelectFile: () => Promise<{ success?: boolean; cancelled?: boolean; fileToken?: string; fileName?: string; error?: string }>
 
   // JD & Research API

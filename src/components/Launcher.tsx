@@ -266,6 +266,14 @@ const getRecommendationConfidenceLabel = (confidence: number) => {
     return `${clampedPercent}% confidence`;
 };
 
+type RefreshNotification = {
+    title: string;
+    message: string;
+    tone: 'success' | 'warning';
+};
+
+const CALENDAR_REFRESH_GATE_MESSAGE = 'Connect Google Calendar before refreshing calendar events.';
+
 const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onOpenModes, onPageChange, ollamaPullStatus = 'idle', ollamaPullPercent = 0, ollamaPullMessage = '' }) => {
     const [meetings, setMeetings] = useState<Meeting[]>([]);
     const [isDetectable, setIsDetectable] = useState(false);
@@ -277,7 +285,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [showEvents, setShowEvents] = useState(false);
     const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
-    const [showNotification, setShowNotification] = useState(false);
+    const [refreshNotification, setRefreshNotification] = useState<RefreshNotification | null>(null);
     const [calendarRecommendation, setCalendarRecommendation] = useState<CalendarModeRecommendation | null>(null);
     const [isCalendarRecommendationOpen, setIsCalendarRecommendationOpen] = useState(false);
     const [isApplyingCalendarMode, setIsApplyingCalendarMode] = useState(false);
@@ -289,12 +297,33 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
     const [showModesOnboarding, setShowModesOnboarding] = useState(false);
     const launcherScrollRef = useRef<HTMLElement | null>(null);
+    const refreshNotificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
     const [nextEventParticipants, setNextEventParticipants] = useState<CalendarParticipant[] | null>(null);
 
     const upcomingCalendarEvents = useMemo(() => getUpcomingEvents(upcomingEvents), [upcomingEvents]);
     const nextCalendarEvent = upcomingCalendarEvents[0] ?? null;
     const nextCalendarEventId = nextCalendarEvent?.id ?? null;
+
+    const showRefreshNotification = (notification: RefreshNotification) => {
+        if (refreshNotificationTimerRef.current) {
+            clearTimeout(refreshNotificationTimerRef.current);
+        }
+
+        setRefreshNotification(notification);
+        refreshNotificationTimerRef.current = setTimeout(() => {
+            setRefreshNotification(null);
+            refreshNotificationTimerRef.current = null;
+        }, 3000);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (refreshNotificationTimerRef.current) {
+                clearTimeout(refreshNotificationTimerRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -351,22 +380,39 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         }
     };
 
-    const syncCalendarConnection = async () => {
+    const syncCalendarConnection = async (): Promise<boolean> => {
         try {
             const result = await window.electronAPI?.googleVerifySession?.();
             if (result?.authState) {
-                setIsCalendarConnected(Boolean(result.authState.calendarConnected));
-                return;
+                const connected = Boolean(result.authState.calendarConnected);
+                setIsCalendarConnected(connected);
+                return connected;
             }
 
             const authState = await window.electronAPI?.googleGetAuthState?.();
-            setIsCalendarConnected(Boolean(authState?.calendarConnected));
+            const connected = Boolean(authState?.calendarConnected);
+            setIsCalendarConnected(connected);
+            return connected;
         } catch {
             setIsCalendarConnected(false);
+            return false;
         }
     };
 
-    const fetchEvents = async () => {
+    const fetchEvents = async (options: { notifyWhenDisconnected?: boolean; skipConnectionCheck?: boolean } = {}): Promise<boolean> => {
+        const calendarConnected = options.skipConnectionCheck ? true : await syncCalendarConnection();
+        if (!calendarConnected) {
+            applyEvents([]);
+            if (options.notifyWhenDisconnected) {
+                showRefreshNotification({
+                    title: 'Calendar not connected',
+                    message: CALENDAR_REFRESH_GATE_MESSAGE,
+                    tone: 'warning',
+                });
+            }
+            return false;
+        }
+
         try {
             if (window.electronAPI?.googleGetCalendarEvents) {
                 const result = await window.electronAPI.googleGetCalendarEvents();
@@ -375,7 +421,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                     // Backend responded with events payload => calendar connection is valid,
                     // even when there are zero events in the next window.
                     setIsCalendarConnected(true);
-                    return;
+                    return true;
                 } else if (result && result.success === false) {
                     // Backend returned an error, e.g. 'Calendar not connected'
                     // Do not fallback to legacy, since backend is the source of truth
@@ -383,8 +429,15 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                     if (result.error === 'Calendar not connected') {
                         setIsCalendarConnected(false);
                         applyEvents([]);
+                        if (options.notifyWhenDisconnected) {
+                            showRefreshNotification({
+                                title: 'Calendar not connected',
+                                message: CALENDAR_REFRESH_GATE_MESSAGE,
+                                tone: 'warning',
+                            });
+                        }
                     }
-                    return;
+                    return false;
                 }
             }
         } catch (err) {
@@ -392,21 +445,35 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         }
 
         applyEvents([]);
+        return false;
     };
 
     const handleRefresh = async () => {
-        setIsRefreshing(true);
-        setIsSyncingCalendar(true);
-        analytics.trackCommandExecuted('refresh_calendar');
-
         try {
-            setShowNotification(true);
+            const calendarConnected = await syncCalendarConnection();
+            if (!calendarConnected) {
+                applyEvents([]);
+                showRefreshNotification({
+                    title: 'Calendar not connected',
+                    message: CALENDAR_REFRESH_GATE_MESSAGE,
+                    tone: 'warning',
+                });
+                return;
+            }
 
-            await fetchEvents();
+            setIsRefreshing(true);
+            setIsSyncingCalendar(true);
+            analytics.trackCommandExecuted('refresh_calendar');
+
+            const refreshedCalendar = await fetchEvents({ notifyWhenDisconnected: true, skipConnectionCheck: true });
+            if (refreshedCalendar) {
+                showRefreshNotification({
+                    title: 'Refreshed',
+                    message: 'Synced with calendar',
+                    tone: 'success',
+                });
+            }
             fetchMeetings();
-            setTimeout(() => {
-                setShowNotification(false);
-            }, 3000);
         } catch (e) {
             console.error("Refresh failed in handleRefresh:", e);
         } finally {
@@ -1613,7 +1680,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
             {/* Notification Toast - Liquid Glass (macOS 26 Tahoe Concept) */}
             <AnimatePresence>
-                {showNotification && (
+                {refreshNotification && (
                     <motion.div
                         initial={{ x: 300, opacity: 0, scale: 0.9 }}
                         animate={{ x: 0, opacity: 1, scale: 1 }}
@@ -1622,15 +1689,19 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                         className={`fixed bottom-10 right-10 z-[2000] flex items-center gap-4 pl-4 pr-6 py-3.5 rounded-[18px] backdrop-blur-xl saturate-[180%] ring-1 ring-black/10 ${isLight ? 'bg-bg-elevated/90 border border-border-muted shadow-[0_8px_32px_rgba(0,0,0,0.15),inset_0_1px_0_rgba(255,255,255,0.9)]' : 'bg-[#2A2A2E]/40 border border-white/10 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.3),inset_0_-1px_0_rgba(255,255,255,0.05)]'}`}
                     >
                         {/* Liquid Icon Orb */}
-                        <div className="relative flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-b from-blue-400/20 to-blue-600/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] border border-white/5">
-                            <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-md" />
-                            <RefreshCw size={15} className="text-blue-300 animate-[spin_2s_linear_infinite] drop-shadow-[0_0_5px_rgba(59,130,246,0.6)]" />
+                        <div className={`relative flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-b shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] border border-white/5 ${refreshNotification.tone === 'warning' ? 'from-amber-400/20 to-amber-600/20' : 'from-blue-400/20 to-blue-600/20'}`}>
+                            <div className={`absolute inset-0 rounded-full blur-md ${refreshNotification.tone === 'warning' ? 'bg-amber-500/20' : 'bg-blue-500/20'}`} />
+                            {refreshNotification.tone === 'warning' ? (
+                                <AlertCircle size={15} className="text-amber-300 drop-shadow-[0_0_5px_rgba(245,158,11,0.6)]" />
+                            ) : (
+                                <RefreshCw size={15} className="text-blue-300 animate-[spin_2s_linear_infinite] drop-shadow-[0_0_5px_rgba(59,130,246,0.6)]" />
+                            )}
                         </div>
 
                         {/* Text Content */}
                         <div className="flex flex-col gap-0.5">
-                            <span className="text-[14px] font-semibold text-text-primary leading-none tracking-tight">Refreshed</span>
-                            <span className="text-[11px] text-text-tertiary font-medium leading-none tracking-wide">Synced with calendar</span>
+                            <span className="text-[14px] font-semibold text-text-primary leading-none tracking-tight">{refreshNotification.title}</span>
+                            <span className="text-[11px] text-text-tertiary font-medium leading-none tracking-wide">{refreshNotification.message}</span>
                         </div>
 
                         {/* Specular Highlight Overlay */}

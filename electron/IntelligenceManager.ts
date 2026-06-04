@@ -326,6 +326,10 @@ export class IntelligenceManager extends EventEmitter {
         this.engine.reset();
     }
 
+    clearActionResponseCache(): void {
+        this.engine.clearActionResponseCache();
+    }
+
     reset(): void {
         this.session.reset();
         this.engine.reset();

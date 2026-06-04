@@ -354,16 +354,13 @@ export function initializeIpcHandlers(appState: AppState): void {
     const rejected = rejectUntrustedLicenseSender(event);
     if (rejected) return rejected;
     await entitlementVerifier.deactivate();
-    try {
-      const orchestrator = appState.getKnowledgeOrchestrator();
-      if (orchestrator) {
-        orchestrator.setKnowledgeMode(false);
-        console.log('[IPC] Knowledge mode auto-disabled due to license deactivation');
-      }
-    } catch (e) { /* ignore */ }
+    const profileDelete = appState.hardDeleteProfileIntelligence('license-deactivate');
+    if (!profileDelete.success) {
+      console.warn('[IPC] Profile hard delete after license deactivation failed:', profileDelete.error);
+    }
     clearActiveModeOnLicenseLoss();
     broadcastLicenseState();
-    return { success: true };
+    return { success: true, profileDeleted: profileDelete.success };
   });
 
   safeHandle("license:get-entitlement", async (event) => {
@@ -1756,34 +1753,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     const rejected = rejectUntrustedLicenseSender(event);
     if (rejected) return rejected;
     try {
-      // 1. Disable knowledge mode + wipe orchestrator in-memory caches
-      try {
-        const orchestrator = appState.getKnowledgeOrchestrator();
-        if (orchestrator) {
-          orchestrator.setKnowledgeMode(false);
-          const { DocType } = require('../premium/electron/knowledge/types');
-          orchestrator.deleteDocumentsByType(DocType.RESUME);
-          orchestrator.deleteDocumentsByType(DocType.JD);
-        }
-      } catch { /* ignore — orchestrator may not be initialised */ }
-
-      // 2. Wipe Pro-specific SQLite tables
-      //    NOT wiped: meetings, transcripts, audio chunks (user's own recordings)
-      try {
-        const sqliteDb = DatabaseManager.getInstance().getDb();
-        if (sqliteDb) {
-          sqliteDb.exec(`
-            DELETE FROM company_dossiers;
-            DELETE FROM knowledge_documents;
-            DELETE FROM resume_nodes;
-            DELETE FROM user_profile;
-          `);
-        }
-      } catch (dbErr: any) {
-        console.warn('[IPC] profile:wipe-trial-data: SQLite wipe partial error:', dbErr.message);
-      }
-
-      return { success: true };
+      return appState.hardDeleteProfileIntelligence('trial-expiry');
     } catch (error: any) {
       console.error('[IPC] profile:wipe-trial-data error:', error);
       return { success: false, error: error.message };
@@ -3793,10 +3763,16 @@ export function initializeIpcHandlers(appState: AppState): void {
       }
       // Map new KnowledgeStatus back to legacy UI shape temporarily
       const status = orchestrator.getStatus();
+      const activeState = orchestrator.getActiveProfileState?.();
       return {
         hasProfile: status.hasResume,
         profileMode: status.activeMode,
         isReady: status.isReady,
+        activeResumeId: activeState?.activeResumeId ?? status.activeResumeId ?? null,
+        activeJDId: activeState?.activeJDId ?? status.activeJDId ?? null,
+        activeProfilePairId: activeState?.activeProfilePairId ?? status.activeProfilePairId ?? null,
+        activeGenerationToken: activeState?.activeGenerationToken ?? status.activeGenerationToken ?? null,
+        generationId: activeState?.generationId ?? status.generationId ?? null,
         name: status.resumeSummary?.name,
         role: status.resumeSummary?.role,
         totalExperienceYears: status.resumeSummary?.totalExperienceYears
@@ -3835,6 +3811,13 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  safeHandle("profile:hard-delete-all", async (_event, reason?: string) => {
+    const normalizedReason = typeof reason === 'string' && reason.trim()
+      ? reason.trim()
+      : 'manual';
+    return appState.hardDeleteProfileIntelligence(normalizedReason);
+  });
+
   safeHandle("profile:delete", async () => {
     try {
       const orchestrator = appState.getKnowledgeOrchestrator();
@@ -3863,13 +3846,48 @@ export function initializeIpcHandlers(appState: AppState): void {
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) return null;
       const status = orchestrator.getStatus?.() || {};
+      const activeState = orchestrator.getActiveProfileState?.();
       return {
         ...(orchestrator.getProfileData() || {}),
         hasResume: !!(status as any).hasResume,
+        activeResumeId: activeState?.activeResumeId ?? (status as any).activeResumeId ?? null,
+        activeJDId: activeState?.activeJDId ?? (status as any).activeJDId ?? null,
+        activeProfilePairId: activeState?.activeProfilePairId ?? (status as any).activeProfilePairId ?? null,
+        activeGenerationToken: activeState?.activeGenerationToken ?? (status as any).activeGenerationToken ?? null,
+        generationId: activeState?.generationId ?? (status as any).generationId ?? null,
         engineReady: !!orchestrator.isEngineReady?.()
       };
     } catch (error: any) {
       return null;
+    }
+  });
+
+  safeHandle("profile:get-active-state", async () => {
+    try {
+      if (!appState.isBootstrapReady()) {
+        await appState.bootstrapPersistentState();
+      }
+      const orchestrator = appState.getKnowledgeOrchestrator();
+      if (!orchestrator?.getActiveProfileState) {
+        return {
+          activeResumeId: null,
+          activeJDId: null,
+          activeProfilePairId: null,
+          generationId: 0,
+          activeGenerationToken: null,
+          updatedAt: null,
+        };
+      }
+      return orchestrator.getActiveProfileState();
+    } catch {
+      return {
+        activeResumeId: null,
+        activeJDId: null,
+        activeProfilePairId: null,
+        generationId: 0,
+        activeGenerationToken: null,
+        updatedAt: null,
+      };
     }
   });
 

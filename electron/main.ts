@@ -517,7 +517,11 @@ export class AppState {
     this.setupAutoUpdater()
 
     // Initialize Google Auth Manager (server-side OAuth + MongoDB)
-    GoogleAuthManager.getInstance().setupIpcHandlers();
+    const googleAuthManager = GoogleAuthManager.getInstance();
+    googleAuthManager.setProfileLifecycleCleanup((reason: string) => {
+      this.hardDeleteProfileIntelligence(reason);
+    });
+    googleAuthManager.setupIpcHandlers();
   }
 
   private broadcast(channel: string, ...args: any[]): void {
@@ -826,10 +830,7 @@ export class AppState {
 
   private clearPremiumStateAfterEntitlementLoss(): void {
     try {
-      const orchestrator = this.getKnowledgeOrchestrator();
-      if (orchestrator) {
-        orchestrator.setKnowledgeMode(false);
-      }
+      this.hardDeleteProfileIntelligence('entitlement-loss');
     } catch { /* non-fatal */ }
     try {
       const manager = ModesManager.getInstance();
@@ -2591,6 +2592,67 @@ export class AppState {
       this.initializeKnowledgeOrchestrator();
     }
     return this.knowledgeOrchestrator;
+  }
+
+  public hardDeleteProfileIntelligence(reason: string = 'manual'): { success: boolean; generationId?: number; reason: string; error?: string } {
+    try {
+      const orchestrator = this.getKnowledgeOrchestrator();
+      const result = typeof orchestrator?.hardDeleteAllProfileIntelligence === 'function'
+        ? orchestrator.hardDeleteAllProfileIntelligence({ reason })
+        : orchestrator?.clearProfileIntelligence?.();
+
+      try {
+        SettingsManager.getInstance().clearProfileSettings();
+      } catch (error) {
+        console.warn('[AppState] Failed to clear profile settings:', error);
+      }
+
+      try {
+        DatabaseManager.getInstance().clearCustomNotes();
+      } catch (error) {
+        console.warn('[AppState] Failed to clear profile custom notes:', error);
+      }
+
+      try {
+        const llmHelper = this.processingHelper?.getLLMHelper?.();
+        llmHelper?.setCustomNotes?.('');
+        llmHelper?.setCustomNotesEnabled?.(false);
+      } catch (error) {
+        console.warn('[AppState] Failed to clear LLM helper profile notes:', error);
+      }
+
+      try {
+        this.intelligenceManager?.clearActionResponseCache?.();
+      } catch (error) {
+        console.warn('[AppState] Failed to clear action response cache:', error);
+      }
+
+      this.knowledgeBootstrapSnapshot = {
+        isReady: false,
+        hasResume: false,
+        hasJD: false,
+        restoredNodeCount: 0,
+        restoredOutputs: {
+          negotiationScript: false,
+          gapAnalysis: false,
+          questions: false
+        }
+      };
+
+      this.broadcast('profile-mode-changed', false);
+      this.broadcast('profile-updated', null);
+      this.broadcast('knowledge_engine_ready', this.getKnowledgeBootstrapSnapshot());
+      this.broadcast('profile-hard-delete-complete', {
+        reason,
+        generationId: result?.generationId ?? null
+      });
+
+      console.log(`[AppState] Profile intelligence hard delete complete reason=${reason} generation=${result?.generationId ?? 'n/a'}`);
+      return { success: true, generationId: result?.generationId, reason };
+    } catch (error: any) {
+      console.error('[AppState] Profile intelligence hard delete failed:', error);
+      return { success: false, reason, error: error?.message || 'profile_hard_delete_failed' };
+    }
   }
 
   public isBootstrapReady(): boolean {

@@ -67,6 +67,24 @@ export class SettingsManager {
         this.saveSettings();
     }
 
+    public unset<K extends keyof AppSettings>(key: K): void {
+        if (key in this.settings) {
+            delete this.settings[key];
+            this.saveSettings();
+        }
+    }
+
+    public clearProfileSettings(): void {
+        let changed = false;
+        if ('knowledgeMode' in this.settings) {
+            delete this.settings.knowledgeMode;
+            changed = true;
+        }
+        if (changed) {
+            this.saveSettings();
+        }
+    }
+
     public getPersonalizationPreferences(): PersonalizationPreferences {
         return normalizePersonalizationPreferences(this.settings.personalization);
     }

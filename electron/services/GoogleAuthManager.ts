@@ -27,6 +27,7 @@ export class GoogleAuthManager {
   private static instance: GoogleAuthManager;
   private authEpoch = 0;
   private activeAuthSessionIds = new Map<string, number>();
+  private profileLifecycleCleanup: ((reason: string) => Promise<void> | void) | null = null;
 
   private constructor() {}
 
@@ -39,6 +40,18 @@ export class GoogleAuthManager {
 
   private get credentials(): CredentialsManager {
     return CredentialsManager.getInstance();
+  }
+
+  public setProfileLifecycleCleanup(cleanup: ((reason: string) => Promise<void> | void) | null): void {
+    this.profileLifecycleCleanup = cleanup;
+  }
+
+  private async runProfileLifecycleCleanup(reason: string): Promise<void> {
+    try {
+      await this.profileLifecycleCleanup?.(reason);
+    } catch (error) {
+      console.warn(`[GoogleAuthManager] Profile lifecycle cleanup failed for ${reason}:`, error);
+    }
   }
 
   private broadcast(channel: string, ...args: any[]): void {
@@ -164,7 +177,7 @@ export class GoogleAuthManager {
     };
   }
 
-  private persistAuthResult(result: any, operationEpoch: number): GoogleAuthResult {
+  private async persistAuthResult(result: any, operationEpoch: number): Promise<GoogleAuthResult> {
     if (!this.isAuthOperationCurrent(operationEpoch)) {
       console.warn('[GoogleAuthManager] Ignored stale Google auth result after logout');
       return this.staleAuthResult();
@@ -187,6 +200,14 @@ export class GoogleAuthManager {
     if (!this.isAuthOperationCurrent(operationEpoch)) {
       console.warn('[GoogleAuthManager] Ignored stale Google auth result before persistence');
       return this.staleAuthResult();
+    }
+
+    const cachedUser = this.credentials.getGoogleAuthUser();
+    if (
+      cachedUser?.email
+      && cachedUser.email.trim().toLowerCase() !== user.email.trim().toLowerCase()
+    ) {
+      await this.runProfileLifecycleCleanup('account-switch');
     }
 
     this.credentials.setGoogleAuthSession(token, user);
@@ -277,6 +298,7 @@ export class GoogleAuthManager {
     this.authEpoch += 1;
     this.activeAuthSessionIds.clear();
     this.clearLocalAuthAndBroadcast();
+    await this.runProfileLifecycleCleanup('logout');
 
     if (token) {
       await fetch(`${API_BASE_URL}/auth/logout`, {
