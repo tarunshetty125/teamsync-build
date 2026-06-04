@@ -1151,6 +1151,26 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   })
 
+  safeHandle("onboarding-v2:get-state", (_, email: string) => {
+    try {
+      const { SettingsManager } = require('./services/SettingsManager');
+      const state = SettingsManager.getInstance().getOnboardingV2State(email);
+      return { success: true, state };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to read onboarding state' };
+    }
+  })
+
+  safeHandle("onboarding-v2:update-state", (_, email: string, patch: unknown) => {
+    try {
+      const { SettingsManager } = require('./services/SettingsManager');
+      const state = SettingsManager.getInstance().updateOnboardingV2State(email, patch);
+      return { success: true, state };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to update onboarding state' };
+    }
+  })
+
   safeHandle("close-settings-window", () => {
     appState.settingsWindowHelper.closeWindow()
   })
