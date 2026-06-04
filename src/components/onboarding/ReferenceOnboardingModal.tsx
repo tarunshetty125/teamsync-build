@@ -1,7 +1,7 @@
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import { Check } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type TeamSyncOnboardingV1 = {
   persona: string;
@@ -136,6 +136,15 @@ const modalVariants: Variants = {
       staggerChildren: 0.075,
     },
   },
+  advanceExit: {
+    opacity: 0,
+    y: 118,
+    scale: 0.982,
+    transition: {
+      duration: 0.88,
+      ease: [0.22, 1, 0.36, 1],
+    },
+  },
   exit: modalExitState,
 };
 
@@ -252,8 +261,17 @@ export function ReferenceOnboardingModal({
   const [discoverySource, setDiscoverySource] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isAdvancingToDetails, setIsAdvancingToDetails] = useState(false);
+  const advanceTimerRef = useRef<number | null>(null);
+
+  const clearAdvanceTimer = () => {
+    if (advanceTimerRef.current === null) return;
+    window.clearTimeout(advanceTimerRef.current);
+    advanceTimerRef.current = null;
+  };
 
   useEffect(() => {
+    clearAdvanceTimer();
     if (!isOpen) return;
     setStep('persona');
     setPersona(null);
@@ -261,13 +279,22 @@ export function ReferenceOnboardingModal({
     setDiscoverySource(null);
     setIsSaving(false);
     setSaveError(null);
+    setIsAdvancingToDetails(false);
+
+    return clearAdvanceTimer;
   }, [isOpen, user?.email]);
 
   const handlePersonaSelect = (id: string) => {
-    if (isSaving) return;
+    if (isSaving || isAdvancingToDetails) return;
     setPersona(id);
     setSaveError(null);
-    window.setTimeout(() => setStep('details'), 160);
+    setIsAdvancingToDetails(true);
+    clearAdvanceTimer();
+    advanceTimerRef.current = window.setTimeout(() => {
+      setStep('details');
+      setIsAdvancingToDetails(false);
+      advanceTimerRef.current = null;
+    }, 2000);
   };
 
   const handleSave = async (
@@ -339,9 +366,11 @@ export function ReferenceOnboardingModal({
                 key="persona-modal"
                 variants={modalVariants}
                 initial="hidden"
-                animate="visible"
+                animate={isAdvancingToDetails ? 'advanceExit' : 'visible'}
                 exit="exit"
-                className="relative w-[calc(100vw-32px)] max-w-[500px] transform-gpu overflow-hidden rounded-[15px] bg-[#020202] px-[40px] pb-[16px] pt-[50px] shadow-[0_26px_90px_rgba(0,0,0,0.62)] will-change-transform"
+                className={`relative w-[calc(100vw-32px)] max-w-[500px] transform-gpu overflow-hidden rounded-[15px] bg-[#020202] px-[40px] pb-[16px] pt-[50px] shadow-[0_26px_90px_rgba(0,0,0,0.62)] will-change-transform ${
+                  isAdvancingToDetails ? 'pointer-events-none' : ''
+                }`}
                 data-testid="persona-modal"
                 style={modalFrameStyle}
               >
