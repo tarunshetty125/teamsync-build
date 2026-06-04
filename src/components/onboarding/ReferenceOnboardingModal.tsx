@@ -330,7 +330,7 @@ export function ReferenceOnboardingModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-          className="fixed inset-0 z-[130] flex items-start justify-center overflow-hidden bg-black/[0.50] pt-[154px] text-white backdrop-blur-[13px]"
+          className="fixed inset-0 z-[130] flex items-start justify-center overflow-hidden bg-[linear-gradient(180deg,rgba(0,0,0,0.70)_0%,rgba(0,0,0,0.50)_42%,rgba(0,0,0,0.24)_100%)] pt-[154px] text-white backdrop-blur-[6px] backdrop-saturate-[0.72]"
           data-testid="reference-onboarding-backdrop"
         >
           <AnimatePresence mode="wait">

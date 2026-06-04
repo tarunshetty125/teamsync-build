@@ -761,7 +761,7 @@ const App: React.FC = () => {
   // Renders if window=launcher OR no param
   return (
     <ErrorBoundary context="Launcher">
-      <div className="h-full min-h-0 w-full relative bg-[#000000]">
+      <div className={`h-full min-h-0 w-full relative ${shouldRenderReferenceOnboarding ? 'bg-transparent' : 'bg-[#000000]'}`}>
         {shouldMountLauncherWorkspace && renderLauncherWorkspace(isStartupCoveringLauncher)}
 
         <AnimatePresence initial={false}>
