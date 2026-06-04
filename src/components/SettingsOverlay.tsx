@@ -2508,8 +2508,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         {
             label: 'Today',
             items: [
-                { id: 'overview', label: 'Overview', icon: <Activity size={16} />, meta: todayStatusLabel },
-                { id: 'privacy-trust', label: 'Privacy & Trust', icon: <BadgeCheck size={16} />, meta: trustSidebarLabel },
+                { id: 'overview', label: 'Overview', icon: <Activity size={16} /> },
+                { id: 'privacy-trust', label: 'Privacy & Trust', icon: <BadgeCheck size={16} /> },
             ],
         },
         {

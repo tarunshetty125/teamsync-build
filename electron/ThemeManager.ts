@@ -11,12 +11,13 @@ interface ThemeConfig {
 
 export class ThemeManager {
     private static instance: ThemeManager;
-    private mode: ThemeMode = 'system';
+    private mode: ThemeMode = 'dark';
     private configPath: string;
 
     private constructor() {
         this.configPath = path.join(app.getPath('userData'), 'theme-config.json');
         this.loadConfig();
+        this.applyNativeThemeSource();
         this.setupListeners();
     }
 
@@ -67,17 +68,19 @@ export class ThemeManager {
     public setMode(mode: ThemeMode) {
         this.mode = mode;
         this.saveConfig();
+        this.applyNativeThemeSource();
+        this.broadcastThemeChange();
+    }
 
-        // Force native theme update if not system, so electron internal UI matches if possible
-        if (mode === 'dark') {
+    private applyNativeThemeSource() {
+        // Force native theme update if not system, so Electron internal UI matches if possible.
+        if (this.mode === 'dark') {
             nativeTheme.themeSource = 'dark';
-        } else if (mode === 'light') {
+        } else if (this.mode === 'light') {
             nativeTheme.themeSource = 'light';
         } else {
             nativeTheme.themeSource = 'system';
         }
-
-        this.broadcastThemeChange();
     }
 
     public getResolvedTheme(): ResolvedTheme {
