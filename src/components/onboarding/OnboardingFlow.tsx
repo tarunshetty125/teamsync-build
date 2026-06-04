@@ -10,6 +10,11 @@ import { isPermissionStatusOperational } from '../../lib/permissions/utils';
 
 interface OnboardingFlowProps {
   isOpen: boolean;
+  skipSplash?: boolean;
+  startAtPermissions?: boolean;
+  completeAfterPermissions?: boolean;
+  onPermissionsComplete?: () => void;
+  onLaunchComplete?: () => void;
 }
 
 const STEPS = [
@@ -38,8 +43,15 @@ function AmbientBackground() {
   );
 }
 
-export function OnboardingFlow({ isOpen }: OnboardingFlowProps) {
-  const [showSplash, setShowSplash] = useState(true);
+export function OnboardingFlow({
+  isOpen,
+  skipSplash = false,
+  startAtPermissions = false,
+  completeAfterPermissions = false,
+  onPermissionsComplete,
+  onLaunchComplete,
+}: OnboardingFlowProps) {
+  const [showSplash, setShowSplash] = useState(() => !skipSplash);
 
   const currentStep = usePermissionsStore((state) => state.currentStep);
   const status = usePermissionsStore((state) => state.status);
@@ -54,13 +66,28 @@ export function OnboardingFlow({ isOpen }: OnboardingFlowProps) {
 
   useEffect(() => {
     if (!isOpen) return;
+    if (skipSplash) {
+      setShowSplash(false);
+      return;
+    }
+    setShowSplash(true);
     const t = setTimeout(() => setShowSplash(false), 2200);
     return () => clearTimeout(t);
-  }, [isOpen]);
+  }, [isOpen, skipSplash]);
+
+  useEffect(() => {
+    if (!isOpen || !startAtPermissions || currentStep !== 'welcome') return;
+    setCurrentStep('permissions');
+  }, [currentStep, isOpen, setCurrentStep, startAtPermissions]);
 
   if (!isOpen) return null;
 
-  const currentIndex = STEPS.findIndex((step) => step.key === currentStep);
+  const displayStep =
+    (startAtPermissions && currentStep === 'welcome') ||
+    (completeAfterPermissions && currentStep === 'ready')
+      ? 'permissions'
+      : currentStep;
+  const currentIndex = STEPS.findIndex((step) => step.key === displayStep);
 
   const handleContinueFromWelcome = () => {
     setCurrentStep(status && isPermissionStatusOperational(status) ? 'ready' : 'permissions');
@@ -69,7 +96,20 @@ export function OnboardingFlow({ isOpen }: OnboardingFlowProps) {
   const handleLaunch = () => {
     if (status && isPermissionStatusOperational(status)) {
       completeOnboarding();
+      onLaunchComplete?.();
     }
+  };
+
+  const handleContinueFromPermissions = () => {
+    if (completeAfterPermissions) {
+      if (status && isPermissionStatusOperational(status)) {
+        completeOnboarding();
+        onPermissionsComplete?.();
+      }
+      return;
+    }
+
+    setCurrentStep('ready');
   };
 
   return (
@@ -207,9 +247,9 @@ export function OnboardingFlow({ isOpen }: OnboardingFlowProps) {
                 </div>
               </motion.div>
 
-              {currentStep === 'welcome' ? <WelcomeStep onContinue={handleContinueFromWelcome} /> : null}
+              {displayStep === 'welcome' ? <WelcomeStep onContinue={handleContinueFromWelcome} /> : null}
 
-              {currentStep === 'permissions' ? (
+              {displayStep === 'permissions' ? (
                 <PermissionsStep
                   status={status}
                   isChecking={isChecking}
@@ -218,12 +258,12 @@ export function OnboardingFlow({ isOpen }: OnboardingFlowProps) {
                   onRequest={(permission) => { void requestPermission(permission); }}
                   onOpenSettings={(permission) => { void openSettings(permission); }}
                   onRetry={() => { void refreshPermissions(); }}
-                  onContinue={() => setCurrentStep('ready')}
+                  onContinue={handleContinueFromPermissions}
                   onQuit={() => { void window.electronAPI?.quitApp?.(); }}
                 />
               ) : null}
 
-              {currentStep === 'ready' ? <ReadyStep onLaunch={handleLaunch} /> : null}
+              {displayStep === 'ready' ? <ReadyStep onLaunch={handleLaunch} /> : null}
             </div>
           </div>
         </motion.div>

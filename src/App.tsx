@@ -41,6 +41,7 @@ import { usePermissionsStore } from "./stores/usePermissionsStore"
 import { formatBlockingPermissions, isPermissionStatusOperational } from "./lib/permissions/utils"
 
 const queryClient = new QueryClient()
+const POST_LOGIN_LAUNCH_PENDING_KEY = 'teamsync-post-login-launch-pending-v1'
 
 type BedrockReauthenticationWarning = {
   title?: string;
@@ -161,6 +162,10 @@ const App: React.FC = () => {
   // ── Onboarding / promo toasters ───────────────────────────
   const [showTrialPromo, setShowTrialPromo] = useState(false);
   const [hasPresentedLauncherWindow, setHasPresentedLauncherWindow] = useState(false);
+  const [pendingPostLoginLaunch, setPendingPostLoginLaunch] = useState<boolean>(() => (
+    (isLauncherWindow || isDefault) &&
+    localStorage.getItem(POST_LOGIN_LAUNCH_PENDING_KEY) === 'true'
+  ));
 
   // ── Free Trial global state ────────────────────────────────
   const [activeTrial, setActiveTrial] = useState<{
@@ -193,7 +198,11 @@ const App: React.FC = () => {
 
   const syncStartupState = useCallback(async () => {
     const reader = window.electronAPI?.forceResync ?? window.electronAPI?.getStartupState;
-    if (!reader) return;
+    if (!reader) {
+      setHasLoadedLicense(true);
+      setHasCompletedBootstrap(true);
+      return;
+    }
     try {
       const state = await reader();
       setPlanDetails(state?.license ?? { isPremium: false });
@@ -247,6 +256,17 @@ const App: React.FC = () => {
     }
   }, [applyGoogleAuthState, clearLegacyRendererAuthCache, isDefault, isLauncherWindow]);
 
+  const markPermissionsSetupComplete = useCallback(() => {
+    if (!(isLauncherWindow || isDefault)) return;
+    localStorage.setItem(POST_LOGIN_LAUNCH_PENDING_KEY, 'true');
+    setPendingPostLoginLaunch(true);
+  }, [isDefault, isLauncherWindow]);
+
+  const completePostLoginLaunch = useCallback(() => {
+    localStorage.removeItem(POST_LOGIN_LAUNCH_PENDING_KEY);
+    setPendingPostLoginLaunch(false);
+  }, []);
+
   const permissionsStatus = usePermissionsStore((state) => state.status);
   const permissionsInitialized = usePermissionsStore((state) => state.hasInitialized);
   const onboardingCompleted = usePermissionsStore((state) => state.onboardingCompleted);
@@ -260,12 +280,19 @@ const App: React.FC = () => {
     (isLauncherWindow || isDefault) &&
     permissionsInitialized &&
     (!onboardingCompleted || !isPermissionsReady);
-  const shouldHoldLauncherBoot = (isLauncherWindow || isDefault) && !permissionsInitialized;
-  const shouldRenderStartup = showStartup && !shouldShowOnboarding;
-  const canRenderLauncherWorkspace = !shouldShowOnboarding && isAuthenticated;
+  const shouldRenderStartup = (isLauncherWindow || isDefault) && showStartup;
+  const shouldRenderOnboarding = shouldShowOnboarding && !shouldRenderStartup;
+  const shouldHoldLauncherBoot = (isLauncherWindow || isDefault) && !permissionsInitialized && !shouldRenderStartup;
+  const shouldRenderPostLoginLaunch =
+    (isLauncherWindow || isDefault) &&
+    !shouldShowOnboarding &&
+    !shouldRenderStartup &&
+    isAuthenticated &&
+    pendingPostLoginLaunch;
+  const canRenderLauncherWorkspace = !shouldShowOnboarding && isAuthenticated && !shouldRenderPostLoginLaunch;
   const shouldMountLauncherWorkspace = (isLauncherWindow || isDefault) && !shouldHoldLauncherBoot && canRenderLauncherWorkspace;
   const isStartupCoveringLauncher = shouldMountLauncherWorkspace && shouldRenderStartup;
-  const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !shouldRenderStartup && !isSettingsOpen && isLauncherMainView && !shouldShowOnboarding;
+  const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !shouldRenderStartup && !isSettingsOpen && isLauncherMainView && !shouldShowOnboarding && !shouldRenderPostLoginLaunch;
   const { activeAd, dismissAd, previewAd } = useAdCampaigns(
     planDetails,
     hasProfile,
@@ -452,20 +479,15 @@ const App: React.FC = () => {
   }, [applyGoogleAuthState, clearLegacyRendererAuthCache, initializePermissions, isDefault, isLauncherWindow, refreshPermissions, setPermissionsError, setPermissionsStep, syncGoogleAuthState, syncStartupState]);
 
   useEffect(() => {
-    if (!shouldShowOnboarding || !showStartup) return;
-    setShowStartup(false);
-  }, [shouldShowOnboarding, showStartup]);
-
-  useEffect(() => {
     if (!(isLauncherWindow || isDefault)) return;
-    if (!permissionsInitialized || hasPresentedLauncherWindow) return;
+    if (hasPresentedLauncherWindow) return;
 
     window.electronAPI?.showWindow?.()
       .catch((error) => {
-        console.error('Failed to present launcher window after permissions bootstrap:', error);
+        console.error('Failed to present launcher window during startup:', error);
       });
     setHasPresentedLauncherWindow(true);
-  }, [hasPresentedLauncherWindow, isDefault, isLauncherWindow, permissionsInitialized]);
+  }, [hasPresentedLauncherWindow, isDefault, isLauncherWindow]);
 
   // Listen for overlay opacity changes — scoped to overlay window only
   useEffect(() => {
@@ -657,16 +679,17 @@ const App: React.FC = () => {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
                 className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
                 onClick={(e) => { if (e.target === e.currentTarget) setIsModesOpen(false); }}
               >
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.97, y: 8 }}
+                  initial={{ opacity: 0, scale: 0.985, y: 12 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.97, y: 8 }}
-                  transition={{ duration: 0.18, ease: [0.19, 1, 0.22, 1] }}
-                  className="h-[82vh] w-[70vw] max-h-[820px] max-w-[980px] overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#0c0e14] shadow-2xl"
+                  exit={{ opacity: 0, scale: 0.99, y: 6 }}
+                  transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
+                  className="h-[74vh] w-[62vw] max-h-[700px] max-w-[840px] transform-gpu overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#0c0e14] shadow-2xl"
+                  style={{ willChange: 'transform, opacity' }}
                 >
                   {(isPremiumActive || !!activeTrial) ? (
                     <PremiumModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
@@ -762,7 +785,13 @@ const App: React.FC = () => {
         {shouldMountLauncherWorkspace && renderLauncherWorkspace(isStartupCoveringLauncher)}
 
         <AnimatePresence initial={false}>
-          {shouldHoldLauncherBoot ? (
+          {shouldRenderStartup ? (
+            <StartupSequence
+              key="startup"
+              isReady={bootstrapUiReady && permissionsInitialized}
+              onComplete={() => setShowStartup(false)}
+            />
+          ) : shouldHoldLauncherBoot ? (
             <motion.div
               key="permissions-bootstrap"
               initial={{ opacity: 1 }}
@@ -773,9 +802,7 @@ const App: React.FC = () => {
                 Preparing TeamSync
               </div>
             </motion.div>
-          ) : shouldRenderStartup ? (
-            <StartupSequence key="startup" isReady={bootstrapUiReady} onComplete={() => setShowStartup(false)} />
-          ) : shouldShowOnboarding ? null : !isAuthenticated ? (
+          ) : shouldShowOnboarding || shouldRenderPostLoginLaunch ? null : !isAuthenticated ? (
             <motion.div
               key="auth"
               initial={{ opacity: 0 }}
@@ -832,14 +859,18 @@ const App: React.FC = () => {
           )}
         </AnimatePresence>
 
-        <UpdateBanner />
-        <SupportToaster />
-        <TeamSyncQuotaBanner />
+        {!shouldRenderStartup && !shouldShowOnboarding && !shouldRenderPostLoginLaunch ? (
+          <>
+            <UpdateBanner />
+            <SupportToaster />
+            <TeamSyncQuotaBanner />
+          </>
+        ) : null}
 
 
 
         {/* Free trial countdown banner — only in launcher window while trial is active */}
-        {(isLauncherWindow || isDefault) && activeTrial && !shouldShowOnboarding && (
+        {(isLauncherWindow || isDefault) && activeTrial && !shouldShowOnboarding && !shouldRenderStartup && !shouldRenderPostLoginLaunch && (
           <FreeTrialBanner
             expiresAt={activeTrial.expiresAt}
             usage={activeTrial.usage}
@@ -851,7 +882,7 @@ const App: React.FC = () => {
         )}
 
         {/* Trial promo toaster — 5s after restart (self-gates via localStorage + conditions) */}
-        {!shouldShowOnboarding && <TrialPromoToaster
+        {!shouldShowOnboarding && !shouldRenderStartup && !shouldRenderPostLoginLaunch && <TrialPromoToaster
           isOpen={showTrialPromo}
           hasTeamSyncKey={hasTeamSyncApi}
           hasTrialToken={!!activeTrial}
@@ -872,7 +903,7 @@ const App: React.FC = () => {
         />}
 
         {/* Post-trial upgrade modal — shown when trial expires */}
-        {(isLauncherWindow || isDefault) && showTrialExpiredModal && !shouldShowOnboarding && (
+        {(isLauncherWindow || isDefault) && showTrialExpiredModal && !shouldShowOnboarding && !shouldRenderStartup && !shouldRenderPostLoginLaunch && (
           <FreeTrialModal
             usage={activeTrial?.usage ?? { ai: 0, stt_seconds: 0, search: 0 }}
             onByok={async () => {
@@ -886,7 +917,7 @@ const App: React.FC = () => {
         )}
         {/* Ad toasters — render whenever activeAd is set (isLauncherMainView guard bypassed
           when triggered via preview shortcut so the card always surfaces) */}
-        {(isLauncherMainView || !!activeAd) && !isSettingsOpen && !shouldShowOnboarding && (
+        {(isLauncherMainView || !!activeAd) && !isSettingsOpen && !shouldShowOnboarding && !shouldRenderStartup && !shouldRenderPostLoginLaunch && (
           <TeamSyncApiPromoToaster
             isOpen={activeAd === 'teamsync_api'}
             onDismiss={() => dismissAd('teamsync_api')}
@@ -896,7 +927,7 @@ const App: React.FC = () => {
             }}
           />
         )}
-        {(isLauncherMainView || !!activeAd) && !shouldShowOnboarding && (
+        {(isLauncherMainView || !!activeAd) && !shouldShowOnboarding && !shouldRenderStartup && !shouldRenderPostLoginLaunch && (
           <>
             <ProfileFeatureToaster
               isOpen={activeAd === 'profile'}
@@ -960,7 +991,14 @@ const App: React.FC = () => {
           }}
           onDeactivated={() => { setIsPremiumActive(false); setPlanDetails({ isPremium: false }); }}
         />
-        <OnboardingFlow isOpen={shouldShowOnboarding} />
+        <OnboardingFlow
+          isOpen={shouldRenderOnboarding || shouldRenderPostLoginLaunch}
+          skipSplash
+          startAtPermissions={shouldRenderOnboarding}
+          completeAfterPermissions={shouldRenderOnboarding}
+          onPermissionsComplete={markPermissionsSetupComplete}
+          onLaunchComplete={completePostLoginLaunch}
+        />
       </div>
     </ErrorBoundary>
   )

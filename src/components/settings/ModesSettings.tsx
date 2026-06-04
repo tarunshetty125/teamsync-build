@@ -130,6 +130,31 @@ const cards: ModeCardProps[] = [
   },
 ];
 
+const modesEntryEase: [number, number, number, number] = [0.23, 1, 0.32, 1];
+
+const modesSurfaceVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      delayChildren: 0.04,
+      staggerChildren: 0.035,
+    },
+  },
+};
+
+const modesItemVariants = {
+  hidden: { opacity: 0, y: 8 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.24,
+      ease: modesEntryEase,
+    },
+  },
+};
+
 function SignalBars({ accent }: { accent: string }) {
   const prefersReducedMotion = useReducedMotion();
 
@@ -159,8 +184,8 @@ function ModeMicroDetail({
 
   if (title === 'Interview') {
     return (
-      <div className="h-[64px] w-[178px] rounded-[14px] border border-white/[0.09] bg-black/18 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-        <div className="mb-2.5 flex items-center justify-between gap-3">
+      <div className="h-[56px] w-[152px] rounded-[12px] border border-white/[0.09] bg-black/18 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <div className="mb-2 flex items-center justify-between gap-2.5">
           <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-white/34">Answer cue</span>
           <span className="rounded-full border px-2 py-0.5 text-[7.5px] font-semibold uppercase tracking-[0.16em]" style={{ borderColor: `${accent}38`, color: accent }}>
             STAR
@@ -176,8 +201,8 @@ function ModeMicroDetail({
 
   if (title === 'Sales Copilot') {
     return (
-      <div className="w-[108px] space-y-1.5">
-        <div className="rounded-full border border-white/[0.08] bg-black/16 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <div className="w-[96px] space-y-1.5">
+        <div className="rounded-full border border-white/[0.08] bg-black/16 px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
           <div className="flex items-center justify-center gap-1.5 text-[7.5px] uppercase tracking-[0.16em] text-white/32">
             <span>Signal</span>
             <span style={{ color: accent }}>ready</span>
@@ -190,7 +215,7 @@ function ModeMicroDetail({
 
   if (title === 'Technical') {
     return (
-      <div className="rounded-[12px] border border-white/[0.08] bg-black/18 px-3 py-2 font-mono text-[9px] leading-relaxed text-white/46 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <div className="rounded-[11px] border border-white/[0.08] bg-black/18 px-2.5 py-1.5 font-mono text-[8.5px] leading-relaxed text-white/46 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
         <div style={{ color: accent }}>O(log n)</div>
         <div className="text-white/28">cache memo</div>
       </div>
@@ -198,7 +223,7 @@ function ModeMicroDetail({
   }
 
   return (
-    <div className="space-y-1.5 rounded-[12px] border border-white/[0.08] bg-black/18 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+    <div className="space-y-1.5 rounded-[11px] border border-white/[0.08] bg-black/18 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
       <div className="h-1.5 w-[78%] rounded-full bg-white/16" />
       <div className="h-1.5 w-[54%] rounded-full" style={{ background: `${accent}55` }} />
     </div>
@@ -217,17 +242,17 @@ function ModeCard({ title, description, tone, layout, icon: Icon, centered = fal
       whileHover={prefersReducedMotion ? undefined : { y: -2, scale: 1.01 }}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
       className={clsx(
-        'group relative overflow-hidden rounded-[28px] border-[2px] border-white/[0.14] bg-[#1c1c1d] shadow-[0_0_0_1px_rgba(255,255,255,0.055),0_18px_44px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.10)]',
-        isTall && 'min-h-[206px] md:min-h-[210px]',
-        isWide && 'min-h-[98px] md:min-h-[96px]',
-        isSquare && 'min-h-[84px]',
+        'group relative overflow-hidden rounded-[24px] border-[2px] border-white/[0.14] bg-[#1c1c1d] shadow-[0_0_0_1px_rgba(255,255,255,0.055),0_18px_44px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.10)]',
+        isTall && 'min-h-[180px] md:min-h-[186px]',
+        isWide && 'min-h-[84px] md:min-h-[86px]',
+        isSquare && 'min-h-[72px]',
         className,
       )}
     >
       <div className={clsx('pointer-events-none absolute inset-0 opacity-100 transition-all duration-200', toneStyle.glow, toneStyle.hoverGlow)} />
-      <div className="pointer-events-none absolute inset-[1px] rounded-[27px] border border-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_-40px_80px_rgba(0,0,0,0.12)]" />
+      <div className="pointer-events-none absolute inset-[1px] rounded-[23px] border border-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_-40px_80px_rgba(0,0,0,0.12)]" />
       <div
-        className="pointer-events-none absolute inset-[6px] rounded-[21px] border-2 border-white/[0.10]"
+        className="pointer-events-none absolute inset-[5px] rounded-[18px] border-2 border-white/[0.10]"
         style={{
           boxShadow: `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(255,255,255,0.045), inset 0 0 0 1px ${toneStyle.accent}22`,
         }}
@@ -258,10 +283,10 @@ function ModeCard({ title, description, tone, layout, icon: Icon, centered = fal
 
 		      <div
 	        className={clsx(
-	          'relative z-10 h-full rounded-[27px]',
-	          isTall && 'grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 px-5 py-4 md:px-6 md:py-5',
-	          isWide && 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-5 py-3.5 md:px-6',
-	          isSquare && 'grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 py-3 md:px-5',
+	          'relative z-10 h-full rounded-[23px]',
+	          isTall && 'grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3.5 px-4 py-3.5 md:px-5 md:py-4',
+	          isWide && 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3.5 px-4 py-3 md:px-5',
+	          isSquare && 'grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2.5 px-3.5 py-2.5 md:px-4',
 	        )}
 	      >
 	        <div
@@ -273,20 +298,20 @@ function ModeCard({ title, description, tone, layout, icon: Icon, centered = fal
           <div
             className={clsx(
               'flex shrink-0 items-center justify-center rounded-[14px] border backdrop-blur-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]',
-              isSquare ? 'h-[40px] w-[40px] rounded-[12px]' : 'h-[44px] w-[44px] md:h-[46px] md:w-[46px]',
+              isSquare ? 'h-[34px] w-[34px] rounded-[10px]' : 'h-[38px] w-[38px] md:h-[40px] md:w-[40px]',
               toneStyle.iconWrap,
             )}
           >
-            <Icon className={clsx('h-[20px] w-[20px] stroke-[2]', isSquare && 'h-[18px] w-[18px]', toneStyle.icon)} />
+            <Icon className={clsx('h-[18px] w-[18px] stroke-[2]', isSquare && 'h-[16px] w-[16px]', toneStyle.icon)} />
           </div>
 
-		          <div className={clsx('min-w-0', isTall && 'mt-4')}>
+		          <div className={clsx('min-w-0', isTall && 'mt-3.5')}>
 		            <h3
 		              className={clsx(
 		                'font-semibold tracking-[-0.04em] text-white',
 		                isSquare ? 'whitespace-nowrap' : 'truncate',
-		                centered ? 'text-[16px]' : 'text-[18px] md:text-[19px]',
-		                isSquare && 'text-[15px] md:text-[16px]',
+		                centered ? 'text-[14.5px]' : 'text-[16px] md:text-[17px]',
+		                isSquare && 'text-[13.5px] md:text-[14.5px]',
               )}
             >
               {title}
@@ -294,7 +319,7 @@ function ModeCard({ title, description, tone, layout, icon: Icon, centered = fal
             {description ? (
               <p
                 className={clsx(
-                  'mt-1 max-w-[15ch] text-[13px] leading-[1.28] tracking-[-0.02em] text-white/50 md:text-[14px]',
+                  'mt-1 max-w-[15ch] text-[12px] leading-[1.28] tracking-[-0.02em] text-white/50 md:text-[13px]',
                   isWide && 'max-w-none leading-[1.2]',
                   isTall && 'max-w-[22ch]',
                 )}
@@ -309,8 +334,8 @@ function ModeCard({ title, description, tone, layout, icon: Icon, centered = fal
 	          <div
 	            className={clsx(
 	              'relative z-10 shrink-0',
-	              isTall && 'w-[178px] self-end',
-	              isWide && 'hidden w-[118px] sm:block',
+	              isTall && 'w-[152px] self-end',
+	              isWide && 'hidden w-[104px] sm:block',
 	            )}
 	          >
 	            <ModeMicroDetail title={title} tone={tone} />
@@ -331,22 +356,22 @@ function LockedFooter({
   };
 
   return (
-    <footer className="border-t border-white/[0.07] px-6 py-3 md:px-8 md:py-3.5">
-      <div className="grid gap-4 md:grid-cols-[auto_1fr_auto] md:items-center">
+    <motion.footer variants={modesItemVariants} className="border-t border-white/[0.07] px-5 py-2.5 md:px-6 md:py-3">
+      <div className="grid gap-3 md:grid-cols-[auto_1fr_auto] md:items-center">
         <button
           type="button"
           onClick={onOpenTeamSyncAPI}
-          className="inline-flex items-center gap-1.5 text-[14px] tracking-[-0.02em] text-white/42 transition-colors duration-200 hover:text-white/72"
+          className="inline-flex items-center gap-1.5 text-[13px] tracking-[-0.02em] text-white/42 transition-colors duration-200 hover:text-white/72"
         >
           <span>I have a license</span>
           <ChevronRight className="h-4 w-4 stroke-[2.2]" />
         </button>
 
         <div className="text-center md:px-5">
-          <p className="text-[14px] tracking-[-0.025em] text-white/40 md:text-[15px]">
+          <p className="text-[13px] tracking-[-0.025em] text-white/40 md:text-[14px]">
             Currently you are restricted to General Mode.
           </p>
-          <p className="mt-1 text-[15px] tracking-[-0.028em] text-[#ffc633] md:text-[16px]">
+          <p className="mt-0.5 text-[14px] tracking-[-0.028em] text-[#ffc633] md:text-[15px]">
             Unlock Pro to access 6 advanced experts and unlimited custom modes.
           </p>
         </div>
@@ -354,27 +379,27 @@ function LockedFooter({
         <button
           type="button"
           onClick={handleUnlockPro}
-          className="inline-flex h-[52px] items-center justify-between rounded-full bg-white pl-6 pr-3 text-[16px] font-semibold tracking-[-0.035em] text-[#141414] shadow-[0_22px_50px_rgba(0,0,0,0.25)] transition-transform duration-200 hover:scale-[1.01] active:scale-[0.99]"
+          className="inline-flex h-[44px] items-center justify-between rounded-full bg-white pl-5 pr-2.5 text-[14px] font-semibold tracking-[-0.035em] text-[#141414] shadow-[0_18px_42px_rgba(0,0,0,0.24)] transition-transform duration-200 hover:scale-[1.01] active:scale-[0.99]"
         >
-          <span className="min-w-[108px] text-left">Unlock Pro</span>
-          <span className="ml-3 flex h-[38px] w-[38px] items-center justify-center rounded-full bg-[#ececec] text-[#161616]">
-            <ArrowUpRight className="h-[18px] w-[18px] stroke-[2.3]" />
+          <span className="min-w-[94px] text-left">Unlock Pro</span>
+          <span className="ml-2.5 flex h-[32px] w-[32px] items-center justify-center rounded-full bg-[#ececec] text-[#161616]">
+            <ArrowUpRight className="h-[16px] w-[16px] stroke-[2.3]" />
           </span>
         </button>
       </div>
-    </footer>
+    </motion.footer>
   );
 }
 
 function PremiumFooter({ onClose }: { onClose: () => void }) {
   return (
-    <footer className="border-t border-white/[0.07] px-6 py-4 md:px-8 md:py-5">
-      <div className="flex flex-col items-center justify-between gap-4 text-center md:flex-row md:text-left">
+    <motion.footer variants={modesItemVariants} className="border-t border-white/[0.07] px-5 py-3 md:px-6 md:py-4">
+      <div className="flex flex-col items-center justify-between gap-3 text-center md:flex-row md:text-left">
         <div>
-          <p className="text-[14px] tracking-[-0.025em] text-white/70 md:text-[15px]">
+          <p className="text-[13px] tracking-[-0.025em] text-white/70 md:text-[14px]">
             All six advanced experts are unlocked.
           </p>
-          <p className="mt-1 text-[14px] tracking-[-0.02em] text-white/42">
+          <p className="mt-0.5 text-[13px] tracking-[-0.02em] text-white/42">
             Mode profiles will plug into this surface next.
           </p>
         </div>
@@ -382,12 +407,12 @@ function PremiumFooter({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-[52px] items-center rounded-full border border-white/10 bg-white/[0.06] px-6 text-[15px] font-medium tracking-[-0.03em] text-white transition-colors duration-200 hover:bg-white/[0.09]"
+          className="inline-flex h-[44px] items-center rounded-full border border-white/10 bg-white/[0.06] px-5 text-[14px] font-medium tracking-[-0.03em] text-white transition-colors duration-200 hover:bg-white/[0.09]"
         >
           Close
         </button>
       </div>
-    </footer>
+    </motion.footer>
   );
 }
 
@@ -399,9 +424,13 @@ const ModesSettings: React.FC<ModesSettingsProps> = ({
   onOpenTeamSyncAPI,
 }) => {
   const isRestricted = isLoaded ? !isPremium && !isTrialActive : true;
+  const prefersReducedMotion = useReducedMotion();
 
   return (
-    <section
+    <motion.section
+      initial={prefersReducedMotion ? false : 'hidden'}
+      animate="show"
+      variants={modesSurfaceVariants}
       className="relative flex h-full flex-col overflow-hidden bg-[#151515] text-white"
       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", sans-serif' }}
     >
@@ -411,35 +440,35 @@ const ModesSettings: React.FC<ModesSettingsProps> = ({
         type="button"
         onClick={onClose}
         aria-label="Close modes"
-        className="absolute right-7 top-7 z-20 flex h-[42px] w-[42px] items-center justify-center rounded-full border border-white/[0.035] bg-white/[0.05] text-white/45 backdrop-blur-sm transition-colors duration-200 hover:text-white/70"
+        className="absolute right-5 top-5 z-20 flex h-[36px] w-[36px] items-center justify-center rounded-full border border-white/[0.035] bg-white/[0.05] text-white/45 backdrop-blur-sm transition-colors duration-200 hover:text-white/70"
       >
-        <X className="h-5 w-5 stroke-[2]" />
+        <X className="h-[18px] w-[18px] stroke-[2]" />
       </button>
 
-      <div className="flex-1 overflow-y-auto px-6 pb-4 pt-[48px] md:px-8">
-        <div className="mx-auto flex max-w-[820px] flex-col">
-          <header className="mx-auto max-w-[650px] text-center">
-            <h1 className="text-[36px] font-semibold leading-[0.94] tracking-[-0.06em] text-white md:text-[42px]">
+      <div className="flex-1 overflow-y-auto px-5 pb-3 pt-[38px] md:px-6">
+        <div className="mx-auto flex max-w-[720px] flex-col">
+          <motion.header variants={modesItemVariants} className="mx-auto max-w-[560px] text-center">
+            <h1 className="text-[30px] font-semibold leading-[0.94] tracking-[-0.06em] text-white md:text-[34px]">
               <span className="block">Every conversation.</span>
               <span className="mt-1 block">A different expert.</span>
             </h1>
-            <p className="mx-auto mt-4 max-w-[560px] text-[14px] leading-[1.34] tracking-[-0.03em] text-white/38 md:text-[15px]">
+            <p className="mx-auto mt-3 max-w-[500px] text-[12.5px] leading-[1.34] tracking-[-0.03em] text-white/38 md:text-[13.5px]">
               Six dedicated AI modes tuned for the exact room you&apos;re in. Designed for professionals.
             </p>
-          </header>
+          </motion.header>
 
-          <div className="mx-auto mt-5 w-full max-w-[820px]">
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-[108px_112px_96px]">
+          <motion.div variants={modesItemVariants} className="mx-auto mt-4 w-full max-w-[720px]">
+            <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-[92px_96px_82px]">
               <ModeCard {...cards[0]} className="lg:row-span-2 lg:h-full" />
               <ModeCard {...cards[1]} className="lg:h-full" />
-              <div className="grid gap-3 sm:grid-cols-2 lg:h-full">
+              <div className="grid gap-2.5 sm:grid-cols-2 lg:h-full">
                 <ModeCard {...cards[2]} className="lg:h-full" />
                 <ModeCard {...cards[3]} className="lg:h-full" />
               </div>
               <ModeCard {...cards[4]} className="lg:h-full" />
               <ModeCard {...cards[5]} className="lg:h-full" />
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
 
@@ -448,7 +477,7 @@ const ModesSettings: React.FC<ModesSettingsProps> = ({
       ) : (
         <PremiumFooter onClose={onClose} />
       )}
-    </section>
+    </motion.section>
   );
 };
 
