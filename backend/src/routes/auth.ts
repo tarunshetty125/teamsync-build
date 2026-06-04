@@ -303,12 +303,14 @@ router.post('/onboarding-v1', async (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
+      console.error('[AuthRoutes] /onboarding-v1 missing bearer token');
       return res.status(401).json({ success: false, error: 'No token provided' });
     }
 
     const token = authHeader.slice(7);
     const user = await verifyAndGetUser(token);
     if (!user) {
+      console.error('[AuthRoutes] /onboarding-v1 invalid or expired token');
       return res.status(401).json({ success: false, error: 'Invalid or expired token' });
     }
 
@@ -318,15 +320,35 @@ router.post('/onboarding-v1', async (req: Request, res: Response) => {
     const requestedOnboardingVersion = req.body?.onboardingVersion;
 
     if (!ONBOARDING_V1_PERSONAS.has(persona)) {
+      console.error('[AuthRoutes] /onboarding-v1 invalid persona', {
+        googleId: user.googleId,
+        email: user.email,
+        persona,
+      });
       return res.status(400).json({ success: false, error: 'Invalid persona' });
     }
     if (!ONBOARDING_V1_INDUSTRIES.has(industry)) {
+      console.error('[AuthRoutes] /onboarding-v1 invalid industry', {
+        googleId: user.googleId,
+        email: user.email,
+        industry,
+      });
       return res.status(400).json({ success: false, error: 'Invalid industry' });
     }
     if (!ONBOARDING_V1_DISCOVERY_SOURCES.has(discoverySource)) {
+      console.error('[AuthRoutes] /onboarding-v1 invalid discovery source', {
+        googleId: user.googleId,
+        email: user.email,
+        discoverySource,
+      });
       return res.status(400).json({ success: false, error: 'Invalid discovery source' });
     }
     if (requestedOnboardingVersion !== undefined && requestedOnboardingVersion !== ONBOARDING_V1_VERSION) {
+      console.error('[AuthRoutes] /onboarding-v1 invalid onboarding version', {
+        googleId: user.googleId,
+        email: user.email,
+        requestedOnboardingVersion,
+      });
       return res.status(400).json({ success: false, error: 'Invalid onboarding version' });
     }
 
@@ -360,15 +382,30 @@ router.post('/onboarding-v1', async (req: Request, res: Response) => {
       }
     );
     if (writeResult.matchedCount !== 1) {
+      console.error('[AuthRoutes] /onboarding-v1 failed to update user', {
+        googleId: user.googleId,
+        email: user.email,
+        matchedCount: writeResult.matchedCount,
+        modifiedCount: writeResult.modifiedCount,
+      });
       return res.status(500).json({ success: false, error: 'Failed to update user' });
     }
 
     const updatedUser = await users.findOne({ googleId: user.googleId });
     if (!updatedUser) {
+      console.error('[AuthRoutes] /onboarding-v1 failed to reload user', {
+        googleId: user.googleId,
+        email: user.email,
+      });
       return res.status(500).json({ success: false, error: 'Failed to reload user' });
     }
     const serializedOnboarding = serializeOnboardingV1(updatedUser.onboardingV1);
     if (serializedOnboarding?.onboardingVersion !== ONBOARDING_V1_VERSION) {
+      console.error('[AuthRoutes] /onboarding-v1 failed to confirm completion', {
+        googleId: user.googleId,
+        email: user.email,
+        onboardingV1: updatedUser.onboardingV1,
+      });
       return res.status(500).json({ success: false, error: 'Failed to confirm onboarding completion' });
     }
 
