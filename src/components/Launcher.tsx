@@ -1640,19 +1640,20 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                 {calendarRecommendation && isCalendarRecommendationOpen && (
                                     <motion.div
                                         key="calendar-recommendation-popup"
-                                        initial={{ opacity: 0 }}
+                                        initial={false}
                                         animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
+                                        exit={{ opacity: 1 }}
+                                        transition={{ duration: 0 }}
                                         className="pointer-events-none absolute inset-0 z-30"
                                     >
                                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.06),transparent_18%),linear-gradient(180deg,rgba(15,23,42,0.16),rgba(15,23,42,0.34))] backdrop-blur-[20px]" />
                                         <div className="absolute inset-0 flex items-center justify-center px-8 py-16">
                                             <div className="mx-auto flex w-full max-w-[980px] justify-center">
                                                 <motion.div
-                                                    initial={{ opacity: 0, y: 18, scale: 0.985, filter: 'blur(10px)' }}
-                                                    animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-                                                    exit={{ opacity: 0, y: 16, scale: 0.985, filter: 'blur(10px)' }}
-                                                    transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
+                                                    initial={{ opacity: 0, y: 8, scale: 0.99 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    exit={{ opacity: 0, y: 8, scale: 0.99 }}
+                                                    transition={{ duration: 0.16, ease: [0.23, 1, 0.32, 1], delay: 0.03 }}
                                                     className="pointer-events-auto w-full max-w-[960px] will-change-transform"
                                                 >
                                                     <CalendarModeRecommendationCard
@@ -1661,6 +1662,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                         applying={isApplyingCalendarMode}
                                                         error={calendarRecommendationError}
                                                         showCloseButton
+                                                        animateEntrance={false}
                                                         onClose={() => setIsCalendarRecommendationOpen(false)}
                                                         onApply={handleApplyCalendarRecommendation}
                                                         onDismiss={handleDismissCalendarRecommendation}

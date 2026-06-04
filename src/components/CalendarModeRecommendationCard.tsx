@@ -31,6 +31,7 @@ interface CalendarModeRecommendationCardProps {
     applying?: boolean;
     error?: string | null;
     showCloseButton?: boolean;
+    animateEntrance?: boolean;
     onClose?: () => void;
     onApply: (modeId: ModeOptionId) => void;
     onDismiss: () => void;
@@ -129,6 +130,7 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
     applying = false,
     error = null,
     showCloseButton = false,
+    animateEntrance = true,
     onClose,
     onApply,
     onDismiss,
@@ -177,10 +179,10 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+            initial={animateEntrance ? { opacity: 0, y: 12 } : false}
+            animate={animateEntrance ? { opacity: 1, y: 0 } : undefined}
+            exit={animateEntrance ? { opacity: 0, y: 10 } : undefined}
+            transition={animateEntrance ? { duration: 0.22, ease: [0.23, 1, 0.32, 1] } : undefined}
             className={`relative overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated ${
                 isLight
                     ? 'shadow-[0_18px_48px_rgba(15,23,42,0.12)]'
