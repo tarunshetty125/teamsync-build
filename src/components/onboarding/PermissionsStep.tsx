@@ -109,7 +109,7 @@ export function PermissionsStep({
             </p>
 
             <div className="mt-4 flex flex-wrap gap-1.5">
-              {['meeting capture', 'overlay intelligence', 'context-aware'].map(pill => (
+              {['meeting capture', 'overlay intelligence', 'context-aware'].map((pill) => (
                 <span
                   key={pill}
                   className="rounded-md border border-border-subtle bg-bg-input px-2.5 py-1 text-[11px] text-text-secondary"
@@ -139,7 +139,6 @@ export function PermissionsStep({
           </div>
         </div>
 
-        {/* Right Panel */}
         <div className="flex flex-col gap-2">
           <PermissionCard
             icon={Eye}
@@ -160,7 +159,7 @@ export function PermissionsStep({
             icon={AudioLines}
             title="Live transcription"
             description="Capture microphone and meeting audio in realtime with production STT."
-            detail="Reopen System Settings and enable TeamSync under Privacy & Security → Microphone."
+            detail="Reopen System Settings and enable TeamSync under Privacy & Security -> Microphone."
             status={snapshot.microphone}
             isBusy={activePermission === 'microphone' && isChecking}
             primaryAction={microphonePrimary}
@@ -175,7 +174,7 @@ export function PermissionsStep({
             icon={Sparkles}
             title="Interview assistance"
             description="Answer faster with contextual prompts, overlays, and instant follow-through."
-            detail="Grant Accessibility in Privacy & Security → Accessibility so TeamSync stays responsive."
+            detail="Grant Accessibility in Privacy & Security -> Accessibility so TeamSync stays responsive."
             status={snapshot.accessibility}
             isBusy={activePermission === 'accessibility' && isChecking}
             primaryAction={accessibilityPrimary}

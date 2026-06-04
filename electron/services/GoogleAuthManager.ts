@@ -7,7 +7,7 @@
 
 import { shell, ipcMain, BrowserWindow } from 'electron';
 import { API_BASE_URL } from '../../src/lib/config/apiConfig';
-import { CredentialsManager, type GoogleAuthUser } from './CredentialsManager';
+import { CredentialsManager, type GoogleAuthUser, type TeamSyncOnboardingV1 } from './CredentialsManager';
 
 type GoogleAuthState = {
   authenticated: boolean;
@@ -21,6 +21,14 @@ type GoogleAuthResult = {
   authState?: GoogleAuthState;
   events?: any[];
   error?: string;
+};
+
+type TeamSyncOnboardingV1Input = {
+  persona: string;
+  industry: string;
+  discoverySource: string;
+  onboardingVersion?: 1;
+  completedInVersion?: string;
 };
 
 export class GoogleAuthManager {
@@ -82,6 +90,10 @@ export class GoogleAuthManager {
       return this.verifySession();
     });
 
+    safeHandle('auth:onboarding-v1', async (_event, payload: TeamSyncOnboardingV1Input) => {
+      return this.saveOnboardingV1(payload);
+    });
+
     safeHandle('auth:connect-calendar', async (_event, loginHint?: string) => {
       try {
         return await this.connectCalendar(loginHint);
@@ -118,6 +130,35 @@ export class GoogleAuthManager {
     return token || null;
   }
 
+  private sanitizeOnboardingV1(input: any, fallback?: TeamSyncOnboardingV1 | null): TeamSyncOnboardingV1 | null | undefined {
+    if (input === null) return null;
+    if (!input || typeof input !== 'object') return fallback;
+    if (input.onboardingVersion !== 1) return fallback;
+
+    const persona = typeof input.persona === 'string' ? input.persona.trim() : '';
+    const industry = typeof input.industry === 'string' ? input.industry.trim() : '';
+    const discoverySource = typeof input.discoverySource === 'string' ? input.discoverySource.trim() : '';
+    const completedAt = typeof input.completedAt === 'string'
+      ? input.completedAt
+      : input.completedAt instanceof Date
+        ? input.completedAt.toISOString()
+        : '';
+    const completedInVersion = typeof input.completedInVersion === 'string'
+      ? input.completedInVersion.trim()
+      : '';
+
+    if (!persona || !industry || !discoverySource || !completedAt || !completedInVersion) return fallback;
+
+    return {
+      persona,
+      industry,
+      discoverySource,
+      completedAt,
+      onboardingVersion: 1,
+      completedInVersion,
+    };
+  }
+
   private sanitizeUser(input: any, fallback?: GoogleAuthUser): GoogleAuthUser | undefined {
     const email = typeof input?.email === 'string' && input.email.trim()
       ? input.email.trim()
@@ -133,13 +174,23 @@ export class GoogleAuthManager {
     const calendarConnected = typeof input?.calendarConnected === 'boolean'
       ? input.calendarConnected
       : Boolean(fallback?.calendarConnected);
+    const id = typeof input?.id === 'string' && input.id.trim()
+      ? input.id.trim()
+      : fallback?.id;
+    const googleId = typeof input?.googleId === 'string' && input.googleId.trim()
+      ? input.googleId.trim()
+      : fallback?.googleId;
+    const onboardingV1 = this.sanitizeOnboardingV1(input?.onboardingV1, fallback?.onboardingV1);
 
     return {
+      ...(id ? { id } : {}),
+      ...(googleId ? { googleId } : {}),
       name,
       email,
       ...(picture ? { picture } : {}),
       calendarConnected,
       ...(typeof input?.isNewUser === 'boolean' ? { isNewUser: input.isNewUser } : {}),
+      ...(onboardingV1 !== undefined ? { onboardingV1 } : {}),
     };
   }
 
@@ -149,6 +200,23 @@ export class GoogleAuthManager {
     } catch {
       return {};
     }
+  }
+
+  private async fetchAuthoritativeUser(token: string, fallback?: GoogleAuthUser): Promise<GoogleAuthUser | undefined> {
+    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (response.ok) {
+      return this.sanitizeUser(await this.readJson(response), fallback);
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      this.clearLocalAuthAndBroadcast();
+    }
+
+    const err = await this.readJson(response);
+    throw new Error(err.error || 'Invalid or expired token');
   }
 
   private clearLocalAuthAndBroadcast(): void {
@@ -211,11 +279,18 @@ export class GoogleAuthManager {
     }
 
     this.credentials.setGoogleAuthSession(token, user);
-    const authState = this.getAuthState(user);
-    this.broadcast('auth:result', { success: true, user, authState });
-    this.broadcast('calendar-status-changed', { connected: user.calendarConnected, email: user.email });
 
-    return { success: true, user, authState };
+    const authoritativeUser = await this.fetchAuthoritativeUser(token, user);
+    if (!authoritativeUser) {
+      return { success: false, error: 'Authentication completed without a verified user profile', authState: this.getAuthState() };
+    }
+
+    this.credentials.updateGoogleAuthUser(authoritativeUser);
+    const authState = this.getAuthState(authoritativeUser);
+    this.broadcast('auth:result', { success: true, user: authoritativeUser, authState });
+    this.broadcast('calendar-status-changed', { connected: authoritativeUser.calendarConnected, email: authoritativeUser.email });
+
+    return { success: true, user: authoritativeUser, authState };
   }
 
   private async verifySession(): Promise<GoogleAuthResult> {
@@ -225,32 +300,15 @@ export class GoogleAuthManager {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        const user = this.sanitizeUser(await this.readJson(response), this.credentials.getGoogleAuthUser());
-        if (!user) {
-          return { success: false, error: 'Invalid user profile', authState: this.getAuthState() };
-        }
-
-        this.credentials.updateGoogleAuthUser(user);
-        const authState = this.getAuthState(user);
-        this.broadcast('calendar-status-changed', { connected: user.calendarConnected, email: user.email });
-        return { success: true, user, authState };
+      const user = await this.fetchAuthoritativeUser(token, this.credentials.getGoogleAuthUser());
+      if (!user) {
+        return { success: false, error: 'Invalid user profile', authState: this.getAuthState() };
       }
 
-      if (response.status === 401 || response.status === 403) {
-        this.clearLocalAuthAndBroadcast();
-      }
-
-      const err = await this.readJson(response);
-      return {
-        success: false,
-        error: err.error || 'Invalid or expired token',
-        authState: this.getAuthState(),
-      };
+      this.credentials.updateGoogleAuthUser(user);
+      const authState = this.getAuthState(user);
+      this.broadcast('calendar-status-changed', { connected: user.calendarConnected, email: user.email });
+      return { success: true, user, authState };
     } catch (error: any) {
       return {
         success: false,
@@ -290,6 +348,69 @@ export class GoogleAuthManager {
       return { success: false, error: err.error || 'Failed to fetch calendar events', authState: this.getAuthState() };
     } catch (error: any) {
       return { success: false, error: error.message || 'Failed to fetch calendar events', authState: this.getAuthState() };
+    }
+  }
+
+  private async saveOnboardingV1(payload: TeamSyncOnboardingV1Input): Promise<GoogleAuthResult> {
+    const token = this.getStoredToken();
+    if (!token) {
+      return { success: false, error: 'Not authenticated', authState: this.getAuthState() };
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/onboarding-v1`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          persona: payload?.persona,
+          industry: payload?.industry,
+          discoverySource: payload?.discoverySource,
+          onboardingVersion: 1,
+          completedInVersion: '1.0.0',
+        }),
+      });
+      const body = await this.readJson(response);
+
+      if (response.status === 401 || response.status === 403) {
+        this.clearLocalAuthAndBroadcast();
+        return {
+          success: false,
+          error: body.error || 'Invalid or expired token',
+          authState: this.getAuthState(),
+        };
+      }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: body.error || 'Failed to save onboarding',
+          authState: this.getAuthState(),
+        };
+      }
+
+      const user = this.sanitizeUser(body.user, this.credentials.getGoogleAuthUser());
+      const completedOnboarding = this.sanitizeOnboardingV1(body.onboardingV1, user?.onboardingV1 ?? null);
+      if (!user?.onboardingV1 || user.onboardingV1.onboardingVersion !== 1 || completedOnboarding?.onboardingVersion !== 1) {
+        return {
+          success: false,
+          error: 'Onboarding save did not return a completed profile',
+          authState: this.getAuthState(),
+        };
+      }
+
+      this.credentials.updateGoogleAuthUser(user);
+      const authState = this.getAuthState(user);
+      this.broadcast('auth:result', { success: true, user, authState });
+      return { success: true, user, authState };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to save onboarding',
+        authState: this.getAuthState(),
+      };
     }
   }
 

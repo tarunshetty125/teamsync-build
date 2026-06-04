@@ -126,12 +126,32 @@ type StoredCredentialsSummary = {
   bedrockFetchedModels?: BedrockFetchedModel[];
 }
 
+type TeamSyncOnboardingV1 = {
+  persona: string;
+  industry: string;
+  discoverySource: string;
+  completedAt: string;
+  onboardingVersion: 1;
+  completedInVersion: string;
+}
+
+type TeamSyncOnboardingV1Input = {
+  persona: string;
+  industry: string;
+  discoverySource: string;
+  onboardingVersion?: 1;
+  completedInVersion?: string;
+}
+
 type GoogleAuthUser = {
+  id?: string;
+  googleId?: string;
   name: string;
   email: string;
   picture?: string;
   calendarConnected: boolean;
   isNewUser?: boolean;
+  onboardingV1?: TeamSyncOnboardingV1 | null;
 }
 
 type GoogleAuthState = {
@@ -693,6 +713,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   googleSignIn: () => Promise<GoogleAuthResult>;
   googleGetAuthState: () => Promise<GoogleAuthState>;
   googleVerifySession: () => Promise<GoogleAuthResult>;
+  googleSaveOnboardingV1: (data: TeamSyncOnboardingV1Input) => Promise<GoogleAuthResult>;
   googleConnectCalendar: (loginHint?: string) => Promise<GoogleAuthResult>;
   googleGetCalendarEvents: () => Promise<GoogleAuthResult>;
   googleLogout: () => Promise<{ success: boolean }>;

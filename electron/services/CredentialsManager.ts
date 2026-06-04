@@ -38,12 +38,24 @@ export interface GroqVaultKey {
     label?: string;       // optional user label
 }
 
+export interface TeamSyncOnboardingV1 {
+    persona: string;
+    industry: string;
+    discoverySource: string;
+    completedAt: string;
+    onboardingVersion: 1;
+    completedInVersion: string;
+}
+
 export interface GoogleAuthUser {
+    id?: string;
+    googleId?: string;
     name: string;
     email: string;
     picture?: string;
     calendarConnected: boolean;
     isNewUser?: boolean;
+    onboardingV1?: TeamSyncOnboardingV1 | null;
 }
 
 export type BedrockAuthMode = 'aws_cli' | 'access_keys';

@@ -8,6 +8,15 @@ import type { TrialDocument } from '../licensing/models/Trial';
 // ═══════════════════════════════════════════════════════
 // User Documents (Google Auth)
 // ═══════════════════════════════════════════════════════
+export interface OnboardingV1Document {
+  persona: string;
+  industry: string;
+  discoverySource: string;
+  completedAt: string;
+  onboardingVersion: 1;
+  completedInVersion: string;
+}
+
 export interface UserDocument {
   _id?: ObjectId;
   googleId: string;
@@ -19,6 +28,7 @@ export interface UserDocument {
   tokenExpiry?: Date;
   calendarConnected: boolean;
   calendarScopes?: string[];
+  onboardingV1?: OnboardingV1Document;
   createdAt: Date;
   updatedAt: Date;
   lastLoginAt: Date;

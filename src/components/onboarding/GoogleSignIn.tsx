@@ -4,11 +4,21 @@ import appIcon from '../icon.png';
 
 interface GoogleSignInProps {
   onSignInComplete: (userData: {
+    id?: string;
+    googleId?: string;
     name: string;
     email: string;
     picture?: string;
     calendarConnected: boolean;
     isNewUser?: boolean;
+    onboardingV1?: {
+      persona: string;
+      industry: string;
+      discoverySource: string;
+      completedAt: string;
+      onboardingVersion: 1;
+      completedInVersion: string;
+    } | null;
   }) => void;
 }
 
@@ -136,13 +146,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
     try {
       const result = await window.electronAPI?.googleVerifySession?.();
       if (result?.success && result.user) {
-        onSignInComplete({
-          name: result.user.name,
-          email: result.user.email,
-          picture: result.user.picture,
-          calendarConnected: result.user.calendarConnected,
-          isNewUser: result.user.isNewUser,
-        });
+        onSignInComplete(result.user);
       }
     } catch {
       // Ignore; the user can sign in manually.
@@ -167,13 +171,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
         setState('success');
         setTimeout(() => {
           if (authAttemptRef.current !== attemptId) return;
-          onSignInComplete({
-            name: result.user!.name,
-            email: result.user!.email,
-            picture: result.user!.picture,
-            calendarConnected: result.user!.calendarConnected,
-            isNewUser: result.user!.isNewUser,
-          });
+          onSignInComplete(result.user!);
         }, 1800);
       } else {
         setState('error');

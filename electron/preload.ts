@@ -155,12 +155,32 @@ type UpdaterCacheInfo = {
   error?: string
 }
 
+type TeamSyncOnboardingV1 = {
+  persona: string
+  industry: string
+  discoverySource: string
+  completedAt: string
+  onboardingVersion: 1
+  completedInVersion: string
+}
+
+type TeamSyncOnboardingV1Input = {
+  persona: string
+  industry: string
+  discoverySource: string
+  onboardingVersion?: 1
+  completedInVersion?: string
+}
+
 type GoogleAuthUser = {
+  id?: string
+  googleId?: string
   name: string
   email: string
   picture?: string
   calendarConnected: boolean
   isNewUser?: boolean
+  onboardingV1?: TeamSyncOnboardingV1 | null
 }
 
 type GoogleAuthState = {
@@ -439,6 +459,7 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   googleSignIn: () => Promise<GoogleAuthResult>
   googleGetAuthState: () => Promise<GoogleAuthState>
   googleVerifySession: () => Promise<GoogleAuthResult>
+  googleSaveOnboardingV1: (data: TeamSyncOnboardingV1Input) => Promise<GoogleAuthResult>
   googleConnectCalendar: (loginHint?: string) => Promise<GoogleAuthResult>
   googleGetCalendarEvents: () => Promise<GoogleAuthResult>
   googleLogout: () => Promise<{ success: boolean }>
@@ -1760,6 +1781,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   googleSignIn: () => ipcRenderer.invoke('auth:google-signin'),
   googleGetAuthState: () => ipcRenderer.invoke('auth:get-state'),
   googleVerifySession: () => ipcRenderer.invoke('auth:verify-session'),
+  googleSaveOnboardingV1: (data: TeamSyncOnboardingV1Input) => ipcRenderer.invoke('auth:onboarding-v1', data),
   googleConnectCalendar: (loginHint?: string) => ipcRenderer.invoke('auth:connect-calendar', loginHint),
   googleGetCalendarEvents: () => ipcRenderer.invoke('auth:calendar-events'),
   googleLogout: () => ipcRenderer.invoke('auth:logout'),

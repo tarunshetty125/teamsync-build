@@ -6,10 +6,48 @@ import {
   verifyAndGetUser,
   fetchCalendarEvents,
 } from '../services/googleAuth';
-import { getAuthSessionsCollection, getUsersCollection } from '../db/mongodb';
+import { getAuthSessionsCollection, getUsersCollection, type OnboardingV1Document, type UserDocument } from '../db/mongodb';
 import { randomUUID } from 'crypto';
 
 const router = Router();
+const ONBOARDING_V1_VERSION = 1 as const;
+const ONBOARDING_V1_COMPLETED_IN_VERSION = '1.0.0';
+
+const ONBOARDING_V1_PERSONAS = new Set([
+  'interview_preparation',
+  'meetings_calls',
+  'developer',
+  'explore_teamsync',
+]);
+
+const ONBOARDING_V1_INDUSTRIES = new Set([
+  'engineering',
+  'cloud_computing',
+  'devops',
+  'data_analytics',
+  'design',
+  'finance',
+  'marketing',
+  'product',
+  'sales',
+  'recruiting',
+  'operations',
+  'hr',
+  'management',
+  'student',
+  'other',
+]);
+
+const ONBOARDING_V1_DISCOVERY_SOURCES = new Set([
+  'google',
+  'linkedin',
+  'youtube',
+  'friend',
+  'reddit',
+  'twitter_x',
+  'email',
+  'other',
+]);
 
 // ─────────────────────────────────────────────────────────────
 // Session-scoped pending auth results.
@@ -54,6 +92,48 @@ async function writeAuthSessionResult(authSessionId: string, data: any): Promise
 async function deleteAuthSession(authSessionId: string): Promise<void> {
   if (!authSessionId) return;
   await getAuthSessionsCollection().deleteOne({ authSessionId });
+}
+
+function serializeOnboardingV1(onboardingV1: OnboardingV1Document | undefined | null) {
+  if (!onboardingV1 || onboardingV1.onboardingVersion !== ONBOARDING_V1_VERSION) return null;
+
+  const completedAtValue = onboardingV1.completedAt as unknown;
+  const completedAt = completedAtValue instanceof Date
+    ? completedAtValue.toISOString()
+    : typeof completedAtValue === 'string'
+      ? completedAtValue
+      : '';
+  const completedInVersion = typeof onboardingV1.completedInVersion === 'string' && onboardingV1.completedInVersion.trim()
+    ? onboardingV1.completedInVersion.trim()
+    : ONBOARDING_V1_COMPLETED_IN_VERSION;
+
+  return {
+    persona: onboardingV1.persona,
+    industry: onboardingV1.industry,
+    discoverySource: onboardingV1.discoverySource,
+    completedAt,
+    onboardingVersion: ONBOARDING_V1_VERSION,
+    completedInVersion,
+  };
+}
+
+function serializeAuthUser(user: UserDocument, isNewUser?: boolean) {
+  return {
+    id: user._id?.toString(),
+    googleId: user.googleId,
+    name: user.name,
+    email: user.email,
+    picture: user.picture,
+    calendarConnected: user.calendarConnected,
+    createdAt: user.createdAt,
+    lastLoginAt: user.lastLoginAt,
+    onboardingV1: serializeOnboardingV1(user.onboardingV1),
+    ...(typeof isNewUser === 'boolean' ? { isNewUser } : {}),
+  };
+}
+
+function readOnboardingValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -102,13 +182,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
     const authData = {
       success: true,
       token: result.jwt,
-      user: {
-        name: result.user.name,
-        email: result.user.email,
-        picture: result.user.picture,
-        calendarConnected: result.user.calendarConnected,
-        isNewUser: result.isNewUser,
-      },
+      user: serializeAuthUser(result.user, result.isNewUser),
     };
 
     // Store for polling — only the matching authSessionId can pick this up.
@@ -117,13 +191,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
     console.log(`[AuthRoutes] Auth result stored for polling session ${authSessionId} (user: ${result.user.email})`);
 
     // Return HTML page to the browser
-    res.send(getCallbackHTML(true, undefined, result.jwt, {
-      name: result.user.name,
-      email: result.user.email,
-      picture: result.user.picture,
-      calendarConnected: result.user.calendarConnected,
-      isNewUser: result.isNewUser,
-    }));
+    res.send(getCallbackHTML(true, undefined, result.jwt, serializeAuthUser(result.user, result.isNewUser)));
   } catch (error: any) {
     console.error('[AuthRoutes] Google callback error:', error);
     if (authSessionId) {
@@ -220,19 +288,98 @@ router.get('/me', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
-    res.json({
-      id: user._id!.toString(),
-      googleId: user.googleId,
-      email: user.email,
-      name: user.name,
-      picture: user.picture,
-      calendarConnected: user.calendarConnected,
-      createdAt: user.createdAt,
-      lastLoginAt: user.lastLoginAt,
-    });
+    res.json(serializeAuthUser(user));
   } catch (error: any) {
     console.error('[AuthRoutes] /me error:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /auth/onboarding-v1
+// Persists the first-run TeamSync onboarding choices to MongoDB.
+// ─────────────────────────────────────────────────────────────
+router.post('/onboarding-v1', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'No token provided' });
+    }
+
+    const token = authHeader.slice(7);
+    const user = await verifyAndGetUser(token);
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired token' });
+    }
+
+    const persona = readOnboardingValue(req.body?.persona);
+    const industry = readOnboardingValue(req.body?.industry);
+    const discoverySource = readOnboardingValue(req.body?.discoverySource);
+    const requestedOnboardingVersion = req.body?.onboardingVersion;
+
+    if (!ONBOARDING_V1_PERSONAS.has(persona)) {
+      return res.status(400).json({ success: false, error: 'Invalid persona' });
+    }
+    if (!ONBOARDING_V1_INDUSTRIES.has(industry)) {
+      return res.status(400).json({ success: false, error: 'Invalid industry' });
+    }
+    if (!ONBOARDING_V1_DISCOVERY_SOURCES.has(discoverySource)) {
+      return res.status(400).json({ success: false, error: 'Invalid discovery source' });
+    }
+    if (requestedOnboardingVersion !== undefined && requestedOnboardingVersion !== ONBOARDING_V1_VERSION) {
+      return res.status(400).json({ success: false, error: 'Invalid onboarding version' });
+    }
+
+    const now = new Date();
+    if (user.onboardingV1?.onboardingVersion === ONBOARDING_V1_VERSION) {
+      const existingOnboarding = serializeOnboardingV1(user.onboardingV1);
+      return res.json({
+        success: true,
+        onboardingV1: existingOnboarding,
+        user: serializeAuthUser(user),
+      });
+    }
+
+    const onboardingV1: OnboardingV1Document = {
+      persona,
+      industry,
+      discoverySource,
+      completedAt: now.toISOString(),
+      onboardingVersion: ONBOARDING_V1_VERSION,
+      completedInVersion: ONBOARDING_V1_COMPLETED_IN_VERSION,
+    };
+
+    const users = getUsersCollection();
+    const writeResult = await users.updateOne(
+      { googleId: user.googleId },
+      {
+        $set: {
+          onboardingV1,
+          updatedAt: now,
+        },
+      }
+    );
+    if (writeResult.matchedCount !== 1) {
+      return res.status(500).json({ success: false, error: 'Failed to update user' });
+    }
+
+    const updatedUser = await users.findOne({ googleId: user.googleId });
+    if (!updatedUser) {
+      return res.status(500).json({ success: false, error: 'Failed to reload user' });
+    }
+    const serializedOnboarding = serializeOnboardingV1(updatedUser.onboardingV1);
+    if (serializedOnboarding?.onboardingVersion !== ONBOARDING_V1_VERSION) {
+      return res.status(500).json({ success: false, error: 'Failed to confirm onboarding completion' });
+    }
+
+    res.json({
+      success: true,
+      onboardingV1: serializedOnboarding,
+      user: serializeAuthUser(updatedUser),
+    });
+  } catch (error: any) {
+    console.error('[AuthRoutes] /onboarding-v1 error:', error);
+    res.status(500).json({ success: false, error: 'Server error' });
   }
 });
 
@@ -315,7 +462,7 @@ function getCallbackHTML(
   success: boolean,
   errorMessage?: string,
   token?: string,
-  user?: { name: string; email: string; picture?: string; calendarConnected: boolean; isNewUser: boolean }
+  user?: ReturnType<typeof serializeAuthUser>
 ): string {
     const data = success
     ? JSON.stringify({ success: true, token, user })
