@@ -182,12 +182,32 @@ function WorkspaceHarness({
           Start TeamSync
         </button>
       </main>
-      {settingsTab === 'profile' ? (
+      {settingsTab ? (
         <section className="absolute right-5 top-16 w-[360px] rounded-2xl border border-white/10 bg-[#08090d]/95 p-5 shadow-2xl">
-          <div data-tour-id="profile-intelligence" className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
-            <p className="text-sm font-semibold">Profile Intelligence</p>
-            <p className="mt-1 text-xs text-white/50">Resume, JD, and role context.</p>
-          </div>
+          {settingsTab === 'profile' ? (
+            <div data-tour-id="profile-intelligence" className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+              <p className="text-sm font-semibold">Profile Intelligence</p>
+              <p className="mt-1 text-xs text-white/50">Resume, JD, and role context.</p>
+            </div>
+          ) : null}
+          {settingsTab === 'audio' ? (
+            <div data-tour-id="settings-audio-provider" className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+              <p className="text-sm font-semibold">Audio Engine</p>
+              <p className="mt-1 text-xs text-white/50">Speech provider and transcription input.</p>
+            </div>
+          ) : null}
+          {settingsTab === 'calendar' ? (
+            <div data-tour-id="settings-calendar-sync" className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+              <p className="text-sm font-semibold">Calendar Context</p>
+              <p className="mt-1 text-xs text-white/50">Meeting-aware agenda and attendee context.</p>
+            </div>
+          ) : null}
+          {settingsTab === 'ai-providers' ? (
+            <div data-tour-id="settings-ai-providers" className="rounded-xl border border-white/10 bg-white/[0.06] p-4">
+              <p className="text-sm font-semibold">AI Providers</p>
+              <p className="mt-1 text-xs text-white/50">Provider routing and model configuration.</p>
+            </div>
+          ) : null}
         </section>
       ) : null}
       <OnboardingV2PostLaunch

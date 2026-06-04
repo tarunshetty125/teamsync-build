@@ -95,6 +95,7 @@ export function OnboardingV2PostLaunch({
   };
 
   const markTourComplete = () => {
+    onCloseSettings();
     void updateState({ tourComplete: true });
   };
 

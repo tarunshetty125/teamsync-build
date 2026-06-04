@@ -4803,7 +4803,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                     </div>
                                 )}
                                 {activeTab === 'ai-providers' && (
-                                    <AIProvidersSettings />
+                                    <div data-tour-id="settings-ai-providers">
+                                        <AIProvidersSettings />
+                                    </div>
                                 )}
                                 {activeTab === 'account' && (
                                     <div className="space-y-6 animated fadeIn select-text pb-4">
@@ -5008,7 +5010,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                 )}
 
                                 {activeTab === 'audio' && (
-                                    <div className="space-y-6 animated fadeIn">
+                                    <div className="space-y-6 animated fadeIn" data-tour-id="settings-audio-provider">
                                         {/* ── Speech Provider Section ── */}
                                         <div>
                                             <h3 className="text-lg font-bold text-text-primary mb-1">Speech Provider</h3>
@@ -5405,7 +5407,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
 
                                 {activeTab === 'calendar' && (
-                                    <div className="space-y-6 animated fadeIn h-full">
+                                    <div className="space-y-6 animated fadeIn h-full" data-tour-id="settings-calendar-sync">
                                         <div>
                                             <h3 className="text-lg font-bold text-text-primary mb-2">Visible Calendars</h3>
                                             <p className="text-xs text-text-secondary mb-4">Upcoming meetings are synchronized from these calendars</p>

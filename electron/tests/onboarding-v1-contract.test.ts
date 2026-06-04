@@ -71,17 +71,19 @@ test('OAuth flow persists token then calls /auth/me before returning renderer au
   assert.doesNotMatch(persistBody, /authState:\s*this\.getAuthState\(user\)/);
 });
 
-test('Renderer gates Persona and Industry only on Mongo onboarding version', () => {
+test('Renderer gates Persona and Industry only on authoritative Mongo onboarding version', () => {
   const app = readRepoFile('src/App.tsx');
-  const modal = readRepoFile('src/components/onboarding/ReferenceOnboardingModal.tsx');
+  const onboardingV2 = readRepoFile('src/components/onboarding/PremiumOnboardingV2.tsx');
 
-  assert.match(app, /const hasCompletedMongoOnboarding = authUser\?\.onboardingV1\?\.onboardingVersion === 1/);
-  assert.match(app, /!hasCompletedMongoOnboarding/);
+  assert.match(app, /<PremiumOnboardingV2/);
+  assert.match(onboardingV2, /const completedOnboarding = user\.onboardingV1\?\.onboardingVersion === 1/);
+  assert.match(onboardingV2, /transitionToStep\('activation'\)/);
+  assert.match(onboardingV2, /transitionToStep\('persona'\)/);
   assert.doesNotMatch(app, /POST_LOGIN_LAUNCH_PENDING_KEY/);
   assert.doesNotMatch(app, /pendingPostLoginLaunch/);
-  assert.doesNotMatch(app, /googleGetAuthState/);
-  assert.doesNotMatch(modal, /localStorage/);
-  assert.doesNotMatch(modal, /sessionStorage/);
+  assert.doesNotMatch(onboardingV2, /googleGetAuthState/);
+  assert.doesNotMatch(onboardingV2, /localStorage/);
+  assert.doesNotMatch(onboardingV2, /sessionStorage/);
 });
 
 test('Onboarding save payload and completion guard include V1 metadata', () => {

@@ -1,11 +1,20 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type TourStep = {
-  id: 'control-center' | 'profile-intelligence' | 'overlay-control' | 'interview-mode' | 'settings';
+  id:
+    | 'control-center'
+    | 'overlay-control'
+    | 'interview-mode'
+    | 'settings'
+    | 'profile-intelligence'
+    | 'settings-audio-provider'
+    | 'settings-calendar-sync'
+    | 'settings-ai-providers';
   title: string;
   description: string;
+  settingsTab?: 'profile' | 'audio' | 'calendar' | 'ai-providers';
 };
 
 type GuidedProductTourProps = {
@@ -23,11 +32,6 @@ const TOUR_STEPS: TourStep[] = [
     description: 'Search meetings, ask TeamSync, and move through your workspace from one command surface.',
   },
   {
-    id: 'profile-intelligence',
-    title: 'Profile Intelligence',
-    description: 'Add resume and role context when you want TeamSync to answer from your background.',
-  },
-  {
     id: 'overlay-control',
     title: 'Overlay',
     description: 'Start TeamSync when you want live screen and audio intelligence during a session.',
@@ -40,14 +44,44 @@ const TOUR_STEPS: TourStep[] = [
   {
     id: 'settings',
     title: 'Settings',
-    description: 'Tune providers, audio, calendar, profile, and workspace preferences when needed.',
+    description: 'Open the control surface for workspace, intelligence, and provider configuration.',
+  },
+  {
+    id: 'profile-intelligence',
+    title: 'Profile Intelligence',
+    description: 'Add resume and role context when you want TeamSync to answer from your background.',
+    settingsTab: 'profile',
+  },
+  {
+    id: 'settings-audio-provider',
+    title: 'Audio Engine',
+    description: 'Choose the speech provider and input path TeamSync uses for live transcription.',
+    settingsTab: 'audio',
+  },
+  {
+    id: 'settings-calendar-sync',
+    title: 'Calendar Context',
+    description: 'Connect calendars so meetings can start with agenda and attendee context.',
+    settingsTab: 'calendar',
+  },
+  {
+    id: 'settings-ai-providers',
+    title: 'AI Providers',
+    description: 'Review provider routing and model configuration without leaving the workspace.',
+    settingsTab: 'ai-providers',
   },
 ];
 
 function readTargetRect(id: string): DOMRect | null {
   const target = document.querySelector(`[data-tour-id="${id}"]`);
   if (!target) return null;
-  return target.getBoundingClientRect();
+  const rect = target.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  return rect;
+}
+
+function isSettingsMounted() {
+  return Boolean(document.getElementById('settings-backdrop'));
 }
 
 function clampPanelPosition(rect: DOMRect | null) {
@@ -78,8 +112,16 @@ export function GuidedProductTour({
 }: GuidedProductTourProps) {
   const [index, setIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+  const [hasResolvedTarget, setHasResolvedTarget] = useState(false);
+  const onOpenSettingsRef = useRef(onOpenSettings);
+  const onCloseSettingsRef = useRef(onCloseSettings);
   const step = TOUR_STEPS[index];
   const isLast = index === TOUR_STEPS.length - 1;
+
+  useEffect(() => {
+    onOpenSettingsRef.current = onOpenSettings;
+    onCloseSettingsRef.current = onCloseSettings;
+  }, [onCloseSettings, onOpenSettings]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -88,20 +130,46 @@ export function GuidedProductTour({
 
   useEffect(() => {
     if (!isOpen) return;
-    if (step.id === 'profile-intelligence') {
-      onOpenSettings('profile');
+    let cancelled = false;
+    let raf = 0;
+    let timer = 0;
+    if (step.settingsTab) {
+      onOpenSettingsRef.current(step.settingsTab);
     } else {
-      onCloseSettings();
+      onCloseSettingsRef.current();
     }
 
-    const updateRect = () => setTargetRect(readTargetRect(step.id));
-    const t = window.setTimeout(updateRect, step.id === 'profile-intelligence' ? 180 : 60);
-    window.addEventListener('resize', updateRect);
-    return () => {
-      window.clearTimeout(t);
-      window.removeEventListener('resize', updateRect);
+    setTargetRect(null);
+    setHasResolvedTarget(false);
+    const startedAt = performance.now();
+    const maxPollMs = step.settingsTab ? 2200 : 900;
+
+    const updateRect = () => {
+      if (cancelled) return;
+      const canMeasure = Boolean(step.settingsTab) || !isSettingsMounted();
+      const nextRect = canMeasure ? readTargetRect(step.id) : null;
+      const elapsed = performance.now() - startedAt;
+      setTargetRect(nextRect);
+      if (nextRect || elapsed >= maxPollMs) {
+        setHasResolvedTarget(true);
+      }
+
+      if (elapsed < maxPollMs) {
+        raf = window.requestAnimationFrame(updateRect);
+      }
     };
-  }, [isOpen, onCloseSettings, onOpenSettings, step.id]);
+
+    timer = window.setTimeout(updateRect, step.settingsTab ? 120 : 220);
+    window.addEventListener('resize', updateRect);
+    window.addEventListener('scroll', updateRect, true);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', updateRect);
+      window.removeEventListener('scroll', updateRect, true);
+    };
+  }, [isOpen, step.id, step.settingsTab]);
 
   const panelPosition = useMemo(() => clampPanelPosition(targetRect), [targetRect]);
 
@@ -122,7 +190,7 @@ export function GuidedProductTour({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-          className="pointer-events-none fixed inset-0 z-[95]"
+          className="pointer-events-none fixed inset-0 z-[3600]"
           data-testid="onboarding-v2-tour"
         >
           {targetRect ? (
@@ -139,15 +207,16 @@ export function GuidedProductTour({
             />
           ) : null}
 
-          <motion.div
-            key={step.id}
-            initial={{ opacity: 0, y: 10, scale: 0.985 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.99 }}
-            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-auto fixed w-[320px] overflow-hidden rounded-[16px] border border-white/[0.12] bg-[#08090d]/[0.88] p-4 text-white shadow-[0_22px_70px_rgba(0,0,0,0.46)] backdrop-blur-[28px]"
-            style={{ left: panelPosition.left, top: panelPosition.top }}
-          >
+          {hasResolvedTarget ? (
+            <motion.div
+              key={step.id}
+              initial={{ opacity: 0, y: 10, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.99 }}
+              transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+              className="pointer-events-auto fixed w-[320px] overflow-hidden rounded-[16px] border border-white/[0.12] bg-[#08090d]/[0.88] p-4 text-white shadow-[0_22px_70px_rgba(0,0,0,0.46)] backdrop-blur-[28px]"
+              style={{ left: panelPosition.left, top: panelPosition.top }}
+            >
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_88%_92%,rgba(126,108,213,0.16),transparent_46%)]" />
             <div className="relative">
               <div className="mb-3 flex items-center justify-between">
@@ -183,7 +252,8 @@ export function GuidedProductTour({
                 )}
               </button>
             </div>
-          </motion.div>
+            </motion.div>
+          ) : null}
         </motion.div>
       ) : null}
     </AnimatePresence>
