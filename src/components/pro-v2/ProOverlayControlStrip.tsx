@@ -5,7 +5,7 @@
 
 import React, { memo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronDown, SlidersHorizontal, PointerOff, FileText } from 'lucide-react';
+import { ChevronDown, SlidersHorizontal, PointerOff, FileText, Ghost } from 'lucide-react';
 import {
     MODEL_PROVIDER_LABELS,
     MODEL_PROVIDER_SHORT_LABELS,
@@ -21,9 +21,11 @@ export interface ProOverlayControlStripProps {
     currentModel: string;
     isSettingsOpen: boolean;
     isMousePassthrough: boolean;
+    overlayOpacity: number;
     customNotesEnabled: boolean;
     hasProContextAccess: boolean;
     onToggleMousePassthrough: () => void;
+    onCycleOverlayOpacity: () => void;
     onToggleCustomContext: () => void;
 }
 
@@ -32,9 +34,11 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
     currentModel,
     isSettingsOpen,
     isMousePassthrough,
+    overlayOpacity,
     customNotesEnabled,
     hasProContextAccess,
     onToggleMousePassthrough,
+    onCycleOverlayOpacity,
     onToggleCustomContext,
 }) {
     const openPopupBelowPanel = useCallback((anchorRect: DOMRect) => {
@@ -73,6 +77,8 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
     const modelProviderLabel = MODEL_PROVIDER_LABELS[modelProvider];
     const modelProviderShortLabel = MODEL_PROVIDER_SHORT_LABELS[modelProvider];
     const modelStatusLabel = modelMetadata.statusLabel;
+    const isOpacityReduced = overlayOpacity < 0.9;
+    const opacityLabel = isOpacityReduced ? `Opacity: ${Math.round(overlayOpacity * 100)}%` : 'Opacity: Full';
 
     return (
         <div className="v2-overlay-controls v2-no-drag">
@@ -112,6 +118,21 @@ const ProOverlayControlStrip = memo<ProOverlayControlStripProps>(function ProOve
                 </button>
                 <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                     Settings
+                </div>
+            </div>
+
+            <div className="relative group v2-overlay-control-wrap">
+                <button
+                    type="button"
+                    className={`v2-panel-btn v2-overlay-icon-btn ${isOpacityReduced ? 'v2-overlay-icon-btn--opacity' : ''}`}
+                    onClick={onCycleOverlayOpacity}
+                    aria-pressed={isOpacityReduced}
+                    aria-label={opacityLabel}
+                >
+                    <Ghost size={14} className={isOpacityReduced ? 'animate-flame-purple' : ''} />
+                </button>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    {opacityLabel}
                 </div>
             </div>
 

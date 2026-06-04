@@ -13,6 +13,7 @@ import ProResponseSurface from './ProResponseSurface';
 import RollingTranscript from '../ui/RollingTranscript';
 import { useV2OverlayResize } from './useV2OverlayResize';
 import { Image as ImageIcon, X } from 'lucide-react';
+import { OVERLAY_OPACITY_MIN } from '../../lib/overlayAppearance';
 import './pro-v2.css';
 import {
     OVERLAY_MAX_WORK_AREA_RATIO,
@@ -217,6 +218,17 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         bridge.setShowTranscript((prev: boolean) => !prev);
     }, [bridge.setShowTranscript]);
 
+    const handleCycleOverlayOpacity = useCallback(() => {
+        const currentOpacity = Number.isFinite(bridge.overlayOpacity) ? bridge.overlayOpacity : 1;
+        const rounded = Math.round(currentOpacity * 100);
+        let nextOpacity = 1.0;
+
+        if (rounded >= 90) nextOpacity = 0.6;
+        else if (rounded >= 50) nextOpacity = OVERLAY_OPACITY_MIN;
+
+        window.electronAPI?.setOverlayOpacity?.(nextOpacity);
+    }, [bridge.overlayOpacity]);
+
     const handleOpenLauncher = useCallback(() => {
         window.electronAPI?.setWindowMode?.('launcher');
     }, []);
@@ -225,6 +237,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         () => getTranscriptPillText(bridge.rollingTranscript, bridge.lastFinalSentence),
         [bridge.lastFinalSentence, bridge.rollingTranscript],
     );
+    const visualOverlayOpacity = Number.isFinite(bridge.overlayOpacity) ? bridge.overlayOpacity : 1;
 
     return (
         <div
@@ -240,6 +253,8 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 padding: '28px 8px 8px',
                 minHeight: 0,
                 background: 'transparent',
+                opacity: visualOverlayOpacity,
+                transition: 'opacity 180ms ease',
                 fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif",
             } as React.CSSProperties}
         >
@@ -348,9 +363,11 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                             currentModel={bridge.currentModel}
                             isSettingsOpen={bridge.isSettingsOpen}
                             isMousePassthrough={bridge.isMousePassthrough}
+                            overlayOpacity={bridge.overlayOpacity}
                             customNotesEnabled={bridge.customNotesEnabled}
                             hasProContextAccess={bridge.hasProContextAccess}
                             onToggleMousePassthrough={bridge.toggleMousePassthrough}
+                            onCycleOverlayOpacity={handleCycleOverlayOpacity}
                             onToggleCustomContext={bridge.toggleCustomContext}
                         />
 

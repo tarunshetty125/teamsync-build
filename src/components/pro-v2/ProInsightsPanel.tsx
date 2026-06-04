@@ -110,9 +110,11 @@ interface ProInsightsPanelProps {
     currentModel: string;
     isSettingsOpen: boolean;
     isMousePassthrough: boolean;
+    overlayOpacity: number;
     customNotesEnabled: boolean;
     hasProContextAccess: boolean;
     onToggleMousePassthrough: () => void;
+    onCycleOverlayOpacity: () => void;
     onToggleCustomContext: () => void;
     contextSummary: { label: string; detail: string };
     activeQuickActions: OverlayQuickActionDef[];
@@ -145,9 +147,11 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
     currentModel,
     isSettingsOpen,
     isMousePassthrough,
+    overlayOpacity,
     customNotesEnabled,
     hasProContextAccess,
     onToggleMousePassthrough,
+    onCycleOverlayOpacity,
     onToggleCustomContext,
     widthPx = V2_INSIGHTS_WIDTH,
 }) {
@@ -187,9 +191,11 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
                 currentModel={currentModel}
                 isSettingsOpen={isSettingsOpen}
                 isMousePassthrough={isMousePassthrough}
+                overlayOpacity={overlayOpacity}
                 customNotesEnabled={customNotesEnabled}
                 hasProContextAccess={hasProContextAccess}
                 onToggleMousePassthrough={onToggleMousePassthrough}
+                onCycleOverlayOpacity={onCycleOverlayOpacity}
                 onToggleCustomContext={onToggleCustomContext}
             />
 

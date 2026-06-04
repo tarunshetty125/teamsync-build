@@ -19,7 +19,7 @@ export interface OverlayAppearance {
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const mix = (min: number, max: number, value: number) => min + ((max - min) * value);
 
-export const OVERLAY_OPACITY_MIN = 0.35;
+export const OVERLAY_OPACITY_MIN = 0.2;
 export const OVERLAY_OPACITY_MAX = 1;
 /** @deprecated Use getDefaultOverlayOpacity() for theme-aware default. */
 export const OVERLAY_OPACITY_DEFAULT = 0.65;

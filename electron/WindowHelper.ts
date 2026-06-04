@@ -45,6 +45,7 @@ export class WindowHelper {
   private overlayDragStateTimeout: NodeJS.Timeout | null = null
   private startupFallbackTimeout: NodeJS.Timeout | null = null
   private displayChangeDebounceTimeout: NodeJS.Timeout | null = null
+  private overlayExternalBlurTimeout: NodeJS.Timeout | null = null
   private displayChangeListenersRegistered = false
 
   // Constants — v1 overlay content is 600px; pro v2 sizing comes from v2LayoutContract.
@@ -152,6 +153,39 @@ export class WindowHelper {
       this.broadcastOverlayLayoutConstraints()
       this.overlayDragStateTimeout = null
     }, 140)
+  }
+
+  private isTeamSyncAuxiliaryWindowFocused(): boolean {
+    const focusedWindow = BrowserWindow.getFocusedWindow()
+    if (!focusedWindow || focusedWindow.isDestroyed()) return false
+
+    const settingsWindow = this.appState.settingsWindowHelper.getSettingsWindow()
+    const modelSelectorWindow = this.appState.modelSelectorWindowHelper.getWindow()
+    const auxiliaryWindows = [settingsWindow, modelSelectorWindow]
+
+    return auxiliaryWindows.some((win) => (
+      !!win &&
+      !win.isDestroyed() &&
+      win === focusedWindow
+    ))
+  }
+
+  private scheduleOverlayExternalBlurPassthrough(): void {
+    if (this.overlayExternalBlurTimeout) {
+      clearTimeout(this.overlayExternalBlurTimeout)
+    }
+
+    this.overlayExternalBlurTimeout = setTimeout(() => {
+      this.overlayExternalBlurTimeout = null
+      if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return
+      if (!this.overlayWindow.isVisible()) return
+      if (this.currentWindowMode !== 'overlay') return
+      if (this.appState.getOverlayMousePassthrough()) return
+      if (this.isTeamSyncAuxiliaryWindowFocused()) return
+
+      console.log('[WindowHelper] Overlay lost focus externally; enabling mouse passthrough so underlying apps can receive clicks.')
+      this.appState.setOverlayMousePassthrough(true)
+    }, 50)
   }
 
   private applyContentProtection(enable: boolean): void {
@@ -569,6 +603,10 @@ export class WindowHelper {
         if (!this.appState.getUndetectable()) {
           this.showContextMenu(this.overlayWindow!, point);
         }
+      });
+
+      this.overlayWindow.on('blur', () => {
+        this.scheduleOverlayExternalBlurPassthrough();
       });
 
       this.overlayWindow.on('close', (e) => {
