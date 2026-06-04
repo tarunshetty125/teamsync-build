@@ -2939,7 +2939,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             </div>
 
                             {/* Content */}
-                            <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-5 py-5 sm:px-6 lg:px-7">
+                            <div className="settings-right-surface min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-5 py-5 sm:px-6 lg:px-7">
                                 <AnimatePresence mode="wait" initial={false}>
                                     <motion.div
                                         key={activeTab}
