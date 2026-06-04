@@ -197,6 +197,33 @@ type GoogleAuthResult = {
   error?: string
 }
 
+type FirstSuccessActionId =
+  | 'upload_resume_jd'
+  | 'connect_calendar'
+  | 'open_technical_interview_mode'
+  | 'open_coding_mode'
+  | 'start_first_session'
+
+type OnboardingV2State = {
+  tourComplete: boolean
+  firstSuccess: {
+    completed: boolean
+    action: FirstSuccessActionId | null
+    completedAt: string | null
+  }
+}
+
+type OnboardingV2StatePatch = Partial<{
+  tourComplete: boolean
+  firstSuccess: Partial<OnboardingV2State['firstSuccess']>
+}>
+
+type OnboardingV2Result = {
+  success: boolean
+  state?: OnboardingV2State
+  error?: string
+}
+
 // Types for the exposed Electron API
 interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   saveSessionExportReport: (request: SessionExportSaveRequest) => Promise<SessionExportSaveResult>
@@ -466,6 +493,8 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   googleDisconnectCalendar: () => Promise<GoogleAuthResult>
   onAuthResult: (callback: (result: GoogleAuthResult) => void) => () => void
   onAuthLoggedOut: (callback: () => void) => () => void
+  onboardingV2GetState: (email: string) => Promise<OnboardingV2Result>
+  onboardingV2UpdateState: (email: string, patch: OnboardingV2StatePatch) => Promise<OnboardingV2Result>
 
   // Auto-Update
   onUpdateAvailable: (callback: (info: any) => void) => () => void
@@ -1786,6 +1815,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   googleGetCalendarEvents: () => ipcRenderer.invoke('auth:calendar-events'),
   googleLogout: () => ipcRenderer.invoke('auth:logout'),
   googleDisconnectCalendar: () => ipcRenderer.invoke('auth:disconnect-calendar'),
+  onboardingV2GetState: (email: string) => ipcRenderer.invoke('onboarding-v2:get-state', email),
+  onboardingV2UpdateState: (email: string, patch: OnboardingV2StatePatch) => ipcRenderer.invoke('onboarding-v2:update-state', email, patch),
   onAuthResult: (callback: (result: any) => void) => {
     const subscription = (_: any, result: any) => callback(result);
     ipcRenderer.on('auth:result', subscription);

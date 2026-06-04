@@ -168,6 +168,33 @@ type GoogleAuthResult = {
   error?: string;
 }
 
+type FirstSuccessActionId =
+  | 'upload_resume_jd'
+  | 'connect_calendar'
+  | 'open_technical_interview_mode'
+  | 'open_coding_mode'
+  | 'start_first_session';
+
+type OnboardingV2State = {
+  tourComplete: boolean;
+  firstSuccess: {
+    completed: boolean;
+    action: FirstSuccessActionId | null;
+    completedAt: string | null;
+  };
+}
+
+type OnboardingV2StatePatch = Partial<{
+  tourComplete: boolean;
+  firstSuccess: Partial<OnboardingV2State['firstSuccess']>;
+}>
+
+type OnboardingV2Result = {
+  success: boolean;
+  state?: OnboardingV2State;
+  error?: string;
+}
+
 type BridgeContextTarget = 'latest_turn' | 'active_context' | 'transcript'
 type BridgeActionContract =
   | 'default'
@@ -720,6 +747,8 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   googleDisconnectCalendar: () => Promise<GoogleAuthResult>;
   onAuthResult: (callback: (result: GoogleAuthResult) => void) => () => void;
   onAuthLoggedOut: (callback: () => void) => () => void;
+  onboardingV2GetState: (email: string) => Promise<OnboardingV2Result>;
+  onboardingV2UpdateState: (email: string, patch: OnboardingV2StatePatch) => Promise<OnboardingV2Result>;
 
   // Calendar status sync (Launcher <-> Settings)
   onCalendarStatusChanged: (callback: (status: { connected: boolean; email: string | null }) => void) => () => void;
