@@ -31,6 +31,7 @@ interface TopSearchPillProps {
     onLiteralSearch: (query: string) => void;
     onOpenMeeting: (meetingId: string) => void;
     onExpansionChange?: (isExpanded: boolean) => void;
+    dataTourId?: string;
 }
 
 // ============================================
@@ -92,7 +93,8 @@ const TopSearchPill: React.FC<TopSearchPillProps> = ({
     onAIQuery,
     onLiteralSearch,
     onOpenMeeting,
-    onExpansionChange
+    onExpansionChange,
+    dataTourId,
 }) => {
     const isLight = useResolvedTheme() === 'light';
     const [state, setState] = useState<PillState>('idle');
@@ -252,6 +254,7 @@ const TopSearchPill: React.FC<TopSearchPillProps> = ({
             {/* Search Pill Container */}
             <div
                 ref={containerRef}
+                data-tour-id={dataTourId}
                 className="absolute left-1/2 -translate-x-1/2 top-[7px] no-drag z-40"
             >
                 <div className="relative">

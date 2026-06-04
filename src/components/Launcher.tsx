@@ -945,6 +945,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
                 {/* Center: Spotlight-style Search Pill */}
                 <TopSearchPill
+                    dataTourId="control-center"
                     meetings={meetings}
                     onAIQuery={(query) => {
                         analytics.trackCommandExecuted('ai_query_search');
@@ -971,6 +972,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                 <div className={`flex items-center gap-1 no-drag shrink-0 ${isMac ? 'mr-1' : ''}`}>
                     <div className="relative group/modes-btn select-none">
                         <button
+                            data-tour-id="interview-mode"
                             onClick={() => {
                                 setShowModesOnboarding(false);
                                 onOpenModes?.();
@@ -1064,6 +1066,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                         </AnimatePresence>
                     </div>
                     <button
+                        data-tour-id="settings"
                         onClick={() => {
                             onOpenSettings();
                         }}
@@ -1200,6 +1203,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                             </div>
 
                                             <motion.button
+                                                data-tour-id="overlay-control"
                                                 onClick={() => {
                                                     if (isMeetingActive) {
                                                         window.electronAPI?.setWindowMode?.('overlay', true);

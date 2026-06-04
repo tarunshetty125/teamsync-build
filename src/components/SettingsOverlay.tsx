@@ -4037,7 +4037,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                     </div>
                                 )}
                                 {activeTab === 'profile' && (
-                                    <div className="space-y-6 animated fadeIn">
+                                    <div className="space-y-6 animated fadeIn" data-tour-id="profile-intelligence">
                                         {/* Introduction */}
                                         <div className="mb-5">
                                             <div className="flex items-center justify-between mb-1">

@@ -19,9 +19,9 @@ import { TeamSyncQuotaBanner } from "./components/TeamSyncQuotaBanner"
 import { FreeTrialBanner } from "./components/trial/FreeTrialBanner"
 import { FreeTrialModal } from "./components/trial/FreeTrialModal"
 import { TrialPromoToaster } from "./components/trial/TrialPromoToaster"
-import { OnboardingFlow } from "./components/onboarding/OnboardingFlow"
-import GoogleSignIn from "./components/onboarding/GoogleSignIn"
-import { ReferenceOnboardingModal, type GoogleAuthUserWithOnboarding, type TeamSyncOnboardingV1 } from "./components/onboarding/ReferenceOnboardingModal"
+import { PremiumOnboardingV2 } from "./components/onboarding/PremiumOnboardingV2"
+import { OnboardingV2PostLaunch } from "./components/onboarding/OnboardingV2PostLaunch"
+import type { GoogleAuthUserWithOnboardingV2 } from "./components/onboarding/onboardingV2Types"
 import { AlertCircle } from "lucide-react"
 import { clampOverlayOpacity, OVERLAY_OPACITY_DEFAULT, getDefaultOverlayOpacity } from "./lib/overlayAppearance"
 import {
@@ -52,14 +52,7 @@ type BedrockReauthenticationWarning = {
   error?: string;
 }
 
-type GoogleAuthUser = GoogleAuthUserWithOnboarding & {
-  onboardingV1?: TeamSyncOnboardingV1 | null;
-  name: string;
-  email: string;
-  picture?: string;
-  calendarConnected?: boolean;
-  isNewUser?: boolean;
-}
+type GoogleAuthUser = GoogleAuthUserWithOnboardingV2;
 
 const App: React.FC = () => {
   const isSettingsWindow = new URLSearchParams(window.location.search).get('window') === 'settings';
@@ -126,6 +119,7 @@ const App: React.FC = () => {
   const [isPremiumActive, setIsPremiumActive] = useState(false);
   const [hasLoadedLicense, setHasLoadedLicense] = useState(false);
   const [hasCompletedBootstrap, setHasCompletedBootstrap] = useState(false);
+  const [hasLaunchedPremiumOnboarding, setHasLaunchedPremiumOnboarding] = useState<boolean>(() => !(isLauncherWindow || isDefault));
   const [planDetails, setPlanDetails] = useState<{ isPremium: boolean; plan?: string; provider?: string }>({ isPremium: false });
 
   // Overlay opacity — only meaningful when isOverlayWindow, but stored centrally
@@ -253,26 +247,17 @@ const App: React.FC = () => {
   const setPermissionsStep = usePermissionsStore((state) => state.setCurrentStep);
   const setPermissionsError = usePermissionsStore((state) => state.setLastError);
 
+  const isLauncherContext = isLauncherWindow || isDefault;
   const isPermissionsReady = isPermissionStatusOperational(permissionsStatus);
-  const shouldShowOnboarding =
-    (isLauncherWindow || isDefault) &&
-    permissionsInitialized &&
-    (!onboardingCompleted || !isPermissionsReady);
-  const shouldRenderStartup = (isLauncherWindow || isDefault) && showStartup;
-  const shouldRenderOnboarding = shouldShowOnboarding && !shouldRenderStartup;
-  const shouldHoldLauncherBoot = (isLauncherWindow || isDefault) && !permissionsInitialized && !shouldRenderStartup;
-  const hasCompletedMongoOnboarding = authUser?.onboardingV1?.onboardingVersion === 1;
-  const shouldRenderReferenceOnboarding =
-    (isLauncherWindow || isDefault) &&
-    !shouldShowOnboarding &&
-    !shouldRenderStartup &&
-    isAuthenticated &&
-    Boolean(authUser) &&
-    !hasCompletedMongoOnboarding;
-  const canRenderLauncherWorkspace = !shouldShowOnboarding && isAuthenticated && !shouldRenderReferenceOnboarding;
+  const shouldSkipPremiumIntroScreens = onboardingCompleted && isPermissionsReady;
+  const shouldStartPremiumAtPermissions = onboardingCompleted && !isPermissionsReady;
+  const shouldRenderStartup = isLauncherContext && showStartup;
+  const shouldHoldLauncherBoot = isLauncherContext && !permissionsInitialized && !shouldRenderStartup;
+  const shouldRenderPremiumOnboarding = isLauncherContext && permissionsInitialized && !shouldRenderStartup && !hasLaunchedPremiumOnboarding;
+  const canRenderLauncherWorkspace = hasLaunchedPremiumOnboarding && isAuthenticated;
   const shouldMountLauncherWorkspace = (isLauncherWindow || isDefault) && !shouldHoldLauncherBoot && canRenderLauncherWorkspace;
   const isStartupCoveringLauncher = shouldMountLauncherWorkspace && shouldRenderStartup;
-  const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !shouldRenderStartup && !isSettingsOpen && isLauncherMainView && !shouldShowOnboarding && !shouldRenderReferenceOnboarding;
+  const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !shouldRenderStartup && !isSettingsOpen && isLauncherMainView && !shouldRenderPremiumOnboarding;
   const { activeAd, dismissAd, previewAd } = useAdCampaigns(
     planDetails,
     hasProfile,
@@ -439,6 +424,9 @@ const App: React.FC = () => {
     const removeAuthLoggedOut = window.electronAPI?.onAuthLoggedOut?.(() => {
       clearLegacyRendererAuthCache();
       applyGoogleAuthState({ authenticated: false, user: null });
+      if (isLauncherWindow || isDefault) {
+        setHasLaunchedPremiumOnboarding(false);
+      }
     });
 
     return () => {
@@ -651,6 +639,23 @@ const App: React.FC = () => {
             isPremiumActive={isPremiumActive}
             isLicenseLoaded={hasLoadedLicense}
           />
+          <OnboardingV2PostLaunch
+            isEnabled={!isStartupCovered && Boolean(authUser)}
+            user={authUser}
+            onOpenSettings={(tab = 'overview') => {
+              setSettingsInitialTab(tab);
+              setIsSettingsOpen(true);
+            }}
+            onCloseSettings={() => {
+              setIsSettingsOpen(false);
+            }}
+            onStartMeeting={() => handleStartMeeting()}
+            onAuthUserChange={(updatedUser) => {
+              setAuthUser(updatedUser);
+              setIsAuthenticated(true);
+              setHasLoadedAuth(true);
+            }}
+          />
           {bedrockAuthToast}
           <AnimatePresence>
             {isModesOpen && (
@@ -761,7 +766,7 @@ const App: React.FC = () => {
   // Renders if window=launcher OR no param
   return (
     <ErrorBoundary context="Launcher">
-      <div className={`h-full min-h-0 w-full relative ${shouldRenderReferenceOnboarding ? 'bg-transparent' : 'bg-[#000000]'}`}>
+      <div className="h-full min-h-0 w-full relative bg-[#000000]">
         {shouldMountLauncherWorkspace && renderLauncherWorkspace(isStartupCoveringLauncher)}
 
         <AnimatePresence initial={false}>
@@ -781,22 +786,6 @@ const App: React.FC = () => {
               <div className="flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/66">
                 Preparing TeamSync
               </div>
-            </motion.div>
-          ) : shouldShowOnboarding || shouldRenderReferenceOnboarding ? null : !isAuthenticated ? (
-            <motion.div
-              key="auth"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, scale: 1.05, transition: { duration: 0.5, ease: "easeInOut" } }}
-            >
-              <GoogleSignIn
-                onSignInComplete={(userData) => {
-                  clearLegacyRendererAuthCache();
-                  setAuthUser(userData);
-                  setIsAuthenticated(true);
-                  setHasLoadedAuth(true);
-                }}
-              />
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -839,7 +828,7 @@ const App: React.FC = () => {
           )}
         </AnimatePresence>
 
-        {!shouldRenderStartup && !shouldShowOnboarding && !shouldRenderReferenceOnboarding ? (
+        {shouldMountLauncherWorkspace && !shouldRenderStartup ? (
           <>
             <UpdateBanner />
             <SupportToaster />
@@ -850,7 +839,7 @@ const App: React.FC = () => {
 
 
         {/* Free trial countdown banner — only in launcher window while trial is active */}
-        {(isLauncherWindow || isDefault) && activeTrial && !shouldShowOnboarding && !shouldRenderStartup && !shouldRenderReferenceOnboarding && (
+        {(isLauncherWindow || isDefault) && activeTrial && shouldMountLauncherWorkspace && !shouldRenderStartup && (
           <FreeTrialBanner
             expiresAt={activeTrial.expiresAt}
             usage={activeTrial.usage}
@@ -862,7 +851,7 @@ const App: React.FC = () => {
         )}
 
         {/* Trial promo toaster — 5s after restart (self-gates via localStorage + conditions) */}
-        {!shouldShowOnboarding && !shouldRenderStartup && !shouldRenderReferenceOnboarding && <TrialPromoToaster
+        {shouldMountLauncherWorkspace && !shouldRenderStartup && <TrialPromoToaster
           isOpen={showTrialPromo}
           hasTeamSyncKey={hasTeamSyncApi}
           hasTrialToken={!!activeTrial}
@@ -883,7 +872,7 @@ const App: React.FC = () => {
         />}
 
         {/* Post-trial upgrade modal — shown when trial expires */}
-        {(isLauncherWindow || isDefault) && showTrialExpiredModal && !shouldShowOnboarding && !shouldRenderStartup && !shouldRenderReferenceOnboarding && (
+        {(isLauncherWindow || isDefault) && showTrialExpiredModal && shouldMountLauncherWorkspace && !shouldRenderStartup && (
           <FreeTrialModal
             usage={activeTrial?.usage ?? { ai: 0, stt_seconds: 0, search: 0 }}
             onByok={async () => {
@@ -897,7 +886,7 @@ const App: React.FC = () => {
         )}
         {/* Ad toasters — render whenever activeAd is set (isLauncherMainView guard bypassed
           when triggered via preview shortcut so the card always surfaces) */}
-        {(isLauncherMainView || !!activeAd) && !isSettingsOpen && !shouldShowOnboarding && !shouldRenderStartup && !shouldRenderReferenceOnboarding && (
+        {(isLauncherMainView || !!activeAd) && !isSettingsOpen && shouldMountLauncherWorkspace && !shouldRenderStartup && (
           <TeamSyncApiPromoToaster
             isOpen={activeAd === 'teamsync_api'}
             onDismiss={() => dismissAd('teamsync_api')}
@@ -907,7 +896,7 @@ const App: React.FC = () => {
             }}
           />
         )}
-        {(isLauncherMainView || !!activeAd) && !shouldShowOnboarding && !shouldRenderStartup && !shouldRenderReferenceOnboarding && (
+        {(isLauncherMainView || !!activeAd) && shouldMountLauncherWorkspace && !shouldRenderStartup && (
           <>
             <ProfileFeatureToaster
               isOpen={activeAd === 'profile'}
@@ -971,21 +960,25 @@ const App: React.FC = () => {
           }}
           onDeactivated={() => { setIsPremiumActive(false); setPlanDetails({ isPremium: false }); }}
         />
-        <ReferenceOnboardingModal
-          isOpen={shouldRenderReferenceOnboarding}
-          user={authUser}
-          onComplete={(updatedUser) => {
+        <PremiumOnboardingV2
+          isOpen={shouldRenderPremiumOnboarding}
+          initialUser={authUser}
+          skipIntroScreens={shouldSkipPremiumIntroScreens}
+          startAtPermissions={shouldStartPremiumAtPermissions}
+          onAuthUserChange={(updatedUser) => {
             clearLegacyRendererAuthCache();
             setAuthUser(updatedUser);
             setIsAuthenticated(true);
             setHasLoadedAuth(true);
           }}
-        />
-        <OnboardingFlow
-          isOpen={shouldRenderOnboarding}
-          skipSplash
-          startAtPermissions={shouldRenderOnboarding}
-          completeAfterPermissions={shouldRenderOnboarding}
+          onLaunch={(updatedUser) => {
+            clearLegacyRendererAuthCache();
+            setAuthUser(updatedUser);
+            setIsAuthenticated(true);
+            setHasLoadedAuth(true);
+            setHasLaunchedPremiumOnboarding(true);
+            setShowTrialPromo(usePermissionsStore.getState().onboardingCompleted);
+          }}
         />
       </div>
     </ErrorBoundary>
