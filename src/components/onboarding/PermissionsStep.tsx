@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Eye, AudioLines, Sparkles, Layers } from 'lucide-react';
+import { Eye, AudioLines, Sparkles, RefreshCw, ShieldCheck } from 'lucide-react';
 import { PermissionCard } from './PermissionCard';
 import type { PermissionKind, PermissionStatusSnapshot } from '../../lib/permissions/types';
 import { isPermissionStatusOperational } from '../../lib/permissions/utils';
@@ -14,6 +14,20 @@ interface PermissionsStepProps {
   onRetry: () => void;
   onContinue: () => void;
   onQuit: () => void;
+}
+
+function PermissionModalFrameBorder() {
+  const bottomFadeMask = 'linear-gradient(to bottom, #000 0, #000 calc(100% - 30px), transparent calc(100% - 10px))';
+
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 rounded-[15px] border border-[#a1a3aa]/50"
+      style={{
+        WebkitMaskImage: bottomFadeMask,
+        maskImage: bottomFadeMask,
+      }}
+    />
+  );
 }
 
 export function PermissionsStep({
@@ -62,84 +76,60 @@ export function PermissionsStep({
         : { label: 'Grant Access', onClick: () => onRequest('accessibility') };
 
   return (
-    <div className="flex flex-col gap-4">
-      {snapshot.restartRequired ? (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col gap-4 overflow-hidden rounded-xl border border-sky-500/20 bg-sky-500/10 p-4 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div>
-            <div className="text-[13px] font-medium text-sky-300">Please restart TeamSync to finish enabling screen access.</div>
-            <p className="mt-1 text-[12px] leading-relaxed text-sky-400/60">
-              macOS has registered Screen Recording, but the app needs a fresh launch.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onQuit}
-            className="rounded-md border border-sky-400/20 bg-sky-400/10 px-4 py-2 text-[13px] font-medium text-sky-300 transition-all hover:bg-sky-400/20 active:scale-[0.98]"
+    <motion.section
+      initial={{ opacity: 0, y: 56 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -12 }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="relative w-full overflow-hidden rounded-[15px] bg-[#020202] px-[40px] pb-[30px] pt-[48px] shadow-[0_26px_90px_rgba(0,0,0,0.62)]"
+      data-testid="startup-permissions-modal"
+    >
+      <PermissionModalFrameBorder />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_95%,rgba(109,55,28,0.13),transparent_43%),radial-gradient(circle_at_72%_92%,rgba(84,43,16,0.10),transparent_48%)]" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[18px] bg-gradient-to-b from-transparent to-[#020202]" />
+
+      <div className="relative mx-auto max-w-[430px] text-center">
+        <div className="mx-auto flex h-[42px] w-[42px] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/[0.62] shadow-[0_0_26px_rgba(255,255,255,0.06)]">
+          <ShieldCheck className="h-[19px] w-[19px]" strokeWidth={1.8} />
+        </div>
+        <h2 className="mt-[20px] text-[38px] font-semibold leading-[1.04] text-white/[0.88] drop-shadow-[0_0_10px_rgba(255,255,255,0.24)]">
+          Enable access
+        </h2>
+        <p className="mx-auto mt-[16px] max-w-[360px] text-[14px] font-semibold leading-[1.45] text-white/[0.56]">
+          TeamSync needs these permissions before the workspace can launch.
+        </p>
+      </div>
+
+      <div className="relative mt-[30px] flex flex-col gap-[10px]">
+        {snapshot.restartRequired ? (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col gap-3 overflow-hidden rounded-[14px] border border-sky-300/20 bg-sky-400/[0.08] p-[14px] sm:flex-row sm:items-center sm:justify-between"
           >
-            Quit TeamSync
-          </button>
-        </motion.div>
-      ) : null}
-
-      {lastError ? (
-        <div className="overflow-hidden rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-[13px] text-rose-300">
-          {lastError}
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.1fr]">
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated p-6 shadow-[0_16px_40px_rgba(0,0,0,0.12)]">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10" />
-          <div className="relative">
-            <div className="inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-bg-input px-2.5 py-1 text-[9px] font-semibold uppercase tracking-widest text-text-secondary">
-              <Layers className="h-3 w-3" />
-              TeamSync Realtime Intelligence
+            <div>
+              <div className="text-[13px] font-bold text-sky-200/90">Restart TeamSync to finish screen access.</div>
+              <p className="mt-1 text-[12px] font-medium leading-relaxed text-sky-100/[0.48]">
+                macOS has registered Screen Recording, but the app needs a fresh launch.
+              </p>
             </div>
-
-            <h2 className="mt-4 text-[22px] font-medium leading-[1.15] tracking-[-0.03em] text-text-primary">
-              TeamSync needs permissions to power realtime meeting intelligence.
-            </h2>
-
-            <p className="mt-3 text-[13px] leading-relaxed text-text-secondary">
-              Grant these once so TeamSync can capture meetings, understand shared screens, and keep the overlay live.
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {['meeting capture', 'overlay intelligence', 'context-aware'].map((pill) => (
-                <span
-                  key={pill}
-                  className="rounded-md border border-border-subtle bg-bg-input px-2.5 py-1 text-[11px] text-text-secondary"
-                >
-                  {pill}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="relative mt-6 flex items-center justify-between">
             <button
               type="button"
-              onClick={onContinue}
-              disabled={!allReady}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-text-primary px-4 text-[13px] font-semibold text-bg-primary shadow-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-bg-input disabled:text-text-tertiary disabled:shadow-none"
+              onClick={onQuit}
+              className="h-[34px] rounded-full border border-sky-200/[0.18] bg-sky-200/[0.08] px-4 text-[12px] font-bold text-sky-100/80 transition-all hover:bg-sky-200/[0.14] active:scale-[0.98]"
             >
-              Continue setup
+              Quit TeamSync
             </button>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="text-[12px] font-medium text-text-secondary transition-colors hover:text-text-primary"
-            >
-              Refresh
-            </button>
-          </div>
-        </div>
+          </motion.div>
+        ) : null}
 
-        <div className="flex flex-col gap-2">
+        {lastError ? (
+          <div className="overflow-hidden rounded-[14px] border border-rose-300/20 bg-rose-400/[0.08] px-4 py-3 text-[13px] font-semibold text-rose-100/[0.72]">
+            {lastError}
+          </div>
+        ) : null}
+
           <PermissionCard
             icon={Eye}
             title="Screen understanding"
@@ -184,8 +174,26 @@ export function PermissionsStep({
                 : undefined
             }
           />
-        </div>
       </div>
-    </div>
+
+      <div className="relative mt-[24px] flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex h-[38px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-[15px] text-[12px] font-bold text-white/[0.56] transition-all hover:border-white/[0.18] hover:bg-white/[0.06] hover:text-white/[0.74] active:scale-[0.98]"
+        >
+          <RefreshCw className="h-[13px] w-[13px]" strokeWidth={1.8} />
+          Refresh
+        </button>
+        <button
+          type="button"
+          onClick={onContinue}
+          disabled={!allReady}
+          className="inline-flex h-[42px] min-w-[154px] items-center justify-center rounded-full border border-white/[0.14] bg-white/[0.92] px-[22px] text-[14px] font-bold text-[#050505] shadow-[0_0_30px_rgba(255,255,255,0.12)] transition-colors duration-200 hover:bg-white active:scale-[0.985] disabled:cursor-not-allowed disabled:border-white/[0.08] disabled:bg-white/[0.06] disabled:text-white/[0.34] disabled:shadow-none"
+        >
+          Continue setup
+        </button>
+      </div>
+    </motion.section>
   );
 }

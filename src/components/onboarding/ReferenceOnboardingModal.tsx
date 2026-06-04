@@ -1,7 +1,7 @@
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import { Check } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 export type TeamSyncOnboardingV1 = {
   persona: string;
@@ -28,6 +28,8 @@ type ReferenceOnboardingModalProps = {
   user: GoogleAuthUserWithOnboarding | null;
   onComplete: (user: GoogleAuthUserWithOnboarding) => void;
 };
+
+type OnboardingStep = 'waiting' | 'persona' | 'details' | 'complete';
 
 type Option = {
   id: string;
@@ -255,41 +257,58 @@ export function ReferenceOnboardingModal({
   user,
   onComplete,
 }: ReferenceOnboardingModalProps) {
-  const [step, setStep] = useState<'persona' | 'details' | 'complete'>('persona');
+  const [step, setStep] = useState<OnboardingStep>('waiting');
   const [persona, setPersona] = useState<string | null>(null);
   const [industry, setIndustry] = useState<string | null>(null);
   const [discoverySource, setDiscoverySource] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [completedUser, setCompletedUser] = useState<GoogleAuthUserWithOnboarding | null>(null);
   const [isAdvancingToDetails, setIsAdvancingToDetails] = useState(false);
+  const [isPreparingComplete, setIsPreparingComplete] = useState(false);
+  const introTimerRef = useRef<number | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
+  const completeTimerRef = useRef<number | null>(null);
 
-  const clearAdvanceTimer = () => {
-    if (advanceTimerRef.current === null) return;
-    window.clearTimeout(advanceTimerRef.current);
-    advanceTimerRef.current = null;
+  const clearTimerRef = (timerRef: MutableRefObject<number | null>) => {
+    if (timerRef.current === null) return;
+    window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+  };
+
+  const clearOnboardingTimers = () => {
+    clearTimerRef(introTimerRef);
+    clearTimerRef(advanceTimerRef);
+    clearTimerRef(completeTimerRef);
   };
 
   useEffect(() => {
-    clearAdvanceTimer();
+    clearOnboardingTimers();
     if (!isOpen) return;
-    setStep('persona');
+    setStep('waiting');
     setPersona(null);
     setIndustry(null);
     setDiscoverySource(null);
     setIsSaving(false);
     setSaveError(null);
+    setCompletedUser(null);
     setIsAdvancingToDetails(false);
+    setIsPreparingComplete(false);
 
-    return clearAdvanceTimer;
+    introTimerRef.current = window.setTimeout(() => {
+      setStep('persona');
+      introTimerRef.current = null;
+    }, 2000);
+
+    return clearOnboardingTimers;
   }, [isOpen, user?.email]);
 
   const handlePersonaSelect = (id: string) => {
-    if (isSaving || isAdvancingToDetails) return;
+    if (isSaving || isAdvancingToDetails || isPreparingComplete) return;
     setPersona(id);
     setSaveError(null);
     setIsAdvancingToDetails(true);
-    clearAdvanceTimer();
+    clearTimerRef(advanceTimerRef);
     advanceTimerRef.current = window.setTimeout(() => {
       setStep('details');
       setIsAdvancingToDetails(false);
@@ -307,23 +326,42 @@ export function ReferenceOnboardingModal({
     setIsSaving(true);
     setSaveError(null);
     try {
-      const result = await window.electronAPI?.googleSaveOnboardingV1?.({
+      const onboardingPayload = {
         persona: personaValue,
         industry: industryValue,
         discoverySource: discoverySourceValue,
         onboardingVersion: 1,
         completedInVersion: '1.0.0',
-      });
+      } as const;
+      console.info('[OnboardingV1] Saving onboarding selections', onboardingPayload);
+      const result = await window.electronAPI?.googleSaveOnboardingV1?.(onboardingPayload);
 
       if (!result?.success || result.user?.onboardingV1?.onboardingVersion !== 1) {
+        console.error('[OnboardingV1] Save failed before launch', {
+          result,
+          persona: personaValue,
+          industry: industryValue,
+          discoverySource: discoverySourceValue,
+          hasBridge: Boolean(window.electronAPI?.googleSaveOnboardingV1),
+        });
         throw new Error(result?.error || 'Could not save onboarding. Please try again.');
       }
 
-      setStep('complete');
-      window.setTimeout(() => {
-        onComplete(result.user as GoogleAuthUserWithOnboarding);
-      }, 780);
+      setCompletedUser(result.user as GoogleAuthUserWithOnboarding);
+      setIsPreparingComplete(true);
+      clearTimerRef(completeTimerRef);
+      completeTimerRef.current = window.setTimeout(() => {
+        setStep('complete');
+        setIsPreparingComplete(false);
+        completeTimerRef.current = null;
+      }, 2000);
     } catch (error: any) {
+      console.error('[OnboardingV1] Save exception', {
+        message: error?.message,
+        persona: personaValue,
+        industry: industryValue,
+        discoverySource: discoverySourceValue,
+      });
       setSaveError(error?.message || 'Could not save onboarding. Please try again.');
     } finally {
       setIsSaving(false);
@@ -331,7 +369,7 @@ export function ReferenceOnboardingModal({
   };
 
   const handleIndustrySelect = (id: string) => {
-    if (isSaving) return;
+    if (isSaving || isPreparingComplete) return;
     setIndustry(id);
     setSaveError(null);
     if (persona && discoverySource) {
@@ -340,12 +378,17 @@ export function ReferenceOnboardingModal({
   };
 
   const handleDiscoverySourceSelect = (id: string) => {
-    if (isSaving) return;
+    if (isSaving || isPreparingComplete) return;
     setDiscoverySource(id);
     setSaveError(null);
     if (persona && industry) {
       void handleSave(persona, industry, id);
     }
+  };
+
+  const handleLaunchTeamSync = () => {
+    if (!completedUser) return;
+    onComplete(completedUser);
   };
 
   return (
@@ -493,9 +536,9 @@ export function ReferenceOnboardingModal({
                   </div>
                 </motion.div>
 
-                {(saveError || isSaving) ? (
+                {saveError ? (
                   <motion.div variants={contentItemVariants} className="relative mt-[18px] min-h-[16px] text-[12px] font-semibold leading-snug text-white/42">
-                    {isSaving ? 'Saving...' : `${saveError} Select a chip to retry.`}
+                    {`${saveError} Select a chip to retry.`}
                   </motion.div>
                 ) : null}
               </motion.div>
@@ -508,25 +551,38 @@ export function ReferenceOnboardingModal({
                 initial="hidden"
                 animate="visible"
                 exit="exit"
-                className="relative flex w-[calc(100vw-32px)] max-w-[552px] transform-gpu flex-col items-center overflow-hidden rounded-[24px] bg-[#050505] px-[40px] py-[54px] text-center shadow-[0_26px_90px_rgba(0,0,0,0.62)] will-change-transform"
+                className="relative w-[calc(100vw-32px)] max-w-[500px] transform-gpu overflow-hidden rounded-[15px] bg-[#020202] px-[40px] pb-[34px] pt-[50px] text-center shadow-[0_26px_90px_rgba(0,0,0,0.62)] will-change-transform"
                 style={modalFrameStyle}
               >
-                <ModalFrameBorder radiusClass="rounded-[24px]" borderClass="border-white/[0.08]" />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[18px] bg-gradient-to-b from-transparent to-[#050505]" />
+                <ModalFrameBorder />
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10" />
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_92%,rgba(91,44,24,0.13),transparent_43%),radial-gradient(circle_at_68%_90%,rgba(84,43,16,0.10),transparent_48%)]" />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[18px] bg-gradient-to-b from-transparent to-[#020202]" />
                 <motion.div
                   initial={{ scale: 0.72, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-                  className="flex h-14 w-14 items-center justify-center rounded-full border border-emerald-300/24 bg-emerald-400/12 text-emerald-200 shadow-[0_0_36px_rgba(52,211,153,0.24)]"
+                  className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-emerald-300/24 bg-emerald-400/12 text-emerald-200 shadow-[0_0_36px_rgba(52,211,153,0.24)]"
                 >
                   <Check className="h-6 w-6" strokeWidth={2.4} />
                 </motion.div>
-                <div className="mt-6 text-[30px] font-semibold tracking-[-0.01em] text-white/90">
+                <div className="relative mt-6 text-[34px] font-semibold leading-[1.04] text-white/88 drop-shadow-[0_0_10px_rgba(255,255,255,0.24)]">
                   TeamSync is ready
                 </div>
-                <p className="mt-3 max-w-[320px] text-[14px] font-semibold leading-[1.45] text-white/50">
-                  Opening your default workspace.
+                <p className="relative mx-auto mt-[14px] max-w-[340px] text-[14px] font-semibold leading-[1.45] text-white/56">
+                  Your onboarding is saved. Launch your workspace when you're ready.
                 </p>
+                <motion.button
+                  type="button"
+                  variants={contentItemVariants}
+                  whileHover={{ scale: 1.018 }}
+                  whileTap={{ scale: 0.985 }}
+                  onClick={handleLaunchTeamSync}
+                  disabled={!completedUser}
+                  className="relative mt-[30px] h-[44px] rounded-full border border-white/14 bg-white/[0.92] px-[28px] text-[14px] font-bold text-[#050505] shadow-[0_0_30px_rgba(255,255,255,0.12)] transition-colors duration-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Launch TeamSync
+                </motion.button>
               </motion.div>
             ) : null}
           </AnimatePresence>

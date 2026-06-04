@@ -100,7 +100,8 @@ test('Onboarding save payload and completion guard include V1 metadata', () => {
   assert.match(modal, /const handleIndustrySelect/);
   assert.match(modal, /const handleDiscoverySourceSelect/);
   assert.doesNotMatch(modal, />\s*Next\s*</);
-  assert.doesNotMatch(modal, />\s*Launch\s*</);
+  assert.doesNotMatch(modal, />\s*Saving\.\.\.\s*</);
+  assert.match(modal, />\s*Launch TeamSync\s*</);
 });
 
 test('Reference modal options, motion, and visual metrics remain locked', () => {
@@ -116,6 +117,12 @@ test('Reference modal options, motion, and visual metrics remain locked', () => 
   assert.equal((discoveryOptions.match(/label:/g) || []).length, 8);
   assert.match(modal, /max-w-\[500px\]/);
   assert.match(modal, /grid grid-cols-2/);
+  assert.match(modal, /type OnboardingStep = 'waiting' \| 'persona' \| 'details' \| 'complete'/);
+  assert.match(modal, /setStep\('waiting'\)/);
+  assert.match(modal, /introTimerRef\.current = window\.setTimeout/);
+  assert.match(modal, /advanceTimerRef\.current = window\.setTimeout/);
+  assert.match(modal, /completeTimerRef\.current = window\.setTimeout/);
+  assert.equal((modal.match(/}, 2000\);/g) || []).length, 3);
   assert.match(modal, /const modalEntryState = \{\s*opacity: 0,\s*y: 108,\s*scale: 0\.978,/s);
   assert.match(modal, /const modalVisibleState = \{\s*opacity: 1,\s*y: 0,\s*scale: 1,/s);
   assert.match(modal, /const modalExitState = \{\s*opacity: 0,\s*y: -14,\s*scale: 0\.996,/s);

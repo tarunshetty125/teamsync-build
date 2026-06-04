@@ -12,7 +12,7 @@ test('TeamSync Onboarding V1 reference modal visual contract', async ({ page }) 
   await page.goto(`${baseURL}/electron/tests/fixtures/onboarding-v1-visual.html`);
 
   const personaModal = page.getByTestId('persona-modal');
-  await expect(personaModal).toBeVisible();
+  await expect(personaModal).toBeVisible({ timeout: 3000 });
   await page.waitForTimeout(700);
 
   const personaBox = await personaModal.boundingBox();
@@ -29,7 +29,7 @@ test('TeamSync Onboarding V1 reference modal visual contract', async ({ page }) 
   await page.getByTestId('persona-card').first().click();
 
   const industryModal = page.getByTestId('industry-modal');
-  await expect(industryModal).toBeVisible();
+  await expect(industryModal).toBeVisible({ timeout: 3000 });
   await page.waitForTimeout(700);
 
   const industryBox = await industryModal.boundingBox();
@@ -37,7 +37,7 @@ test('TeamSync Onboarding V1 reference modal visual contract', async ({ page }) 
   expect(industryBox?.width).toBeLessThanOrEqual(505);
   await expect(page.getByTestId('industry-chip')).toHaveCount(15);
   await expect(page.getByTestId('discovery-chip')).toHaveCount(8);
-  await expect(page.getByRole('button', { name: 'Launch' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Launch TeamSync' })).toHaveCount(0);
 
   await page.screenshot({
     path: path.join(screenshotDir, 'industry.png'),
@@ -45,5 +45,8 @@ test('TeamSync Onboarding V1 reference modal visual contract', async ({ page }) 
 
   await page.getByTestId('industry-chip').first().click();
   await page.getByTestId('discovery-chip').first().click();
+  const launchButton = page.getByRole('button', { name: 'Launch TeamSync' });
+  await expect(launchButton).toBeVisible({ timeout: 3500 });
+  await launchButton.click();
   await expect(page.locator('body')).toHaveAttribute('data-onboarding-complete', 'true', { timeout: 2000 });
 });

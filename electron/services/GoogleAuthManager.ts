@@ -354,10 +354,16 @@ export class GoogleAuthManager {
   private async saveOnboardingV1(payload: TeamSyncOnboardingV1Input): Promise<GoogleAuthResult> {
     const token = this.getStoredToken();
     if (!token) {
+      console.error('[GoogleAuthManager] onboarding-v1 save blocked: missing stored token');
       return { success: false, error: 'Not authenticated', authState: this.getAuthState() };
     }
 
     try {
+      console.info('[GoogleAuthManager] onboarding-v1 save request', {
+        persona: payload?.persona,
+        industry: payload?.industry,
+        discoverySource: payload?.discoverySource,
+      });
       const response = await fetch(`${API_BASE_URL}/auth/onboarding-v1`, {
         method: 'POST',
         headers: {
@@ -373,8 +379,19 @@ export class GoogleAuthManager {
         }),
       });
       const body = await this.readJson(response);
+      console.info('[GoogleAuthManager] onboarding-v1 response', {
+        status: response.status,
+        ok: response.ok,
+        error: body?.error,
+        hasUser: Boolean(body?.user),
+        onboardingVersion: body?.onboardingV1?.onboardingVersion ?? body?.user?.onboardingV1?.onboardingVersion,
+      });
 
       if (response.status === 401 || response.status === 403) {
+        console.error('[GoogleAuthManager] onboarding-v1 auth failure', {
+          status: response.status,
+          error: body?.error,
+        });
         this.clearLocalAuthAndBroadcast();
         return {
           success: false,
@@ -384,6 +401,11 @@ export class GoogleAuthManager {
       }
 
       if (!response.ok) {
+        console.error('[GoogleAuthManager] onboarding-v1 API failure', {
+          status: response.status,
+          error: body?.error,
+          body,
+        });
         return {
           success: false,
           error: body.error || 'Failed to save onboarding',
@@ -394,6 +416,12 @@ export class GoogleAuthManager {
       const user = this.sanitizeUser(body.user, this.credentials.getGoogleAuthUser());
       const completedOnboarding = this.sanitizeOnboardingV1(body.onboardingV1, user?.onboardingV1 ?? null);
       if (!user?.onboardingV1 || user.onboardingV1.onboardingVersion !== 1 || completedOnboarding?.onboardingVersion !== 1) {
+        console.error('[GoogleAuthManager] onboarding-v1 completion confirmation failed', {
+          userEmail: user?.email,
+          userOnboardingVersion: user?.onboardingV1?.onboardingVersion,
+          responseOnboardingVersion: completedOnboarding?.onboardingVersion,
+          body,
+        });
         return {
           success: false,
           error: 'Onboarding save did not return a completed profile',
@@ -406,6 +434,10 @@ export class GoogleAuthManager {
       this.broadcast('auth:result', { success: true, user, authState });
       return { success: true, user, authState };
     } catch (error: any) {
+      console.error('[GoogleAuthManager] onboarding-v1 save exception', {
+        message: error?.message,
+        stack: error?.stack,
+      });
       return {
         success: false,
         error: error.message || 'Failed to save onboarding',
