@@ -1,6 +1,6 @@
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
-import { Check } from 'lucide-react';
+import { AlertTriangle, Check } from 'lucide-react';
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 export type TeamSyncOnboardingV1 = {
@@ -537,8 +537,25 @@ export function ReferenceOnboardingModal({
                 </motion.div>
 
                 {saveError ? (
-                  <motion.div variants={contentItemVariants} className="relative mt-[18px] min-h-[16px] text-[12px] font-semibold leading-snug text-white/42">
-                    {`${saveError} Select a chip to retry.`}
+                  <motion.div
+                    variants={contentItemVariants}
+                    className="relative mt-[18px] overflow-hidden rounded-[15px] bg-[linear-gradient(145deg,rgba(251,113,133,0.30),rgba(255,255,255,0.045)_48%,rgba(245,158,11,0.11))] p-px shadow-[0_14px_34px_rgba(0,0,0,0.28),0_0_26px_rgba(251,113,133,0.08)]"
+                    aria-live="polite"
+                  >
+                    <div className="relative overflow-hidden rounded-[14px] bg-[linear-gradient(180deg,rgba(23,17,21,0.96),rgba(10,9,11,0.98))] px-[11px] py-[10px] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_96%_86%,rgba(251,113,133,0.13),transparent_48%)]" />
+                      <div className="relative flex items-center gap-[10px]">
+                        <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[10px] border border-rose-200/[0.16] bg-rose-300/[0.08] text-rose-100 shadow-[0_0_22px_rgba(251,113,133,0.16)]">
+                          <AlertTriangle className="h-[14px] w-[14px]" strokeWidth={1.8} />
+                        </div>
+                        <div className="min-w-0 flex-1 text-left">
+                          <div className="text-[11px] font-bold text-white/[0.9]">Save failed</div>
+                          <p className="mt-px text-[9px] font-semibold leading-[1.35] text-rose-100/[0.62]">
+                            {`${saveError} Select a chip to retry.`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </motion.div>
                 ) : null}
               </motion.div>

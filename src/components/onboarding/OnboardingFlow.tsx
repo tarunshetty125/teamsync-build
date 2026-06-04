@@ -169,7 +169,7 @@ export function OnboardingFlow({
         >
           <AmbientBackground />
 
-          <div className="relative mx-auto flex min-h-screen w-full max-w-[560px] items-start px-4 pb-10 pt-[clamp(64px,18vh,154px)] sm:px-0">
+          <div className="relative mx-auto flex min-h-screen w-full max-w-[444px] items-center px-4 py-10 sm:px-0">
             <div className="w-full">
               {displayStep === 'welcome' ? <WelcomeStep onContinue={handleContinueFromWelcome} /> : null}
 
