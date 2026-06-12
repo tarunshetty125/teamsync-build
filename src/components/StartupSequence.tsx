@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
-import startupArtwork from '../assets/teamsync-startup-columns.png';
+import startupArtwork from '../assets/quietly-ai-startup.jpg';
 
 interface StartupSequenceProps {
     onComplete: () => void;
