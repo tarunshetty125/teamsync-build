@@ -1062,6 +1062,12 @@ export function PremiumOnboardingV2({
     const completedOnboarding = user.onboardingV1?.onboardingVersion === 1;
     if (completedOnboarding) {
       setPersona(isPersonaId(user.onboardingV1?.persona) ? user.onboardingV1.persona : 'explore_teamsync');
+      // If intro screens were skipped (permissions ready + onboarding already completed),
+      // auto-launch instead of showing the activation screen on every restart.
+      if (skipIntroScreens) {
+        onLaunch(user);
+        return;
+      }
       transitionToStep('activation');
       return;
     }
