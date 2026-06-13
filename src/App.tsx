@@ -23,7 +23,7 @@ import { PremiumOnboardingV2 } from "./components/onboarding/PremiumOnboardingV2
 import { OnboardingV2PostLaunch } from "./components/onboarding/OnboardingV2PostLaunch"
 import type { GoogleAuthUserWithOnboardingV2 } from "./components/onboarding/onboardingV2Types"
 import { AlertCircle } from "lucide-react"
-import { clampOverlayOpacity, OVERLAY_OPACITY_DEFAULT, getDefaultOverlayOpacity } from "./lib/overlayAppearance"
+import { clampOverlayOpacity, getDefaultOverlayOpacity } from "./lib/overlayAppearance"
 import {
   JDAwarenessToaster,
   ProfileFeatureToaster,
@@ -113,7 +113,7 @@ const App: React.FC = () => {
   const [authUser, setAuthUser] = useState<GoogleAuthUser | null>(null);
   const [hasLoadedAuth, setHasLoadedAuth] = useState<boolean>(() => !(isLauncherWindow || isDefault));
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState('overview');
+  const [settingsInitialTab, setSettingsInitialTab] = useState('general');
   const [isModesOpen, setIsModesOpen] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremiumActive, setIsPremiumActive] = useState(false);
@@ -122,15 +122,9 @@ const App: React.FC = () => {
   const [hasLaunchedPremiumOnboarding, setHasLaunchedPremiumOnboarding] = useState<boolean>(() => !(isLauncherWindow || isDefault));
   const [planDetails, setPlanDetails] = useState<{ isPremium: boolean; plan?: string; provider?: string }>({ isPremium: false });
 
-  // Overlay opacity — only meaningful when isOverlayWindow, but stored centrally
-  // so it can be initialized once from localStorage and updated via IPC.
-  const [overlayOpacity, setOverlayOpacity] = useState<number>(() => {
-    const stored = localStorage.getItem('teamsync_overlay_opacity');
-    const parsed = stored ? parseFloat(stored) : NaN;
-    // Treat missing value or the old default (0.65) as "not user-set"
-    const isUserSet = Number.isFinite(parsed) && parsed !== OVERLAY_OPACITY_DEFAULT;
-    return isUserSet ? clampOverlayOpacity(parsed) : getDefaultOverlayOpacity();
-  });
+  // Overlay opacity — initialized from SettingsManager via IPC.
+  // Starts with theme-aware default until the persisted value is loaded.
+  const [overlayOpacity, setOverlayOpacity] = useState<number>(() => getDefaultOverlayOpacity());
 
   // Profile state for ad targeting
   const [hasProfile, setHasProfile] = useState(false);
@@ -457,9 +451,15 @@ const App: React.FC = () => {
     setHasPresentedLauncherWindow(true);
   }, [hasPresentedLauncherWindow, isDefault, isLauncherWindow]);
 
-  // Listen for overlay opacity changes — scoped to overlay window only
+  // Load persisted opacity from SettingsManager on mount, then listen for live changes
   useEffect(() => {
     if (!isOverlayWindow) return;
+    // Load persisted value from SettingsManager (single source of truth)
+    window.electronAPI?.getOverlayOpacity?.().then((persisted) => {
+      if (typeof persisted === 'number') {
+        setOverlayOpacity(clampOverlayOpacity(persisted));
+      }
+    }).catch(() => { /* ignore — use theme-aware default */ });
     const removeOpacityListener = window.electronAPI?.onOverlayOpacityChanged?.((opacity) => {
       setOverlayOpacity(opacity);
     });
@@ -472,10 +472,14 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isOverlayWindow || !window.electronAPI?.onThemeChanged) return;
     return window.electronAPI.onThemeChanged(() => {
-      const stored = localStorage.getItem('teamsync_overlay_opacity');
-      if (!stored) {
+      // If no opacity is persisted in SettingsManager, use theme-aware default
+      window.electronAPI?.getOverlayOpacity?.().then((persisted) => {
+        if (persisted === null || persisted === undefined) {
+          setOverlayOpacity(getDefaultOverlayOpacity());
+        }
+      }).catch(() => {
         setOverlayOpacity(getDefaultOverlayOpacity());
-      }
+      });
     });
   }, [isOverlayWindow]);
 

@@ -830,6 +830,8 @@ export class IntelligenceEngine extends EventEmitter {
             providerPreference: personalizationPreferences.preferredProvider,
             responseStyle: personalizationPreferences.responseStyle,
             interviewFocus: personalizationPreferences.interviewFocus,
+            interviewFocusApplied: personalizationPreferences.interviewFocus,
+            focusBiasApplied: personalizationPreferences.interviewFocus !== 'mixed',
         };
 
         const debounceDelayMs = this.getDebounceDelay(actionStartedAt, fingerprint);

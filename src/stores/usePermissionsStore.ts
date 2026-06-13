@@ -94,9 +94,13 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
         }
 
         set({ isChecking: true });
+        const minDelay = new Promise((r) => setTimeout(r, 500));
 
         try {
-          const status = await window.electronAPI.permissions.getStatus();
+          const [status] = await Promise.all([
+            window.electronAPI.permissions.getStatus(),
+            minDelay,
+          ]);
           set((state) => ({
             status,
             isChecking: false,
@@ -105,6 +109,7 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
             currentStep: deriveStep(state.currentStep, state.onboardingCompleted, status),
           }));
         } catch (error) {
+          await minDelay;
           set({
             isChecking: false,
             hasInitialized: true,
@@ -125,6 +130,8 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
           lastError: null,
         });
 
+        const minDelay = new Promise((r) => setTimeout(r, 500));
+
         try {
           const requesters = {
             screenRecording: window.electronAPI.permissions.requestScreenRecording,
@@ -132,7 +139,10 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
             accessibility: window.electronAPI.permissions.requestAccessibility,
           } as const;
 
-          const result = await requesters[permission]();
+          const [result] = await Promise.all([
+            requesters[permission](),
+            minDelay,
+          ]);
           set((state) => ({
             status: result.status,
             isChecking: false,
@@ -146,6 +156,7 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
             ),
           }));
         } catch (error) {
+          await minDelay;
           set({
             isChecking: false,
             hasInitialized: true,

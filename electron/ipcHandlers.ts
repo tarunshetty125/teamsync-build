@@ -486,7 +486,11 @@ export function initializeIpcHandlers(appState: AppState): void {
   })
 
   safeHandle("set-overlay-v2-layout", async (_, enabled: boolean) => {
-    appState.getWindowHelper().setOverlayUsesV2Layout(!!enabled);
+    const effectiveValue = !!enabled;
+    appState.getWindowHelper().setOverlayUsesV2Layout(effectiveValue);
+    // Persist to SettingsManager so value survives restart
+    const { SettingsManager } = require('./services/SettingsManager');
+    SettingsManager.getInstance().set('overlayV2Layout', effectiveValue);
     return { success: true };
   })
 
@@ -4229,13 +4233,17 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("set-custom-notes-enabled", async (_, enabled: boolean) => {
     try {
+      const effectiveValue = !!enabled;
+      // Persist to SettingsManager so value survives restart
+      const { SettingsManager } = require('./services/SettingsManager');
+      SettingsManager.getInstance().set('customNotesEnabled', effectiveValue);
       const llmHelper = appState.processingHelper?.getLLMHelper?.();
       if (llmHelper?.setCustomNotesEnabled) {
-        llmHelper.setCustomNotesEnabled(!!enabled);
+        llmHelper.setCustomNotesEnabled(effectiveValue);
       }
       const orchestrator = appState.getKnowledgeOrchestrator?.();
       if (orchestrator?.setCustomNotesEnabled) {
-        orchestrator.setCustomNotesEnabled(!!enabled);
+        orchestrator.setCustomNotesEnabled(effectiveValue);
       }
       return { success: true };
     } catch (error: any) {
@@ -4246,7 +4254,13 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("get-custom-notes-enabled", async () => {
     try {
       const llmHelper = appState.processingHelper?.getLLMHelper?.();
-      return { success: true, enabled: llmHelper?.getCustomNotesEnabled?.() ?? true };
+      if (llmHelper?.getCustomNotesEnabled) {
+        return { success: true, enabled: llmHelper.getCustomNotesEnabled() };
+      }
+      // Fallback: read persisted value from SettingsManager
+      const { SettingsManager } = require('./services/SettingsManager');
+      const persisted = SettingsManager.getInstance().get('customNotesEnabled');
+      return { success: true, enabled: persisted !== false };
     } catch (error: any) {
       return { success: false, enabled: true, error: error.message };
     }
@@ -4276,6 +4290,9 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("set-overlay-opacity", async (_, opacity: number) => {
     // Clamp to valid range
     const clamped = Math.min(1.0, Math.max(0.2, opacity));
+    // Persist to SettingsManager (single source of truth)
+    const { SettingsManager } = require('./services/SettingsManager');
+    SettingsManager.getInstance().set('overlayOpacity', clamped);
     // Broadcast to all renderer windows so the overlay picks it up in real-time
     BrowserWindow.getAllWindows().forEach(win => {
       if (!win.isDestroyed()) {
@@ -4283,6 +4300,13 @@ export function initializeIpcHandlers(appState: AppState): void {
       }
     });
     return;
+  });
+
+  safeHandle("get-overlay-opacity", async () => {
+    const { SettingsManager } = require('./services/SettingsManager');
+    const stored = SettingsManager.getInstance().get('overlayOpacity');
+    // Return null if never set — renderer uses theme-aware default in that case
+    return typeof stored === 'number' ? stored : null;
   });
 
   // ── Permissions ──────────────────────────────────────────────

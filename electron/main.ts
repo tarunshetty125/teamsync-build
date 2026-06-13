@@ -3649,6 +3649,48 @@ async function initializeApp() {
   // Explicitly load credentials into helpers
   appState.processingHelper.loadStoredCredentials();
 
+  // ── Restore persisted settings from SettingsManager ────────────────────────
+  // These settings were historically only in-memory. Now they persist across
+  // restarts via SettingsManager so that a subsequent getXxx() IPC
+  // query sees the persisted value instead of a hard-coded default.
+  {
+    const sm = SettingsManager.getInstance();
+
+    // Mouse passthrough — set field directly to avoid re-persisting the same value
+    const persistedPassthrough = sm.get('overlayMousePassthrough');
+    if (persistedPassthrough === true) {
+      // Use internal field set so we don't trigger syncOverlayInteractionPolicy
+      // before the overlay window exists. The policy will be synced when the
+      // overlay window is created and shown.
+      (appState as any).overlayMousePassthrough = true;
+      console.log('[Main] Restored overlayMousePassthrough = true from settings');
+    }
+
+    // Custom notes enabled — restore into LLMHelper + KnowledgeOrchestrator
+    const persistedCustomNotes = sm.get('customNotesEnabled');
+    if (persistedCustomNotes === false) {
+      try {
+        const llmHelper = appState.processingHelper?.getLLMHelper?.();
+        if (llmHelper?.setCustomNotesEnabled) {
+          llmHelper.setCustomNotesEnabled(false);
+        }
+        const orchestrator = (appState as any).getKnowledgeOrchestrator?.();
+        if (orchestrator?.setCustomNotesEnabled) {
+          orchestrator.setCustomNotesEnabled(false);
+        }
+        console.log('[Main] Restored customNotesEnabled = false from settings');
+      } catch (e) {
+        console.warn('[Main] Failed to restore customNotesEnabled:', e);
+      }
+    }
+
+    // V2 layout — will be applied when WindowHelper is accessed
+    const persistedV2 = sm.get('overlayV2Layout');
+    if (persistedV2 === true) {
+      console.log('[Main] Will restore overlayV2Layout = true after window creation');
+    }
+  }
+
   // Initialize IPC handlers BEFORE bootstrapPersistentState() — the AppState constructor
   // preloads the cropper window (CropperWindowHelper.preload()) which uses preload.js.
   // preload.ts immediately calls ipcRenderer.invoke('get-verbose-logging') on load.
@@ -3699,6 +3741,15 @@ async function initializeApp() {
 
   PermissionManager.getInstance().startMonitoring()
   appState.createWindow()
+
+  // Restore persisted V2 layout after window creation so WindowHelper uses it
+  {
+    const persistedV2 = SettingsManager.getInstance().get('overlayV2Layout');
+    if (persistedV2 === true) {
+      appState.getWindowHelper().setOverlayUsesV2Layout(true);
+      console.log('[Main] Restored overlayV2Layout = true into WindowHelper');
+    }
+  }
 
   // Apply initial stealth state based on isUndetectable setting.
   // NOTE: app.dock.hide() was already called pre-emptively before createWindow()

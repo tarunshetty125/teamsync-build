@@ -683,6 +683,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   licenseDeactivate: () => Promise<{ success: boolean; error?: string }>
 
   // Overlay Opacity (Stealth Mode)
+  getOverlayOpacity: () => Promise<number | null>;
   setOverlayOpacity: (opacity: number) => Promise<void>;
   onOverlayOpacityChanged: (callback: (opacity: number) => void) => () => void;
 

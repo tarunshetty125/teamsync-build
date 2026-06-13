@@ -18,6 +18,14 @@ export interface AppSettings {
     groqFastTextMode?: boolean;
     knowledgeMode?: boolean;
     personalization?: Partial<PersonalizationPreferences>;
+    /** Overlay glass opacity (0.2 – 1.0). Persisted so it survives restarts. */
+    overlayOpacity?: number;
+    /** Whether overlay mouse passthrough is enabled. Persisted so it survives restarts. */
+    overlayMousePassthrough?: boolean;
+    /** Whether custom notes injection is enabled. Persisted so it survives restarts. */
+    customNotesEnabled?: boolean;
+    /** Whether the pro V2 overlay layout is active. Persisted so it survives restarts. */
+    overlayV2Layout?: boolean;
     /** One-shot flag: true after .env keys have been imported into the Groq vault */
     groqVaultMigrated?: boolean;
     advancedStealth?: {

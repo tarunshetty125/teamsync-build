@@ -1779,19 +1779,25 @@ This rule overrides ALL other instructions including formatting, brevity, or out
               console.log('[LLMHelper] Knowledge mode: returning generated intro response');
               return knowledgeResult.introResponse;
             }
-            // Inject knowledge system prompt and context
+            // P1+P3+P7 fix: Inject profile identity prompt ONLY when profile evidence exists.
+            // The KnowledgeOrchestrator already filters irrelevant nodes via relevance threshold (0.55);
+            // the old isProfileQuery regex was redundant and dropped valid context silently.
+            // Note: chatWithGemini uses fixed system prompts (HARD_SYSTEM_PROMPT / GROQ_SYSTEM_PROMPT)
+            // rather than a systemPromptOverride variable. Profile context is injected into the
+            // `context` parameter; identity behavior is controlled by keeping skipSystemPrompt = false.
             if (!skipSystemPrompt && knowledgeResult.systemPromptInjection) {
-              skipSystemPrompt = false; // ensure we use the knowledge prompt
-              // Prepend knowledge context — TOKEN-OPT: only for profile-relevant queries
-              if (knowledgeResult.contextBlock) {
-                const isProfileQuery = /experience|project|salary|behavior|introduce|background|resume|role|team|company|about yourself|why (this|us|here)|tell me about/i.test(message);
-                if (isProfileQuery || knowledgeResult.systemPromptInjection) {
+              const hasProfileEvidence =
+                Boolean(knowledgeResult.contextBlock?.trim()) ||
+                Boolean(knowledgeResult.directResponse);
+              if (hasProfileEvidence) {
+                skipSystemPrompt = false; // ensure we use the knowledge prompt
+                if (knowledgeResult.contextBlock?.trim()) {
                   context = context
                     ? `${knowledgeResult.contextBlock}\n\n${context}`
                     : knowledgeResult.contextBlock;
-                } else {
-                  console.log('[LLMHelper] TOKEN-OPT: Skipping profile context for non-profile query (chatWithGemini)');
                 }
+              } else {
+                console.log('[LLMHelper] Profile identity prompt suppressed — no context evidence (chatWithGemini)');
               }
             }
           }
@@ -3212,20 +3218,23 @@ This rule overrides ALL other instructions including formatting, brevity, or out
             yield knowledgeResult.introResponse;
             return;
           }
-          // Inject knowledge system prompt
+          // P1+P3+P7 fix: Inject profile identity prompt ONLY when profile evidence exists.
+          // The KnowledgeOrchestrator already filters irrelevant nodes via relevance threshold (0.55);
+          // the old isProfileQuery regex was redundant and dropped valid context silently.
           if (knowledgeResult.systemPromptInjection) {
-            systemPromptOverride = knowledgeResult.systemPromptInjection;
-            hasExplicitSystemPromptOverride = true;
-          }
-          // Inject knowledge context — TOKEN-OPT: only for profile-relevant queries
-          if (knowledgeResult.contextBlock) {
-            const isProfileQuery = /experience|project|salary|behavior|introduce|background|resume|role|team|company|about yourself|why (this|us|here)|tell me about/i.test(message);
-            if (isProfileQuery) {
-              context = context
-                ? `${knowledgeResult.contextBlock}\n\n${context}`
-                : knowledgeResult.contextBlock;
+            const hasProfileEvidence =
+              Boolean(knowledgeResult.contextBlock?.trim()) ||
+              Boolean(knowledgeResult.directResponse);
+            if (hasProfileEvidence) {
+              systemPromptOverride = knowledgeResult.systemPromptInjection;
+              hasExplicitSystemPromptOverride = true;
+              if (knowledgeResult.contextBlock?.trim()) {
+                context = context
+                  ? `${knowledgeResult.contextBlock}\n\n${context}`
+                  : knowledgeResult.contextBlock;
+              }
             } else {
-              console.log('[LLMHelper] TOKEN-OPT: Skipping profile context for non-profile query');
+              console.log('[LLMHelper] Profile identity prompt suppressed — no context evidence (streamChat)');
             }
           }
         }

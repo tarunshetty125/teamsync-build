@@ -615,6 +615,7 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   setTavilyApiKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
 
   // Overlay Opacity (Stealth Mode)
+  getOverlayOpacity: () => Promise<number | null>;
   setOverlayOpacity: (opacity: number) => Promise<void>;
   onOverlayOpacityChanged: (callback: (opacity: number) => void) => () => void;
 
@@ -1753,6 +1754,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // Overlay Opacity (Stealth Mode)
+  getOverlayOpacity: () => ipcRenderer.invoke('get-overlay-opacity'),
   setOverlayOpacity: (opacity: number) => ipcRenderer.invoke('set-overlay-opacity', opacity),
   onOverlayOpacityChanged: (callback: (opacity: number) => void) => {
     const subscription = (_: any, opacity: number) => callback(opacity)

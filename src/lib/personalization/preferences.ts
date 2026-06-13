@@ -28,6 +28,10 @@ export interface ResolvedPersonalizationSnapshot {
     providerPreference?: PreferredProvider;
     responseStyle: ResponseStylePreference;
     interviewFocus: InterviewFocusPreference;
+    /** The interview focus value that was applied to prompt/classification. */
+    interviewFocusApplied?: InterviewFocusPreference;
+    /** Whether the interview focus bias actually influenced classification or prompts. */
+    focusBiasApplied?: boolean;
 }
 
 export const DEFAULT_PERSONALIZATION_PREFERENCES: PersonalizationPreferences = {
