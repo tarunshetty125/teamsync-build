@@ -3310,7 +3310,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 <button
                                                     onClick={() => refreshPermissions().catch(() => { })}
                                                     disabled={permissionsChecking}
-                                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:opacity-50"
+                                                    className="shrink-0 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:opacity-50"
                                                 >
                                                     {permissionsChecking ? <Activity size={13} /> : <RefreshCw size={13} />}
                                                     {permissionsChecking ? 'Checking' : 'Check again'}

@@ -446,7 +446,7 @@ router.get('/calendar/events', async (req: Request, res: Response) => {
     }
 
     const events = await fetchCalendarEvents(user);
-    res.json({ events });
+    res.json({ success: true, events });
   } catch (error: any) {
     console.error('[AuthRoutes] Calendar events error:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch events' });
