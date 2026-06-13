@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import packageJson from '../../package.json';
+
 import {
-    X, Mic, Speaker, Monitor, Keyboard, User, LifeBuoy, LogOut, Upload,
-    ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
-    Camera, RotateCcw, Eye, Layout, MessageSquare, Crop,
-    ChevronDown, ChevronUp, Check, BadgeCheck, Power, Palette, Calendar, Ghost, Sun, Moon, RefreshCw, Info, Globe, FlaskConical, Terminal, Settings, Activity, ExternalLink, Trash2, FolderOpen,
-    Sparkles, Pencil, Briefcase, Building2, Search, MapPin, CheckCircle, HelpCircle, Zap, SlidersHorizontal, PointerOff,
-    AlertCircle, Lock
+    X, Mic, Monitor, Keyboard, User, LogOut, Upload,
+    MessageSquare,
+    ChevronDown, ChevronUp, Check, Power, Calendar, Ghost, RefreshCw, Info, Globe, Settings, ExternalLink, Trash2,
+    Sparkles, Pencil, Briefcase, Building2, Search, CheckCircle, HelpCircle, Zap, SlidersHorizontal,
+    AlertCircle
 } from 'lucide-react';
 import { analytics } from '../lib/analytics/analytics.service';
-import { AboutSection } from './AboutSection';
-import { HelpSettings } from './settings/HelpSettings';
-import { AIProvidersSettings } from './settings/AIProvidersSettings';
-import { TeamSyncApiSettings } from './settings/TeamSyncApiSettings';
+import { GeneralSettings } from './settings/GeneralSettings';
+import { AudioSettings } from './settings/AudioSettings';
+import { ShortcutsSettings } from './settings/ShortcutsSettings';
+import { IntegrationsSettings } from './settings/IntegrationsSettings';
+import { ProfileSettings } from './settings/ProfileSettings';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
@@ -20,7 +20,6 @@ import {
     clampOverlayOpacity,
     getOverlayAppearance,
     OVERLAY_OPACITY_DEFAULT,
-    OVERLAY_OPACITY_MIN,
     getDefaultOverlayOpacity,
 } from '../lib/overlayAppearance';
 import {
@@ -31,11 +30,10 @@ import {
     type ResponseStylePreference,
     type InterviewFocusPreference,
 } from '../lib/personalization/preferences';
-import { KeyRecorder } from './ui/KeyRecorder';
+
 import { ProfileVisualizer, PremiumUpgradeModal, ResearchPanel } from '../premium';
 import { usePermissionsStore } from '../stores/usePermissionsStore';
-import type { PermissionKind, PermissionState } from '../lib/permissions/types';
-import { isPermissionGranted } from '../lib/permissions/utils';
+
 import { getUpcomingEvents, type NormalizedEvent } from '../utils/filter';
 import icon from './icon.png';
 
@@ -64,59 +62,6 @@ type UpdaterCacheInfo = {
     error?: string;
 }
 
-const formatUpdaterBytes = (bytes: number): string => {
-    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    const value = bytes / Math.pow(1024, exponent);
-    return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
-};
-
-type TrustState = 'healthy' | 'needs_attention' | 'disabled';
-
-const getTrustStateLabel = (state: TrustState): string => {
-    switch (state) {
-        case 'healthy':
-            return 'Healthy';
-        case 'needs_attention':
-            return 'Needs Attention';
-        case 'disabled':
-            return 'Disabled';
-        default:
-            return 'Needs Attention';
-    }
-};
-
-const getTrustChipClass = (state: TrustState): string => {
-    switch (state) {
-        case 'healthy':
-            return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500';
-        case 'needs_attention':
-            return 'border-amber-500/25 bg-amber-500/10 text-amber-500';
-        case 'disabled':
-            return 'border-border-subtle bg-bg-input text-text-tertiary';
-        default:
-            return 'border-border-subtle bg-bg-input text-text-tertiary';
-    }
-};
-
-const getPermissionTrustState = (
-    permissionState: PermissionState | undefined,
-    restartRequired = false,
-): TrustState => {
-    if (restartRequired) return 'needs_attention';
-    if (!permissionState) return 'needs_attention';
-    if (isPermissionGranted(permissionState)) return 'healthy';
-    if (permissionState === 'unsupported') return 'disabled';
-    return 'needs_attention';
-};
-
-const formatTrustTimestamp = (value?: string | null): string => {
-    if (!value) return 'Not checked yet';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return 'Not checked yet';
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
-};
 
 const CALENDAR_REFRESH_GATE_MESSAGE = 'Connect Google Calendar before refreshing calendar events.';
 
@@ -637,6 +582,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const customNotesDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const [verboseLogging, setVerboseLogging] = useState(false);
     const [showVerboseToast, setShowVerboseToast] = useState(false);
+    const [showAdvanced] = useState(false);
     const verboseToastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const [useProUI, setUseProUI] = useState(() => localStorage.getItem('teamsync_overlay_v2') === 'true');
 
@@ -2187,29 +2133,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     // Use the native mic test path so device IDs stay consistent with the meeting runtime.
     // Gated behind micTestActive to prevent eager mic activation (macOS orange indicator).
     useEffect(() => {
-        if (isOpen && activeTab === 'audio' && micTestActive) {
-            const unsubscribe = window.electronAPI?.onAudioTestLevel?.((level) => {
-                setMicLevel(Math.max(0, Math.min(100, level * 100)));
-            });
-
-            window.electronAPI?.startAudioTest(selectedInput || undefined).catch((error) => {
-                console.error("Error starting native microphone test:", error);
-                setMicLevel(0);
-            });
-
-            return () => {
-                unsubscribe?.();
-                window.electronAPI?.stopAudioTest?.().catch((error) => {
-                    console.error("Error stopping native microphone test:", error);
-                });
-                setMicLevel(0);
-            };
-        } else {
-            setMicLevel(0);
-            window.electronAPI?.stopAudioTest?.().catch((error) => {
-                console.error("Error stopping native microphone test:", error);
-            });
-        }
     }, [isOpen, activeTab, selectedInput, micTestActive]);
 
     // Stop mic test when leaving the audio tab or closing settings
@@ -2337,129 +2260,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         </div>
     );
 
-    const updateDiagnosticsFile = updaterCacheInfo?.downloadedFiles[0] ?? null;
-    const updateDiagnosticsCacheDir = updaterCacheInfo?.cacheDir || 'Not resolved yet';
-    const updateDiagnosticsFileName = updateDiagnosticsFile?.fileName || 'No downloaded update found';
-    const updateDiagnosticsFilePath = updateDiagnosticsFile?.path || 'No downloaded update found';
-    const updateDiagnosticsSize = formatUpdaterBytes(updateDiagnosticsFile?.size ?? updaterCacheInfo?.totalSize ?? 0);
-    const updateDiagnosticsCurrentVersion = updaterCacheInfo?.currentVersion || packageJson.version;
-    const updateDiagnosticsLatestVersion = latestUpdateVersion || updaterCacheInfo?.latestVersion || 'Unknown';
-    const sttProviderLabel = sttProviderOptions.find((option) => option.id === sttProvider)?.label || 'Speech provider';
-    const selectedInputLabel = inputDevices.find((device) => device.deviceId === selectedInput)?.label || 'System default microphone';
-    const calendarIdentity = calendarStatus.email || authUser?.email || 'Google Calendar';
-    const nextSettingsCalendarEvent = settingsCalendarEvents[0] ?? null;
-    const permissionLastCheckedLabel = permissionsChecking
-        ? 'Checking now'
-        : permissionsInitialized
-            ? formatTrustTimestamp(permissionStatus?.checkedAt)
-            : 'Not checked yet';
-    const calendarLastSyncLabel = isCalendarSyncing
-        ? 'Checking now'
-        : calendarStatus.connected
-            ? formatTrustTimestamp(calendarLastSyncedAt)
-            : 'Not connected';
-    const screenRecordingTrustState = getPermissionTrustState(
-        permissionStatus?.screenRecording,
-        Boolean(permissionStatus?.restartRequired)
-    );
-    const accessibilityTrustState = getPermissionTrustState(permissionStatus?.accessibility);
-    const microphoneTrustState: TrustState = sttProvider === 'none'
-        ? 'disabled'
-        : getPermissionTrustState(permissionStatus?.microphone);
-    const calendarTrustState: TrustState = calendarStatus.connected ? 'healthy' : 'needs_attention';
-    const stealthTrustState: TrustState = isUndetectable ? 'healthy' : 'disabled';
-    const trustReadinessItems = [
-        {
-            id: 'screen-recording',
-            label: 'Screen Recording',
-            state: screenRecordingTrustState,
-            detail: permissionStatus?.restartRequired
-                ? 'Restart TeamSync to finish applying screen access.'
-                : 'Lets TeamSync read visible meeting context when you ask for help.',
-            icon: <Monitor size={16} />,
-        },
-        {
-            id: 'accessibility',
-            label: 'Accessibility',
-            state: accessibilityTrustState,
-            detail: 'Keeps global shortcuts and overlay controls reliable during calls.',
-            icon: <Keyboard size={16} />,
-        },
-        {
-            id: 'microphone',
-            label: 'Microphone',
-            state: microphoneTrustState,
-            detail: sttProvider === 'none'
-                ? 'Speech capture is disabled in Audio settings.'
-                : `${sttProviderLabel} listens through ${selectedInputLabel}.`,
-            icon: <Mic size={16} />,
-        },
-        {
-            id: 'calendar',
-            label: 'Calendar',
-            state: calendarTrustState,
-            detail: calendarStatus.connected
-                ? `Connected as ${calendarIdentity}.`
-                : 'Connect Calendar for meeting-aware preparation.',
-            icon: <Calendar size={16} />,
-        },
-        {
-            id: 'stealth',
-            label: 'Stealth Status',
-            state: stealthTrustState,
-            detail: isUndetectable
-                ? 'Privacy during screen sharing is active.'
-                : 'Screen sharing privacy is currently disabled.',
-            icon: <Ghost size={16} />,
-        },
-    ];
-    const trustHealthyCount = trustReadinessItems.filter((item) => item.state === 'healthy').length;
-    const trustNeedsAttentionCount = trustReadinessItems.filter((item) => item.state === 'needs_attention').length;
-    const trustStatusLabel = trustNeedsAttentionCount > 0
-        ? `${trustNeedsAttentionCount} needs attention`
-        : `${trustHealthyCount}/${trustReadinessItems.length} healthy`;
-    const trustSidebarLabel = trustNeedsAttentionCount > 0
-        ? `${trustNeedsAttentionCount} needs`
-        : `${trustHealthyCount}/${trustReadinessItems.length}`;
-    const permissionChecklistItems: Array<{
-        id: PermissionKind;
-        label: string;
-        state: TrustState;
-        why: string;
-        unlocks: string;
-        fix: string;
-        icon: React.ReactNode;
-    }> = [
-        {
-            id: 'screenRecording',
-            label: 'Screen Recording',
-            state: screenRecordingTrustState,
-            why: 'TeamSync needs permission before it can inspect the screen you are already viewing.',
-            unlocks: 'Screen-aware answers, code context, and visible-meeting notes.',
-            fix: permissionStatus?.restartRequired
-                ? 'Restart TeamSync after macOS finishes granting access.'
-                : 'Open Privacy & Security and allow TeamSync under Screen Recording.',
-            icon: <Monitor size={16} />,
-        },
-        {
-            id: 'accessibility',
-            label: 'Accessibility',
-            state: accessibilityTrustState,
-            why: 'TeamSync uses this to keep keyboard controls available while another app is focused.',
-            unlocks: 'Reliable show, hide, capture, movement, and recovery shortcuts.',
-            fix: 'Open Accessibility settings and allow TeamSync.',
-            icon: <Keyboard size={16} />,
-        },
-        {
-            id: 'microphone',
-            label: 'Microphone',
-            state: getPermissionTrustState(permissionStatus?.microphone),
-            why: 'TeamSync listens to your selected microphone only when capture is active.',
-            unlocks: 'Live transcript, better meeting memory, and speech-aware suggestions.',
-            fix: 'Allow microphone access, then test your input in Audio settings.',
-            icon: <Mic size={16} />,
-        },
-    ];
+
+
     const handleToggleUndetectable = () => {
         const newState = !isUndetectable;
         setIsUndetectable(newState);
@@ -2470,13 +2272,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         const newState = !isMousePassthrough;
         setIsMousePassthrough(newState);
         window.electronAPI?.setOverlayMousePassthrough(newState);
-    };
-    const handlePermissionAction = (permission: PermissionKind) => {
-        if (permissionStatus?.[permission] === 'not_requested') {
-            requestPermission(permission).catch(() => { });
-            return;
-        }
-        openPermissionSettings(permission).catch(() => { });
     };
     const handleSelectResume = async () => {
         let uploadGenerationId = 0;
@@ -2533,7 +2328,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             id: 'calendar',
             label: 'Calendar',
             title: calendarStatus.connected ? 'Calendar context is connected' : 'Calendar context is not connected',
-            detail: calendarStatus.connected ? calendarIdentity : 'Connect Google Calendar for meeting-aware context.',
+            detail: calendarStatus.connected ? (calendarStatus.email || authUser?.email || 'Google Calendar') : 'Connect Google Calendar for meeting-aware context.',
             status: calendarStatus.connected ? 'Connected' : 'Needs setup',
             ready: calendarStatus.connected,
             tab: 'calendar',
@@ -2542,8 +2337,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         {
             id: 'audio',
             label: 'Audio',
-            title: sttProvider === 'none' ? 'Speech capture is disabled' : `${sttProviderLabel} is selected`,
-            detail: selectedInputLabel,
+            title: sttProvider === 'none' ? 'Speech capture is disabled' : `${sttProviderOptions.find((o) => o.id === sttProvider)?.label || 'Speech provider'} is selected`,
+            detail: inputDevices.find((d) => d.deviceId === selectedInput)?.label || 'System default microphone',
             status: sttProvider === 'none' ? 'Off' : 'Ready',
             ready: sttProvider !== 'none',
             tab: 'audio',
@@ -2588,72 +2383,18 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 label: todayStatusLabel,
                 className: 'border-border-subtle bg-bg-item-active text-text-secondary',
             };
-    const overviewQuickLinks = [
-        {
-            id: 'interface',
-            label: 'Interface',
-            detail: `Theme follows ${themeMode === 'system' ? 'system' : themeMode}. Opacity is ${Math.round(overlayOpacity * 100)}%.`,
-            tab: 'general',
-            icon: <SlidersHorizontal size={16} />,
-        },
-        {
-            id: 'shortcuts',
-            label: 'Shortcuts',
-            detail: 'Review global commands for visibility, capture, and movement.',
-            tab: 'keybinds',
-            icon: <Keyboard size={16} />,
-        },
-        {
-            id: 'startup',
-            label: 'Startup',
-            detail: openOnLogin ? 'TeamSync opens when you log in.' : 'Manual launch is currently selected.',
-            tab: 'general',
-            icon: <Power size={16} />,
-        },
-    ];
     type SettingsSidebarItem = {
         id: string;
         label: string;
         icon: React.ReactNode;
         meta?: string;
     };
-    const sidebarGroups: Array<{ label: string; items: SettingsSidebarItem[] }> = [
-        {
-            label: 'Today',
-            items: [
-                { id: 'overview', label: 'Overview', icon: <Activity size={16} /> },
-                { id: 'privacy-trust', label: 'Privacy & Trust', icon: <BadgeCheck size={16} /> },
-            ],
-        },
-        {
-            label: 'Workspace',
-            items: [
-                { id: 'general', label: 'General', icon: <Monitor size={16} /> },
-                { id: 'audio', label: 'Audio', icon: <Mic size={16} /> },
-                { id: 'keybinds', label: 'Keybinds', icon: <Keyboard size={16} /> },
-            ],
-        },
-        {
-            label: 'Intelligence',
-            items: [
-                { id: 'profile', label: 'Profile Intelligence', icon: <User size={16} /> },
-                { id: 'calendar', label: 'Calendar', icon: <Calendar size={16} />, meta: calendarStatus.connected ? 'Connected' : undefined },
-                { id: 'ai-providers', label: 'AI Providers', icon: <FlaskConical size={16} /> },
-            ],
-        },
-        {
-            label: 'Account',
-            items: [
-                { id: 'account', label: 'Account', icon: <User size={16} /> },
-            ],
-        },
-        {
-            label: 'Support',
-            items: [
-                { id: 'help', label: 'Setup & Help', icon: <HelpCircle size={16} /> },
-                { id: 'about', label: 'About', icon: <Info size={16} /> },
-            ],
-        },
+    const sidebarItems: SettingsSidebarItem[] = [
+        { id: 'general', label: 'General', icon: <Monitor size={16} /> },
+        { id: 'audio', label: 'Audio', icon: <Mic size={16} /> },
+        { id: 'keybinds', label: 'Shortcuts', icon: <Keyboard size={16} /> },
+        { id: 'profile', label: 'Profile Intelligence', icon: <User size={16} /> },
+        { id: 'integrations', label: 'Integrations', icon: <Calendar size={16} />, meta: calendarStatus.connected ? 'Connected' : undefined },
     ];
     const settingsMotionEase = [0.22, 1, 0.36, 1] as const;
     const sectionMotionProps = shouldReduceMotion
@@ -2830,46 +2571,37 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                                 <div className="flex-1 overflow-y-auto px-2.5 py-3.5">
                                     <nav className="space-y-4" aria-label="Settings sections">
-                                        {sidebarGroups.map((group) => (
-                                            <div key={group.label}>
-                                                <div className="px-2 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-white">
-                                                    {group.label}
-                                                </div>
-                                                <div className="space-y-0.5">
-                                                    {group.items.map((item) => {
-                                                        const isActive = activeTab === item.id;
-                                                        return (
-                                                            <button
-                                                                key={item.id}
-                                                                onClick={() => openSettingsSection(item.id)}
-                                                                aria-current={isActive ? 'page' : undefined}
-                                                                className={`group relative w-full overflow-hidden rounded-xl px-2.5 py-2.5 text-left text-[12.5px] font-medium transition-colors duration-200 flex items-center gap-2.5 active:scale-[0.99] ${isActive
-                                                                    ? 'text-white'
-                                                                    : 'text-white hover:bg-white/10'
-                                                                    }`}
-                                                            >
-                                                                {isActive && (
-                                                                    <motion.span
-                                                                        layoutId="settings-sidebar-active"
-                                                                        className="absolute inset-0 rounded-xl border border-white/15 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]"
-                                                                        transition={sidebarIndicatorTransition}
-                                                                    />
-                                                                )}
-                                                                <span className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white transition-colors ${isActive ? 'bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'group-hover:bg-white/10'}`}>
-                                                                    {item.icon}
-                                                                </span>
-                                                                <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
-                                                                {item.meta && (
-                                                                    <span className={`relative z-10 max-w-[72px] truncate ${statusChipBaseClass} ${isActive ? 'border-white/20 bg-white/10 text-white' : 'border-white/15 bg-white/10 text-white'}`}>
-                                                                        {item.meta}
-                                                                    </span>
-                                                                )}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        ))}
+                                        {sidebarItems.map((item) => {
+                                            const isActive = activeTab === item.id;
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    onClick={() => openSettingsSection(item.id)}
+                                                    aria-current={isActive ? 'page' : undefined}
+                                                    className={`group relative w-full overflow-hidden rounded-xl px-2.5 py-2.5 text-left text-[12.5px] font-medium transition-colors duration-200 flex items-center gap-2.5 active:scale-[0.99] ${isActive
+                                                        ? 'text-white'
+                                                        : 'text-white hover:bg-white/10'
+                                                        }`}
+                                                >
+                                                    {isActive && (
+                                                        <motion.span
+                                                            layoutId="settings-sidebar-active"
+                                                            className="absolute inset-0 rounded-xl border border-white/15 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]"
+                                                            transition={sidebarIndicatorTransition}
+                                                        />
+                                                    )}
+                                                    <span className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white transition-colors ${isActive ? 'bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'group-hover:bg-white/10'}`}>
+                                                        {item.icon}
+                                                    </span>
+                                                    <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
+                                                    {item.meta && (
+                                                        <span className={`relative z-10 max-w-[72px] truncate ${statusChipBaseClass} ${isActive ? 'border-white/20 bg-white/10 text-white' : 'border-white/15 bg-white/10 text-white'}`}>
+                                                            {item.meta}
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
                                     </nav>
                                 </div>
 
@@ -2946,1098 +2678,157 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                         {...sectionMotionProps}
                                         className="mx-auto min-h-full min-w-0 max-w-[720px]"
                                     >
-                                {activeTab === 'overview' && (
-                                    <div className="space-y-5 animated fadeIn select-text pb-4">
-                                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                            <div className="min-w-0">
-                                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">Today</p>
-                                                <h3 className="mt-1 text-[23px] font-semibold tracking-tight text-text-primary">Control center</h3>
-                                                <p className="mt-2 max-w-[560px] text-[13px] leading-relaxed text-text-secondary">
-                                                    A quick read on whether TeamSync is ready for meetings, capture, and screen sharing.
-                                                </p>
-                                            </div>
-                                            <div className="shrink-0 self-start rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-tertiary">Readiness</p>
-                                                <p className="mt-1 text-[18px] font-semibold tabular-nums text-text-primary">{readyTodayCount}/{todayReadinessItems.length}</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="overflow-hidden rounded-2xl border border-border-subtle bg-bg-card shadow-[0_12px_32px_rgba(0,0,0,0.10),inset_0_1px_0_rgba(255,255,255,0.05)]">
-                                            <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-                                                <div className="flex items-start gap-3">
-                                                    <div className={`mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl border ${readyTodayCount === todayReadinessItems.length ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-amber-500/20 bg-amber-500/10 text-amber-400'}`}>
-                                                        {readyTodayCount === todayReadinessItems.length ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-[15px] font-semibold text-text-primary">{todayStatusLabel}</h4>
-                                                        <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-text-secondary">
-                                                            {calendarStatus.connected
-                                                                ? 'Calendar context is available. Review the remaining controls before a live session.'
-                                                                : 'Connect Calendar when you want TeamSync to understand upcoming meetings and attendees.'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={() => openSettingsSection(calendarStatus.connected ? 'general' : 'calendar')}
-                                                    className="shrink-0 rounded-full border border-border-subtle bg-bg-input px-3.5 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98]"
-                                                >
-                                                    {calendarStatus.connected ? 'Review controls' : 'Connect calendar'}
-                                                </button>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 divide-y divide-border-subtle border-t border-border-subtle xl:grid-cols-2 xl:divide-x xl:divide-y-0">
-                                                {todayReadinessItems.map((item) => (
-                                                    <button
-                                                        key={item.id}
-                                                        onClick={() => openSettingsSection(item.tab)}
-                                                        className="group flex min-h-[112px] items-start gap-3 p-4 text-left transition-colors hover:bg-bg-input/40 sm:p-5"
-                                                    >
-                                                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors ${item.ready ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-border-subtle bg-bg-input text-text-tertiary group-hover:text-text-primary'}`}>
-                                                            {item.icon}
-                                                        </span>
-                                                        <span className="min-w-0 flex-1">
-                                                            <span className="flex items-center justify-between gap-3">
-                                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">{item.label}</span>
-                                                                <span className={`${statusChipBaseClass} ${item.ready ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-border-subtle bg-bg-input text-text-tertiary'}`}>
-                                                                    {item.status}
-                                                                </span>
-                                                            </span>
-                                                            <span className="mt-2 block text-[13px] font-semibold text-text-primary">{item.title}</span>
-                                                            <span className="mt-1 block text-[12px] leading-relaxed text-text-secondary">{item.detail}</span>
-                                                        </span>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-3">
-                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                                                <div className="flex items-center justify-between gap-4">
-                                                    <div>
-                                                        <h4 className="text-[14px] font-semibold text-text-primary">Daily workspace</h4>
-                                                        <p className="mt-1 text-[12px] text-text-secondary">The controls most likely to matter before a call.</p>
-                                                    </div>
-                                                    <Activity size={18} className="text-text-tertiary" />
-                                                </div>
-                                                <div className="mt-4 divide-y divide-border-subtle">
-                                                    {overviewQuickLinks.map((item) => (
-                                                        <button
-                                                            key={item.id}
-                                                            onClick={() => openSettingsSection(item.tab)}
-                                                            className="group flex w-full items-center gap-3 rounded-xl px-1 py-3 text-left transition-colors hover:bg-bg-input/45"
-                                                        >
-                                                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-bg-input text-text-tertiary transition-colors group-hover:text-text-primary">
-                                                                {item.icon}
-                                                            </span>
-                                                            <span className="min-w-0 flex-1">
-                                                                <span className="block text-[13px] font-medium text-text-primary">{item.label}</span>
-                                                                <span className="mt-0.5 block truncate text-[11px] text-text-secondary">{item.detail}</span>
-                                                            </span>
-                                                            <ChevronDown size={14} className="-rotate-90 text-text-tertiary transition-transform group-hover:translate-x-0.5 group-hover:text-text-primary" />
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </section>
-
-                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                                                <div className="flex items-center justify-between gap-4">
-                                                    <div>
-                                                        <h4 className="text-[14px] font-semibold text-text-primary">Current session</h4>
-                                                        <p className="mt-1 text-[12px] text-text-secondary">A compact view of the app state Settings can control.</p>
-                                                    </div>
-                                                    <CheckCircle size={18} className="text-text-tertiary" />
-                                                </div>
-                                                <div className="mt-4 space-y-3">
-                                                    {[
-                                                        ['Account', authUser?.email || 'Not signed in'],
-                                                        ['Calendar', calendarStatus.connected ? 'Connected' : 'Not connected'],
-                                                        ['Capture', sttProvider === 'none' ? 'Speech off' : sttProviderLabel],
-                                                        ['Privacy', isUndetectable ? 'Screen sharing privacy on' : 'Visible overlay'],
-                                                    ].map(([label, value]) => (
-                                                        <div key={label} className="flex items-center justify-between gap-4 rounded-lg bg-bg-input/60 px-3 py-2">
-                                                            <span className="text-[11px] font-medium text-text-secondary">{label}</span>
-                                                            <span className="min-w-0 truncate text-right text-[12px] font-semibold text-text-primary">{value}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </section>
-                                        </div>
-                                    </div>
-                                )}
-                                {activeTab === 'privacy-trust' && (
-                                    <div className="space-y-6 animated fadeIn select-text pb-4">
-                                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                            <div className="min-w-0">
-                                                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Privacy & Trust</p>
-                                                <h3 className="mt-1 text-[24px] font-semibold tracking-tight text-text-primary">Trusted control center</h3>
-                                                <p className="mt-2 max-w-[560px] text-[13px] leading-relaxed text-text-secondary">
-                                                    One place to review capture permissions, Calendar readiness, and privacy controls before sharing your screen.
-                                                </p>
-                                            </div>
-                                            <div className="w-full max-w-[180px] shrink-0 self-start rounded-xl border border-border-subtle bg-bg-item-surface px-4 py-3 text-right shadow-sm">
-                                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Trust status</p>
-                                                <p className="mt-1 text-[15px] font-semibold text-text-primary">{trustStatusLabel}</p>
-                                            </div>
-                                        </div>
-
-                                        <section className="rounded-2xl border border-border-subtle bg-bg-item-surface overflow-hidden">
-                                            <div className="flex flex-col gap-3 border-b border-border-subtle p-5 sm:flex-row sm:items-center sm:justify-between">
-                                                <div>
-                                                    <h4 className="text-[15px] font-semibold text-text-primary">Readiness checklist</h4>
-                                                    <p className="mt-1 text-[12px] text-text-secondary">
-                                                        Last permission check: {permissionLastCheckedLabel}
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    onClick={() => refreshPermissions().catch(() => { })}
-                                                    disabled={permissionsChecking}
-                                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:opacity-50"
-                                                >
-                                                    {permissionsChecking ? <Activity size={13} /> : <RefreshCw size={13} />}
-                                                    {permissionsChecking ? 'Checking' : 'Refresh'}
-                                                </button>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 gap-px bg-border-subtle xl:grid-cols-2">
-                                                {trustReadinessItems.map((item) => (
-                                                    <div key={item.id} className="min-w-0 bg-bg-item-surface p-4">
-                                                        <div className="flex flex-wrap items-start justify-between gap-3">
-                                                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(item.state)}`}>
-                                                                {item.icon}
-                                                            </span>
-                                                            <span className={`${statusChipBaseClass} ${getTrustChipClass(item.state)}`}>
-                                                                {getTrustStateLabel(item.state)}
-                                                            </span>
-                                                        </div>
-                                                        <h5 className="mt-3 text-[13px] font-semibold text-text-primary">{item.label}</h5>
-                                                        <p className="mt-1 text-[11px] leading-relaxed text-text-secondary break-words">{item.detail}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </section>
-
-                                        <div className="grid grid-cols-1 gap-4">
-                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
-                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                                    <div className="flex min-w-0 items-start gap-3">
-                                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(calendarTrustState)}`}>
-                                                            <Calendar size={18} />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <h4 className="text-[15px] font-semibold text-text-primary">Calendar trust</h4>
-                                                            <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
-                                                                Meeting context stays connected to your signed-in Google account.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <span className={`${statusChipBaseClass} ${getTrustChipClass(calendarTrustState)}`}>
-                                                        {calendarStatus.connected ? 'Connected' : 'Needs Setup'}
-                                                    </span>
-                                                </div>
-
-                                                {calendarStatus.connected ? (
-                                                    <div className="mt-5 space-y-4">
-                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                                            {[
-                                                                ['Account', calendarIdentity],
-                                                                ['Sync status', calendarSyncError ? 'Needs attention' : 'Available'],
-                                                                ['Last sync', calendarLastSyncLabel],
-                                                                ['Next meeting', nextSettingsCalendarEvent ? nextSettingsCalendarEvent.summary : 'No upcoming meeting'],
-                                                            ].map(([label, value]) => (
-                                                                <div key={label} className="rounded-xl border border-border-subtle bg-bg-input/60 px-3 py-2.5">
-                                                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">{label}</p>
-                                                                    <p className="mt-1 truncate text-[12px] font-semibold text-text-primary">{value}</p>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-
-                                                        <div className="rounded-xl border border-border-subtle bg-bg-input/50 p-4">
-                                                            <div className="flex items-center justify-between gap-3">
-                                                                <div>
-                                                                    <p className="text-[12px] font-semibold text-text-primary">
-                                                                        {nextSettingsCalendarEvent ? formatCalendarWindow(nextSettingsCalendarEvent) : 'Calendar is clear'}
-                                                                    </p>
-                                                                    <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">
-                                                                        {nextSettingsCalendarEvent
-                                                                            ? 'TeamSync can use this upcoming meeting for preparation context in Launcher.'
-                                                                            : 'No upcoming event is currently available from Calendar.'}
-                                                                    </p>
-                                                                </div>
-                                                                <span className="shrink-0 rounded-md border border-border-subtle bg-bg-card px-2 py-1 text-[10px] font-medium text-text-secondary">
-                                                                    Next
-                                                                </span>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                                            {['Meeting-aware setup', 'Attendee context', 'Preparation notes'].map((benefit) => (
-                                                                <div key={benefit} className="flex items-center gap-2 rounded-lg bg-bg-input/50 px-3 py-2 text-[11px] font-medium text-text-secondary">
-                                                                    <CheckCircle size={13} className="text-emerald-500" />
-                                                                    <span className="truncate">{benefit}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-
-                                                        {calendarSyncError && (
-                                                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-500">
-                                                                {calendarSyncError}
-                                                            </div>
-                                                        )}
-
-                                                        <div className="flex flex-wrap items-center justify-end gap-2">
-                                                            <button
-                                                                onClick={() => refreshCalendarEvents().catch(() => { })}
-                                                                disabled={isCalendarSyncing}
-                                                                className="rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:opacity-50"
-                                                            >
-                                                                {isCalendarSyncing ? 'Checking' : 'Refresh calendar'}
-                                                            </button>
-                                                            <button
-                                                                onClick={handleDisconnectCalendar}
-                                                                disabled={isCalendarsLoading}
-                                                                className="rounded-lg border border-border-subtle bg-transparent px-3 py-2 text-[12px] font-semibold text-text-secondary transition-all hover:bg-red-500/10 hover:text-red-400 active:scale-[0.98] disabled:opacity-50"
-                                                            >
-                                                                {isCalendarsLoading ? 'Disconnecting' : 'Disconnect'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="mt-5 rounded-2xl border border-border-subtle bg-bg-input/50 p-5">
-                                                        <div className="max-w-[460px]">
-                                                            <h5 className="text-[14px] font-semibold text-text-primary">Connect Calendar for trusted meeting context</h5>
-                                                            <p className="mt-2 text-[12px] leading-relaxed text-text-secondary">
-                                                                TeamSync can show the next meeting, prepare from event details, and keep Launcher focused on the call that matters now.
-                                                            </p>
-                                                        </div>
-                                                        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                                            {['Next meeting awareness', 'Relevant participants', 'Less manual setup'].map((benefit) => (
-                                                                <div key={benefit} className="flex items-center gap-2 rounded-lg bg-bg-card px-3 py-2 text-[11px] font-medium text-text-secondary">
-                                                                    <CheckCircle size={13} className="text-emerald-500" />
-                                                                    <span className="truncate">{benefit}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                        {calendarSyncError && (
-                                                            <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-500">
-                                                                {calendarSyncError}
-                                                            </div>
-                                                        )}
-                                                        <button
-                                                            onClick={handleConnectCalendar}
-                                                            disabled={isCalendarsLoading}
-                                                            className={`mt-5 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-[12px] font-semibold transition-all active:scale-[0.98] disabled:opacity-50 ${isLight ? 'bg-bg-component hover:bg-bg-item-surface text-text-primary border border-border-subtle' : 'bg-[#303033] hover:bg-[#3A3A3D] text-white'}`}
-                                                        >
-                                                            <Calendar size={14} />
-                                                            {isCalendarsLoading ? 'Connecting' : 'Connect Google Calendar'}
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </section>
-
-                                            <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
-                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                                    <div className="flex min-w-0 items-start gap-3">
-                                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(stealthTrustState)}`}>
-                                                            <Ghost size={18} />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <h4 className="text-[15px] font-semibold text-text-primary">Privacy during screen sharing</h4>
-                                                            <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
-                                                                Controls how TeamSync windows behave when another app is sharing or recording the screen.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <span className={`${statusChipBaseClass} ${getTrustChipClass(stealthTrustState)}`}>
-                                                        {isUndetectable ? 'Protected' : 'Disabled'}
-                                                    </span>
-                                                </div>
-
-                                                <div className="mt-5 space-y-3">
-                                                    <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle bg-bg-input/60 px-3 py-3">
-                                                        <div>
-                                                            <p className="text-[12px] font-semibold text-text-primary">Screen sharing privacy</p>
-                                                            <p className="mt-0.5 text-[11px] text-text-secondary">
-                                                                {isUndetectable ? 'TeamSync applies content protection to supported windows.' : 'TeamSync windows may be visible in screen sharing.'}
-                                                            </p>
-                                                        </div>
-                                                        {renderSettingsSwitch({
-                                                            checked: isUndetectable,
-                                                            onToggle: handleToggleUndetectable,
-                                                            label: 'Toggle screen sharing privacy',
-                                                        })}
-                                                    </div>
-
-                                                    <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle bg-bg-input/60 px-3 py-3">
-                                                        <div>
-                                                            <p className="text-[12px] font-semibold text-text-primary">Mouse passthrough</p>
-                                                            <p className="mt-0.5 text-[11px] text-text-secondary">
-                                                                {isMousePassthrough ? 'Clicks pass through TeamSync to the app underneath.' : 'TeamSync keeps normal overlay interaction.'}
-                                                            </p>
-                                                        </div>
-                                                        {renderSettingsSwitch({
-                                                            checked: isMousePassthrough,
-                                                            onToggle: handleToggleMousePassthrough,
-                                                            label: 'Toggle mouse passthrough',
-                                                            tone: 'sky',
-                                                        })}
-                                                    </div>
-
-                                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                                        {[
-                                                            ['Limitations', 'Protection depends on the meeting app and macOS capture path.'],
-                                                            ['Recovery shortcut', shortcuts.toggleVisibility.length ? shortcuts.toggleVisibility.join(' ') : 'Set in Keybinds'],
-                                                            ['Platform notes', permissionStatus?.platform === 'darwin' ? 'macOS privacy controls are active.' : 'Permission handling follows this OS.'],
-                                                            ['Interaction', isMousePassthrough ? 'Pointer clicks pass through the overlay.' : 'Overlay controls remain clickable.'],
-                                                        ].map(([label, value]) => (
-                                                            <div key={label} className="rounded-xl border border-border-subtle bg-bg-input/50 px-3 py-2.5">
-                                                                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">{label}</p>
-                                                                <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{value}</p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </section>
-                                        </div>
-
-                                        <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
-                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                                <div>
-                                                    <h4 className="text-[15px] font-semibold text-text-primary">Permission checklist</h4>
-                                                    <p className="mt-1 max-w-[540px] text-[12px] leading-relaxed text-text-secondary">
-                                                        Each permission has a clear reason, benefit, and repair path. Nothing here changes how permissions are requested.
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    onClick={() => refreshPermissions().catch(() => { })}
-                                                    disabled={permissionsChecking}
-                                                    className="shrink-0 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:opacity-50"
-                                                >
-                                                    {permissionsChecking ? <Activity size={13} /> : <RefreshCw size={13} />}
-                                                    {permissionsChecking ? 'Checking' : 'Check again'}
-                                                </button>
-                                            </div>
-
-                                            {permissionError && (
-                                                <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-500">
-                                                    {permissionError}
-                                                </div>
-                                            )}
-
-                                            <div className="mt-5 divide-y divide-border-subtle overflow-hidden rounded-2xl border border-border-subtle">
-                                                {!permissionsInitialized && permissionsChecking ? (
-                                                    <div className="space-y-4 bg-bg-item-surface p-4" aria-live="polite" aria-label="Checking permissions">
-                                                        {[0, 1, 2].map((item) => (
-                                                            <div key={item} className="grid grid-cols-1 gap-4">
-                                                                <div className="flex items-start gap-3">
-                                                                    <div className="h-9 w-9 shrink-0 rounded-xl bg-bg-input animate-pulse" />
-                                                                    <div className="min-w-0 flex-1 space-y-2">
-                                                                        <div className={`h-2.5 w-36 ${skeletonLineClass}`} />
-                                                                        <div className={`h-2.5 w-56 max-w-full ${skeletonLineClass}`} />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                                                                    <div className={`h-12 ${skeletonLineClass} rounded-lg`} />
-                                                                    <div className={`h-12 ${skeletonLineClass} rounded-lg`} />
-                                                                </div>
-                                                                <div className={`h-9 w-20 ${skeletonLineClass} rounded-lg`} />
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ) : permissionChecklistItems.map((item) => {
-                                                    const isBusy = activePermission === item.id || permissionsChecking;
-                                                    const rawState = permissionStatus?.[item.id];
-                                                    const actionLabel = item.state === 'healthy'
-                                                        ? 'Review'
-                                                        : rawState === 'not_requested'
-                                                            ? 'Allow'
-                                                            : item.state === 'disabled'
-                                                                ? 'Unavailable'
-                                                                : 'Fix';
-                                                    return (
-                                                        <div key={item.id} className="grid grid-cols-1 gap-4 bg-bg-item-surface p-4">
-                                                            <div className="flex min-w-0 items-start gap-3">
-                                                                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(item.state)}`}>
-                                                                    {item.icon}
-                                                                </span>
-                                                                <div className="min-w-0">
-                                                                    <div className="flex flex-wrap items-center gap-2">
-                                                                        <h5 className="text-[13px] font-semibold text-text-primary">{item.label}</h5>
-                                                                        <span className={`${statusChipBaseClass} ${getTrustChipClass(item.state)}`}>
-                                                                            {getTrustStateLabel(item.state)}
-                                                                        </span>
-                                                                    </div>
-                                                                    <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.why}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-2">
-                                                                <div className="rounded-lg bg-bg-input/60 px-3 py-2">
-                                                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Unlocks</p>
-                                                                    <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.unlocks}</p>
-                                                                </div>
-                                                                <div className="rounded-lg bg-bg-input/60 px-3 py-2">
-                                                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">How to fix</p>
-                                                                    <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{item.fix}</p>
-                                                                </div>
-                                                            </div>
-                                                            <button
-                                                                onClick={() => handlePermissionAction(item.id)}
-                                                                disabled={item.state === 'disabled' || isBusy}
-                                                                className="justify-self-start rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                                                            >
-                                                                {isBusy ? 'Checking' : actionLabel}
-                                                            </button>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </section>
-
-                                        {hasResumeAndJd && renderDeleteProfileIntelligenceCard('privacy-trust')}
-                                    </div>
-                                )}
                                 {activeTab === 'general' && (
-                                    <div className="space-y-6 animated fadeIn">
-                                        <div className="space-y-3.5">
-                                            {/* UndetectableToggle */}
-                                            <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between transition-all ${isUndetectable ? 'shadow-lg shadow-blue-500/10' : ''}`}>
-                                                <div className="flex flex-col gap-1">
-                                                    <div className="flex items-center gap-2">
-                                                        {isUndetectable ? (
-                                                            <svg
-                                                                width="18"
-                                                                height="18"
-                                                                viewBox="0 0 24 24"
-                                                                fill="none"
-                                                                stroke="currentColor"
-                                                                strokeWidth="2"
-                                                                strokeLinecap="round"
-                                                                strokeLinejoin="round"
-                                                                className="text-text-primary"
-                                                            >
-                                                                <path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" fill="currentColor" stroke="currentColor" />
-                                                                <path d="M9 10h.01" stroke="var(--bg-item-surface)" strokeWidth="2.5" />
-                                                                <path d="M15 10h.01" stroke="var(--bg-item-surface)" strokeWidth="2.5" />
-                                                            </svg>
-                                                        ) : (
-                                                            <Ghost size={18} className="text-text-primary" />
-                                                        )}
-                                                        <h3 className="text-lg font-bold text-text-primary">{isUndetectable ? 'Undetectable' : 'Detectable'}</h3>
-                                                    </div>
-                                                    <p className="text-xs text-text-secondary">
-                                                        TeamSync is currently {isUndetectable ? 'undetectable' : 'detectable'} by screen-sharing. <button className="text-blue-400 hover:underline">Supported apps here</button>
-                                                    </p>
-                                                </div>
-                                                {renderSettingsSwitch({
-                                                    checked: isUndetectable,
-                                                    onToggle: handleToggleUndetectable,
-                                                    label: 'Toggle undetectable mode',
-                                                })}
-                                            </div>
-
-                                            {/* Mouse Passthrough Toggle — Adapted from public PR #113 */}
-                                            <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between transition-all ${isMousePassthrough ? 'shadow-lg shadow-sky-500/10' : ''}`}>
-                                                <div className="flex flex-col gap-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <PointerOff size={18} className={isMousePassthrough ? 'text-sky-400' : 'text-text-primary'} />
-                                                        <h3 className="text-lg font-bold text-text-primary">Mouse Passthrough</h3>
-                                                    </div>
-                                                    <p className="text-xs text-text-secondary">
-                                                        Overlay stays visible but lets all mouse clicks pass through to the app beneath.
-                                                    </p>
-                                                </div>
-                                                {renderSettingsSwitch({
-                                                    checked: isMousePassthrough,
-                                                    onToggle: handleToggleMousePassthrough,
-                                                    label: 'Toggle mouse passthrough',
-                                                    tone: 'sky',
-                                                })}
-                                            </div>
-
-                                            {/* Pro UI Toggle — Premium/Trial only */}
-                                            <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between transition-all ${hasProAccess && useProUI ? 'shadow-lg shadow-purple-500/10' : ''} ${!hasProAccess ? 'opacity-80' : ''}`}>
-                                                <div className="flex flex-col gap-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <Sparkles size={18} className={hasProAccess && useProUI ? 'text-purple-400' : 'text-text-primary'} />
-                                                        <h3 className="text-lg font-bold text-text-primary">Pro UI</h3>
-                                                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20">Beta</span>
-                                                        {!hasProAccess && <Lock size={14} className="text-text-tertiary" />}
-                                                    </div>
-                                                    <p className="text-xs text-text-secondary">
-                                                        {hasProAccess
-                                                            ? 'Switch to the new floating panels layout with split insights and response surfaces.'
-                                                            : 'Upgrade to Pro to unlock the new floating panels layout.'
-                                                        }
-                                                    </p>
-                                                </div>
-                                                {hasProAccess ? (
-                                                    renderSettingsSwitch({
-                                                        checked: useProUI,
-                                                        onToggle: () => {
-                                                            const newState = !useProUI;
-                                                            setUseProUI(newState);
-                                                            localStorage.setItem('teamsync_overlay_v2', String(newState));
-                                                            window.dispatchEvent(new CustomEvent('teamsync-overlay-v2-changed', { detail: newState }));
-                                                        },
-                                                        label: 'Toggle Pro UI',
-                                                        tone: 'purple',
-                                                    })
-                                                ) : (
-                                                    <button
-                                                        onClick={() => setIsPremiumModalOpen(true)}
-                                                        className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 transition-colors whitespace-nowrap"
-                                                    >
-                                                        Upgrade
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            <div>
-                                                <h3 className="text-lg font-bold text-text-primary mb-1">General settings</h3>
-                                                <p className="text-xs text-text-secondary mb-2">Customize how TeamSync works for you</p>
-
-                                                <div className={`rounded-xl border ${isLight ? 'bg-bg-card border-border-subtle divide-y divide-border-subtle' : 'bg-transparent border-transparent divide-y divide-border-subtle/20'}`}>
-                                                    <div className="space-y-0">
-                                                        {/* Open at Login */}
-                                                        <div className="flex items-center justify-between px-4 py-3">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                                    <Power size={20} />
-                                                                </div>
-                                                                <div>
-                                                                    <h3 className="text-sm font-bold text-text-primary">Open TeamSync when you log in</h3>
-                                                                    <p className="text-xs text-text-secondary mt-0.5">TeamSync will open automatically when you log in to your computer</p>
-                                                                </div>
-                                                            </div>
-                                                            {renderSettingsSwitch({
-                                                                checked: openOnLogin,
-                                                                onToggle: () => {
-                                                                    const newState = !openOnLogin;
-                                                                    setOpenOnLogin(newState);
-                                                                    window.electronAPI?.setOpenAtLogin(newState);
-                                                                },
-                                                                label: 'Toggle open TeamSync at login',
-                                                            })}
-                                                        </div>
-
-                                                        {/* Debug Logging */}
-                                                        <div className="flex items-center justify-between px-4 py-3">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className={`w-10 h-10 bg-bg-item-surface rounded-lg border flex items-center justify-center transition-colors ${verboseLogging ? 'border-amber-500/40 text-amber-400' : 'border-border-subtle text-text-tertiary'}`}>
-                                                                    <Terminal size={20} />
-                                                                </div>
-                                                                <div>
-                                                                    <h3 className="text-sm font-bold text-text-primary">Verbose debug logging</h3>
-                                                                    <p className="text-xs text-text-secondary mt-0.5">Print detailed audio, STT, and pipeline diagnostics</p>
-                                                                </div>
-                                                            </div>
-                                                            {renderSettingsSwitch({
-                                                                checked: verboseLogging,
-                                                                onToggle: () => {
-                                                                    const newState = !verboseLogging;
-                                                                    setVerboseLogging(newState);
-                                                                    window.electronAPI?.setVerboseLogging?.(newState);
-                                                                    if (newState) {
-                                                                        setShowVerboseToast(true);
-                                                                    }
-                                                                },
-                                                                label: 'Toggle verbose debug logging',
-                                                                tone: 'amber',
-                                                            })}
-                                                        </div>
-
-                                                        {/* Verbose logging toast */}
-                                                        <AnimatePresence>
-                                                            {showVerboseToast && (
-                                                                <motion.div
-                                                                    key="verbose-toast"
-                                                                    initial={{ opacity: 0, y: -6, height: 0 }}
-                                                                    animate={{ opacity: 1, y: 0, height: 'auto' }}
-                                                                    exit={{ opacity: 0, y: -4, height: 0 }}
-                                                                    transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-                                                                    className="mx-4 mb-1 overflow-hidden"
-                                                                >
-                                                                    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                                                                        <div className="flex items-center gap-2.5 min-w-0">
-                                                                            <Terminal size={14} className="text-amber-400 shrink-0" />
-                                                                            <p className="text-xs text-amber-200/80 leading-snug truncate">
-                                                                                Logs → <span className="font-mono text-amber-300">~/Documents/teamsync_debug.log</span>
-                                                                            </p>
-                                                                        </div>
-                                                                        <button
-                                                                            onClick={() => window.electronAPI?.openLogFile?.()}
-                                                                            className="shrink-0 text-[11px] font-medium text-amber-400 hover:text-amber-300 transition-colors px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25"
-                                                                        >
-                                                                            Open
-                                                                        </button>
-                                                                    </div>
-                                                                    {/* 5-second drain bar */}
-                                                                    <motion.div
-                                                                        className="h-[2px] bg-amber-500/40 rounded-b-xl"
-                                                                        initial={{ scaleX: 1, originX: 0 }}
-                                                                        animate={{ scaleX: 0 }}
-                                                                        transition={{ duration: 5, ease: 'linear', delay: 0.2 }}
-                                                                    />
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
-
-                                                        {/* Interviewer Transcript */}
-                                                        <div className="flex items-center justify-between px-4 py-3">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                                    <MessageSquare size={20} />
-                                                                </div>
-                                                                <div>
-                                                                    <h3 className="text-sm font-bold text-text-primary">Interviewer Transcript</h3>
-                                                                    <p className="text-xs text-text-secondary mt-0.5">Show real-time transcription of the interviewer</p>
-                                                                </div>
-                                                            </div>
-                                                            {renderSettingsSwitch({
-                                                                checked: showTranscript,
-                                                                onToggle: () => {
-                                                                    const newState = !showTranscript;
-                                                                    setShowTranscript(newState);
-                                                                    localStorage.setItem('teamsync_interviewer_transcript', String(newState));
-                                                                    window.dispatchEvent(new Event('storage'));
-                                                                },
-                                                                label: 'Toggle interviewer transcript',
-                                                            })}
-                                                        </div>
-
-
-                                                        {/* Theme */}
-                                                        <div className="flex items-center justify-between px-4 py-3">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                                    <Palette size={20} />
-                                                                </div>
-                                                                <div>
-                                                                    <h3 className="text-sm font-bold text-text-primary">Theme</h3>
-                                                                    <p className="text-xs text-text-secondary mt-0.5">Customize how TeamSync looks on your device</p>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="relative" ref={themeDropdownRef}>
-                                                                <button
-                                                                    onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
-                                                                    className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 min-w-[110px] justify-between"
-                                                                >
-                                                                    <div className="flex items-center gap-2 overflow-hidden">
-                                                                        <span className="text-text-secondary shrink-0">
-                                                                            {themeMode === 'system' && <Monitor size={14} />}
-                                                                            {themeMode === 'light' && <Sun size={14} />}
-                                                                            {themeMode === 'dark' && <Moon size={14} />}
-                                                                        </span>
-                                                                        <span className="capitalize text-ellipsis overflow-hidden whitespace-nowrap">{themeMode}</span>
-                                                                    </div>
-                                                                    <ChevronDown size={12} className={`shrink-0 transition-transform ${isThemeDropdownOpen ? 'rotate-180' : ''}`} />
-                                                                </button>
-
-                                                                {/* Dropdown Menu */}
-                                                                {isThemeDropdownOpen && (
-                                                                    <div className="absolute right-0 top-full mt-1 min-w-full w-max bg-bg-elevated border border-border-subtle rounded-lg shadow-xl overflow-hidden z-20 p-1 animated fadeIn select-none">
-                                                                        {[
-                                                                            { mode: 'system', label: 'System', icon: <Monitor size={14} /> },
-                                                                            { mode: 'light', label: 'Light', icon: <Sun size={14} /> },
-                                                                            { mode: 'dark', label: 'Dark', icon: <Moon size={14} /> }
-                                                                        ].map((option) => (
-                                                                            <button
-                                                                                key={option.mode}
-                                                                                onClick={() => {
-                                                                                    handleSetTheme(option.mode as any);
-                                                                                    setIsThemeDropdownOpen(false);
-                                                                                }}
-                                                                                className={`w-full text-left px-2 py-1.5 rounded-md text-xs flex items-center gap-2 transition-colors ${themeMode === option.mode ? 'text-text-primary bg-bg-item-active/50' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
-                                                                            >
-                                                                                <span className={themeMode === option.mode ? 'text-text-primary' : 'text-text-secondary group-hover:text-text-primary'}>{option.icon}</span>
-                                                                                <span className="font-medium">{option.label}</span>
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* AI Response Language */}
-                                                        <div className="flex items-center justify-between px-4 py-3">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                                    <Globe size={20} />
-                                                                </div>
-                                                                <div>
-                                                                    <h3 className="text-sm font-bold text-text-primary">AI Response Language</h3>
-                                                                    <p className="text-xs text-text-secondary mt-0.5">
-                                                                        {aiResponseLanguage === 'auto'
-                                                                            ? 'Mirrors user\'s language automatically'
-                                                                            : 'Language for AI suggestions and notes'
-                                                                        }
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="relative" ref={aiLangDropdownRef}>
-                                                                <button
-                                                                    onClick={() => setIsAiLangDropdownOpen(!isAiLangDropdownOpen)}
-                                                                    className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 min-w-[110px] justify-between"
-                                                                >
-                                                                    <span className="capitalize text-ellipsis overflow-hidden whitespace-nowrap flex items-center gap-1">
-                                                                        {aiResponseLanguage === 'auto' ? 'Auto' : aiResponseLanguage}
-                                                                    </span>
-                                                                    <ChevronDown size={12} className={`shrink-0 transition-transform ${isAiLangDropdownOpen ? 'rotate-180' : ''}`} />
-                                                                </button>
-
-                                                                {/* Dropdown Menu */}
-                                                                {isAiLangDropdownOpen && (
-                                                                    <div className="absolute right-0 top-full mt-1 min-w-full w-max bg-bg-elevated border border-border-subtle rounded-lg shadow-xl overflow-hidden z-20 p-1 animated fadeIn select-none max-h-60 overflow-y-auto custom-scrollbar">
-                                                                        {availableAiLanguages.map((option) => (
-                                                                            <button
-                                                                                key={option.code}
-                                                                                onClick={() => {
-                                                                                    handleAiLanguageChange(option.code);
-                                                                                    setIsAiLangDropdownOpen(false);
-                                                                                }}
-                                                                                className={`w-full text-left px-2 py-1.5 rounded-md text-xs flex items-center gap-2 transition-colors ${aiResponseLanguage === option.code ? 'text-text-primary bg-bg-item-active/50' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
-                                                                            >
-                                                                                {option.code === 'auto' ? (
-                                                                                    <span className="font-medium">Auto</span>
-                                                                                ) : (
-                                                                                    <span className="font-medium">{option.label}</span>
-                                                                                )}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Personalization */}
-                                                        <div className="flex items-start justify-between gap-4 px-4 py-3 flex-wrap">
-                                                            <div className="flex items-start gap-4">
-                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
-                                                                    <SlidersHorizontal size={20} />
-                                                                </div>
-                                                                <div>
-                                                                    <h3 className="text-sm font-bold text-text-primary">Personalization</h3>
-                                                                    <p className="text-xs text-text-secondary mt-0.5">
-                                                                        Defaults for coding, routing, response depth, and interview focus
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="grid grid-cols-2 gap-2 w-full max-w-[360px] min-w-[260px]">
-                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                                                                    Code
-                                                                    <select
-                                                                        value={personalizationPreferences.preferredCodingLanguage ?? 'auto'}
-                                                                        onChange={(event) => handlePersonalizationChange(
-                                                                            'preferredCodingLanguage',
-                                                                            event.target.value === 'auto' ? null : event.target.value as PreferredCodingLanguage,
-                                                                        )}
-                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
-                                                                    >
-                                                                        {CODING_LANGUAGE_OPTIONS.map((option) => (
-                                                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </label>
-
-                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                                                                    Provider
-                                                                    <select
-                                                                        value={personalizationPreferences.preferredProvider}
-                                                                        onChange={(event) => handlePersonalizationChange('preferredProvider', event.target.value as PreferredProvider)}
-                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
-                                                                    >
-                                                                        {PROVIDER_PREFERENCE_OPTIONS.map((option) => (
-                                                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </label>
-
-                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                                                                    Style
-                                                                    <select
-                                                                        value={personalizationPreferences.responseStyle}
-                                                                        onChange={(event) => handlePersonalizationChange('responseStyle', event.target.value as ResponseStylePreference)}
-                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
-                                                                    >
-                                                                        {RESPONSE_STYLE_OPTIONS.map((option) => (
-                                                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </label>
-
-                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                                                                    Focus
-                                                                    <select
-                                                                        value={personalizationPreferences.interviewFocus}
-                                                                        onChange={(event) => handlePersonalizationChange('interviewFocus', event.target.value as InterviewFocusPreference)}
-                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
-                                                                    >
-                                                                        {INTERVIEW_FOCUS_OPTIONS.map((option) => (
-                                                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </label>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Version */}
-                                                        <div className="flex items-start justify-between gap-4 px-4 py-3">
-                                                            <div className="flex items-start gap-4">
-                                                                <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
-                                                                    <BadgeCheck size={20} />
-                                                                </div>
-                                                                <div>
-                                                                    <h3 className="text-sm font-bold text-text-primary">Version</h3>
-                                                                    <p className="text-xs text-text-secondary mt-0.5">
-                                                                        {updateStatus === 'checking' ? 'Checking for updates...' :
-                                                                            updateStatus === 'uptodate' ? `You're on the latest version (v${packageJson.version})` :
-                                                                                updateStatus === 'available' ? 'A new update is available!' :
-                                                                                    updateStatus === 'error' ? (updateErrorMessage || 'Could not check for updates') :
-                                                                                        `You are currently using TeamSync version ${packageJson.version}`}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                            <button
-                                                                onClick={async () => {
-                                                                    if (updateStatus === 'available') {
-                                                                        try {
-                                                                            // @ts-ignore
-                                                                            await window.electronAPI.downloadUpdate();
-                                                                            onClose(); // Close settings to show the banner
-                                                                        } catch (err) {
-                                                                            console.error("Failed to start download:", err);
-                                                                        }
-                                                                    } else {
-                                                                        handleCheckForUpdates();
-                                                                    }
-                                                                }}
-                                                                disabled={updateStatus === 'checking'}
-                                                                className={`px-5 py-2 rounded-lg text-[13px] font-bold transition-all flex items-center gap-2 shrink-0 ${updateStatus === 'checking' ? 'bg-bg-input text-text-tertiary cursor-wait' :
-                                                                    updateStatus === 'available' ? 'bg-accent-primary text-white hover:bg-accent-secondary shadow-lg shadow-blue-500/20' :
-                                                                        updateStatus === 'uptodate' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
-                                                                            updateStatus === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                                                'bg-bg-component hover:bg-bg-input text-text-primary'
-                                                                    }`}
-                                                            >
-                                                                {updateStatus === 'checking' ? (
-                                                                    <>
-                                                                        <RefreshCw size={14} className="animate-spin" />
-                                                                        Checking...
-                                                                    </>
-                                                                ) : updateStatus === 'available' ? (
-                                                                    <>
-                                                                        <ArrowDown size={14} />
-                                                                        Update Available
-                                                                    </>
-                                                                ) : updateStatus === 'uptodate' ? (
-                                                                    <>
-                                                                        <Check size={14} />
-                                                                        Up to date
-                                                                    </>
-                                                                ) : updateStatus === 'error' ? (
-                                                                    <>
-                                                                        <X size={14} />
-                                                                        Error
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <RefreshCw size={14} />
-                                                                        Check for updates
-                                                                    </>
-                                                                )}
-                                                            </button>
-                                                        </div>
-
-                                                        {/* Update Diagnostics */}
-                                                        <div className="px-4 py-4">
-                                                            <div className="flex items-start justify-between gap-4 mb-3">
-                                                                <div className="flex items-start gap-4 min-w-0">
-                                                                    <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
-                                                                        <FolderOpen size={20} />
-                                                                    </div>
-                                                                    <div className="min-w-0">
-                                                                        <h3 className="text-sm font-bold text-text-primary">Update Diagnostics</h3>
-                                                                        <p className="text-xs text-text-secondary mt-0.5">
-                                                                            Download cache details for the current updater feed
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="flex items-center gap-2 shrink-0">
-                                                                    <button
-                                                                        onClick={refreshUpdaterCacheInfo}
-                                                                        disabled={updaterCacheLoading}
-                                                                        className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-bg-component hover:bg-bg-input text-text-primary transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-wait"
-                                                                    >
-                                                                        <RefreshCw size={13} className={updaterCacheLoading ? 'animate-spin' : ''} />
-                                                                        Refresh
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={handleOpenUpdaterCacheFolder}
-                                                                        disabled={!updaterCacheInfo?.cacheDir}
-                                                                        className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-accent-primary hover:bg-accent-secondary text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                    >
-                                                                        <FolderOpen size={13} />
-                                                                        Open Update Cache Folder
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                                <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                    <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Update Cache Location</p>
-                                                                    <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsCacheDir}>
-                                                                        {updateDiagnosticsCacheDir}
-                                                                    </p>
-                                                                </div>
-                                                                <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                    <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Downloaded Update File</p>
-                                                                    <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsFilePath}>
-                                                                        {updateDiagnosticsFileName}
-                                                                    </p>
-                                                                </div>
-                                                                <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                    <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Full Path</p>
-                                                                    <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsFilePath}>
-                                                                        {updateDiagnosticsFilePath}
-                                                                    </p>
-                                                                </div>
-                                                                <div className="grid grid-cols-3 gap-2">
-                                                                    <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                        <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Size</p>
-                                                                        <p className="text-[11px] font-mono text-text-primary truncate">{updateDiagnosticsSize}</p>
-                                                                    </div>
-                                                                    <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                        <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Current Version</p>
-                                                                        <p className="text-[11px] font-mono text-text-primary truncate">v{updateDiagnosticsCurrentVersion.replace(/^v/, '')}</p>
-                                                                    </div>
-                                                                    <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                        <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Latest Version</p>
-                                                                        <p className="text-[11px] font-mono text-text-primary truncate">
-                                                                            {updateDiagnosticsLatestVersion === 'Unknown' ? 'Unknown' : `v${updateDiagnosticsLatestVersion.replace(/^v/, '')}`}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            {updaterCacheError && (
-                                                                <div className="mt-2 flex items-center gap-2 text-[11px] text-red-400">
-                                                                    <AlertCircle size={12} />
-                                                                    <span className="truncate">{updaterCacheError}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* ------------------------------------------------------------------ */}
-                                                {/* Interface Opacity (Stealth Mode)                                   */}
-                                                {/* ------------------------------------------------------------------ */}
-                                                <div
-                                                    id="opacity-slider-card"
-                                                    style={isPreviewingOpacity ? { visibility: 'visible', position: 'relative', zIndex: 9999 } : {}}
-                                                    className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle mt-4`}
-                                                >
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <label className="flex items-center gap-2 text-xs font-medium text-text-secondary uppercase tracking-wide">
-                                                            <Eye size={13} className="text-text-secondary" />
-                                                            Interface Opacity
-                                                        </label>
-                                                        <span className="opacity-percent-label text-xs font-semibold text-text-primary tabular-nums">
-                                                            {Math.round(overlayOpacity * 100)}%
-                                                        </span>
-                                                    </div>
-
-                                                    <input
-                                                        type="range"
-                                                        min={OVERLAY_OPACITY_MIN}
-                                                        max={1.0}
-                                                        step={0.01}
-                                                        defaultValue={overlayOpacity}
-                                                        onChange={(e) => handleOpacityChange(parseFloat(e.target.value))}
-                                                        onPointerDown={startPreviewingOpacity}
-                                                        onPointerUp={stopPreviewingOpacity}
-                                                        onPointerCancel={stopPreviewingOpacity}
-                                                        onPointerLeave={stopPreviewingOpacity}
-                                                        className="w-full h-1.5 rounded-full appearance-none bg-bg-input accent-accent-primary"
-                                                        style={{ WebkitAppearance: 'none' } as React.CSSProperties}
-                                                    />
-
-                                                    <div className="flex justify-between mt-1.5">
-                                                        <span className="text-[10px] text-text-tertiary">More Stealth</span>
-                                                        <span className="text-[10px] text-text-tertiary">Fully Visible</span>
-                                                    </div>
-
-                                                    <p className="text-xs text-text-tertiary mt-2">
-                                                        Controls the visibility of the in-meeting overlay.{' '}
-                                                        <span className="text-text-secondary">Hold the slider to preview.</span>
-                                                    </p>
-                                                </div>
-
-                                            </div>
-
-                                        </div>
-
-                                        {/* Process Disguise */}
-                                        {/* Process Disguise */}
-                                        <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle`}>
-                                            <div className="flex flex-col gap-1 mb-3">
-                                                <div className="flex items-center gap-2">
-                                                    <h3 className="text-lg font-bold text-text-primary">Process Disguise</h3>
-                                                </div>
-                                                <p className="text-xs text-text-secondary">
-                                                    Disguise TeamSync as another application to prevent detection during screen sharing.
-                                                    <span className="block mt-1 text-text-tertiary">
-                                                        Select a disguise to be automatically applied when Undetectable mode is on.
-                                                    </span>
-                                                </p>
-                                            </div>
-
-                                            <div className={`grid grid-cols-2 gap-3 ${isUndetectable ? 'opacity-50 pointer-events-none' : ''}`}>
-                                                {isUndetectable && (
-                                                    <p className="col-span-2 text-xs text-yellow-500/80 -mt-1 mb-1">
-                                                        ⚠️ Disable Undetectable mode first to change disguise.
-                                                    </p>
-                                                )}
-                                                {[
-                                                    { id: 'none', label: 'None (Default)', icon: <Layout size={14} /> },
-                                                    { id: 'terminal', label: 'Terminal', icon: <Terminal size={14} /> },
-                                                    { id: 'settings', label: 'System Settings', icon: <Settings size={14} /> },
-                                                    { id: 'activity', label: 'Activity Monitor', icon: <Activity size={14} /> }
-                                                ].map((option) => (
-                                                    <button
-                                                        key={option.id}
-                                                        disabled={isUndetectable}
-                                                        onClick={() => {
-                                                            if (isUndetectable) return;
-                                                            // @ts-ignore
-                                                            setDisguiseMode(option.id);
-                                                            // @ts-ignore
-                                                            window.electronAPI?.setDisguise(option.id);
-                                                            // Analytics
-                                                            analytics.trackModeSelected(`disguise_${option.id}`);
-                                                        }}
-                                                        className={`p-3 rounded-lg border text-left flex items-center gap-3 transition-all ${disguiseMode === option.id
-                                                            ? 'bg-accent-primary border-accent-primary text-white shadow-lg shadow-blue-500/20'
-                                                            : 'bg-bg-input border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-subtle-hover'
-                                                            } ${isUndetectable ? 'cursor-not-allowed' : ''}`}
-                                                    >
-                                                        <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${disguiseMode === option.id ? 'bg-white/20 text-white' : 'bg-bg-item-surface text-text-secondary'
-                                                            }`}>
-                                                            {option.icon}
-                                                        </div>
-                                                        <span className="text-xs font-medium">{option.label}</span>
-                                                    </button>
-                                                ))}
-                                                    </div>
-                                                        </div>
-
-                                    </div>
+                                    <GeneralSettings
+                                        isUndetectable={isUndetectable}
+                                        onToggleUndetectable={() => {
+                                            const newVal = !isUndetectable;
+                                            setIsUndetectable(newVal);
+                                            window.electronAPI?.setUndetectable?.(newVal);
+                                        }}
+                                        isMousePassthrough={isMousePassthrough}
+                                        onToggleMousePassthrough={handleToggleMousePassthrough}
+                                        useProUI={useProUI}
+                                        hasProAccess={hasProAccess}
+                                        isPremium={isPremium}
+                                        onToggleProUI={() => {
+                                            const next = !useProUI;
+                                            setUseProUI(next);
+                                            localStorage.setItem('useProUI', next ? 'true' : 'false');
+                                        }}
+                                        onOpenPremiumModal={() => setIsPremiumModalOpen(true)}
+                                        openOnLogin={openOnLogin}
+                                        onToggleOpenOnLogin={() => {
+                                            const newVal = !openOnLogin;
+                                            setOpenOnLogin(newVal);
+                                            window.electronAPI?.setOpenAtLogin?.(newVal);
+                                        }}
+                                        showTranscript={showTranscript}
+                                        onToggleTranscript={() => setShowTranscript(prev => !prev)}
+                                        themeMode={themeMode}
+                                        onSetTheme={(mode) => {
+                                            setThemeMode(mode as 'light' | 'dark' | 'system');
+                                            localStorage.setItem('themeMode', mode);
+                                            if (mode === 'system') {
+                                                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                                                document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+                                            } else {
+                                                document.documentElement.setAttribute('data-theme', mode);
+                                            }
+                                        }}
+                                        isThemeDropdownOpen={isThemeDropdownOpen}
+                                        onToggleThemeDropdown={() => setIsThemeDropdownOpen(prev => !prev)}
+                                        themeDropdownRef={themeDropdownRef}
+                                        aiResponseLanguage={aiResponseLanguage}
+                                        onAiLanguageChange={(code) => {
+                                            setAiResponseLanguage(code);
+                                            localStorage.setItem('aiResponseLanguage', code);
+                                        }}
+                                        isAiLangDropdownOpen={isAiLangDropdownOpen}
+                                        onToggleAiLangDropdown={() => setIsAiLangDropdownOpen(prev => !prev)}
+                                        aiLangDropdownRef={aiLangDropdownRef}
+                                        availableAiLanguages={availableAiLanguages}
+                                        overlayOpacity={overlayOpacity}
+                                        onOpacityChange={(v) => {
+                                            setOverlayOpacity(v);
+                                            localStorage.setItem('overlayOpacity', String(v));
+                                            document.documentElement.style.setProperty('--overlay-opacity', String(v));
+                                        }}
+                                        isPreviewingOpacity={isPreviewingOpacity}
+                                        startPreviewingOpacity={() => setIsPreviewingOpacity(true)}
+                                        stopPreviewingOpacity={() => setIsPreviewingOpacity(false)}
+                                        updateStatus={updateStatus}
+                                        updateErrorMessage={updateErrorMessage || ''}
+                                        onCheckForUpdates={handleCheckForUpdates}
+                                        onClose={onClose}
+                                        isLight={isLight}
+                                        showAdvanced={showAdvanced}
+                                        verboseLogging={verboseLogging}
+                                        onToggleVerboseLogging={() => {
+                                            const newVal = !verboseLogging;
+                                            setVerboseLogging(newVal);
+                                            localStorage.setItem('verboseLogging', String(newVal));
+                                            window.electronAPI?.setVerboseLogging?.(newVal);
+                                            if (newVal) {
+                                                setShowVerboseToast(true);
+                                                setTimeout(() => setShowVerboseToast(false), 5000);
+                                            }
+                                        }}
+                                        showVerboseToast={showVerboseToast}
+                                        personalizationPreferences={personalizationPreferences}
+                                        onPersonalizationChange={(key, value) => {
+                                            setPersonalizationPreferences(prev => ({ ...prev, [key]: value }));
+                                        }}
+                                        updaterCacheInfo={updaterCacheInfo}
+                                        updaterCacheLoading={updaterCacheLoading}
+                                        updaterCacheError={updaterCacheError || ''}
+                                        onRefreshUpdaterCache={refreshUpdaterCacheInfo}
+                                        onOpenUpdaterCacheFolder={() => {
+                                            window.electronAPI?.openUpdaterCacheFolder?.();
+                                        }}
+                                        disguiseMode={disguiseMode}
+                                        onSetDisguiseMode={(mode) => {
+                                            setDisguiseMode(mode as any);
+                                            localStorage.setItem('processDisguiseMode', mode);
+                                        }}
+                                    />
+                                )}
+                                {activeTab === 'audio' && (
+                                    <AudioSettings
+                                        selectedInput={selectedInput}
+                                        selectedOutput={selectedOutput}
+                                        inputDevices={inputDevices}
+                                        outputDevices={outputDevices}
+                                        onInputChange={(id) => setSelectedInput(id)}
+                                        onOutputChange={(id) => setSelectedOutput(id)}
+                                        micTestActive={micTestActive}
+                                        micLevel={micLevel}
+                                        onToggleMicTest={() => setMicTestActive(prev => !prev)}
+                                        selectedSttGroup={selectedSttGroup}
+                                        languageGroups={languageGroups}
+                                        onGroupChange={(val) => {
+                                            setSelectedSttGroup(val);
+                                            const firstVariant = Object.entries(availableLanguages).find(([_, lang]) => lang.group === val);
+                                            if (firstVariant) setRecognitionLanguage(firstVariant[0]);
+                                        }}
+                                        recognitionLanguage={recognitionLanguage}
+                                        currentGroupVariants={currentGroupVariants}
+                                        onLanguageChange={(val) => setRecognitionLanguage(val)}
+                                        autoDetectedLanguage={autoDetectedLanguage}
+                                        availableLanguages={availableLanguages}
+                                        showAdvanced={showAdvanced}
+                                        sttFallbackChainLabel={sttFallbackChainLabel}
+                                        renderSttProviderContent={() => null}
+                                        useExperimentalSck={useExperimentalSck}
+                                        onToggleSck={() => {
+                                            const next = !useExperimentalSck;
+                                            setUseExperimentalSck(next);
+                                            localStorage.setItem('useExperimentalSCK', next ? 'true' : 'false');
+                                        }}
+                                    />
+                                )}
+                                {activeTab === 'keybinds' && (
+                                    <ShortcutsSettings
+                                        shortcuts={shortcuts}
+                                        updateShortcut={updateShortcut}
+                                        resetShortcuts={resetShortcuts}
+                                    />
+                                )}
+                                {activeTab === 'integrations' && (
+                                    <IntegrationsSettings
+                                        authUser={authUser}
+                                        calendarStatus={calendarStatus}
+                                        isCalendarsLoading={isCalendarsLoading}
+                                        isLight={isLight}
+                                        onConnectCalendar={handleConnectCalendar}
+                                        onDisconnectCalendar={handleDisconnectCalendar}
+                                        onSignOut={async () => {
+                                            window.electronAPI?.googleLogout?.();
+                                        }}
+                                    />
                                 )}
                                 {activeTab === 'profile' && (
-                                    <div className="space-y-6 animated fadeIn" data-tour-id="profile-intelligence">
+                                    <ProfileSettings>
                                         {/* Introduction */}
                                         <div className="mb-5">
                                             <div className="flex items-center justify-between mb-1">
@@ -4800,688 +3591,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             </div>
                                         )}
 
-                                    </div>
-                                )}
-                                {activeTab === 'ai-providers' && (
-                                    <div data-tour-id="settings-ai-providers">
-                                        <AIProvidersSettings />
-                                    </div>
-                                )}
-                                {activeTab === 'account' && (
-                                    <div className="space-y-6 animated fadeIn select-text pb-4">
-                                        <div>
-                                            <h3 className="text-lg font-bold text-text-primary mb-1">Account</h3>
-                                            <p className="text-xs text-text-secondary">Manage your signed-in Google account.</p>
-                                        </div>
-
-                                        {authUser ? (
-                                            <div className="bg-bg-card rounded-xl border border-border-subtle p-5 space-y-4">
-                                                <div className="flex items-center gap-4">
-                                                    {authUser.picture ? (
-                                                        <img src={authUser.picture} alt="" className="w-12 h-12 rounded-full ring-2 ring-border-subtle" referrerPolicy="no-referrer" />
-                                                    ) : (
-                                                        <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-lg font-bold">
-                                                            {(authUser.name || authUser.email || '?')[0].toUpperCase()}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-semibold text-text-primary truncate">{authUser.name || 'User'}</p>
-                                                        <p className="text-xs text-text-secondary truncate">{authUser.email}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="pt-3 border-t border-border-subtle">
-                                                    <button
-                                                        onClick={async () => {
-                                                            await window.electronAPI?.googleLogout?.();
-                                                            localStorage.removeItem('teamsync_auth_token');
-                                                            localStorage.removeItem('teamsync_auth_user');
-                                                            setAuthUser(null);
-                                                            setCalendarStatus({ connected: false });
-                                                        }}
-                                                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 transition-all"
-                                                    >
-                                                        <LogOut size={14} /> Sign Out
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="bg-bg-card rounded-xl border border-border-subtle p-5 text-center">
-                                                <p className="text-sm text-text-secondary mb-3">Not signed in</p>
-                                                <button
-                                                    onClick={() => window.location.reload()}
-                                                    className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
-                                                >
-                                                    Sign In with Google
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                {activeTab === 'keybinds' && (
-                                    <div className="space-y-5 animated fadeIn select-text pb-4">
-                                        <div className="flex items-start justify-between">
-                                            <div>
-                                                <h3 className="text-lg font-bold text-text-primary mb-1">Keyboard shortcuts</h3>
-                                                <p className="text-xs text-text-secondary">TeamSync works with these easy to remember commands.</p>
-                                            </div>
-                                            <button
-                                                onClick={resetShortcuts}
-                                                className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-border-subtle bg-bg-subtle/30 hover:bg-bg-subtle hover:border-green-500/30 transition-all duration-200 text-xs font-medium text-text-secondary hover:text-green-500 active:scale-95 mt-1"
-                                            >
-                                                <RotateCcw size={13} strokeWidth={2.5} />
-                                                Restore Default
-                                            </button>
-                                        </div>
-
-                                        <div className="grid gap-6">
-                                            {/* General Category */}
-                                            <div>
-                                                <h4 className="text-sm font-bold text-text-primary mb-3">General</h4>
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Eye size={14} /></span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Toggle Visibility</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts.toggleVisibility}
-                                                            onSave={(keys) => updateShortcut('toggleVisibility', keys)}
-                                                        />
-                                                    </div>
-                                                    <div className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><PointerOff size={14} /></span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Toggle Mouse Passthrough</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts.toggleMousePassthrough}
-                                                            onSave={(keys) => updateShortcut('toggleMousePassthrough', keys)}
-                                                        />
-                                                    </div>
-                                                    <div className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><MessageSquare size={14} /></span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Process Screenshots</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts.processScreenshots}
-                                                            onSave={(keys) => updateShortcut('processScreenshots', keys)}
-                                                        />
-                                                    </div>
-                                                    <div className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Sparkles size={14} /></span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Capture Screen & Ask AI</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts.captureAndProcess}
-                                                            onSave={(keys) => updateShortcut('captureAndProcess', keys)}
-                                                        />
-                                                    </div>
-                                                    <div className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><RotateCcw size={14} /></span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Reset / Cancel</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts.resetCancel}
-                                                            onSave={(keys) => updateShortcut('resetCancel', keys)}
-                                                        />
-                                                    </div>
-                                                    <div className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Camera size={14} /></span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Take Screenshot</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts.takeScreenshot}
-                                                            onSave={(keys) => updateShortcut('takeScreenshot', keys)}
-                                                        />
-                                                    </div>
-                                                    <div className="flex items-center justify-between py-1.5 group">
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Crop size={14} /></span>
-                                                            <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Selective Screenshot</span>
-                                                        </div>
-                                                        <KeyRecorder
-                                                            currentKeys={shortcuts.selectiveScreenshot}
-                                                            onSave={(keys) => updateShortcut('selectiveScreenshot', keys)}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Chat Category */}
-                                            <div>
-                                                <div className="mb-3">
-                                                    <h4 className="text-sm font-bold text-text-primary">Chat</h4>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    {[
-                                                        { id: 'whatToAnswer', label: 'What to Answer', icon: <Sparkles size={14} /> },
-                                                        { id: 'clarify', label: 'Clarify', icon: <MessageSquare size={14} /> },
-                                                        { id: 'followUp', label: 'Follow Up', icon: <MessageSquare size={14} /> },
-                                                        { id: 'dynamicAction4', label: 'Recap / Brainstorm', icon: <RefreshCw size={14} /> },
-                                                        { id: 'answer', label: 'Answer / Record', icon: <Mic size={14} /> },
-                                                        { id: 'codeHint', label: 'Get Code Hint', icon: <Zap size={14} /> },
-                                                        { id: 'brainstorm', label: 'Brainstorm Approaches', icon: <Zap size={14} /> },
-                                                        { id: 'scrollUp', label: 'Scroll Up', icon: <ArrowUp size={14} /> },
-                                                        { id: 'scrollDown', label: 'Scroll Down', icon: <ArrowDown size={14} /> },
-                                                    ].map((item, i) => (
-                                                        <div key={i} className="flex items-center justify-between py-1.5 group">
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center">{item.icon}</span>
-                                                                <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">{item.label}</span>
-                                                            </div>
-                                                            <KeyRecorder
-                                                                currentKeys={shortcuts[item.id as keyof typeof shortcuts]}
-                                                                onSave={(keys) => updateShortcut(item.id as any, keys)}
-                                                            />
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Window Category */}
-                                            <div>
-                                                <h4 className="text-sm font-bold text-text-primary mb-3">Window</h4>
-                                                <div className="space-y-1">
-                                                    {[
-                                                        { id: 'moveWindowUp', label: 'Move Window Up', icon: <ArrowUp size={14} /> },
-                                                        { id: 'moveWindowDown', label: 'Move Window Down', icon: <ArrowDown size={14} /> },
-                                                        { id: 'moveWindowLeft', label: 'Move Window Left', icon: <ArrowLeft size={14} /> },
-                                                        { id: 'moveWindowRight', label: 'Move Window Right', icon: <ArrowRight size={14} /> }
-                                                    ].map((item, i) => (
-                                                        <div key={i} className="flex items-center justify-between py-1.5 group">
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center">{item.icon}</span>
-                                                                <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">{item.label}</span>
-                                                            </div>
-                                                            <KeyRecorder
-                                                                currentKeys={shortcuts[item.id as keyof typeof shortcuts]}
-                                                                onSave={(keys) => updateShortcut(item.id as any, keys)}
-                                                            />
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {activeTab === 'audio' && (
-                                    <div className="space-y-6 animated fadeIn" data-tour-id="settings-audio-provider">
-                                        {/* ── Speech Provider Section ── */}
-                                        <div>
-                                            <h3 className="text-lg font-bold text-text-primary mb-1">Speech Provider</h3>
-                                            <p className="text-xs text-text-secondary mb-5">Choose the engine that transcribes audio to text.</p>
-
-                                            <div className="space-y-4">
-                                                <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-3">
-                                                    <label className="text-xs font-medium text-text-secondary block">Speech Provider</label>
-                                                    <div className="relative">
-                                                        <ProviderSelect
-                                                            value={sttProvider}
-                                                            onChange={(val) => handleSttProviderChange(val as any)}
-                                                            options={sttProviderOptions}
-                                                        />
-                                                    </div>
-                                                    <p className="text-[10px] text-text-tertiary">
-                                                        {sttFallbackChainLabel}
-                                                    </p>
-                                                </div>
-
-                                                {/* Google Cloud Service Account */}
-                                                {sttProvider === 'google' && (
-                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-4">
-                                                        <label className="text-xs font-medium text-text-secondary mb-2 block">Service Account JSON</label>
-                                                        <div className="flex gap-2">
-                                                            <div className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-secondary font-mono truncate">
-                                                                {googleServiceAccountPath
-                                                                    ? <span className="text-text-primary">{googleServiceAccountPath.split('/').pop()}</span>
-                                                                    : <span className="text-text-tertiary italic">No file selected</span>}
-                                                            </div>
-                                                            <button
-                                                                onClick={async () => {
-                                                                    // @ts-ignore
-                                                                    const result = await window.electronAPI?.selectServiceAccount?.();
-                                                                    if (result?.success && result.path) {
-                                                                        setGoogleServiceAccountPath(result.path);
-                                                                    }
-                                                                }}
-                                                                className="px-3 py-2 bg-bg-input hover:bg-bg-elevated border border-border-subtle rounded-lg text-xs font-medium text-text-primary transition-colors flex items-center gap-2"
-                                                            >
-                                                                <Upload size={14} /> Select File
-                                                            </button>
-                                                        </div>
-                                                        <p className="text-[10px] text-text-tertiary mt-2">
-                                                            Google can be your active provider or the first live fallback when the selected primary provider fails.
-                                                        </p>
-                                                    </div>
-                                                )}
-
-                                                {(sttProvider === 'deepgram') && renderSttApiKeyCard({
-                                                    provider: 'deepgram',
-                                                    label: 'Deepgram API Key',
-                                                    value: sttDeepgramKey,
-                                                    onChange: setSttDeepgramKey,
-                                                    hasStoredKey: hasStoredDeepgramKey,
-                                                    maskedKey: sttKeyStatuses.deepgram.masked,
-                                                    placeholder: 'Enter Deepgram API key',
-                                                    docsUrl: 'https://console.deepgram.com',
-                                                    helperText: 'Deepgram remains the default recommended primary provider.',
-                                                })}
-
-                                                {(sttProvider === 'groq') && renderSttApiKeyCard({
-                                                    provider: 'groq',
-                                                    label: 'Groq STT API Key',
-                                                    value: sttGroqKey,
-                                                    onChange: setSttGroqKey,
-                                                    hasStoredKey: hasStoredSttGroqKey,
-                                                    maskedKey: sttKeyStatuses.groq.masked,
-                                                    placeholder: 'Enter Groq STT API key',
-                                                    docsUrl: 'https://console.groq.com/keys',
-                                                    extraFields: (
-                                                        <div className="space-y-2">
-                                                            <label className="text-[10px] uppercase tracking-wide text-text-tertiary block">Model</label>
-                                                            <select
-                                                                value={groqSttModel}
-                                                                onChange={async (e) => {
-                                                                    const nextModel = e.target.value;
-                                                                    setGroqSttModel(nextModel);
-                                                                    try {
-                                                                        // @ts-ignore
-                                                                        await window.electronAPI?.setGroqSttModel?.(nextModel);
-                                                                    } catch (error) {
-                                                                        console.error('Failed to update Groq STT model:', error);
-                                                                    }
-                                                                }}
-                                                                className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
-                                                            >
-                                                                <option value="whisper-large-v3-turbo">Whisper Large V3 Turbo</option>
-                                                                <option value="whisper-large-v3">Whisper Large V3</option>
-                                                            </select>
-                                                        </div>
-                                                    ),
-                                                    helperText: 'Saving the key switches the live meeting pipeline to Groq immediately.',
-                                                })}
-
-                                                {(sttProvider === 'openai') && renderSttApiKeyCard({
-                                                    provider: 'openai',
-                                                    label: 'OpenAI STT API Key',
-                                                    value: sttOpenaiKey,
-                                                    onChange: setSttOpenaiKey,
-                                                    hasStoredKey: hasStoredSttOpenaiKey,
-                                                    maskedKey: sttKeyStatuses.openai.masked,
-                                                    placeholder: 'Enter OpenAI API key',
-                                                    docsUrl: 'https://platform.openai.com/api-keys',
-                                                    helperText: 'OpenAI runs as the primary path and still falls back to Google, then Whisper.',
-                                                })}
-
-                                                {(sttProvider === 'elevenlabs') && renderSttApiKeyCard({
-                                                    provider: 'elevenlabs',
-                                                    label: 'ElevenLabs API Key',
-                                                    value: sttElevenLabsKey,
-                                                    onChange: setSttElevenLabsKey,
-                                                    hasStoredKey: hasStoredElevenLabsKey,
-                                                    maskedKey: sttKeyStatuses.elevenlabs.masked,
-                                                    placeholder: 'Enter ElevenLabs API key',
-                                                    docsUrl: 'https://elevenlabs.io/app/settings/api-keys',
-                                                    helperText: 'Uses the realtime Scribe path when available, with the same recovery chain behind it.',
-                                                })}
-
-                                                {(sttProvider === 'azure') && renderSttApiKeyCard({
-                                                    provider: 'azure',
-                                                    label: 'Azure Speech API Key',
-                                                    value: sttAzureKey,
-                                                    onChange: setSttAzureKey,
-                                                    hasStoredKey: hasStoredAzureKey,
-                                                    maskedKey: sttKeyStatuses.azure.masked,
-                                                    placeholder: 'Enter Azure Speech API key',
-                                                    docsUrl: 'https://portal.azure.com',
-                                                    extraFields: (
-                                                        <div className="space-y-2">
-                                                            <label className="text-[10px] uppercase tracking-wide text-text-tertiary block">Azure Region</label>
-                                                            <input
-                                                                type="text"
-                                                                value={sttAzureRegion}
-                                                                onChange={(e) => setSttAzureRegion(e.target.value)}
-                                                                placeholder="eastus"
-                                                                className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
-                                                            />
-                                                        </div>
-                                                    ),
-                                                    helperText: 'The selected region is saved live and used immediately after the key is stored.',
-                                                })}
-
-                                                {(sttProvider === 'ibmwatson') && renderSttApiKeyCard({
-                                                    provider: 'ibmwatson',
-                                                    label: 'IBM Watson API Key',
-                                                    value: sttIbmKey,
-                                                    onChange: setSttIbmKey,
-                                                    hasStoredKey: hasStoredIbmWatsonKey,
-                                                    maskedKey: sttKeyStatuses.ibmwatson.masked,
-                                                    placeholder: 'Enter IBM Watson API key',
-                                                    docsUrl: 'https://cloud.ibm.com/catalog/services/speech-to-text',
-                                                    extraFields: (
-                                                        <div className="space-y-2">
-                                                            <label className="text-[10px] uppercase tracking-wide text-text-tertiary block">IBM Region</label>
-                                                            <input
-                                                                type="text"
-                                                                value={sttIbmRegion}
-                                                                onChange={(e) => setSttIbmRegion(e.target.value)}
-                                                                placeholder="us-south"
-                                                                className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
-                                                            />
-                                                        </div>
-                                                    ),
-                                                    helperText: 'IBM Watson stays hot-swappable during a live meeting once the key is saved.',
-                                                })}
-
-                                                {(sttProvider === 'soniox') && renderSttApiKeyCard({
-                                                    provider: 'soniox',
-                                                    label: 'Soniox API Key',
-                                                    value: sttSonioxKey,
-                                                    onChange: setSttSonioxKey,
-                                                    hasStoredKey: hasStoredSonioxKey,
-                                                    maskedKey: sttKeyStatuses.soniox.masked,
-                                                    placeholder: 'Enter Soniox API key',
-                                                    docsUrl: 'https://app.soniox.com',
-                                                    helperText: 'Soniox uses its streaming path first, then drops into Google and Whisper recovery if needed.',
-                                                })}
-
-                                                {sttProvider === 'teamsync' && (
-                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-2">
-                                                        <label className="text-xs font-medium text-text-secondary block">Managed TeamSync STT</label>
-                                                        <p className="text-xs text-text-secondary">
-                                                            Your TeamSync key is already connected. Runtime switching happens automatically as soon as that key is saved in the TeamSync API section.
-                                                        </p>
-                                                        <p className="text-[10px] text-text-tertiary">
-                                                            This selection still keeps the Google and Whisper recovery path available locally if the managed stream drops.
-                                                        </p>
-                                                    </div>
-                                                )}
-
-                                                {sttProvider === 'whisper' && (
-                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-2">
-                                                        <label className="text-xs font-medium text-text-secondary block">Local Fallback</label>
-                                                        <p className="text-xs text-text-secondary">
-                                                            Whisper is only used after the active provider and Google fail. It does not replace the primary realtime stream.
-                                                        </p>
-                                                        <p className="text-[10px] text-text-tertiary">
-                                                            No API key is required here. If local Whisper is unavailable, TeamSync enters degraded mode and warns that speech recognition is temporarily unavailable.
-                                                        </p>
-                                                    </div>
-                                                )}
-
-                                                {/* Recognition Language Family */}
-                                                <CustomSelect
-                                                    label="Language"
-                                                    icon={<Globe size={14} />}
-                                                    value={selectedSttGroup}
-                                                    options={languageGroups.map(g => ({
-                                                        deviceId: g,
-                                                        label: g,
-                                                        kind: 'audioinput' as MediaDeviceKind,
-                                                        groupId: '',
-                                                        toJSON: () => ({})
-                                                    }))}
-                                                    onChange={handleGroupChange}
-                                                    placeholder="Select Language"
-                                                />
-
-                                                {/* Variant/Accent Selector (Conditional) */}
-                                                {currentGroupVariants.length > 1 && (
-                                                    <div className="mt-3 animated fadeIn">
-                                                        <CustomSelect
-                                                            label="Accent / Region"
-                                                            icon={<MapPin size={14} />}
-                                                            value={recognitionLanguage}
-                                                            options={currentGroupVariants}
-                                                            onChange={handleLanguageChange}
-                                                            placeholder="Select Region"
-                                                        />
-                                                    </div>
-                                                )}
-
-                                                <div className="flex gap-2 items-center mt-2 px-1">
-                                                    <Info size={14} className="text-text-secondary shrink-0" />
-                                                    <p className="text-xs text-text-secondary">
-                                                        {recognitionLanguage === 'auto'
-                                                            ? autoDetectedLanguage
-                                                                ? (() => {
-                                                                    const label = Object.values(availableLanguages).find((l: any) =>
-                                                                        l.bcp47 === autoDetectedLanguage || l.iso639 === autoDetectedLanguage
-                                                                    )?.label as string | undefined;
-                                                                    return `Auto mode — detected: ${label ?? autoDetectedLanguage}`;
-                                                                })()
-                                                                : 'Auto mode — language will be detected from the first few seconds of audio.'
-                                                            : 'Select the primary language being spoken in the meeting.'
-                                                        }
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="h-px bg-border-subtle" />
-
-                                        {/* ── Audio Configuration Section ── */}
-                                        <div>
-                                            <h3 className="text-lg font-bold text-text-primary mb-1">Audio Configuration</h3>
-                                            <p className="text-xs text-text-secondary mb-5">Manage input and output devices.</p>
-
-                                            <div className="space-y-4">
-                                                <CustomSelect
-                                                    label="Input Device"
-                                                    icon={<Mic size={16} />}
-                                                    value={selectedInput}
-                                                    options={inputDevices}
-                                                    onChange={(id) => {
-                                                        setSelectedInput(id);
-                                                        localStorage.setItem('preferredInputDeviceId', id);
-                                                    }}
-                                                    placeholder="Default Microphone"
-                                                />
-
-                                                <div>
-                                                    <div className="flex justify-between text-xs text-text-secondary mb-2 px-1">
-                                                        <span>Input Level</span>
-                                                        <button
-                                                            onClick={() => setMicTestActive(prev => !prev)}
-                                                            className={`text-[11px] font-medium px-2 py-0.5 rounded-md transition-colors ${
-                                                                micTestActive
-                                                                    ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
-                                                                    : 'bg-bg-item-surface text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 border border-border-subtle'
-                                                            }`}
-                                                        >
-                                                            {micTestActive ? 'Stop Test' : 'Test Mic'}
-                                                        </button>
-                                                    </div>
-                                                    <div className="h-1.5 bg-bg-input rounded-full overflow-hidden">
-                                                        <div
-                                                            className={`h-full transition-all duration-100 ease-out ${micTestActive ? 'bg-green-500' : 'bg-gray-600'}`}
-                                                            style={{ width: `${micLevel}%` }}
-                                                        />
-                                                    </div>
-                                                    {!micTestActive && (
-                                                        <p className="text-[10px] text-text-tertiary mt-1.5 px-1">Click "Test Mic" to check your microphone input level</p>
-                                                    )}
-                                                </div>
-
-                                                <div className="h-px bg-border-subtle my-2" />
-
-                                                <CustomSelect
-                                                    label="Output Device"
-                                                    icon={<Speaker size={16} />}
-                                                    value={selectedOutput}
-                                                    options={outputDevices}
-                                                    onChange={(id) => {
-                                                        setSelectedOutput(id);
-                                                        localStorage.setItem('preferredOutputDeviceId', id);
-                                                    }}
-                                                    placeholder="Default Speakers"
-                                                />
-
-                                                <div className="flex justify-end">
-                                                    <button
-                                                        onClick={async () => {
-                                                            try {
-                                                                const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-                                                                if (!AudioContext) {
-                                                                    console.error("Web Audio API not supported");
-                                                                    return;
-                                                                }
-
-                                                                const ctx = new AudioContext();
-
-                                                                if (ctx.state === 'suspended') {
-                                                                    await ctx.resume();
-                                                                }
-
-                                                                const oscillator = ctx.createOscillator();
-                                                                const gainNode = ctx.createGain();
-
-                                                                oscillator.connect(gainNode);
-                                                                gainNode.connect(ctx.destination);
-
-                                                                oscillator.type = 'sine';
-                                                                oscillator.frequency.setValueAtTime(523.25, ctx.currentTime);
-                                                                gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
-                                                                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.0);
-
-                                                                if (selectedOutput && (ctx as any).setSinkId) {
-                                                                    try {
-                                                                        await (ctx as any).setSinkId(selectedOutput);
-                                                                    } catch (e) {
-                                                                        console.warn("Error setting sink for AudioContext", e);
-                                                                    }
-                                                                }
-
-                                                                oscillator.start();
-                                                                oscillator.stop(ctx.currentTime + 1.0);
-                                                            } catch (e) {
-                                                                console.error("Error playing test sound", e);
-                                                            }
-                                                        }}
-                                                        className="text-xs bg-bg-input hover:bg-bg-elevated text-text-primary px-3 py-1.5 rounded-md transition-colors flex items-center gap-2"
-                                                    >
-                                                        <Speaker size={12} /> Test Sound
-                                                    </button>
-                                                </div>
-
-                                                <div className="h-px bg-border-subtle my-2" />
-
-                                                {/* SCK Backend Toggle */}
-                                                <div className="bg-amber-500/5 rounded-xl border border-amber-500/20 p-4">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-start gap-3">
-                                                            <div className="mt-0.5 p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
-                                                                <FlaskConical size={18} />
-                                                            </div>
-                                                            <div>
-                                                                <div className="flex items-center gap-2 mb-0.5">
-                                                                    <h3 className="text-sm font-bold text-text-primary">SCK Backend</h3>
-                                                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-400 uppercase tracking-wide">Alternative</span>
-                                                                </div>
-                                                                <p className="text-xs text-text-secondary leading-relaxed max-w-[300px]">
-                                                                    Use the ScreenCaptureKit backend. An optimized alternative to CoreAudio if you experience any capture issues.
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        {renderSettingsSwitch({
-                                                            checked: useExperimentalSck,
-                                                            onToggle: () => {
-                                                                const newState = !useExperimentalSck;
-                                                                setUseExperimentalSck(newState);
-                                                                window.localStorage.setItem('useExperimentalSckBackend', newState ? 'true' : 'false');
-                                                            },
-                                                            label: 'Toggle ScreenCaptureKit backend',
-                                                            tone: 'amber',
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    </ProfileSettings>
                                 )}
 
 
-                                {activeTab === 'calendar' && (
-                                    <div className="space-y-6 animated fadeIn h-full" data-tour-id="settings-calendar-sync">
-                                        <div>
-                                            <h3 className="text-lg font-bold text-text-primary mb-2">Visible Calendars</h3>
-                                            <p className="text-xs text-text-secondary mb-4">Upcoming meetings are synchronized from these calendars</p>
-                                        </div>
 
-                                        <div className="bg-bg-card rounded-xl p-6 border border-border-subtle flex flex-col items-start gap-4">
-                                            {calendarStatus.connected ? (
-                                                <div className="w-full flex items-center justify-between">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500">
-                                                            <Calendar size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="text-sm font-medium text-text-primary">Google Calendar</h4>
-                                                            <p className="text-xs text-text-secondary">Connected as {calendarStatus.email || 'User'}</p>
-                                                        </div>
-                                                    </div>
 
-                                                    <button
-                                                        onClick={handleDisconnectCalendar}
-                                                        disabled={isCalendarsLoading}
-                                                        className="px-3 py-1.5 bg-bg-input hover:bg-bg-elevated border border-border-subtle text-text-primary rounded-md text-xs font-medium transition-colors"
-                                                    >
-                                                        {isCalendarsLoading ? 'Disconnecting...' : 'Disconnect'}
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div className="w-full rounded-2xl border border-dashed border-border-subtle bg-bg-input/35 p-5">
-                                                    <div className="max-w-[480px]">
-                                                        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border-subtle bg-bg-card text-text-tertiary">
-                                                            <Calendar size={20} />
-                                                        </div>
-                                                        <h4 className="text-sm font-bold text-text-primary mb-1">Connect Calendar for meeting context</h4>
-                                                        <p className="text-xs leading-relaxed text-text-secondary">
-                                                            TeamSync can surface your next meeting, attendees, and preparation context before capture starts.
-                                                        </p>
-                                                    </div>
-                                                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                                        {['Next meeting', 'Participants', 'Preparation notes'].map((benefit) => (
-                                                            <div key={benefit} className="flex items-center gap-2 rounded-lg bg-bg-card px-3 py-2 text-[11px] font-medium text-text-secondary">
-                                                                <CheckCircle size={13} className="text-emerald-500" />
-                                                                <span className="truncate">{benefit}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
 
-                                                    <button
-                                                        onClick={handleConnectCalendar}
-                                                        disabled={isCalendarsLoading}
-                                                        className={`mt-5 px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2.5 active:scale-[0.98] disabled:opacity-60 ${isLight ? 'bg-bg-component hover:bg-bg-item-surface text-text-primary border border-border-subtle' : 'bg-[#303033] hover:bg-[#3A3A3D] text-white'}`}
-                                                    >
-                                                        <svg viewBox="0 0 24 24" width="14" height="14" xmlns="http://www.w3.org/2000/svg">
-                                                            <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
-                                                                <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z" />
-                                                                <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z" />
-                                                                <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.734 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z" />
-                                                                <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z" />
-                                                            </g>
-                                                        </svg>
-                                                        {isCalendarsLoading ? 'Connecting...' : 'Connect Google'}
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {activeTab === 'help' && (
-                                    <HelpSettings onNavigate={setActiveTab} />
-                                )}
-
-                                {activeTab === 'about' && (
-                                    <AboutSection />
-                                )}
                                     </motion.div>
                                 </AnimatePresence>
                             </div>
