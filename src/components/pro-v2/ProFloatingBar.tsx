@@ -101,21 +101,6 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             className={`v2-surface-bar v2-draggable ${!isMeetingActive ? 'v2-surface-bar--paused' : ''}`}
         >
             <div className="v2-bar-status">
-                <button
-                    type="button"
-                    className="v2-no-drag v2-bar-logo-btn"
-                    onClick={onOpenLauncher}
-                    aria-label="Open launcher"
-                    title="Open launcher"
-                >
-                    <img src={icon} alt="" className="v2-bar-logo-img" draggable="false" />
-                </button>
-
-                {/* Recording Dot */}
-                <span className="v2-recording-dot-shell" aria-hidden="true">
-                    <span className={`v2-recording-dot ${!isMeetingActive ? 'v2-recording-dot--paused' : ''}`} />
-                </span>
-
                 {/* Waveform */}
                 <div className={`v2-waveform ${!isMeetingActive ? 'v2-waveform-paused' : ''}`} aria-hidden="true">
                     <div className="v2-waveform-bar" />
@@ -131,7 +116,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                 </span>
             </div>
 
-            <div className="relative group">
+            <div className="relative group" style={{ display: 'flex', alignItems: 'center' }}>
                 <button
                     type="button"
                     onClick={onToggleTranscriptPause}
@@ -149,6 +134,21 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                 </button>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                     {isTranscriptPaused ? 'Resume Listening' : 'Pause Listening'}
+                </div>
+            </div>
+
+            {/* Logo — Back to Launcher */}
+            <div className="relative group" style={{ display: 'flex', alignItems: 'center' }}>
+                <button
+                    type="button"
+                    className="v2-no-drag v2-bar-logo-btn"
+                    onClick={onOpenLauncher}
+                    aria-label="Back to Launcher"
+                >
+                    <img src={icon} alt="" className="v2-bar-logo-img" draggable="false" />
+                </button>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    Back to Launcher
                 </div>
             </div>
 

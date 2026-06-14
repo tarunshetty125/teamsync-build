@@ -416,10 +416,10 @@ export class WindowHelper {
     this.overlayWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
       const levelLabel =
         level === 0 ? 'log' :
-        level === 1 ? 'warn' :
-        level === 2 ? 'error' :
-        level === 3 ? 'debug' :
-        'info';
+          level === 1 ? 'warn' :
+            level === 2 ? 'error' :
+              level === 3 ? 'debug' :
+                'info';
       console.log(`[OverlayRenderer:${levelLabel}] ${redactForPersistentLog(message)} (${sourceId}:${line})`);
     });
 
@@ -430,7 +430,7 @@ export class WindowHelper {
     }
 
     this.overlayWindow.loadURL(`${startUrl}?window=overlay`).catch(e => {
-        console.error('[WindowHelper] Failed to load Overlay URL:', e);
+      console.error('[WindowHelper] Failed to load Overlay URL:', e);
     })
 
     // --- 3. Startup Sequence ---
@@ -789,32 +789,32 @@ export class WindowHelper {
       const currentBounds = this.overlayWindow.getBounds();
       const savedBounds = this.overlayBounds
         ? {
-            ...this.overlayBounds,
-            height: Math.max(this.overlayBounds.height, WindowHelper.OVERLAY_MIN_HEIGHT)
-          }
+          ...this.overlayBounds,
+          height: Math.max(this.overlayBounds.height, WindowHelper.OVERLAY_MIN_HEIGHT)
+        }
         : null;
       const workArea = this.getDisplayWorkArea(savedBounds ?? currentBounds);
       const maxAllowedWidth = getOverlayMaxWidth(workArea.width);
       const maxAllowedHeight = getOverlayMaxHeight(workArea.height);
       const targetBounds = savedBounds
         ? {
-            x: Math.min(Math.max(savedBounds.x, workArea.x), workArea.x + workArea.width - Math.min(savedBounds.width, maxAllowedWidth)),
-            y: Math.min(Math.max(savedBounds.y, workArea.y), workArea.y + workArea.height - Math.min(savedBounds.height, maxAllowedHeight)),
-            width: Math.min(savedBounds.width, maxAllowedWidth),
-            height: Math.min(savedBounds.height, maxAllowedHeight)
-          }
+          x: Math.min(Math.max(savedBounds.x, workArea.x), workArea.x + workArea.width - Math.min(savedBounds.width, maxAllowedWidth)),
+          y: Math.min(Math.max(savedBounds.y, workArea.y), workArea.y + workArea.height - Math.min(savedBounds.height, maxAllowedHeight)),
+          width: Math.min(savedBounds.width, maxAllowedWidth),
+          height: Math.min(savedBounds.height, maxAllowedHeight)
+        }
         : (() => {
-            const defaultWidth = this.overlayUsesV2Layout
-              ? getV2DefaultOverlayWidth(maxAllowedWidth)
-              : this.getOverlayDefaultWidth();
-            const defaultHeight = this.getOverlayDefaultHeight(currentBounds.height, maxAllowedHeight);
-            return {
-              x: Math.floor(workArea.x + (workArea.width - defaultWidth) / 2),
-              y: Math.floor(workArea.y + (workArea.height - defaultHeight) / 2),
-              width: defaultWidth,
-              height: defaultHeight,
-            };
-          })();
+          const defaultWidth = this.overlayUsesV2Layout
+            ? getV2DefaultOverlayWidth(maxAllowedWidth)
+            : this.getOverlayDefaultWidth();
+          const defaultHeight = this.getOverlayDefaultHeight(currentBounds.height, maxAllowedHeight);
+          return {
+            x: Math.floor(workArea.x + (workArea.width - defaultWidth) / 2),
+            y: Math.floor(workArea.y + (workArea.height - defaultHeight) / 2),
+            width: defaultWidth,
+            height: defaultHeight,
+          };
+        })();
 
       this.overlayWindow.setBounds(targetBounds);
       this.overlayBounds = this.overlayWindow.getBounds();

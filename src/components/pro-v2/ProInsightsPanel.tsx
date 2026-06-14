@@ -47,59 +47,59 @@ import { V2_INSIGHTS_WIDTH } from './v2Layout';
 
 const ACTION_ICONS: Record<string, React.ReactNode> = {
     // General / Core
-    what_to_answer: <Sparkles size={14} className="text-violet-400" />,
-    recap: <FileText size={14} className="text-emerald-400" />,
-    clarify: <HelpCircle size={14} className="text-sky-400" />,
-    brainstorm: <Brain size={14} className="text-pink-400" />,
-    follow_up_questions: <ArrowRight size={14} className="text-blue-400" />,
-    
+    what_to_answer: <Sparkles size={12} className="text-violet-400" />,
+    recap: <FileText size={12} className="text-emerald-400" />,
+    clarify: <HelpCircle size={12} className="text-sky-400" />,
+    brainstorm: <Brain size={12} className="text-pink-400" />,
+    follow_up_questions: <ArrowRight size={12} className="text-blue-400" />,
+
     // Tech mode
-    tech_hint: <Info size={14} className="text-indigo-400" />,
-    tech_optimal_solution: <Zap size={14} className="text-amber-400" />,
-    tech_complexity: <Timer size={14} className="text-rose-400" />,
-    tech_edge_case: <ShieldAlert size={14} className="text-orange-400" />,
-    
+    tech_hint: <Info size={12} className="text-indigo-400" />,
+    tech_optimal_solution: <Zap size={12} className="text-amber-400" />,
+    tech_complexity: <Timer size={12} className="text-rose-400" />,
+    tech_edge_case: <ShieldAlert size={12} className="text-orange-400" />,
+
     // Sales mode
-    sales_objection: <LifeBuoy size={14} className="text-red-400" />,
-    sales_pricing: <BadgeDollarSign size={14} className="text-emerald-400" />,
-    sales_discovery: <Compass size={14} className="text-cyan-400" />,
-    sales_negotiation: <Handshake size={14} className="text-yellow-400" />,
-    
+    sales_objection: <LifeBuoy size={12} className="text-red-400" />,
+    sales_pricing: <BadgeDollarSign size={12} className="text-emerald-400" />,
+    sales_discovery: <Compass size={12} className="text-cyan-400" />,
+    sales_negotiation: <Handshake size={12} className="text-yellow-400" />,
+
     // Lecture mode
-    lecture_explain: <BookOpen size={14} className="text-blue-400" />,
-    lecture_summary: <FileText size={14} className="text-teal-400" />,
-    lecture_takeaway: <Star size={14} className="text-amber-400" />,
-    lecture_question: <MessageCircle size={14} className="text-purple-400" />,
-    
+    lecture_explain: <BookOpen size={12} className="text-blue-400" />,
+    lecture_summary: <FileText size={12} className="text-teal-400" />,
+    lecture_takeaway: <Star size={12} className="text-amber-400" />,
+    lecture_question: <MessageCircle size={12} className="text-purple-400" />,
+
     // Recruiting mode
-    recruiting_strength: <ThumbsUp size={14} className="text-green-400" />,
-    recruiting_red_flag: <Flag size={14} className="text-red-400" />,
-    recruiting_follow_up: <Search size={14} className="text-sky-400" />,
-    recruiting_evaluation: <FileCheck size={14} className="text-indigo-400" />,
+    recruiting_strength: <ThumbsUp size={12} className="text-green-400" />,
+    recruiting_red_flag: <Flag size={12} className="text-red-400" />,
+    recruiting_follow_up: <Search size={12} className="text-sky-400" />,
+    recruiting_evaluation: <FileCheck size={12} className="text-indigo-400" />,
 
     // Team meeting mode
-    team_decision: <CheckCircle2 size={14} className="text-emerald-400" />,
-    team_action_item: <CheckSquare size={14} className="text-blue-400" />,
-    team_risk: <AlertTriangle size={14} className="text-orange-400" />,
-    team_owner: <User size={14} className="text-purple-400" />,
+    team_decision: <CheckCircle2 size={12} className="text-emerald-400" />,
+    team_action_item: <CheckSquare size={12} className="text-blue-400" />,
+    team_risk: <AlertTriangle size={12} className="text-orange-400" />,
+    team_owner: <User size={12} className="text-purple-400" />,
 
     // Job Prep / STAR mode
-    job_star: <Award size={14} className="text-amber-400" />,
-    job_resume_alignment: <Briefcase size={14} className="text-sky-400" />,
-    job_confidence: <Volume2 size={14} className="text-violet-400" />,
-    job_improvement: <TrendingUp size={14} className="text-emerald-400" />,
+    job_star: <Award size={12} className="text-amber-400" />,
+    job_resume_alignment: <Briefcase size={12} className="text-sky-400" />,
+    job_confidence: <Volume2 size={12} className="text-violet-400" />,
+    job_improvement: <TrendingUp size={12} className="text-emerald-400" />,
 
     // System Design mode
-    system_tradeoffs: <Scale size={14} className="text-rose-400" />,
-    system_clarify: <HelpCircle size={14} className="text-sky-400" />,
-    system_approaches: <Brain size={14} className="text-pink-400" />,
-    system_deep_dive: <SearchCode size={14} className="text-violet-400" />,
+    system_tradeoffs: <Scale size={12} className="text-rose-400" />,
+    system_clarify: <HelpCircle size={12} className="text-sky-400" />,
+    system_approaches: <Brain size={12} className="text-pink-400" />,
+    system_deep_dive: <SearchCode size={12} className="text-violet-400" />,
 
     // Salary mode
-    salary_negotiate: <Handshake size={14} className="text-emerald-400" />,
-    salary_counter: <DollarSign size={14} className="text-amber-400" />,
-    salary_confidence: <Volume2 size={14} className="text-violet-400" />,
-    salary_anchor: <Anchor size={14} className="text-cyan-400" />,
+    salary_negotiate: <Handshake size={12} className="text-emerald-400" />,
+    salary_counter: <DollarSign size={12} className="text-amber-400" />,
+    salary_confidence: <Volume2 size={12} className="text-violet-400" />,
+    salary_anchor: <Anchor size={12} className="text-cyan-400" />,
 };
 
 const getActionIcon = (action: OverlayQuickActionDef) => {
@@ -160,7 +160,7 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
 
     const handleCopy = useCallback(() => {
         const text = rollingTranscript || lastFinalSentence || 'No transcript available';
-        navigator.clipboard.writeText(text).catch(() => {});
+        navigator.clipboard.writeText(text).catch(() => { });
         setCopiedText(true);
         setTimeout(() => setCopiedText(false), 2000);
     }, [rollingTranscript, lastFinalSentence]);
@@ -236,17 +236,8 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
                 </div>
             </div>
 
-            {/* ── Context Summary (fixed) ── */}
-            <div style={{ padding: '0 16px 12px' }}>
-                <div className="v2-context-summary">
-                    <div className="v2-context-label">{contextSummary.label}</div>
-                    <div className="v2-context-detail">{contextSummary.detail}</div>
-                </div>
-            </div>
-
-            {/* ── Actions (fixed, always visible) ── */}
+            {/* ── Actions (directly below header) ── */}
             <div style={{ padding: '0 10px 10px', flexShrink: 0 }}>
-                <div className="v2-section-header">Actions</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                     {activeQuickActions.map((action, idx) => (
                         <motion.button
@@ -260,12 +251,11 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
                                 ease: [0.22, 1, 0.36, 1],
                             }}
                             onClick={() => getQuickActionHandler(action)()}
-                            className={`v2-action-row ${
-                                action.id === recommendedButton ? 'v2-action-row--recommended' : ''
-                            }`}
+                            className={`v2-action-row ${action.id === recommendedButton ? 'v2-action-row--recommended' : ''
+                                }`}
                             style={{ width: '100%', border: 'none', background: action.id === recommendedButton ? undefined : 'transparent' }}
                         >
-                            <span className="v2-action-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px' }}>
+                            <span className="v2-action-icon">
                                 {getActionIcon(action)}
                             </span>
                             <span className="v2-action-copy">
@@ -279,9 +269,9 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
                 </div>
                 {activeQuickActions.length === 0 && (
                     <div style={{
-                        fontSize: '12px',
+                        fontSize: '11px',
                         color: 'rgba(255,255,255,0.30)',
-                        padding: '12px',
+                        padding: '10px',
                         textAlign: 'center',
                         fontStyle: 'italic',
                     }}>

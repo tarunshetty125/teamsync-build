@@ -1,0 +1,110 @@
+/* ============================================================
+   CLUELY THEME — Solid Black
+   
+   All surfaces solid black. No blur, no frost.
+   
+   SINGLE SOURCE OF TRUTH — overrides everything in pro-v2.css.
+   ============================================================ */
+
+/* ── Transparency Reset ──
+   Only reset html/body/#root — NOT deep descendants,
+   because that would override the surface backgrounds. */
+html,
+body,
+#root {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* ─── TOOLBAR ─── */
+.v2-surface-bar {
+  background: #000000 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.30) !important;
+}
+
+.v2-surface-bar--paused {
+  background: #000000 !important;
+}
+
+.v2-surface-bar::before,
+.v2-surface-bar::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* ─── PANELS ─── */
+.v2-surface-insights,
+.v2-surface-response {
+  background: #000000 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 8px 24px rgba(0, 0, 0, 0.30) !important;
+}
+
+.v2-surface-insights::before,
+.v2-surface-insights::after,
+.v2-surface-response::before,
+.v2-surface-response::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* ─── ROLLING TRANSCRIPT ─── */
+.v2-rolling-transcript-shell {
+  background: #000000 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 4px 16px rgba(0, 0, 0, 0.24) !important;
+}
+
+/* ── Inner Element Transparency ──
+   Only CHILDREN of surfaces, not the surfaces themselves. */
+.v2-surface-insights .v2-panel-header,
+.v2-surface-response .v2-panel-header,
+.v2-surface-insights .v2-response-scroll,
+.v2-surface-response .v2-response-scroll,
+.v2-surface-insights .v2-response-body,
+.v2-surface-response .v2-response-body {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Panel headers */
+.v2-surface-insights .v2-panel-header,
+.v2-surface-response .v2-panel-header {
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Context cards */
+.v2-context-card,
+[class*="context-summary"] {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Action items */
+.v2-action-row {
+  background: transparent !important;
+}
+
+/* Attachment strip */
+.v2-attachment-strip {
+  background: #000000 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 4px 16px rgba(0, 0, 0, 0.24) !important;
+}

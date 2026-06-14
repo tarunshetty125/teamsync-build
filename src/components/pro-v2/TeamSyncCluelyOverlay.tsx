@@ -11,10 +11,12 @@ import ProFloatingBar from './ProFloatingBar';
 import ProInsightsPanel from './ProInsightsPanel';
 import ProResponseSurface from './ProResponseSurface';
 import RollingTranscript from '../ui/RollingTranscript';
+
 import { useV2OverlayResize } from './useV2OverlayResize';
 import { Image as ImageIcon, X } from 'lucide-react';
 import { OVERLAY_OPACITY_MIN } from '../../lib/overlayAppearance';
 import './pro-v2.css';
+import './glass.css';
 import {
     OVERLAY_MAX_WORK_AREA_RATIO,
     OVERLAY_MIN_HEIGHT,

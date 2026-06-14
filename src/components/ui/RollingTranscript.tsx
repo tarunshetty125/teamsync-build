@@ -91,11 +91,11 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
 
         return {
             tone: shouldUseWide ? 'wide' : 'normal',
-            maxWidth: shouldUseWide ? 940 : 620,
+            maxWidth: shouldUseWide ? 380 : 320,
             padding: shouldUseWide
-                ? { top: 10, right: 20, bottom: 10, left: 20 }
-                : { top: 8, right: 16, bottom: 8, left: 16 },
-            radius: shouldUseWide ? 24 : 999,
+                ? { top: 5, right: 10, bottom: 5, left: 10 }
+                : { top: 4, right: 10, bottom: 4, left: 10 },
+            radius: shouldUseWide ? 10 : 8,
         };
     }, [anyFailed, anyReconnecting, displayText, isProV2]);
     const speakerToneClass = (() => {
@@ -122,11 +122,11 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
         ? {
             width: '100%',
             padding: 0,
-            border: '1px solid rgba(255,255,255,0.14)',
-            background: 'linear-gradient(180deg, rgba(22,22,26,0.72) 0%, rgba(15,15,18,0.62) 100%)',
-            boxShadow: '0 14px 28px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 rgba(255,255,255,0.03)',
-            backdropFilter: 'blur(8px) saturate(135%)',
-            WebkitBackdropFilter: 'blur(8px) saturate(135%)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            background: 'rgba(0,0,0,0.94)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 20px rgba(0,0,0,0.36)',
+            backdropFilter: 'none',
+            WebkitBackdropFilter: 'none',
             overflow: 'hidden',
             transform: 'translateZ(0)',
         }
@@ -177,7 +177,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                     {isNormal && (
                         <motion.div
                             layout={isProV2}
-                            className={`flex items-center gap-2 min-h-[28px] ${isProV2 ? 'w-full' : ''}`}
+                            className={`flex items-center gap-1.5 min-h-[20px] ${isProV2 ? 'w-full' : ''}`}
                             transition={isProV2 ? proV2Spring : undefined}
                         >
                             {/* Status dot: green+pulse when waiting, grey when AI responded */}
@@ -196,17 +196,17 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                 }
                                 style={{
                                     display: 'inline-block',
-                                    width: 7,
-                                    height: 7,
+                                    width: 5,
+                                    height: 5,
                                     borderRadius: '50%',
                                     flexShrink: 0,
                                 }}
                             />
 
                             {/* Sentence text */}
-                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <div className="flex min-w-0 flex-1 items-center gap-1.5">
                                 {trimmedSpeakerLabel ? (
-                                    <span className={`inline-flex max-w-[40%] items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] ${speakerToneClass}`}>
+                                    <span className={`inline-flex max-w-[36%] items-center rounded border px-1.5 py-px text-[9px] font-semibold uppercase tracking-[0.1em] ${speakerToneClass}`}>
                                         {trimmedSpeakerLabel}
                                     </span>
                                 ) : null}
@@ -225,7 +225,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                                     ? { opacity: 0, filter: 'blur(2px)', transform: 'translateY(-3px)' }
                                                     : { opacity: 0 }}
                                                 transition={isProV2 ? proV2TextTransition : { duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
-                                                className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-ellipsis text-[13px] italic leading-snug"
+                                                className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-ellipsis text-[11px] italic leading-snug"
                                                 style={{
                                                     color: aiHasResponded
                                                         ? 'var(--overlay-text-muted)'
@@ -249,7 +249,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                                     : { opacity: 0.4 }}
                                                 exit={{ opacity: 0 }}
                                                 transition={isProV2 ? proV2TextTransition : { duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
-                                                className="text-[13px] italic leading-snug text-[var(--overlay-text-muted)]"
+                                                className="text-[11px] italic leading-snug text-[var(--overlay-text-muted)]"
                                             >
                                                 Listening…
                                             </motion.span>
@@ -262,7 +262,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
 
                     {/* Reconnecting state */}
                     {anyReconnecting && !anyFailed && (
-                        <span className="flex items-center justify-center w-full text-[12px] leading-7 stt-state-enter">
+                        <span className="flex items-center justify-center w-full text-[10px] leading-5 stt-state-enter">
                             <span className="text-amber-400/70 font-medium tracking-wide">
                                 Reconnecting
                             </span>
@@ -273,13 +273,13 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                 {/* Error chips row */}
                 {(anyFailed || anyReconnecting) && (
                     <div className="relative w-[90%] mx-auto">
-                        <span className="flex items-center justify-center w-full text-[12px] leading-7 pl-3 stt-state-enter gap-3">
+                        <span className="flex items-center justify-center w-full text-[10px] leading-5 pl-2 stt-state-enter gap-2">
                             {intStatus === 'failed' && intErrorCategory && (
-                                <span className="flex items-center gap-1.5 text-red-400 font-medium tracking-wide truncate max-w-[44%]">
-                                    <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                                        <line x1="23" y1="9" x2="17" y2="15"/>
-                                        <line x1="17" y1="9" x2="23" y2="15"/>
+                                <span className="flex items-center gap-1 text-red-400 font-medium tracking-wide truncate max-w-[44%]">
+                                    <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                        <line x1="23" y1="9" x2="17" y2="15" />
+                                        <line x1="17" y1="9" x2="23" y2="15" />
                                     </svg>
                                     System: {intErrorCategory.title}
                                 </span>
@@ -290,11 +290,11 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                             )}
 
                             {micStatus === 'failed' && micErrorCategory && (
-                                <span className="flex items-center gap-1.5 text-red-400 font-medium tracking-wide truncate max-w-[44%]">
-                                    <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
-                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                                        <line x1="12" y1="19" x2="12" y2="22"/>
+                                <span className="flex items-center gap-1 text-red-400 font-medium tracking-wide truncate max-w-[44%]">
+                                    <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                        <line x1="12" y1="19" x2="12" y2="22" />
                                     </svg>
                                     Mic: {micErrorCategory.title}
                                 </span>
@@ -309,10 +309,10 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                         setExpanded(!expanded);
                                     }
                                 }}
-                                className="absolute right-1 flex items-center justify-center w-6 h-6 rounded-md text-red-400/70 hover:text-red-400 hover:bg-red-500/[0.12] transition-all duration-200 flex-shrink-0"
+                                className="absolute right-0.5 flex items-center justify-center w-5 h-5 rounded text-red-400/70 hover:text-red-400 hover:bg-red-500/[0.12] transition-all duration-200 flex-shrink-0"
                             >
                                 <svg
-                                    className={`w-3 h-3 transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}
+                                    className={`w-2.5 h-2.5 transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`}
                                     viewBox="0 0 24 24"
                                     fill="none"
                                     stroke="currentColor"
@@ -343,20 +343,17 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <div className="relative flex items-center justify-center w-5 h-5">
-                                        <div className={`absolute inset-0 rounded-full ${
-                                            anyFailed ? 'bg-red-500/20 animate-pulse' : anyReconnecting ? 'bg-amber-500/20' : 'bg-sky-500/20'
-                                        }`} />
-                                        <div className={`w-2 h-2 rounded-full ${
-                                            anyFailed ? 'bg-red-400' : anyReconnecting ? 'bg-amber-400' : 'bg-sky-400'
-                                        }`} />
+                                        <div className={`absolute inset-0 rounded-full ${anyFailed ? 'bg-red-500/20 animate-pulse' : anyReconnecting ? 'bg-amber-500/20' : 'bg-sky-500/20'
+                                            }`} />
+                                        <div className={`w-2 h-2 rounded-full ${anyFailed ? 'bg-red-400' : anyReconnecting ? 'bg-amber-400' : 'bg-sky-400'
+                                            }`} />
                                     </div>
                                     <span className="text-[11px] font-semibold tracking-[0.08em] uppercase overlay-text-muted">
                                         Audio Diagnostics
                                     </span>
                                 </div>
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                                    anyFailed ? 'bg-red-500/20 text-red-400/80' : anyReconnecting ? 'bg-amber-500/20 text-amber-400/80' : 'bg-sky-500/20 text-sky-400/80'
-                                }`}>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full ${anyFailed ? 'bg-red-500/20 text-red-400/80' : anyReconnecting ? 'bg-amber-500/20 text-amber-400/80' : 'bg-sky-500/20 text-sky-400/80'
+                                    }`}>
                                     {anyFailed ? 'Issues Detected' : anyReconnecting ? 'Reconnecting' : 'Healthy'}
                                 </span>
                             </div>
@@ -370,21 +367,21 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                     errorCategory={intErrorCategory}
                                     iconConnected={
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
                                         </svg>
                                     }
                                     iconReconnecting={
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                                         </svg>
                                     }
                                     iconFailed={
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                                            <line x1="23" y1="9" x2="17" y2="15"/>
-                                            <line x1="17" y1="9" x2="23" y2="15"/>
+                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                                            <line x1="23" y1="9" x2="17" y2="15" />
+                                            <line x1="17" y1="9" x2="23" y2="15" />
                                         </svg>
                                     }
                                 />
@@ -396,21 +393,21 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                     errorCategory={micErrorCategory}
                                     iconConnected={
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <polyline points="20 6 9 17 4 12"/>
+                                            <polyline points="20 6 9 17 4 12" />
                                         </svg>
                                     }
                                     iconReconnecting={
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                                         </svg>
                                     }
                                     iconFailed={
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <line x1="1" y1="1" x2="23" y2="23"/>
-                                            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
-                                            <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
-                                            <line x1="12" y1="19" x2="12" y2="22"/>
-                                            <line x1="8" y1="23" x2="16" y2="23"/>
+                                            <line x1="1" y1="1" x2="23" y2="23" />
+                                            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                                            <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                                            <line x1="12" y1="19" x2="12" y2="22" />
+                                            <line x1="8" y1="23" x2="16" y2="23" />
                                         </svg>
                                     }
                                 />
@@ -421,11 +418,10 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                                     <button
                                         onClick={handleCopy}
                                         aria-label="Copy STT error details"
-                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-semibold tracking-wide transition-all duration-200 interaction-press ${
-                                            copied
+                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-semibold tracking-wide transition-all duration-200 interaction-press ${copied
                                                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                                                 : 'bg-white/5 hover:bg-white/10 overlay-text-secondary hover:overlay-text-primary border border-white/5 hover:border-white/15'
-                                        }`}
+                                            }`}
                                     >
                                         {copied ? (
                                             <>
