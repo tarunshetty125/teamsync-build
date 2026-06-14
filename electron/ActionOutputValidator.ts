@@ -120,6 +120,40 @@ function hasArchitectureJson(content: string): boolean {
     return /architecture_json\s*:?\s*\{[\s\S]*"diagram"\s*:[\s\S]*"nodes"\s*:[\s\S]*"edges"\s*:/i.test(content);
 }
 
+/**
+ * Normalize an ID the same way the renderer's cleanId() does so that
+ * validator edge-endpoint checks match the renderer's tolerance.
+ */
+function validatorCleanId(value: string): string {
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Coerce an unknown node kind to a known kind using the same heuristics
+ * the renderer uses in architectureSchema.ts → coerceKind(). This prevents
+ * the validator from rejecting responses the renderer can handle fine.
+ */
+function validatorCoerceKind(kind: string, label: string): string | null {
+    const allowedKinds = new Set(['client', 'gateway', 'service', 'database', 'cache', 'queue', 'storage', 'external']);
+    const normalized = kind.trim().toLowerCase();
+    if (allowedKinds.has(normalized)) return normalized;
+
+    const l = label.toLowerCase();
+    if (/\b(client|mobile|web|browser|user|app)\b/.test(l)) return 'client';
+    if (/\b(gateway|load balancer|lb|edge|ingress|api)\b/.test(l)) return 'gateway';
+    if (/\b(redis|cache|memcache)\b/.test(l)) return 'cache';
+    if (/\b(kafka|queue|pubsub|pub\/sub|sqs|rabbit)\b/.test(l)) return 'queue';
+    if (/\b(db|database|postgres|mysql|mongo|dynamo|cassandra)\b/.test(l)) return 'database';
+    if (/\b(s3|blob|object storage|cdn|storage)\b/.test(l)) return 'storage';
+    if (/\b(third party|external|partner|payment|maps|email|sms)\b/.test(l)) return 'external';
+    // Fall back to 'service' — the renderer does the same
+    return 'service';
+}
+
 function validateArchitectureJsonContract(content: string): { valid: true } | { valid: false; issues: string[] } {
     const fenced = content.match(/```[ \t]*architecture_json[ \t]*\n([\s\S]*?)\n```/i);
     if (!fenced?.[1]?.trim()) {
@@ -148,7 +182,6 @@ function validateArchitectureJsonContract(content: string): { valid: true } | { 
     if (nodes.length < 12) return { valid: false, issues: ['system_design_architecture_json_too_few_nodes'] };
     if (edges.length < 1) return { valid: false, issues: ['system_design_architecture_json_needs_edges'] };
 
-    const allowedKinds = new Set(['client', 'gateway', 'service', 'database', 'cache', 'queue', 'storage', 'external']);
     const nodeIds = new Set<string>();
     for (const rawNode of nodes) {
         if (!rawNode || typeof rawNode !== 'object') return { valid: false, issues: ['system_design_architecture_json_bad_node'] };
@@ -156,23 +189,37 @@ function validateArchitectureJsonContract(content: string): { valid: true } | { 
         if (typeof node.id !== 'string' || typeof node.label !== 'string' || typeof node.kind !== 'string') {
             return { valid: false, issues: ['system_design_architecture_json_bad_node'] };
         }
-        if (!allowedKinds.has(node.kind)) return { valid: false, issues: ['system_design_architecture_json_bad_node_kind'] };
+        // Coerce unknown kinds to known kinds the same way the renderer does,
+        // instead of hard-failing the entire response.
+        const coerced = validatorCoerceKind(node.kind, node.label);
+        if (!coerced) return { valid: false, issues: ['system_design_architecture_json_bad_node_kind'] };
         for (const optionalTextField of ['technology', 'purpose', 'layer', 'latency', 'failureMode']) {
             if (node[optionalTextField] !== undefined && typeof node[optionalTextField] !== 'string') {
                 return { valid: false, issues: ['system_design_architecture_json_bad_node_metadata'] };
             }
         }
+        // Store both the raw ID and the normalized ID so edge lookups work
+        // even when the LLM uses slightly different casing/formatting.
         nodeIds.add(node.id);
+        nodeIds.add(validatorCleanId(node.id));
     }
 
+    let skippedEdges = 0;
     for (const rawEdge of edges) {
         if (!rawEdge || typeof rawEdge !== 'object') return { valid: false, issues: ['system_design_architecture_json_bad_edge'] };
         const edge = rawEdge as Record<string, unknown>;
         if (typeof edge.source !== 'string' || typeof edge.target !== 'string') {
             return { valid: false, issues: ['system_design_architecture_json_bad_edge'] };
         }
-        if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target) || edge.source === edge.target) {
-            return { valid: false, issues: ['system_design_architecture_json_bad_edge_endpoint'] };
+        // Check both raw and normalized IDs to match the renderer's tolerance.
+        const sourceOk = nodeIds.has(edge.source) || nodeIds.has(validatorCleanId(edge.source));
+        const targetOk = nodeIds.has(edge.target) || nodeIds.has(validatorCleanId(edge.target));
+        const isSelfLoop = edge.source === edge.target || validatorCleanId(edge.source) === validatorCleanId(edge.target);
+        if (!sourceOk || !targetOk || isSelfLoop) {
+            // Skip bad edges instead of hard-failing the entire response.
+            // The renderer already gracefully skips unknown endpoints.
+            skippedEdges++;
+            continue;
         }
         if (edge.label !== undefined && typeof edge.label !== 'string') {
             return { valid: false, issues: ['system_design_architecture_json_bad_edge_label'] };
@@ -182,6 +229,11 @@ function validateArchitectureJsonContract(content: string): { valid: true } | { 
                 return { valid: false, issues: ['system_design_architecture_json_bad_edge_metadata'] };
             }
         }
+    }
+
+    // Only fail if ALL edges are invalid (no connectivity at all)
+    if (edges.length > 0 && skippedEdges === edges.length) {
+        return { valid: false, issues: ['system_design_architecture_json_bad_edge_endpoint'] };
     }
 
     return { valid: true };

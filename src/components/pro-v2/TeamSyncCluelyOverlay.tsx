@@ -249,9 +249,11 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 flexDirection: 'column',
                 alignItems: 'center',
                 width: '100%',
+                maxHeight: '100vh',
                 margin: '0 auto',
                 padding: '28px 8px 8px',
                 minHeight: 0,
+                overflow: 'hidden',
                 background: 'transparent',
                 opacity: visualOverlayOpacity,
                 transition: 'opacity 180ms ease',
@@ -342,8 +344,11 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                             width: responsiveLayout.contentWidth,
                             maxWidth: '100%',
                             gap: responsiveLayout.panelGap,
+                            flex: '1 1 auto',
+                            minHeight: 0,
+                            overflow: 'hidden',
                             flexDirection: responsiveLayout.stacked ? 'column' : 'row',
-                            alignItems: responsiveLayout.stacked ? 'stretch' : 'flex-start',
+                            alignItems: responsiveLayout.stacked ? 'stretch' : 'stretch',
                         }}
                     >
                         <ProInsightsPanel

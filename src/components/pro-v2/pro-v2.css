@@ -3,6 +3,22 @@
    Crisp translucency · Native depth · Rim lighting
    ============================================================ */
 
+/* ── Global box-sizing for pro-v2 ─────────────────────────── */
+/* Without border-box, padding inflates elements beyond their
+   constrained parent widths, clipping the right edge.       */
+
+.v2-surface-response,
+.v2-surface-response *,
+.v2-surface-insights,
+.v2-surface-insights *,
+.v2-panels-row,
+.v2-panels-row *,
+.v2-response-body,
+.v2-response-body *,
+.v2-response-scroll {
+  box-sizing: border-box;
+}
+
 /* ── Shared glass tokens ──────────────────────────────────── */
 
 :root {
@@ -191,11 +207,13 @@
 
 .v2-panels-row {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: var(--v2-panel-gap, 7px);
   margin-top: 8px;
   width: var(--v2-content-max-width, auto);
   max-width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -3321,16 +3339,18 @@
 }
 
 .v2-response-scroll {
-  max-height: min(72vh, 660px);
-  padding: 8px 34px 26px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(56vh, 520px);
+  padding: 8px 20px 36px;
   overflow-y: auto;
-  overflow-x: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
 }
 
 .v2-response-scroll--system-design {
-  max-height: min(76vh, 700px);
-  padding: 10px 26px 24px 38px;
+  max-height: min(60vh, 560px);
+  padding: 10px 20px 34px 26px;
 }
 
 /* ── Response Source Pill ──────────────────────────────────── */
