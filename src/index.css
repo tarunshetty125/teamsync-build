@@ -1447,26 +1447,7 @@ html[data-platform="linux"] body {
   will-change: opacity, transform;
 }
 
-/* ── Settings right panel custom dark palette ───────────────────────────── */
-.settings-right-surface {
-  --bg-main: #0A0A0A;
-  --bg-card: #121212;
-  --bg-elevated: #121212;
-  --bg-input: #121212;
-  --bg-component: #121212;
-  --bg-item-surface: #121212;
-  --bg-item-active: #181818;
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-muted: rgba(255, 255, 255, 0.06);
-}
-
-.settings-right-surface :where(button, [role='button'], a, .group):hover {
-  --bg-elevated: #181818;
-  --bg-input: #181818;
-  --bg-component: #181818;
-  --bg-item-surface: #181818;
-  --bg-item-active: #181818;
-}
+/* ── Settings right panel — inherits theme tokens from root ──────────── */
 
 @media (prefers-reduced-motion: reduce) {
   .launcher-hero-studio-glow,

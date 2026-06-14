@@ -605,10 +605,6 @@ export class WindowHelper {
         }
       });
 
-      this.overlayWindow.on('blur', () => {
-        this.scheduleOverlayExternalBlurPassthrough();
-      });
-
       this.overlayWindow.on('close', (e) => {
         if (this.overlayWindow?.isVisible()) {
           e.preventDefault();

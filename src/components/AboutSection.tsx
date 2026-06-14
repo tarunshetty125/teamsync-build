@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import {
     Github, Twitter, Shield, Cpu, Database,
-    Heart, Linkedin, Instagram, Mail, MicOff, Star, Bug, Globe, Sparkles, Zap, Camera, LayoutGrid, User
+    Heart, Linkedin, Instagram, Mail, MicOff, Star, Bug, Globe, Sparkles, Zap, Camera, LayoutGrid, User,
+    Layers, Palette, Settings, SlidersHorizontal
 } from 'lucide-react';
 import tarunPhoto from '../assets/icon.png';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
@@ -61,7 +62,69 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                 <h3 className="text-lg font-bold text-text-primary mb-1">About Quietly</h3>
                 <p className="text-sm text-text-secondary">Designed to be invisible, intelligent, and trusted.</p>
             </div>
-                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.6 (Upcoming)</h4>
+            {/* What's New v2.7 */}
+            <div>
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.7</h4>
+                <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden mb-6">
+                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400 shrink-0">
+                                <Layers size={20} />
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Overlay Pro (V2)</h5>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    A completely redesigned overlay experience with a wider, panel-based layout, response history, drag-to-resize, and a floating control strip — built for power users who need more space and context during live sessions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-400 shrink-0">
+                                <Palette size={20} />
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Unified Dark &amp; Light Theme</h5>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    A new theme-aware design system powers every surface — Settings, Launcher, and Overlay all share the same visual language. Switch between dark and light modes and everything follows.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                                <Settings size={20} />
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Advanced Settings Configuration</h5>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    Redesigned settings with granular controls for audio devices, STT providers, API keys, overlay opacity, keybinds, privacy permissions, and updater cache management — all in one unified panel.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-3 bg-bg-card/50">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 shrink-0">
+                                <SlidersHorizontal size={20} />
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Adaptive Behavioural Modes</h5>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    Quietly now automatically detects your meeting context and adjusts its AI persona in real time — switching between Interview, Sales, Technical, and other modes based on the conversation flow. Manual override is always available.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.6</h4>
                 <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden mb-6">
                     <div className="p-3 border-b border-border-subtle bg-bg-card/50">
                         <div className="flex items-start gap-4">
@@ -133,69 +196,6 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                         </div>
                     </div>
                 </div>
-
-
-            {/* What's New Section */}
-            <div>
-                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.5</h4>
-                <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden">
-                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
-                                <LayoutGrid size={20} />
-                            </div>
-                            <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Modes Manager</h5>
-                                <p className="text-xs text-text-secondary leading-relaxed">
-                                    Seven specialized AI personas — Interview, Sales, Recruiting, Team Meet, Lecture, Technical, and General. Each mode injects a tailored system prompt, reference files, and smart note sections into every response.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 shrink-0">
-                                <User size={20} />
-                            </div>
-                            <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Custom Context in Profile Intelligence</h5>
-                                <p className="text-xs text-text-secondary leading-relaxed">
-                                    A free-form textarea in Profile Intelligence lets you inject any personal context — sales stats, product notes, LeetCode patterns, preferences — into every AI call as a structured block. Auto-saves as you type.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
-                                <Shield size={20} />
-                            </div>
-                            <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Real-Time Pro License Sync</h5>
-                                <p className="text-xs text-text-secondary leading-relaxed">
-                                    Pro feature gates (Modes, Profile Intelligence) now update instantly when you activate or deactivate a license — no restart needed. Active mode is automatically cleared on license loss.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-3 bg-bg-card/50">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
-                                <Zap size={20} />
-                            </div>
-                            <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">STT Stability & Resilience</h5>
-                                <p className="text-xs text-text-secondary leading-relaxed">
-                                    Deepgram reconnect storms are now prevented via exponential backoff and connection staggering. Server-side key pooling supports up to 6 Deepgram and ElevenLabs keys with automatic rotation on failure.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             {/* Architecture Section */}
             <div>

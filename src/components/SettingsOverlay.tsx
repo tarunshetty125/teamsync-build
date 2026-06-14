@@ -2800,28 +2800,21 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             damping: 32,
                             mass: 1
                         }}
-                        className="relative h-[74vh] max-h-[680px] w-[84vw] max-w-[860px] overflow-hidden rounded-[22px] border border-border-subtle bg-bg-elevated shadow-[0_28px_88px_rgba(0,0,0,0.40),inset_0_1px_0_rgba(255,255,255,0.06)]"
+                        className="relative h-[74vh] max-h-[680px] w-[84vw] max-w-[860px] overflow-hidden rounded-[22px] border border-border-subtle bg-bg-primary shadow-[0_20px_60px_rgba(0,0,0,0.25),0_0_0_1px_rgba(0,0,0,0.05)]"
                     >
                         <div
                             id="settings-panel"
                             className="relative z-10 flex h-full w-full min-w-0"
                             style={{ visibility: isPreviewingOpacity ? 'hidden' : 'visible' }}
                         >
-                            <div
-                                aria-hidden="true"
-                                className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_0%,rgba(59,130,246,0.10),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.035),transparent_26%)]"
-                            />
-                            <div
-                                aria-hidden="true"
-                                className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                            />
+
                             {/* Sidebar */}
-                            <div className="flex w-[210px] shrink-0 flex-col border-r border-white/10 bg-black text-white">
-                                <div className="px-4 pt-4 pb-3 border-b border-white/10">
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white">Quietly</p>
+                            <div className="flex w-[210px] shrink-0 flex-col border-r border-border-subtle bg-bg-secondary text-text-primary">
+                                <div className="px-4 pt-4 pb-3 border-b border-border-subtle">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">Quietly</p>
                                     <div className="mt-1.5 flex items-center justify-between gap-3">
-                                        <h2 className="text-[17px] font-semibold tracking-tight text-white">Settings</h2>
-                                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${settingsHeaderBadge.className} !text-white`}>
+                                        <h2 className="text-[17px] font-semibold tracking-tight text-text-primary">Settings</h2>
+                                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${settingsHeaderBadge.className}`}>
                                             {isPremium && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
                                             {settingsHeaderBadge.label}
                                         </span>
@@ -2832,7 +2825,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                     <nav className="space-y-4" aria-label="Settings sections">
                                         {sidebarGroups.map((group) => (
                                             <div key={group.label}>
-                                                <div className="px-2 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-white">
+                                                <div className="px-2 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">
                                                     {group.label}
                                                 </div>
                                                 <div className="space-y-0.5">
@@ -2844,23 +2837,23 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 onClick={() => openSettingsSection(item.id)}
                                                                 aria-current={isActive ? 'page' : undefined}
                                                                 className={`group relative w-full overflow-hidden rounded-xl px-2.5 py-2.5 text-left text-[12.5px] font-medium transition-colors duration-200 flex items-center gap-2.5 active:scale-[0.99] ${isActive
-                                                                    ? 'text-white'
-                                                                    : 'text-white hover:bg-white/10'
+                                                                    ? 'text-text-primary'
+                                                                    : 'text-text-secondary hover:bg-bg-item-active/50 hover:text-text-primary'
                                                                     }`}
                                                             >
                                                                 {isActive && (
                                                                     <motion.span
                                                                         layoutId="settings-sidebar-active"
-                                                                        className="absolute inset-0 rounded-xl border border-white/15 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]"
+                                                                        className="absolute inset-0 rounded-xl border border-border-subtle bg-bg-item-active shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                                                                         transition={sidebarIndicatorTransition}
                                                                     />
                                                                 )}
-                                                                <span className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white transition-colors ${isActive ? 'bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'group-hover:bg-white/10'}`}>
+                                                                <span className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors ${isActive ? 'bg-bg-input shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]' : 'group-hover:bg-bg-input'}`}>
                                                                     {item.icon}
                                                                 </span>
                                                                 <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
                                                                 {item.meta && (
-                                                                    <span className={`relative z-10 max-w-[72px] truncate ${statusChipBaseClass} ${isActive ? 'border-white/20 bg-white/10 text-white' : 'border-white/15 bg-white/10 text-white'}`}>
+                                                                    <span className={`relative z-10 max-w-[72px] truncate ${statusChipBaseClass} ${isActive ? 'border-border-subtle bg-bg-input text-text-primary' : 'border-border-subtle bg-bg-input text-text-secondary'}`}>
                                                                         {item.meta}
                                                                     </span>
                                                                 )}
@@ -2873,7 +2866,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                     </nav>
                                 </div>
 
-                                <div className="mt-auto p-4 border-t border-white/10">
+                                <div className="mt-auto p-4 border-t border-border-subtle">
 
                                     <AnimatePresence mode="wait" initial={false}>
                                         {showQuitConfirm ? (
@@ -2889,13 +2882,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     <AlertCircle size={15} />
                                                     Meeting in progress
                                                 </div>
-                                                <p className="text-[12px] text-white mt-1">
+                                                <p className="text-[12px] text-text-secondary mt-1">
                                                     Quitting will end the active session and stop recording.
                                                 </p>
                                                 <div className="flex justify-end gap-2 mt-3">
                                                     <button
                                                         onClick={() => setShowQuitConfirm(false)}
-                                                        className="text-[12px] px-3 py-1.5 text-white hover:bg-white/10 transition-colors rounded-lg"
+                                                        className="text-[12px] px-3 py-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors rounded-lg"
                                                     >
                                                         Cancel
                                                     </button>
@@ -2926,14 +2919,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         window.electronAPI.quitApp();
                                                     }
                                                 }}
-                                                className="w-full text-left px-3 py-2 mt-1 rounded-xl text-[13px] font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-3"
+                                                className="w-full text-left px-3 py-2 mt-1 rounded-xl text-[13px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors flex items-center gap-3"
                                             >
                                                 <LogOut size={16} className="text-red-400" /> Quit Quietly
                                             </motion.button>
                                         )}
                                     </AnimatePresence>
-                                    <button onClick={onClose} className="group mt-2 w-full text-left px-3 py-2 rounded-xl text-[13px] font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-3">
-                                        <X size={18} className="text-white group-hover:text-red-400 transition-colors" /> Close
+                                    <button onClick={onClose} className="group mt-2 w-full text-left px-3 py-2 rounded-xl text-[13px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors flex items-center gap-3">
+                                        <X size={18} className="text-text-tertiary group-hover:text-red-400 transition-colors" /> Close
                                     </button>
                                 </div>
                             </div>
