@@ -667,6 +667,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         currentSourceRef.current = undefined;
         manualSessionModeRef.current = null;
         persistManualSessionMode(null);
+        setActiveModeLabel(null);
+        setActiveModeTemplateId(null);
         setSession({ currentMode: 'general' });
 
         resetRecommendation();

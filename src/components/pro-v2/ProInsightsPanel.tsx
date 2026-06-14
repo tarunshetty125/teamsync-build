@@ -181,8 +181,11 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
             style={{
                 width: `${widthPx}px`,
                 maxWidth: '100%',
+                flex: `0 0 ${widthPx}px`,
+                alignSelf: 'flex-start',
                 display: 'flex',
                 flexDirection: 'column',
+                overflow: 'hidden',
                 willChange: 'transform, opacity',
             }}
         >
