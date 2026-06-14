@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cluely Glass — Exact Clone</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    height: 100vh;
+    overflow: hidden;
+    color: rgba(255,255,255,0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Warm background — simulates a person on video call / warm room */
+  .desktop {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: url('./wallpaper.png') center/cover no-repeat;
+  }
+
+  /* ── OVERLAY ── */
+  .overlay {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 420px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     CLUELY GLASS — Dark frosted. ~0.78-0.85 alpha.
+     Heavy blur. Warm bg tints it subtly.
+     ═══════════════════════════════════════════════ */
+
+  /* ── TOOLBAR ── Nearly opaque dark pill */
+  .toolbar {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 44px;
+    padding: 0 4px;
+    border-radius: 14px;
+    background: rgba(18, 18, 22, 0.52);
+    backdrop-filter: blur(60px) saturate(200%);
+    -webkit-backdrop-filter: blur(60px) saturate(200%);
+    border: 0.5px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.10),
+      0 0 0 0.5px rgba(0, 0, 0, 0.40),
+      0 4px 16px rgba(0, 0, 0, 0.30),
+      0 12px 40px rgba(0, 0, 0, 0.25);
+  }
+  .toolbar > * { position: relative; z-index: 1; }
+
+  /* ── CONTENT PANEL ── Dark frosted glass */
+  .panel {
+    position: relative;
+    isolation: isolate;
+    border-radius: 16px;
+    overflow: hidden;
+    background: rgba(18, 18, 22, 0.48);
+    backdrop-filter: blur(60px) saturate(200%);
+    -webkit-backdrop-filter: blur(60px) saturate(200%);
+    border: 0.5px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.08),
+      inset 0 -0.5px 0 rgba(0, 0, 0, 0.30),
+      0 0 0 0.5px rgba(0, 0, 0, 0.35),
+      0 4px 16px rgba(0, 0, 0, 0.25),
+      0 16px 48px rgba(0, 0, 0, 0.30),
+      0 24px 80px rgba(0, 0, 0, 0.20);
+  }
+  .panel > * { position: relative; z-index: 1; }
+  .panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 30%);
+    z-index: 2;
+  }
+
+  /* ═══════════════════════════════════════════════
+     UI CHROME — Matching reference exactly
+     ═══════════════════════════════════════════════ */
+
+  /* Toolbar items */
+  .tb-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    padding: 0 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.85);
+    cursor: pointer;
+    border-right: 0.5px solid rgba(255,255,255,0.06);
+    gap: 6px;
+    transition: background 0.12s;
+    white-space: nowrap;
+  }
+  .tb-item:first-child { border-radius: 12px 0 0 12px; padding-left: 12px; }
+  .tb-item:last-child { border-right: none; border-radius: 0 12px 12px 0; padding-right: 12px; }
+  .tb-item:hover { background: rgba(255,255,255,0.04); }
+
+  .tb-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.55);
+    cursor: pointer;
+    border-right: 0.5px solid rgba(255,255,255,0.06);
+    transition: all 0.12s;
+  }
+  .tb-icon:last-child { border-right: none; }
+  .tb-icon:hover { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.8); }
+
+  .pause-icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.9);
+    margin: 0 4px;
+  }
+
+  .wf { display: flex; align-items: center; gap: 1.5px; height: 14px; margin-right: 4px; }
+  .wf i { display: block; width: 2px; border-radius: 1px; background: rgba(255,255,255,0.55); animation: w 1s ease-in-out infinite; font-style: normal; }
+  .wf i:nth-child(1) { height: 4px; animation-delay: 0s; }
+  .wf i:nth-child(2) { height: 8px; animation-delay: 0.1s; }
+  .wf i:nth-child(3) { height: 12px; animation-delay: 0.2s; }
+  .wf i:nth-child(4) { height: 6px; animation-delay: 0.3s; }
+  @keyframes w { 0%,100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+
+  .timer { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+
+  /* Panel header row */
+  .panel-hdr {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    gap: 8px;
+    border-bottom: 0.5px solid rgba(255,255,255,0.06);
+  }
+  .panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.88);
+  }
+
+  /* Search / context pill */
+  .search-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.06);
+    border: 0.5px solid rgba(255,255,255,0.06);
+    font-size: 12px;
+    color: rgba(255,255,255,0.50);
+    margin-left: auto;
+    cursor: pointer;
+    transition: background 0.12s;
+    overflow: hidden;
+    max-width: 200px;
+  }
+  .search-pill:hover { background: rgba(255,255,255,0.09); }
+  .search-pill .globe {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: rgba(52,211,153,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: rgba(52,211,153,0.9);
+    flex-shrink: 0;
+  }
+  .search-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hdr-icons {
+    display: flex;
+    gap: 2px;
+    margin-left: 6px;
+  }
+  .hdr-ic {
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.30);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .hdr-ic:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.55); }
+
+  /* Response body */
+  .resp-body {
+    padding: 14px 14px 16px;
+  }
+  .resp-body p {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.82);
+    margin-bottom: 10px;
+  }
+  .resp-body p:last-child { margin-bottom: 0; }
+  .resp-body strong { color: rgba(255,255,255,0.95); font-weight: 600; }
+
+  /* Keyboard shortcut badge */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.08);
+    border: 0.5px solid rgba(255,255,255,0.10);
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.50);
+    font-family: -apple-system, system-ui, sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<div class="desktop"></div>
+
+<div class="overlay">
+
+  <!-- TOOLBAR — matches reference exactly -->
+  <div class="toolbar">
+    <div class="tb-item" style="padding: 0 6px;">
+      <div class="pause-icon">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      </div>
+    </div>
+    <div class="tb-item">
+      <div class="wf"><i></i><i></i><i></i><i></i></div>
+      <span class="timer">00:20</span>
+    </div>
+    <div class="tb-item">
+      Ask AI
+    </div>
+    <div class="tb-icon">
+      <span class="kbd">⌘</span>
+    </div>
+    <div class="tb-icon">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 10l-5 5 5 5"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+    </div>
+    <div class="tb-item" style="font-weight: 500;">
+      Show/Hide
+    </div>
+    <div class="tb-icon">
+      <span class="kbd">⌘</span>
+    </div>
+    <div class="tb-icon" style="border-right: none;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </div>
+  </div>
+
+  <!-- CONTENT PANEL -->
+  <div class="panel">
+    <!-- Header row -->
+    <div class="panel-hdr">
+      <span class="panel-title">AI response</span>
+      <div class="search-pill">
+        <div class="globe">🌐</div>
+        <span class="search-text">Search the web for informati...</span>
+      </div>
+      <div class="hdr-icons">
+        <div class="hdr-ic">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </div>
+        <div class="hdr-ic">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="resp-body">
+      <p>On July 14, 2025, Cognition acquired the remainder of Windsurf to integrate into its Devin platform</p>
+      <p>Includes Windsurf's agentic IDE, IP, brand, <strong>$82 M ARR</strong>, 350+ enterprise clients, and full team</p>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
