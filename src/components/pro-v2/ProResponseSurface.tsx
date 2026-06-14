@@ -397,16 +397,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                 </div>
             </div>
 
-            {responseMetaItems.length > 0 && (
-                <div className="v2-response-meta-strip v2-no-drag" aria-label="Response metadata">
-                    {responseMetaItems.map((item) => (
-                        <div className="v2-response-meta-item" key={item.label} title={item.title ?? item.value}>
-                            <span className="v2-response-meta-label">{item.label}</span>
-                            <span className="v2-response-meta-value">{item.value}</span>
-                        </div>
-                    ))}
-                </div>
-            )}
+            {/* Debug metadata hidden for clean UI */}
 
             <div className="v2-response-drag-rail v2-response-drag-rail--left" aria-hidden="true" />
             <div className="v2-response-drag-rail v2-response-drag-rail--right" aria-hidden="true" />

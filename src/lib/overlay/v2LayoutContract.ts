@@ -54,8 +54,8 @@ export const V2_RESPONSE_MIN_WIDTH_MEDIUM = 480;
 export const V2_RESPONSE_MAX_WIDTH_MEDIUM = 760;
 export const V2_STACKED_PANEL_MAX_WIDTH = 720;
 
-export const V2_OVERLAY_WINDOW_DEFAULT_HEIGHT = 520;
-export const V2_OVERLAY_WINDOW_MAX_HEIGHT = 860;
+export const V2_OVERLAY_WINDOW_DEFAULT_HEIGHT = 780;
+export const V2_OVERLAY_WINDOW_MAX_HEIGHT = 1290;
 
 export function clampNumber(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
