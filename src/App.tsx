@@ -498,8 +498,8 @@ const App: React.FC = () => {
       const latestPermissions = usePermissionsStore.getState().status;
       if (!isPermissionStatusOperational(latestPermissions)) {
         const message = latestPermissions?.restartRequired
-          ? 'Please restart TeamSync to finish enabling screen access before starting a meeting.'
-          : `TeamSync needs ${formatBlockingPermissions(latestPermissions)} access before it can start a meeting.`;
+          ? 'Please restart Quietly to finish enabling screen access before starting a meeting.'
+          : `Quietly needs ${formatBlockingPermissions(latestPermissions)} access before it can start a meeting.`;
         setPermissionsStep('permissions');
         setPermissionsError(message);
         return false;
@@ -541,7 +541,7 @@ const App: React.FC = () => {
         const refreshedPermissions = usePermissionsStore.getState().status;
         if (!isPermissionStatusOperational(refreshedPermissions)) {
           setPermissionsStep('permissions');
-          setPermissionsError(result.error || 'Permissions are still blocking TeamSync.');
+          setPermissionsError(result.error || 'Permissions are still blocking Quietly.');
         }
       }
     } catch (err) {
@@ -788,7 +788,7 @@ const App: React.FC = () => {
               className="flex h-full w-full items-center justify-center bg-[#04070d]"
             >
               <div className="flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/66">
-                Preparing TeamSync
+                Preparing Quietly
               </div>
             </motion.div>
           ) : null}

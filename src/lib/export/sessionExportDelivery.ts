@@ -113,7 +113,7 @@ export function buildSessionExportDefaultFileName(
         ? new Date(generatedAt).toISOString()
         : new Date().toISOString();
     const safeTimestamp = sanitizeFileNamePart(timestamp.replace(/\.\d{3}Z$/, 'Z'));
-    return `TeamSync Session Report - ${safeTimestamp}.${getSessionExportFileExtension(format)}`;
+    return `Quietly Session Report - ${safeTimestamp}.${getSessionExportFileExtension(format)}`;
 }
 
 function serializedByteLength(value: string): number {

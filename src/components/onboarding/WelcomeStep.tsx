@@ -180,15 +180,15 @@ export function WelcomeStep({ onContinue }: WelcomeStepProps) {
         <div className="relative">
           <div className="inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-bg-input px-2.5 py-1 text-[9px] font-semibold uppercase tracking-widest text-text-secondary">
             <Layers className="h-3 w-3" />
-            TeamSync Realtime Intelligence
+            Quietly Realtime Intelligence
           </div>
 
           <h1 className="mt-4 text-[22px] font-medium leading-[1.15] tracking-[-0.03em] text-text-primary">
-            TeamSync needs permissions to power realtime meeting intelligence.
+            Quietly needs permissions to power realtime meeting intelligence.
           </h1>
 
           <p className="mt-3 text-[13px] leading-relaxed text-text-secondary">
-            Grant these once so TeamSync can capture meetings, understand shared screens, and keep the overlay live while you work.
+            Grant these once so Quietly can capture meetings, understand shared screens, and keep the overlay live while you work.
           </p>
 
           <div className="mt-4 flex flex-wrap gap-1.5">

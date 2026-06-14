@@ -85,8 +85,8 @@ const UpdateBanner: React.FC = () => {
                 const dmgSuffix = isArm ? 'arm64' : 'x64';
                 setInstructionsArch(dmgSuffix);
                 const version = updateInfo?.version ? updateInfo.version.replace(/^v/, '') : '2.0.8';
-                const dmgFileName = isArm ? `TeamSync-${version}-arm64.dmg` : `TeamSync-${version}.dmg`;
-                const url = `https://github.com/tarunshetty125/TeamSync/releases/download/v${version}/${dmgFileName}`;
+                const dmgFileName = isArm ? `Quietly-${version}-arm64.dmg` : `Quietly-${version}.dmg`;
+                const url = `https://github.com/tarunshetty125/Quietly/releases/download/v${version}/${dmgFileName}`;
                 window.electronAPI.openExternal(url);
                 setStatus('instructions');
             } catch (err) {

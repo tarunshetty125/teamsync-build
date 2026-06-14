@@ -115,8 +115,8 @@ export const STT_PROVIDERS: Record<SttProviderId, SttProviderConfig> = {
     },
     teamsync: {
         id: 'teamsync',
-        name: 'TeamSync Pro (Managed)',
-        description: 'All-in-one managed STT via TeamSync API',
+        name: 'Quietly Pro (Managed)',
+        description: 'All-in-one managed STT via Quietly API',
         endpoint: '', 
         model: '',
         uploadType: 'websocket',

@@ -271,7 +271,7 @@ const StartupSequence: React.FC<StartupSequenceProps> = ({ onComplete, isReady }
                 <motion.div aria-hidden="true" className="teamsync-startup-curtain teamsync-startup-curtain-left absolute inset-y-0 left-0 w-1/2" variants={curtainLeftVariants} />
                 <motion.div aria-hidden="true" className="teamsync-startup-curtain teamsync-startup-curtain-right absolute inset-y-0 right-0 w-1/2" variants={curtainRightVariants} />
             </motion.div>
-            <h1 className="sr-only">TeamSync</h1>
+            <h1 className="sr-only">Quietly</h1>
         </motion.div>
     );
 };

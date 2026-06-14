@@ -1412,16 +1412,12 @@ export class DatabaseManager {
     public seedDemoMeeting() {
         if (!this.db) return;
 
-        // Check if demo meeting already exists
+        // Delete any existing demo meeting so we always seed the latest content
         const existing = this.db.prepare('SELECT id FROM meetings WHERE id = ?').get('demo-meeting');
         if (existing) {
-            console.log('[DatabaseManager] Demo meeting already exists, skipping seed.');
-            return;
+            this.deleteMeeting('demo-meeting');
+            console.log('[DatabaseManager] Deleted old demo meeting for re-seed.');
         }
-
-        // Do NOT flush all meetings. Preserving user data is critical.
-        // If we really need to clean up old demo data, we should delete only that ID.
-        // this.deleteMeeting('demo-meeting'); // Optional safety if we wanted to force update
 
         const demoId = 'demo-meeting';
 
@@ -1433,7 +1429,7 @@ export class DatabaseManager {
 
         const summaryMarkdown = `# Overview
 
-TeamSync is a real-time AI meeting assistant designed to help you stay focused, informed, and fast-moving during calls. Get live insights while you speak, instant answers to questions, and structured notes after every meeting.
+Quietly is a real-time AI meeting assistant designed to help you stay focused, informed, and fast-moving during calls. Get live insights while you speak, instant answers to questions, and structured notes after every meeting.
 
 # Getting Started
 
@@ -1443,7 +1439,7 @@ Join a scheduled meeting and start directly from the meeting notification.
 
 ### During a Meeting
 - Use the **five quick action buttons** for real-time assistance
-- Show or hide TeamSync at any time:
+- Show or hide Quietly at any time:
   - **Mac**: Cmd + B
   - **Windows**: Ctrl + B
 - Move the widget anywhere on your screen by hovering over the top pill and dragging
@@ -1461,7 +1457,7 @@ Join a scheduled meeting and start directly from the meeting notification.
 - **Smart Note Taking**: Automatically captures key points, action items, and structured summaries.
 - **Summary**: A concise high-level brief of the entire meeting.
 - **Transcript**: Full real-time speech-to-text transcript, available during and after the call.
-- **Usage**: Track your interaction history and see how TeamSync assisted you.
+- **Usage**: Track your interaction history and see how Quietly assisted you.
 
 ## Live Insights
 Click **Live Insights** during a call to view:
@@ -1478,7 +1474,7 @@ Click **Live Insights** during a call to view:
 - **Full Screen Screenshot**: Cmd + H
 - **Selective Screenshot**: Cmd + Shift + H
 
-# Making the Most of TeamSync
+# Making the Most of Quietly
 
 ### Custom Context
 Upload resumes, project briefs, sales scripts, or other documents to tailor responses to your workflow. (coming soon).
@@ -1489,7 +1485,7 @@ Go to **Settings → Language Preferences** to:
 - Enable real-time translation during calls
 
 ### Undetectability
-Unlock the **Undetectability** add-on to keep TeamSync invisible during screen sharing.
+Unlock the **Undetectability** add-on to keep Quietly invisible during screen sharing.
 
 # Interface Basics
 
@@ -1523,7 +1519,7 @@ If you don't already have one, follow the steps below to create it.
 ## 3. Create a Service Account
 - Navigate to **IAM & Admin → Service Accounts**
 - Click **Create Service Account**
-- **Name**: teamsync-stt
+- **Name**: quietly-stt
 - **Description**: optional
 
 ## 4. Assign Permissions
@@ -1535,7 +1531,7 @@ If you don't already have one, follow the steps below to create it.
 - Select **JSON**
 - Download the file
 
-**Once downloaded, return to Settings → Credentials in TeamSync and select this file to complete setup.**
+**Once downloaded, return to Settings → Credentials in Quietly and select this file to complete setup.**
 
 # Free Google Cloud Credit (New Users)
 
@@ -1557,17 +1553,17 @@ teamsync-ai.vercel.app`;
 
         const demoMeeting: Meeting = {
             id: demoId,
-            title: "TeamSync Demo & Guide",
+            title: "Quietly Demo & Guide",
             date: today.toISOString(),
             duration: "5:00",
-            summary: "Complete guide to using TeamSync - your real-time AI meeting assistant.",
+            summary: "Complete guide to using Quietly - your real-time AI meeting assistant.",
             detailedSummary: {
                 overview: summaryMarkdown,
                 actionItems: [],
                 keyPoints: []
             },
             transcript: [
-                { speaker: 'interviewer', text: "Welcome to TeamSync! Let me show you how it works.", timestamp: 0 },
+                { speaker: 'interviewer', text: "Welcome to Quietly! Let me show you how it works.", timestamp: 0 },
                 { speaker: 'user', text: "Thanks! I'm excited to try it out.", timestamp: 5000 },
                 { speaker: 'interviewer', text: "You have 5 quick action buttons. 'What to answer' listens to the conversation and suggests what you should say.", timestamp: 10000 },
                 { speaker: 'user', text: "That sounds helpful for interviews.", timestamp: 18000 },
@@ -1577,13 +1573,13 @@ teamsync-ai.vercel.app`;
                 { speaker: 'interviewer', text: "'Follow Up Questions' suggests questions you can ask. 'Answer' lets you speak a question and get an instant response.", timestamp: 35000 },
                 { speaker: 'user', text: "Can I take screenshots during calls?", timestamp: 45000 },
                 { speaker: 'interviewer', text: "Yes! Press Cmd+H for full screen or Cmd+Shift+H to select an area. The AI will analyze it and help you.", timestamp: 50000 },
-                { speaker: 'user', text: "How do I hide TeamSync during screen share?", timestamp: 60000 },
+                { speaker: 'user', text: "How do I hide Quietly during screen share?", timestamp: 60000 },
                 { speaker: 'interviewer', text: "Press Cmd+B to toggle visibility anytime. You can also enable undetectable mode in settings.", timestamp: 65000 },
                 { speaker: 'user', text: "This is amazing. What happens after the call?", timestamp: 75000 },
                 { speaker: 'interviewer', text: "You get detailed meeting notes with action items, key points, full transcript, and a log of all AI interactions.", timestamp: 80000 }
             ],
             usage: [
-                { type: 'assist', timestamp: 15000, question: 'What features does TeamSync have?', answer: 'TeamSync offers 5 quick action buttons, screenshot analysis, real-time transcription, and comprehensive meeting notes.' },
+                { type: 'assist', timestamp: 15000, question: 'What features does Quietly have?', answer: 'Quietly offers 5 quick action buttons, screenshot analysis, real-time transcription, and comprehensive meeting notes.' },
                 { type: 'followup', timestamp: 40000, question: 'How do the action buttons work?', answer: 'Each button serves a specific purpose: suggest answers, clarify questions, recap conversations, generate follow-up questions, or get instant voice-to-answer responses.' }
             ],
             isProcessed: true

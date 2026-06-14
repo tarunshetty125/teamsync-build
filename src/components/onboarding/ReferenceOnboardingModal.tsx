@@ -66,8 +66,8 @@ const PERSONA_OPTIONS: PersonaOption[] = [
   },
   {
     id: 'explore_teamsync',
-    label: 'Explore TeamSync',
-    description: 'Explore how TeamSync fits in with your workflow',
+    label: 'Explore Quietly',
+    description: 'Explore how Quietly fits in with your workflow',
     glow: 'radial-gradient(circle at 84% 84%, rgba(66,219,169,0.78), rgba(12,54,42,0.82) 45%, rgba(5,5,5,0.04) 74%)',
     border: 'rgba(51,202,161,0.78)',
   },
@@ -426,7 +426,7 @@ export function ReferenceOnboardingModal({
                     Which one fits you best?
                   </h2>
                   <p className="relative mx-auto mt-[18px] max-w-[330px] text-[14px] font-semibold leading-[1.45] text-white/56">
-                    TeamSync adapts to you and your meetings - fitting into your daily rhythm.
+                    Quietly adapts to you and your meetings - fitting into your daily rhythm.
                   </p>
                 </motion.div>
 
@@ -523,7 +523,7 @@ export function ReferenceOnboardingModal({
 
                 <motion.div variants={contentItemVariants} className="relative mt-[32px]">
                   <div className="text-[17px] font-bold leading-tight text-white/90">
-                    How did you hear about TeamSync?
+                    How did you hear about Quietly?
                   </div>
                   <div className="mt-[10px]">
                     <ChipGroup
@@ -584,7 +584,7 @@ export function ReferenceOnboardingModal({
                   <Check className="h-6 w-6" strokeWidth={2.4} />
                 </motion.div>
                 <div className="relative mt-6 text-[34px] font-semibold leading-[1.04] text-white/88 drop-shadow-[0_0_10px_rgba(255,255,255,0.24)]">
-                  TeamSync is ready
+                  Quietly is ready
                 </div>
                 <p className="relative mx-auto mt-[14px] max-w-[340px] text-[14px] font-semibold leading-[1.45] text-white/56">
                   Your onboarding is saved. Launch your workspace when you're ready.
@@ -598,7 +598,7 @@ export function ReferenceOnboardingModal({
                   disabled={!completedUser}
                   className="relative mt-[30px] h-[44px] rounded-full border border-white/14 bg-white/[0.92] px-[28px] text-[14px] font-bold text-[#050505] shadow-[0_0_30px_rgba(255,255,255,0.12)] transition-colors duration-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  Launch TeamSync
+                  Launch Quietly
                 </motion.button>
               </motion.div>
             ) : null}

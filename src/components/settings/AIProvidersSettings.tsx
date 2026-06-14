@@ -136,7 +136,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
     const activeOption = options[activeOptionIndex] ?? options[selectedOptionIndex];
     const showProviderSections = options.some(option => option.provider);
     const providerLabels: Record<string, string> = {
-        teamsync: 'TeamSync',
+        teamsync: 'Quietly',
         gemini: 'Gemini',
         groq: 'Groq',
         openai: 'OpenAI',
@@ -386,7 +386,7 @@ export const AIProvidersSettings: React.FC = () => {
     const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({});
     const [hasStoredKey, setHasStoredKey] = useState<Record<string, boolean>>({});
     const [bedrockVisionWarning, setBedrockVisionWarning] = useState('');
-    // Fast mode is available with a local Groq key OR via the TeamSync API (server-side Groq pool)
+    // Fast mode is available with a local Groq key OR via the Quietly API (server-side Groq pool)
     const canUseFastMode = !!(hasStoredKey.groq || hasStoredKey.teamsync);
     const [testStatus, setTestStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
     const [testError, setTestError] = useState<Record<string, string>>({});
@@ -648,7 +648,7 @@ export const AIProvidersSettings: React.FC = () => {
         }
     }, []);
 
-    // Effect to enforce fast mode disabled if neither Groq key nor TeamSync API is configured.
+    // Effect to enforce fast mode disabled if neither Groq key nor Quietly API is configured.
     // Guard with credentialsLoaded so this never fires during the initial async load phase
     // (when hasStoredKey is still empty and canUseFastMode is incorrectly false).
     useEffect(() => {
@@ -1076,7 +1076,7 @@ export const AIProvidersSettings: React.FC = () => {
         const opts: ModelOption[] = [];
 
         if (hasStoredKey.teamsync) {
-            opts.push({ id: 'teamsync', name: 'TeamSync API', provider: 'teamsync' });
+            opts.push({ id: 'teamsync', name: 'Quietly API', provider: 'teamsync' });
         }
 
         for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
@@ -1123,7 +1123,7 @@ export const AIProvidersSettings: React.FC = () => {
         : 'Not configured';
     const activeProviderKey = activeModelOption?.provider || 'custom';
     const activeProviderLabels: Record<string, string> = {
-        teamsync: 'TeamSync API',
+        teamsync: 'Quietly API',
         gemini: 'Gemini',
         groq: 'Groq',
         openai: 'OpenAI',
@@ -1374,7 +1374,7 @@ export const AIProvidersSettings: React.FC = () => {
                 <div className="flex items-center justify-between">
                     <div>
                         <h4 className="text-sm font-semibold text-text-primary">Choose by outcome</h4>
-                        <p className="mt-1 text-xs text-text-secondary">Provider brands stay visible, but the decision starts with what you want TeamSync to do.</p>
+                        <p className="mt-1 text-xs text-text-secondary">Provider brands stay visible, but the decision starts with what you want Quietly to do.</p>
                     </div>
                 </div>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1446,7 +1446,7 @@ export const AIProvidersSettings: React.FC = () => {
                             {/* Fast Response Mode */}
                             <div
                                 className={`bg-bg-input/40 rounded-xl p-5 border border-border-subtle flex items-center justify-between ${!canUseFastMode ? 'opacity-50 grayscale' : ''}`}
-                                title={!canUseFastMode ? "Requires a Groq API Key or TeamSync API to be configured" : ""}
+                                title={!canUseFastMode ? "Requires a Groq API Key or Quietly API to be configured" : ""}
                             >
                                 <div>
                                     <div className="flex items-center gap-2">
@@ -1455,7 +1455,7 @@ export const AIProvidersSettings: React.FC = () => {
                                     </div>
                                     <p className="text-[10px] text-text-secondary mt-0.5">Super fast responses using Groq Llama 3 for text. Multimodal requests still use your Default Model.</p>
                                     {!canUseFastMode && (
-                                        <p className="text-[10px] text-orange-500 mt-0.5 font-medium">Requires a Groq API Key or TeamSync API to be configured.</p>
+                                        <p className="text-[10px] text-orange-500 mt-0.5 font-medium">Requires a Groq API Key or Quietly API to be configured.</p>
                                     )}
                                 </div>
                                 {renderProviderSwitch({
@@ -1464,7 +1464,7 @@ export const AIProvidersSettings: React.FC = () => {
                                     tone: 'orange',
                                     onToggle: async () => {
                                         if (!canUseFastMode) {
-                                            alert("Please configure a Groq API Key or TeamSync API first to enable Fast Response Mode.");
+                                            alert("Please configure a Groq API Key or Quietly API first to enable Fast Response Mode.");
                                             return;
                                         }
                                         const newState = !fastResponseMode;

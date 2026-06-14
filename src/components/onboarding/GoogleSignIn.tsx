@@ -182,7 +182,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
         setState('error');
         setErrorMessage(
           error.message?.includes('connect') || error.message?.includes('fetch')
-            ? 'Could not reach the TeamSync backend. Please try again.'
+            ? 'Could not reach the Quietly backend. Please try again.'
             : error.message || 'Failed to start sign in'
         );
       }
@@ -275,7 +275,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
               <div className="absolute inset-0 w-20 h-20 bg-white/10 rounded-3xl blur-[30px] scale-150" />
               <motion.img
                 src={appIcon}
-                alt="TeamSync"
+                alt="Quietly"
                 className="w-20 h-20 object-contain relative z-10"
                 animate={{
                   filter: [
@@ -490,7 +490,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignInComplete }) => {
               className="mt-12 flex flex-col items-center gap-2"
             >
               <p className="text-[11px] font-sans text-[#9E9E9E] text-center leading-relaxed">
-                By continuing, you agree to TeamSync's Terms of Service and Privacy Policy.
+                By continuing, you agree to Quietly's Terms of Service and Privacy Policy.
               </p>
             </motion.div>
 

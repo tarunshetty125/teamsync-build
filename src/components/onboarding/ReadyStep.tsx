@@ -98,7 +98,7 @@ export function ReadyStep({ onLaunch }: ReadyStepProps) {
               transition={{ delay: 0.25, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
               className="mt-4 text-[32px] font-medium leading-[1.1] tracking-[-0.04em] text-text-primary"
             >
-              TeamSync is ready.
+              Quietly is ready.
             </motion.h2>
 
             <motion.p
@@ -178,7 +178,7 @@ export function ReadyStep({ onLaunch }: ReadyStepProps) {
                 className="relative h-4 w-4 transition-transform duration-300 group-hover:rotate-12"
                 strokeWidth={1.5}
               />
-              <span className="relative">Launch TeamSync</span>
+              <span className="relative">Launch Quietly</span>
             </motion.button>
           </motion.div>
         </div>

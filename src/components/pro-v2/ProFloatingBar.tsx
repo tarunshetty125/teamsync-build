@@ -2,7 +2,7 @@
  * ProFloatingBar.tsx — Surface 1
  * 
  * Floating command pill. Most opaque glass surface.
- * Contains: recording dot, waveform, timer, Ask TeamSync input, screen scan, show/hide, end.
+ * Contains: recording dot, waveform, timer, Ask Quietly input, screen scan, show/hide, end.
  */
 
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
@@ -154,7 +154,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
 
             <div className="v2-bar-sep" />
 
-            {/* Ask TeamSync — fixed width inline input */}
+            {/* Ask Quietly — fixed width inline input */}
             <div className="v2-no-drag v2-bar-input-shell">
                 <Search size={13} strokeWidth={2.2} className="v2-bar-input-icon" aria-hidden="true" />
                 <input
@@ -165,7 +165,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                     onKeyDown={handleInputKeyDown}
                     onKeyUp={e => e.stopPropagation()}
                     onKeyPress={e => e.stopPropagation()}
-                    placeholder={hasAttachments ? 'Ask with context...' : 'Ask TeamSync...'}
+                    placeholder={hasAttachments ? 'Ask with context...' : 'Ask Quietly...'}
                 />
 
                 {/* Send button */}

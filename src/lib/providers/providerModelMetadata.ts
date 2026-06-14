@@ -39,7 +39,7 @@ export interface UiProviderModelMetadata {
 }
 
 export const UI_PROVIDER_LABELS: Record<UiProviderId, string> = {
-    teamsync: 'TeamSync',
+    teamsync: 'Quietly',
     gemini: 'Gemini',
     groq: 'Groq',
     openai: 'OpenAI',

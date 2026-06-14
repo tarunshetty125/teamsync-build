@@ -39,7 +39,7 @@ const ACTIONS: Record<PersonaId, PromptAction[]> = {
     {
       id: 'connect_calendar',
       title: 'Connect Calendar',
-      description: 'Let TeamSync prepare from upcoming meeting context.',
+      description: 'Let Quietly prepare from upcoming meeting context.',
       icon: Calendar,
     },
   ],
@@ -57,11 +57,11 @@ const ACTIONS: Record<PersonaId, PromptAction[]> = {
       icon: Code2,
     },
   ],
-  explore_teamsync: [
+  explore_quietly: [
     {
       id: 'start_first_session',
       title: 'Start First Session',
-      description: 'Open the live overlay and experience TeamSync in context.',
+      description: 'Open the live overlay and experience Quietly in context.',
       icon: Play,
     },
   ],
@@ -94,7 +94,7 @@ export function FirstSuccessPrompt({
 }: FirstSuccessPromptProps) {
   const [busyAction, setBusyAction] = useState<FirstSuccessActionId | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const resolvedPersona = isPersonaId(persona) ? persona : 'explore_teamsync';
+  const resolvedPersona = isPersonaId(persona) ? persona : 'explore_quietly';
   const actions = useMemo(() => ACTIONS[resolvedPersona], [resolvedPersona]);
 
   const runAction = async (action: FirstSuccessActionId) => {

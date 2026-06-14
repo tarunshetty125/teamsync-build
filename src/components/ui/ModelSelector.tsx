@@ -52,7 +52,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSe
                 const cModels: { id: string; name: string; desc: string; provider: string }[] = [];
 
                 if (creds?.hasTeamSyncKey) {
-                    cModels.push({ id: 'teamsync', name: 'TeamSync API', desc: 'Managed AI • Fast execution', provider: 'teamsync' });
+                    cModels.push({ id: 'teamsync', name: 'Quietly API', desc: 'Managed AI • Fast execution', provider: 'teamsync' });
                 }
                 // Fetch dynamic models
                 const dynamicModels: Record<string, any[]> = {};

@@ -29,12 +29,12 @@ const TOUR_STEPS: TourStep[] = [
   {
     id: 'control-center',
     title: 'Control Center',
-    description: 'Search meetings, ask TeamSync, and move through your workspace from one command surface.',
+    description: 'Search meetings, ask Quietly, and move through your workspace from one command surface.',
   },
   {
     id: 'overlay-control',
     title: 'Overlay',
-    description: 'Start TeamSync when you want live screen and audio intelligence during a session.',
+    description: 'Start Quietly when you want live screen and audio intelligence during a session.',
   },
   {
     id: 'interview-mode',
@@ -49,13 +49,13 @@ const TOUR_STEPS: TourStep[] = [
   {
     id: 'profile-intelligence',
     title: 'Profile Intelligence',
-    description: 'Add resume and role context when you want TeamSync to answer from your background.',
+    description: 'Add resume and role context when you want Quietly to answer from your background.',
     settingsTab: 'profile',
   },
   {
     id: 'settings-audio-provider',
     title: 'Audio Engine',
-    description: 'Choose the speech provider and input path TeamSync uses for live transcription.',
+    description: 'Choose the speech provider and input path Quietly uses for live transcription.',
     settingsTab: 'audio',
   },
   {

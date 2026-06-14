@@ -240,7 +240,7 @@ const buildPreparationNotes = (event: NormalizedEvent | null, recommendation: Ca
     }
 
     if (notes.length < 3) {
-        notes.push('Keep TeamSync ready for follow-up questions and concise recap capture.');
+        notes.push('Keep Quietly ready for follow-up questions and concise recap capture.');
     }
 
     return notes.slice(0, 3);
@@ -1267,8 +1267,8 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                                 transition={{ duration: 0.22, ease: 'easeOut' }}
                                                                 className="flex h-6 items-center gap-2"
                                                             >
-                                                                <img src={icon} alt="TeamSync" className="h-[30px] w-[30px] object-contain brightness-0 invert opacity-90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.16)]" />
-                                                                <span className="text-[17px] font-medium leading-none tracking-normal drop-shadow-[0_1px_1px_rgba(0,0,0,0.14)]">Start TeamSync</span>
+                                                                <img src={icon} alt="Quietly" className="h-[30px] w-[30px] object-contain brightness-0 invert opacity-90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.16)]" />
+                                                                <span className="text-[17px] font-medium leading-none tracking-normal drop-shadow-[0_1px_1px_rgba(0,0,0,0.14)]">Start Quietly</span>
                                                             </motion.div>
                                                         )}
                                                     </AnimatePresence>
@@ -1410,7 +1410,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                         </div>
                                                     </div>
                                                     <p className="mt-4 max-w-[62ch] text-[13px] leading-6 text-text-secondary">
-                                                        TeamSync can prepare from your next event before the meeting starts and keep saved notes tied to the calendar title.
+                                                        Quietly can prepare from your next event before the meeting starts and keep saved notes tied to the calendar title.
                                                     </p>
                                                 </div>
 

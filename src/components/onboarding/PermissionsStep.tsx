@@ -119,7 +119,7 @@ export function PermissionsStep({
           Enable access
         </h2>
         <p className="mx-auto mt-[8px] max-w-[310px] text-[12px] font-semibold leading-[1.38] text-white/[0.54]">
-          TeamSync needs these permissions before the workspace can launch.
+          Quietly needs these permissions before the workspace can launch.
         </p>
         <div className="mx-auto mt-[11px] h-px w-[96px] bg-gradient-to-r from-transparent via-white/[0.18] to-transparent" />
       </div>
@@ -138,7 +138,7 @@ export function PermissionsStep({
             className="flex flex-col gap-3 overflow-hidden rounded-[14px] border border-sky-300/20 bg-sky-400/[0.08] p-[14px] sm:flex-row sm:items-center sm:justify-between"
           >
             <div>
-              <div className="text-[13px] font-bold text-sky-200/90">Restart TeamSync to finish screen access.</div>
+              <div className="text-[13px] font-bold text-sky-200/90">Restart Quietly to finish screen access.</div>
               <p className="mt-1 text-[12px] font-medium leading-relaxed text-sky-100/[0.48]">
                 macOS has registered Screen Recording, but the app needs a fresh launch.
               </p>
@@ -148,7 +148,7 @@ export function PermissionsStep({
               onClick={onQuit}
               className="h-[34px] rounded-full border border-sky-200/[0.18] bg-sky-200/[0.08] px-4 text-[12px] font-bold text-sky-100/80 transition-all hover:bg-sky-200/[0.14] active:scale-[0.98]"
             >
-              Quit TeamSync
+              Quit Quietly
             </button>
           </motion.div>
         ) : null}
@@ -189,7 +189,7 @@ export function PermissionsStep({
           icon={Eye}
           title="Screen understanding"
           description="See IDEs, browser tabs, shared decks, and live interview prompts in context."
-          detail="If macOS has already been allowed but TeamSync still shows restart required, quit and relaunch once."
+          detail="If macOS has already been allowed but Quietly still shows restart required, quit and relaunch once."
           status={snapshot.screenRecording}
           isBusy={activePermission === 'screenRecording' && isChecking}
           primaryAction={screenPrimary}
@@ -210,7 +210,7 @@ export function PermissionsStep({
           icon={AudioLines}
           title="Live transcription"
           description="Capture microphone and meeting audio in realtime with production STT."
-          detail="Reopen System Settings and enable TeamSync under Privacy & Security -> Microphone."
+          detail="Reopen System Settings and enable Quietly under Privacy & Security -> Microphone."
           status={snapshot.microphone}
           isBusy={activePermission === 'microphone' && isChecking}
           primaryAction={microphonePrimary}
@@ -231,7 +231,7 @@ export function PermissionsStep({
           icon={Sparkles}
           title="Interview assistance"
           description="Answer faster with contextual prompts, overlays, and instant follow-through."
-          detail="Grant Accessibility in Privacy & Security -> Accessibility so TeamSync stays responsive."
+          detail="Grant Accessibility in Privacy & Security -> Accessibility so Quietly stays responsive."
           status={snapshot.accessibility}
           isBusy={activePermission === 'accessibility' && isChecking}
           primaryAction={accessibilityPrimary}

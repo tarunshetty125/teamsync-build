@@ -1227,7 +1227,7 @@ html[data-platform="linux"] body {
   }
 }
 
-/* TeamSync startup cinematic material */
+/* Quietly startup cinematic material */
 .teamsync-startup-surface {
   isolation: isolate;
   background: #000000;

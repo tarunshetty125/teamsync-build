@@ -163,7 +163,7 @@ const MockupTeamSyncInterface = ({ opacity }: { opacity: number }) => {
                         <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden overlay-icon-surface" style={appearance.iconStyle}>
                             <img
                                 src={icon}
-                                alt="TeamSync"
+                                alt="Quietly"
                                 className="w-[24px] h-[24px] object-contain opacity-95 scale-105 force-black-icon"
                                 draggable="false"
                             />
@@ -258,7 +258,7 @@ const CODING_LANGUAGE_OPTIONS: Array<{ value: PreferredCodingLanguage | 'auto'; 
 
 const PROVIDER_PREFERENCE_OPTIONS: Array<{ value: PreferredProvider; label: string }> = [
     { value: 'auto', label: 'Auto' },
-    { value: 'teamsync', label: 'TeamSync' },
+    { value: 'teamsync', label: 'Quietly' },
     { value: 'gemini', label: 'Gemini' },
     { value: 'groq', label: 'Groq' },
     { value: 'openai', label: 'OpenAI' },
@@ -1499,7 +1499,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const [sttSaved, setSttSaved] = useState(false);
     const [sttKeyStatuses, setSttKeyStatuses] = useState<SttSecretStatuses>(() => createEmptySttSecretStatuses());
     const [googleServiceAccountPath, setGoogleServiceAccountPath] = useState<string | null>(null);
-    const [hasTeamSyncKey, setHasTeamSyncKey] = useState(false);
+    const [hasTeamSyncKey, setHasQuietlyKey] = useState(false);
     const [hasStoredSttGroqKey, setHasStoredSttGroqKey] = useState(false);
     const [hasStoredSttOpenaiKey, setHasStoredSttOpenaiKey] = useState(false);
     const [hasStoredDeepgramKey, setHasStoredDeepgramKey] = useState(false);
@@ -1549,7 +1549,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                     if (creds.ibmWatsonRegion) setSttIbmRegion(creds.ibmWatsonRegion);
                     setHasStoredSonioxKey(nextSttKeyStatuses.soniox.configured || creds.hasSonioxKey || false);
                     setHasStoredTavilyKey(creds.hasTavilyKey || false);
-                    setHasTeamSyncKey(creds.hasTeamSyncKey || false);
+                    setHasQuietlyKey(creds.hasTeamSyncKey || false);
                 }
             } catch (e) {
                 console.error('Failed to load STT settings:', e);
@@ -1560,7 +1560,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
     // PR #173: Live-reload settings whenever the backend broadcasts a credentials change
     // (e.g., when the user saves an STT key in a different window, or main fires it after
-    // a provider auto-reconfigure like TeamSync key clear).
+    // a provider auto-reconfigure like Quietly key clear).
     useEffect(() => {
         if (!window.electronAPI?.onCredentialsChanged) return;
         const unsubscribe = window.electronAPI.onCredentialsChanged(() => {
@@ -1571,7 +1571,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                     const nextSttKeyStatuses = { ...createEmptySttSecretStatuses(), ...(creds.sttKeys ?? {}) };
                     setSttProvider(normalizeStoredSttProvider(creds.sttProvider));
                     if (creds.groqSttModel) setGroqSttModel(creds.groqSttModel);
-                    setHasTeamSyncKey(creds.hasTeamSyncKey || false);
+                    setHasQuietlyKey(creds.hasTeamSyncKey || false);
                     setSttKeyStatuses(nextSttKeyStatuses);
                     setHasStoredSttGroqKey(nextSttKeyStatuses.groq.configured || creds.hasSttGroqKey);
                     setHasStoredSttOpenaiKey(nextSttKeyStatuses.openai.configured || creds.hasSttOpenaiKey);
@@ -2230,9 +2230,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         { id: 'google', label: 'Google Cloud', badge: googleServiceAccountPath ? 'Saved' : 'Fallback', desc: 'Streaming Google STT used directly or as the first recovery provider.', color: 'blue', icon: <Mic size={14} /> },
         ...(hasTeamSyncKey ? [{
             id: 'teamsync',
-            label: 'TeamSync Managed',
+            label: 'Quietly Managed',
             badge: 'Saved',
-            desc: 'Managed TeamSync transcription with live fallback behind it.',
+            desc: 'Managed Quietly transcription with live fallback behind it.',
             color: 'green',
             icon: <Mic size={14} />,
         } as ProviderOption] : []),
@@ -2374,8 +2374,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             label: 'Screen Recording',
             state: screenRecordingTrustState,
             detail: permissionStatus?.restartRequired
-                ? 'Restart TeamSync to finish applying screen access.'
-                : 'Lets TeamSync read visible meeting context when you ask for help.',
+                ? 'Restart Quietly to finish applying screen access.'
+                : 'Lets Quietly read visible meeting context when you ask for help.',
             icon: <Monitor size={16} />,
         },
         {
@@ -2434,27 +2434,27 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             id: 'screenRecording',
             label: 'Screen Recording',
             state: screenRecordingTrustState,
-            why: 'TeamSync needs permission before it can inspect the screen you are already viewing.',
+            why: 'Quietly needs permission before it can inspect the screen you are already viewing.',
             unlocks: 'Screen-aware answers, code context, and visible-meeting notes.',
             fix: permissionStatus?.restartRequired
-                ? 'Restart TeamSync after macOS finishes granting access.'
-                : 'Open Privacy & Security and allow TeamSync under Screen Recording.',
+                ? 'Restart Quietly after macOS finishes granting access.'
+                : 'Open Privacy & Security and allow Quietly under Screen Recording.',
             icon: <Monitor size={16} />,
         },
         {
             id: 'accessibility',
             label: 'Accessibility',
             state: accessibilityTrustState,
-            why: 'TeamSync uses this to keep keyboard controls available while another app is focused.',
+            why: 'Quietly uses this to keep keyboard controls available while another app is focused.',
             unlocks: 'Reliable show, hide, capture, movement, and recovery shortcuts.',
-            fix: 'Open Accessibility settings and allow TeamSync.',
+            fix: 'Open Accessibility settings and allow Quietly.',
             icon: <Keyboard size={16} />,
         },
         {
             id: 'microphone',
             label: 'Microphone',
             state: getPermissionTrustState(permissionStatus?.microphone),
-            why: 'TeamSync listens to your selected microphone only when capture is active.',
+            why: 'Quietly listens to your selected microphone only when capture is active.',
             unlocks: 'Live transcript, better meeting memory, and speech-aware suggestions.',
             fix: 'Allow microphone access, then test your input in Audio settings.',
             icon: <Mic size={16} />,
@@ -2606,7 +2606,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         {
             id: 'startup',
             label: 'Startup',
-            detail: openOnLogin ? 'TeamSync opens when you log in.' : 'Manual launch is currently selected.',
+            detail: openOnLogin ? 'Quietly opens when you log in.' : 'Manual launch is currently selected.',
             tab: 'general',
             icon: <Power size={16} />,
         },
@@ -2818,7 +2818,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             {/* Sidebar */}
                             <div className="flex w-[210px] shrink-0 flex-col border-r border-white/10 bg-black text-white">
                                 <div className="px-4 pt-4 pb-3 border-b border-white/10">
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white">TeamSync</p>
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white">Quietly</p>
                                     <div className="mt-1.5 flex items-center justify-between gap-3">
                                         <h2 className="text-[17px] font-semibold tracking-tight text-white">Settings</h2>
                                         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${settingsHeaderBadge.className} !text-white`}>
@@ -2928,7 +2928,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 }}
                                                 className="w-full text-left px-3 py-2 mt-1 rounded-xl text-[13px] font-medium text-white hover:bg-white/10 transition-colors flex items-center gap-3"
                                             >
-                                                <LogOut size={16} className="text-red-400" /> Quit TeamSync
+                                                <LogOut size={16} className="text-red-400" /> Quit Quietly
                                             </motion.button>
                                         )}
                                     </AnimatePresence>
@@ -2953,7 +2953,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">Today</p>
                                                 <h3 className="mt-1 text-[23px] font-semibold tracking-tight text-text-primary">Control center</h3>
                                                 <p className="mt-2 max-w-[560px] text-[13px] leading-relaxed text-text-secondary">
-                                                    A quick read on whether TeamSync is ready for meetings, capture, and screen sharing.
+                                                    A quick read on whether Quietly is ready for meetings, capture, and screen sharing.
                                                 </p>
                                             </div>
                                             <div className="shrink-0 self-start rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
@@ -2973,7 +2973,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         <p className="mt-1 max-w-[520px] text-[12px] leading-relaxed text-text-secondary">
                                                             {calendarStatus.connected
                                                                 ? 'Calendar context is available. Review the remaining controls before a live session.'
-                                                                : 'Connect Calendar when you want TeamSync to understand upcoming meetings and attendees.'}
+                                                                : 'Connect Calendar when you want Quietly to understand upcoming meetings and attendees.'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -3159,7 +3159,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     </p>
                                                                     <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">
                                                                         {nextSettingsCalendarEvent
-                                                                            ? 'TeamSync can use this upcoming meeting for preparation context in Launcher.'
+                                                                            ? 'Quietly can use this upcoming meeting for preparation context in Launcher.'
                                                                             : 'No upcoming event is currently available from Calendar.'}
                                                                     </p>
                                                                 </div>
@@ -3206,7 +3206,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         <div className="max-w-[460px]">
                                                             <h5 className="text-[14px] font-semibold text-text-primary">Connect Calendar for trusted meeting context</h5>
                                                             <p className="mt-2 text-[12px] leading-relaxed text-text-secondary">
-                                                                TeamSync can show the next meeting, prepare from event details, and keep Launcher focused on the call that matters now.
+                                                                Quietly can show the next meeting, prepare from event details, and keep Launcher focused on the call that matters now.
                                                             </p>
                                                         </div>
                                                         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -3243,7 +3243,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         <div className="min-w-0">
                                                             <h4 className="text-[15px] font-semibold text-text-primary">Privacy during screen sharing</h4>
                                                             <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
-                                                                Controls how TeamSync windows behave when another app is sharing or recording the screen.
+                                                                Controls how Quietly windows behave when another app is sharing or recording the screen.
                                                             </p>
                                                         </div>
                                                     </div>
@@ -3257,7 +3257,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         <div>
                                                             <p className="text-[12px] font-semibold text-text-primary">Screen sharing privacy</p>
                                                             <p className="mt-0.5 text-[11px] text-text-secondary">
-                                                                {isUndetectable ? 'TeamSync applies content protection to supported windows.' : 'TeamSync windows may be visible in screen sharing.'}
+                                                                {isUndetectable ? 'Quietly applies content protection to supported windows.' : 'Quietly windows may be visible in screen sharing.'}
                                                             </p>
                                                         </div>
                                                         {renderSettingsSwitch({
@@ -3271,7 +3271,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         <div>
                                                             <p className="text-[12px] font-semibold text-text-primary">Mouse passthrough</p>
                                                             <p className="mt-0.5 text-[11px] text-text-secondary">
-                                                                {isMousePassthrough ? 'Clicks pass through TeamSync to the app underneath.' : 'TeamSync keeps normal overlay interaction.'}
+                                                                {isMousePassthrough ? 'Clicks pass through Quietly to the app underneath.' : 'Quietly keeps normal overlay interaction.'}
                                                             </p>
                                                         </div>
                                                         {renderSettingsSwitch({
@@ -3424,7 +3424,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         <h3 className="text-lg font-bold text-text-primary">{isUndetectable ? 'Undetectable' : 'Detectable'}</h3>
                                                     </div>
                                                     <p className="text-xs text-text-secondary">
-                                                        TeamSync is currently {isUndetectable ? 'undetectable' : 'detectable'} by screen-sharing. <button className="text-blue-400 hover:underline">Supported apps here</button>
+                                                        Quietly is currently {isUndetectable ? 'undetectable' : 'detectable'} by screen-sharing. <button className="text-blue-400 hover:underline">Supported apps here</button>
                                                     </p>
                                                 </div>
                                                 {renderSettingsSwitch({
@@ -3493,7 +3493,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                                             <div>
                                                 <h3 className="text-lg font-bold text-text-primary mb-1">General settings</h3>
-                                                <p className="text-xs text-text-secondary mb-2">Customize how TeamSync works for you</p>
+                                                <p className="text-xs text-text-secondary mb-2">Customize how Quietly works for you</p>
 
                                                 <div className={`rounded-xl border ${isLight ? 'bg-bg-card border-border-subtle divide-y divide-border-subtle' : 'bg-transparent border-transparent divide-y divide-border-subtle/20'}`}>
                                                     <div className="space-y-0">
@@ -3504,8 +3504,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     <Power size={20} />
                                                                 </div>
                                                                 <div>
-                                                                    <h3 className="text-sm font-bold text-text-primary">Open TeamSync when you log in</h3>
-                                                                    <p className="text-xs text-text-secondary mt-0.5">TeamSync will open automatically when you log in to your computer</p>
+                                                                    <h3 className="text-sm font-bold text-text-primary">Open Quietly when you log in</h3>
+                                                                    <p className="text-xs text-text-secondary mt-0.5">Quietly will open automatically when you log in to your computer</p>
                                                                 </div>
                                                             </div>
                                                             {renderSettingsSwitch({
@@ -3515,7 +3515,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     setOpenOnLogin(newState);
                                                                     window.electronAPI?.setOpenAtLogin(newState);
                                                                 },
-                                                                label: 'Toggle open TeamSync at login',
+                                                                label: 'Toggle open Quietly at login',
                                                             })}
                                                         </div>
 
@@ -3613,7 +3613,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 </div>
                                                                 <div>
                                                                     <h3 className="text-sm font-bold text-text-primary">Theme</h3>
-                                                                    <p className="text-xs text-text-secondary mt-0.5">Customize how TeamSync looks on your device</p>
+                                                                    <p className="text-xs text-text-secondary mt-0.5">Customize how Quietly looks on your device</p>
                                                                 </div>
                                                             </div>
 
@@ -3795,7 +3795,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                             updateStatus === 'uptodate' ? `You're on the latest version (v${packageJson.version})` :
                                                                                 updateStatus === 'available' ? 'A new update is available!' :
                                                                                     updateStatus === 'error' ? (updateErrorMessage || 'Could not check for updates') :
-                                                                                        `You are currently using TeamSync version ${packageJson.version}`}
+                                                                                        `You are currently using Quietly version ${packageJson.version}`}
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -3988,7 +3988,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     <h3 className="text-lg font-bold text-text-primary">Process Disguise</h3>
                                                 </div>
                                                 <p className="text-xs text-text-secondary">
-                                                    Disguise TeamSync as another application to prevent detection during screen sharing.
+                                                    Disguise Quietly as another application to prevent detection during screen sharing.
                                                     <span className="block mt-1 text-text-tertiary">
                                                         Select a disguise to be automatically applied when Undetectable mode is on.
                                                     </span>
@@ -4551,7 +4551,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             {profileUploading ? 'Building profile intelligence' : 'Refreshing role intelligence'}
                                                         </p>
                                                         <p className="mt-1 text-[12px] text-text-secondary">
-                                                            TeamSync is preparing the context surface for your meetings.
+                                                            Quietly is preparing the context surface for your meetings.
                                                         </p>
                                                     </div>
                                                     <span className={`${statusChipBaseClass} border-border-subtle bg-bg-input text-text-secondary`}>
@@ -4588,7 +4588,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 <div className="max-w-[520px]">
                                                     <p className="text-[14px] font-semibold text-text-primary">Create your profile intelligence</p>
                                                     <p className="mt-2 text-[12px] leading-relaxed text-text-secondary">
-                                                        Add a resume once so TeamSync can personalize answers, interview framing, and role-specific preparation.
+                                                        Add a resume once so Quietly can personalize answers, interview framing, and role-specific preparation.
                                                     </p>
                                                 </div>
                                                 <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -4862,7 +4862,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                         <div className="flex items-start justify-between">
                                             <div>
                                                 <h3 className="text-lg font-bold text-text-primary mb-1">Keyboard shortcuts</h3>
-                                                <p className="text-xs text-text-secondary">TeamSync works with these easy to remember commands.</p>
+                                                <p className="text-xs text-text-secondary">Quietly works with these easy to remember commands.</p>
                                             </div>
                                             <button
                                                 onClick={resetShortcuts}
@@ -5192,9 +5192,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                                                 {sttProvider === 'teamsync' && (
                                                     <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-2">
-                                                        <label className="text-xs font-medium text-text-secondary block">Managed TeamSync STT</label>
+                                                        <label className="text-xs font-medium text-text-secondary block">Managed Quietly STT</label>
                                                         <p className="text-xs text-text-secondary">
-                                                            Your TeamSync key is already connected. Runtime switching happens automatically as soon as that key is saved in the TeamSync API section.
+                                                            Your Quietly key is already connected. Runtime switching happens automatically as soon as that key is saved in the Quietly API section.
                                                         </p>
                                                         <p className="text-[10px] text-text-tertiary">
                                                             This selection still keeps the Google and Whisper recovery path available locally if the managed stream drops.
@@ -5209,7 +5209,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             Whisper is only used after the active provider and Google fail. It does not replace the primary realtime stream.
                                                         </p>
                                                         <p className="text-[10px] text-text-tertiary">
-                                                            No API key is required here. If local Whisper is unavailable, TeamSync enters degraded mode and warns that speech recognition is temporarily unavailable.
+                                                            No API key is required here. If local Whisper is unavailable, Quietly enters degraded mode and warns that speech recognition is temporarily unavailable.
                                                         </p>
                                                     </div>
                                                 )}
@@ -5442,7 +5442,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         </div>
                                                         <h4 className="text-sm font-bold text-text-primary mb-1">Connect Calendar for meeting context</h4>
                                                         <p className="text-xs leading-relaxed text-text-secondary">
-                                                            TeamSync can surface your next meeting, attendees, and preparation context before capture starts.
+                                                            Quietly can surface your next meeting, attendees, and preparation context before capture starts.
                                                         </p>
                                                     </div>
                                                     <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">

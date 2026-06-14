@@ -47,7 +47,7 @@ export default function TopPill({
                 >
                     <img
                         src={icon}
-                        alt="TeamSync"
+                        alt="Quietly"
                         className="w-[24px] h-[24px] object-contain opacity-95 scale-105 force-black-icon"
                         draggable="false"
                         onDragStart={(e) => e.preventDefault()}

@@ -74,7 +74,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
 
     const displayVersion = formatVersion(updateInfo?.version);
     const displayVersionNumber = displayVersion.replace(/^v/, '');
-    const manualDmgName = `TeamSync-${displayVersionNumber}${instructionsArch === 'arm64' ? '-arm64' : ''}.dmg`;
+    const manualDmgName = `Quietly-${displayVersionNumber}${instructionsArch === 'arm64' ? '-arm64' : ''}.dmg`;
 
     const showFallback = !parsedNotes || (!parsedNotes.summary && (!parsedNotes.sections || parsedNotes.sections.length === 0));
 
@@ -86,7 +86,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
     };
 
     const handleCopyCommand = () => {
-        navigator.clipboard.writeText('xattr -cr /Applications/TeamSync.app');
+        navigator.clipboard.writeText('xattr -cr /Applications/Quietly.app');
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
@@ -196,11 +196,11 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
                                         <CopyBlock command={`xattr -cr ~/Downloads/${manualDmgName}`} />
                                     </div>
                                     <div className="space-y-1 mt-1 pl-0.5">
-                                        <p className="text-[12px] font-medium text-white/80">2. Open the file and install TeamSync.</p>
+                                        <p className="text-[12px] font-medium text-white/80">2. Open the file and install Quietly.</p>
                                     </div>
                                     <div className="space-y-1 mt-3 w-full">
                                         <p className="text-[12px] font-medium text-white/80">3. Clear quarantine on the installed app:</p>
-                                        <CopyBlock command="xattr -cr /Applications/TeamSync.app" />
+                                        <CopyBlock command="xattr -cr /Applications/Quietly.app" />
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-center mt-auto w-full">
@@ -247,7 +247,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
                                     {/* Code Block with Copy */}
                                     <div className="flex items-center justify-between bg-black/20 rounded-lg pl-3 pr-1.5 py-1.5 border border-white/[0.03] group hover:border-white/10 transition-colors">
                                         <code className="text-[10px] font-mono text-blue-400 truncate mr-2 select-all">
-                                            xattr -cr /Applications/TeamSync.app
+                                            xattr -cr /Applications/Quietly.app
                                         </code>
                                         <button
                                             onClick={handleCopyCommand}

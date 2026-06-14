@@ -22,7 +22,7 @@ interface FeatureSlide {
 const FEATURES: FeatureSlide[] = [
     {
         id: 'teamsync_features',
-        headline: 'TeamSync Intelligence 💥',
+        headline: 'Quietly Intelligence 💥',
         subtitle: 'Elevate your team collaboration',
         bullets: ['Context-aware meeting insights', 'Seamless workflow integrations'],
         footer: 'Designed to keep your team perfectly synchronized.',

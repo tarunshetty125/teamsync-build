@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * TeamSync logomark — "N" letterform inscribed in a circle.
+ * Quietly logomark — "Q" letterform inscribed in a circle.
  * Rendered as inline SVG so it inherits `color` (currentColor) and
  * can be styled freely with className.
  */
@@ -28,37 +28,26 @@ export const TeamSyncLogoMark: React.FC<{
         />
 
         {/*
-          The "N" lettermark — three strokes:
-            Left vertical bar
-            Diagonal stroke (top-left → bottom-right)
-            Right vertical bar
-          All strokes use round caps and joins to keep it crisp at small sizes.
+          The "Q" lettermark — a circle with a diagonal tail.
+          The inner circle forms the bowl and the diagonal is the tail.
         */}
 
-        {/* Left vertical bar */}
-        <line
-            x1="26" y1="22"
-            x2="26" y2="78"
+        {/* Inner bowl of Q */}
+        <circle
+            cx="50"
+            cy="46"
+            r="22"
             stroke="currentColor"
-            strokeWidth="9"
-            strokeLinecap="round"
+            strokeWidth="8"
+            fill="none"
         />
 
-        {/* Diagonal */}
+        {/* Diagonal tail of Q */}
         <line
-            x1="26" y1="22"
-            x2="74" y2="78"
+            x1="60" y1="58"
+            x2="76" y2="78"
             stroke="currentColor"
-            strokeWidth="9"
-            strokeLinecap="round"
-        />
-
-        {/* Right vertical bar */}
-        <line
-            x1="74" y1="22"
-            x2="74" y2="78"
-            stroke="currentColor"
-            strokeWidth="9"
+            strokeWidth="8"
             strokeLinecap="round"
         />
     </svg>

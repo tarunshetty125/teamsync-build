@@ -33,7 +33,7 @@ export interface SessionExportReport {
     sectionCount: number;
 }
 
-const DEFAULT_REPORT_TITLE = 'TeamSync Session Report';
+const DEFAULT_REPORT_TITLE = 'Quietly Session Report';
 
 function valueOrDash(value: unknown): string {
     if (value === undefined || value === null || value === '') return '-';
@@ -672,7 +672,7 @@ function buildHtmlReport(model: SessionExportReadModel, options: Required<Sessio
 function normalizeOptions(options: SessionExportReportOptions = {}): Required<SessionExportReportOptions> {
     return {
         title: options.title ?? DEFAULT_REPORT_TITLE,
-        generatedBy: options.generatedBy ?? 'TeamSync',
+        generatedBy: options.generatedBy ?? 'Quietly',
         includeGuardrailWarnings: options.includeGuardrailWarnings ?? true,
     };
 }

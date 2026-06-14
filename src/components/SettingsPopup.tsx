@@ -246,8 +246,8 @@ const SettingsPopup = () => {
                     </div>
 
 
-                    {/* Groq (Fast Text) Toggle — enabled with Groq key OR TeamSync API key */}
-                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group ${!(hasStoredKey.groq || hasStoredKey.teamsync) ? 'opacity-50 grayscale cursor-not-allowed' : `${itemHoverClass} cursor-default`}`} title={!(hasStoredKey.groq || hasStoredKey.teamsync) ? "Requires Groq or TeamSync API key" : ""}>
+                    {/* Groq (Fast Text) Toggle — enabled with Groq key OR Quietly API key */}
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group ${!(hasStoredKey.groq || hasStoredKey.teamsync) ? 'opacity-50 grayscale cursor-not-allowed' : `${itemHoverClass} cursor-default`}`} title={!(hasStoredKey.groq || hasStoredKey.teamsync) ? "Requires Groq or Quietly API key" : ""}>
                         <div className="flex items-center gap-3">
                             <Zap
                                 className={`w-4 h-4 transition-colors ${useGroqFastText ? 'text-orange-500' : iconInactiveClass}`}
@@ -354,7 +354,7 @@ const SettingsPopup = () => {
 
                     <div className={`h-px my-0.5 mx-2 ${dividerClass}`} />
 
-                    {/* Show/Hide TeamSync */}
+                    {/* Show/Hide Quietly */}
                     <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group interaction-base interaction-press ${itemHoverClass}`}>
                         <div className="flex items-center gap-3">
                             <MessageSquare className={`w-3.5 h-3.5 transition-colors ${iconInactiveClass}`} />

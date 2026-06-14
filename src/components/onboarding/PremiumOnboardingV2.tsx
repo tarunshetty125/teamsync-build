@@ -238,7 +238,7 @@ const PERSONA_CARD_TREATMENT: Record<PersonaId, { glow: string; border: string }
     glow: 'radial-gradient(circle at 78% 84%, rgba(188,48,211,0.86), rgba(39,8,47,0.8) 45%, rgba(5,5,5,0.04) 74%)',
     border: 'rgba(205,35,190,0.82)',
   },
-  explore_teamsync: {
+  explore_quietly: {
     glow: 'radial-gradient(circle at 84% 84%, rgba(66,219,169,0.78), rgba(12,54,42,0.82) 45%, rgba(5,5,5,0.04) 74%)',
     border: 'rgba(51,202,161,0.78)',
   },
@@ -248,23 +248,23 @@ const LEGACY_PERSONA_DESCRIPTION: Record<PersonaId, string> = {
   interview_preparation: 'Interviews, prep calls, career practice',
   meetings_calls: 'Client calls, team syncs, stakeholder meetings',
   developer: 'Code reviews, standups, technical deep dives',
-  explore_teamsync: 'Explore how TeamSync fits in with your workflow',
+  explore_quietly: 'Explore how Quietly fits in with your workflow',
 };
 
 const ACTIVATION_COPY: Record<PersonaId, Array<{ title: string; detail: string; icon: LucideIcon }>> = {
   interview_preparation: [
-    { title: 'Resume Intelligence Ready', detail: 'TeamSync can ground interview answers in your profile.', icon: FileText },
+    { title: 'Resume Intelligence Ready', detail: 'Quietly can ground interview answers in your profile.', icon: FileText },
     { title: 'Interview Intelligence Ready', detail: 'Live answers are tuned for behavioral and technical prompts.', icon: BriefcaseBusiness },
   ],
   developer: [
     { title: 'Technical Interview Mode Available', detail: 'DSA, system design, and tradeoff reasoning are ready.', icon: Code2 },
-    { title: 'Coding Assistance Ready', detail: 'TeamSync can help structure explanations and implementation steps.', icon: Monitor },
+    { title: 'Coding Assistance Ready', detail: 'Quietly can help structure explanations and implementation steps.', icon: Monitor },
   ],
   meetings_calls: [
     { title: 'Calendar Intelligence Available', detail: 'Meetings can use agenda and attendee context once connected.', icon: BriefcaseBusiness },
     { title: 'Live Meeting Assistance Ready', detail: 'Capture decisions, blockers, action items, and follow-ups.', icon: AudioLines },
   ],
-  explore_teamsync: [
+  explore_quietly: [
     { title: 'Workspace Ready', detail: 'Your launcher is prepared for the first live session.', icon: Sparkles },
     { title: 'Live Assistance Available', detail: 'Screen, audio, and overlay intelligence are ready to work.', icon: Zap },
   ],
@@ -466,7 +466,7 @@ function GoogleAuthScreen({
           variants={legacyContentItemVariants}
           className="mb-7 flex h-[62px] w-[62px] items-center justify-center rounded-[18px] border border-white/[0.10] bg-white/[0.055] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
         >
-          {isBusy ? <Loader2 className="h-5 w-5 animate-spin text-white/[0.72]" /> : <img src={appIcon} alt="TeamSync" className="h-10 w-10 object-contain" />}
+          {isBusy ? <Loader2 className="h-5 w-5 animate-spin text-white/[0.72]" /> : <img src={appIcon} alt="Quietly" className="h-10 w-10 object-contain" />}
         </motion.div>
 
         <motion.div variants={legacyContentItemVariants} className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.045] px-3 py-1.5 text-[11px] font-semibold text-white/[0.54]">
@@ -479,8 +479,8 @@ function GoogleAuthScreen({
         </motion.h1>
         <motion.p variants={legacyContentItemVariants} className="mt-4 max-w-[360px] text-[13px] font-medium leading-6 text-white/[0.52]">
           {isChecking
-            ? 'TeamSync is refreshing your account before choosing the right workspace path.'
-            : 'Sign in once so TeamSync can save your profile and open the right activation path.'}
+            ? 'Quietly is refreshing your account before choosing the right workspace path.'
+            : 'Sign in once so Quietly can save your profile and open the right activation path.'}
         </motion.p>
 
         {authError ? (
@@ -563,7 +563,7 @@ function PermissionsScreen({
   const primaryLabel = allReady
     ? 'Continue'
     : snapshot.restartRequired
-      ? 'Quit TeamSync'
+      ? 'Quit Quietly'
       : nextPermissionState === 'denied'
         ? `Open ${permissionLabel} Settings`
         : isChecking
@@ -591,8 +591,8 @@ function PermissionsScreen({
     <StepShell
       testId="onboarding-v2-permissions"
       eyebrow="Access"
-      title="Enable TeamSync intelligence"
-      description="Grant the desktop access TeamSync needs to understand your screen, hear live context, and keep assistance responsive."
+      title="Enable Quietly intelligence"
+      description="Grant the desktop access Quietly needs to understand your screen, hear live context, and keep assistance responsive."
       isAdvancing={isAdvancing}
       footer={
         <div className="flex flex-col gap-3">
@@ -687,10 +687,10 @@ function PersonaScreen({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[18px] bg-gradient-to-b from-transparent to-[#08090d] opacity-70" />
       <motion.div variants={legacyContentItemVariants} className="mx-auto max-w-[420px] text-center">
         <h2 className="relative text-[37px] font-semibold leading-[1.04] text-white/88 drop-shadow-[0_0_10px_rgba(255,255,255,0.24)]">
-          What brings you to TeamSync?
+          What brings you to Quietly?
         </h2>
         <p className="relative mx-auto mt-[18px] max-w-[330px] text-[14px] font-semibold leading-[1.45] text-white/56">
-          TeamSync adapts to you and your meetings - fitting into your daily rhythm.
+          Quietly adapts to you and your meetings - fitting into your daily rhythm.
         </p>
       </motion.div>
 
@@ -865,7 +865,7 @@ function BuildingScreen({
       testId="onboarding-v2-building"
       eyebrow="Workspace"
       title="Building your workspace..."
-      description="TeamSync is preparing the first workspace from your profile."
+      description="Quietly is preparing the first workspace from your profile."
       isAdvancing={isAdvancing}
       footer={error ? (
         <PrimaryButton onClick={onRetry} disabled={isSaving} icon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}>
@@ -934,11 +934,11 @@ function ActivationScreen({
       testId="onboarding-v2-activation"
       eyebrow="Ready"
       title={`Welcome, ${getFirstName(user)}.`}
-      description="Based on your profile, TeamSync has prepared the workspace around the moments where it can help fastest."
+      description="Based on your profile, Quietly has prepared the workspace around the moments where it can help fastest."
       isAdvancing={isAdvancing}
       footer={
         <PrimaryButton onClick={onLaunch} icon={<Zap className="h-4 w-4" />} testId="onboarding-v2-launch">
-          Launch TeamSync
+          Launch Quietly
         </PrimaryButton>
       }
     >
@@ -1009,7 +1009,7 @@ export function PremiumOnboardingV2({
   const resolvedPersona = useMemo<PersonaId>(() => {
     if (persona) return persona;
     const storedPersona = authUser?.onboardingV1?.persona;
-    return isPersonaId(storedPersona) ? storedPersona : 'explore_teamsync';
+    return isPersonaId(storedPersona) ? storedPersona : 'explore_quietly';
   }, [authUser?.onboardingV1?.persona, persona]);
 
   useEffect(() => {
@@ -1061,7 +1061,7 @@ export function PremiumOnboardingV2({
     onAuthUserChange(user);
     const completedOnboarding = user.onboardingV1?.onboardingVersion === 1;
     if (completedOnboarding) {
-      setPersona(isPersonaId(user.onboardingV1?.persona) ? user.onboardingV1.persona : 'explore_teamsync');
+      setPersona(isPersonaId(user.onboardingV1?.persona) ? user.onboardingV1.persona : 'explore_quietly');
       // If intro screens were skipped (permissions ready + onboarding already completed),
       // auto-launch instead of showing the activation screen on every restart.
       if (skipIntroScreens) {
@@ -1227,8 +1227,8 @@ export function PremiumOnboardingV2({
       return (
         <StepShell
           testId="onboarding-v2-welcome"
-          eyebrow="TeamSync"
-          title="Welcome to TeamSync"
+          eyebrow="Quietly"
+          title="Welcome to Quietly"
           description="Your AI copilot for interviews, meetings, coding, and career growth."
           isAdvancing={advancingStep === 'welcome'}
           footer={
@@ -1239,11 +1239,11 @@ export function PremiumOnboardingV2({
         >
           <motion.div variants={itemVariants} className="mt-8 flex items-center gap-4 rounded-[16px] border border-white/[0.10] bg-white/[0.055] p-4">
             <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[15px] border border-white/[0.10] bg-black/35">
-              <img src={appIcon} alt="TeamSync" className="h-10 w-10 object-contain" />
+              <img src={appIcon} alt="Quietly" className="h-10 w-10 object-contain" />
             </div>
             <div>
               <p className="text-[14px] font-semibold text-white/[0.88]">Realtime intelligence, ready before the dashboard.</p>
-              <p className="mt-1 text-[12px] font-medium leading-5 text-white/[0.46]">TeamSync adapts around what you do first.</p>
+              <p className="mt-1 text-[12px] font-medium leading-5 text-white/[0.46]">Quietly adapts around what you do first.</p>
             </div>
           </motion.div>
         </StepShell>
@@ -1295,7 +1295,7 @@ export function PremiumOnboardingV2({
           testId="onboarding-v2-industry"
           eyebrow="Industry"
           title="What industry are you in?"
-          description="This helps TeamSync tune examples, language, and likely context."
+          description="This helps Quietly tune examples, language, and likely context."
           options={INDUSTRY_OPTIONS}
           selected={industry}
           isAdvancing={advancingStep === 'industry'}
@@ -1310,7 +1310,7 @@ export function PremiumOnboardingV2({
         <ChipDecisionScreen
           testId="onboarding-v2-discovery"
           eyebrow="Discovery"
-          title="How did you hear about TeamSync?"
+          title="How did you hear about Quietly?"
           description="One last signal so we can understand how people find the product."
           options={DISCOVERY_OPTIONS}
           selected={discoverySource}

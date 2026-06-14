@@ -58,7 +58,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
         <div className="space-y-6 animated fadeIn pb-10">
             {/* Header */}
             <div>
-                <h3 className="text-lg font-bold text-text-primary mb-1">About TeamSync</h3>
+                <h3 className="text-lg font-bold text-text-primary mb-1">About Quietly</h3>
                 <p className="text-sm text-text-secondary">Designed to be invisible, intelligent, and trusted.</p>
             </div>
                 <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.6 (Upcoming)</h4>
@@ -199,7 +199,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
 
             {/* Architecture Section */}
             <div>
-                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">How TeamSync Works</h4>
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">How Quietly Works</h4>
                 <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden">
                     <div className="p-3 border-b border-border-subtle bg-bg-card/50">
                         <div className="flex items-start gap-4">
@@ -223,7 +223,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                             <div>
                                 <h5 className="text-sm font-bold text-text-primary mb-1">Local RAG & Memory</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    A purely local vector memory system allows TeamSync to recall details from past meetings. Embeddings and retrieval happen on-device via SQLite for maximum privacy.
+                                    A purely local vector memory system allows Quietly to recall details from past meetings. Embeddings and retrieval happen on-device via SQLite for maximum privacy.
                                 </p>
                             </div>
                         </div>
@@ -249,7 +249,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                         <div>
                             <h5 className="text-sm font-medium text-text-primary">No Recording</h5>
                             <p className="text-xs text-text-secondary mt-1 leading-relaxed">
-                                TeamSync listens only when active. It does not record video, take arbitrary screenshots without command, or perform background surveillance.
+                                Quietly listens only when active. It does not record video, take arbitrary screenshots without command, or perform background surveillance.
                             </p>
                         </div>
                     </div>
@@ -299,7 +299,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                     <p className="text-xs text-text-secondary leading-relaxed max-w-lg">
                                         I build software that stays out of the way.
                                         <br />
-                                        <span className="font-bold text-text-primary">TeamSync</span> is made to feel fast, quiet, and respectful of your privacy.
+                                        <span className="font-bold text-text-primary">Quietly</span> is made to feel fast, quiet, and respectful of your privacy.
                                     </p>
                                 </div>
                             </div>
@@ -352,7 +352,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                             </div>
                             <div>
                                 <h5 className="text-sm font-bold text-text-primary">Star on GitHub</h5>
-                                <p className="text-xs text-text-secondary mt-0.5">Love TeamSync? Support us by starring the repo.</p>
+                                <p className="text-xs text-text-secondary mt-0.5">Love Quietly? Support us by starring the repo.</p>
                             </div>
                         </a>
 
@@ -400,7 +400,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                             </div>
                             <div>
                                 <h5 className="text-sm font-bold text-text-primary">Support Development</h5>
-                                <p className="text-xs text-text-secondary mt-0.5">TeamSync is independent open-source software.</p>
+                                <p className="text-xs text-text-secondary mt-0.5">Quietly is independent open-source software.</p>
                             </div>
                         </div>
                         <a

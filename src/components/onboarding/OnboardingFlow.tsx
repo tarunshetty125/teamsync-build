@@ -132,7 +132,7 @@ export function OnboardingFlow({
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10" />
                 <img
                   src={appIcon}
-                  alt="TeamSync"
+                  alt="Quietly"
                   className="relative h-16 w-16 rounded-lg object-contain"
                 />
               </div>
@@ -145,7 +145,7 @@ export function OnboardingFlow({
               transition={{ delay: 0.35, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
               className="flex flex-col items-center gap-1.5"
             >
-              <span className="text-[22px] font-semibold tracking-[-0.03em] text-white/[0.88] drop-shadow-[0_0_10px_rgba(255,255,255,0.20)]">TeamSync</span>
+              <span className="text-[22px] font-semibold tracking-[-0.03em] text-white/[0.88] drop-shadow-[0_0_10px_rgba(255,255,255,0.20)]">Quietly</span>
               <span className="text-[12px] uppercase tracking-widest text-white/[0.42]">Realtime Meeting Intelligence</span>
             </motion.div>
 

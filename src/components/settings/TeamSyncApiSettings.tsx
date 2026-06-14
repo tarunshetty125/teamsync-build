@@ -339,7 +339,7 @@ export const TeamSyncApiSettings: React.FC = () => {
             {/* ── Page title ───────────────────────────────────── */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-[15px] font-semibold text-text-primary tracking-[-0.01em]">TeamSync API</h3>
+                    <h3 className="text-[15px] font-semibold text-text-primary tracking-[-0.01em]">Quietly API</h3>
                     <p className="text-[12px] text-text-tertiary mt-0.5 leading-snug">
                         Managed transcription, AI &amp; search
                     </p>
@@ -369,7 +369,7 @@ export const TeamSyncApiSettings: React.FC = () => {
                 return (
                     <Card className="shadow-sm border-violet-500/25">
                         <div className="px-5 pt-5 pb-5 space-y-4">
-                            {/* Header — same layout as "Try TeamSync API free" start card */}
+                            {/* Header — same layout as "Try Quietly API free" start card */}
                             <div className="flex items-start gap-3.5">
                                 <div className="w-10 h-10 rounded-[11px] bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
                                     <TeamSyncLogoMark size={18} className="text-violet-400" />
@@ -421,7 +421,7 @@ export const TeamSyncApiSettings: React.FC = () => {
                                 <TeamSyncLogoMark size={20} className={isClaimed ? "text-text-tertiary" : "text-text-primary drop-shadow-sm"} />
                             </div>
                             
-                            <h3 className="text-[14.5px] font-bold text-text-primary tracking-tight mb-1">TeamSync API. Try it free.</h3>
+                            <h3 className="text-[14.5px] font-bold text-text-primary tracking-tight mb-1">Quietly API. Try it free.</h3>
                             <p className="text-[12px] text-text-secondary leading-snug px-4 mb-4">
                                 Experience managed text-to-speech, AI models, and real-time research without adding a license key.
                             </p>
@@ -499,7 +499,7 @@ export const TeamSyncApiSettings: React.FC = () => {
                     <div className="min-w-0">
                         <p className="text-[13px] font-semibold text-text-primary">API Key</p>
                         <p className="text-[11px] text-text-tertiary leading-snug mt-0.5">
-                            Your administrator-issued TeamSync API key
+                            Your administrator-issued Quietly API key
                         </p>
                     </div>
                 </div>
@@ -672,7 +672,7 @@ export const TeamSyncApiSettings: React.FC = () => {
                         {[
                             { step: '1', text: 'Request an administrator-issued license key.' },
                             { step: '2', text: 'Paste the key here once it has been issued.'  },
-                            { step: '3', text: 'TeamSync syncs usage and access automatically.' },
+                            { step: '3', text: 'Quietly syncs usage and access automatically.' },
                         ].map(({ step, text }) => (
                             <div key={step} className="flex items-start gap-3">
                                 <div className="w-5 h-5 rounded-full bg-bg-input border border-border-subtle flex items-center justify-center text-[10px] font-bold text-text-tertiary shrink-0 mt-[1px]">

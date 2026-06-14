@@ -4,7 +4,7 @@
  * AI reading surface (right, adaptive width 480–720px).
  * Dynamic height: fit-content, max 75vh, grows with content.
  * Uses existing PremiumResponseCard for rendering.
- * Label: "TeamSync Intelligence"
+ * Label: "Quietly Intelligence"
  */
 
 import React, { memo, useCallback, useEffect, useState, useMemo } from 'react';
@@ -333,7 +333,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                         <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                         <line x1="12" y1="19" x2="12" y2="22" />
                     </svg>
-                    TeamSync Intelligence
+                    Quietly Intelligence
                 </div>
                 <div className="v2-panel-actions v2-no-drag">
                     {/* Source pill */}

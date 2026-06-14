@@ -10,7 +10,7 @@ export const MODE_TEMPLATE_CATALOG: PublicModeTemplate[] = [
     name: 'General',
     icon: 'sparkles',
     description: 'Adaptive everyday copilot for broad conversations, meetings, and Q&A.',
-    userPromptPlaceholder: 'Tell TeamSync how to respond during the conversation.',
+    userPromptPlaceholder: 'Tell Quietly how to respond during the conversation.',
     defaultUserPrompt: [
       'I want clear, actionable answers — not lectures.',
       'When I\'m asked a question in a meeting, give me what to say in first person.',

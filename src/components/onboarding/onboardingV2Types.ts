@@ -2,7 +2,7 @@ export type PersonaId =
   | 'interview_preparation'
   | 'meetings_calls'
   | 'developer'
-  | 'explore_teamsync';
+  | 'explore_quietly';
 
 export type IndustryId =
   | 'engineering'
@@ -91,9 +91,9 @@ export const PERSONA_OPTIONS: Array<{
     description: 'Coding rounds, system design, and technical discussions.',
   },
   {
-    id: 'explore_teamsync',
-    label: 'Explore TeamSync',
-    description: 'Start broadly and discover where TeamSync fits.',
+    id: 'explore_quietly',
+    label: 'Explore Quietly',
+    description: 'Start broadly and discover where Quietly fits.',
   },
 ];
 
@@ -135,5 +135,5 @@ export function isPersonaId(value: unknown): value is PersonaId {
 }
 
 export function getPersonaLabel(persona: string | null | undefined): string {
-  return PERSONA_OPTIONS.find((option) => option.id === persona)?.label ?? 'TeamSync';
+  return PERSONA_OPTIONS.find((option) => option.id === persona)?.label ?? 'Quietly';
 }

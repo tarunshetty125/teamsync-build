@@ -4,7 +4,7 @@
 //
 // Premium Apple-inspired trial offer card.
 // Shows 5 seconds after launcher is visible on non-first launches,
-// when no TeamSync API key is stored and no trial is active.
+// when no Quietly API key is stored and no trial is active.
 // Violet/purple accent — consistent with the trial brand throughout the app.
 
 import React, { useState, useEffect } from 'react';
@@ -181,7 +181,7 @@ export const TrialPromoToaster: React.FC<Props> = ({
               {/* Header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '26px', paddingBottom: '16px', borderBottom: `1px solid ${T.rule}` }}>
                 <span style={{ fontSize: '10.5px', fontWeight: 660, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.t2 }}>
-                  TeamSync API
+                  Quietly API
                 </span>
                 <button onClick={handleDismiss} aria-label="Dismiss"
                   style={{ background: 'none', border: 'none', cursor: 'pointer', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', opacity: 0.35, padding: 0, transition: 'opacity 150ms, background 150ms' }}
@@ -223,7 +223,7 @@ export const TrialPromoToaster: React.FC<Props> = ({
                     Try everything. No card needed.
                   </h2>
                   <p style={{ fontSize: '13px', lineHeight: 1.66, color: T.t3, margin: '0 auto', maxWidth: '330px' }}>
-                    Full TeamSync API access — AI chat, meeting transcription, and company research — free for 10 minutes. Bound to this device. No sign-in.
+                    Full Quietly API access — AI chat, meeting transcription, and company research — free for 10 minutes. Bound to this device. No sign-in.
                   </p>
                 </motion.div>
 

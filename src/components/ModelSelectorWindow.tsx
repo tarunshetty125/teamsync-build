@@ -134,13 +134,13 @@ const ModelSelectorWindow = () => {
                 if (creds?.hasTeamSyncKey) {
                     models.push({
                         id: 'teamsync',
-                        name: 'TeamSync API',
+                        name: 'Quietly API',
                         type: 'cloud',
                         provider: 'teamsync',
                         metadata: getProviderModelMetadata('teamsync', {
                             explicitProvider: 'teamsync',
                             source: 'standard',
-                            displayName: 'TeamSync API',
+                            displayName: 'Quietly API',
                         }),
                     });
                 }

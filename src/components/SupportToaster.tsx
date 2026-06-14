@@ -273,7 +273,7 @@ export const SupportToaster: React.FC<SupportToasterProps> = ({ className }) => 
 
                                         {/* Body */}
                                         <p className="text-[13.5px] leading-[1.65] text-white/50 max-w-[360px] font-normal antialiased">
-                                            TeamSync is built and maintained by one person.<br />
+                                            Quietly is built and maintained by one person.<br />
                                             If it's become part of how you work, your support<br />
                                             keeps it alive and moving forward.
                                         </p>
