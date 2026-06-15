@@ -861,7 +861,7 @@ export class LLMHelper {
       });
     }
 
-    if (this.isGroqModel(requestedModel) && this.groqClient) {
+    if (this.isGroqModel(requestedModel) && (this.groqClient || this.groqKeyManager.hasAvailableKey())) {
       return this.makeRouteDecision({
         requestedModel,
         requestedProvider,

@@ -132,6 +132,42 @@ export function detectScreenContentMode(text: string): ScreenContentMode {
 }
 
 /**
+ * Detect the coding platform from OCR text.
+ * Returns the platform name if detected, null otherwise.
+ */
+export function detectCodingPlatform(text: string): string | null {
+    const lower = text.toLowerCase();
+
+    // URL patterns
+    if (/leetcode\.com/i.test(text)) return 'LeetCode';
+    if (/hackerrank\.com/i.test(text)) return 'HackerRank';
+    if (/codeforces\.com/i.test(text)) return 'Codeforces';
+    if (/codechef\.com/i.test(text)) return 'CodeChef';
+    if (/geeksforgeeks\.org/i.test(text)) return 'GeeksForGeeks';
+    if (/interviewbit\.com/i.test(text)) return 'InterviewBit';
+    if (/codesignal\.com/i.test(text)) return 'CodeSignal';
+    if (/algoexpert\.io/i.test(text)) return 'AlgoExpert';
+    if (/neetcode\.io/i.test(text)) return 'NeetCode';
+
+    // UI element patterns (platform-specific)
+    if (/\bsubmissions?\b/i.test(text) && /\baccepted\b/i.test(text) && /\b(?:easy|medium|hard)\b/i.test(text)) return 'LeetCode';
+    if (/\bleetcode\b/i.test(text)) return 'LeetCode';
+    if (/\bhackerrank\b/i.test(text)) return 'HackerRank';
+    if (/\bcodeforces\b/i.test(text)) return 'Codeforces';
+    if (/\bcodechef\b/i.test(text)) return 'CodeChef';
+    if (/\bgeeksforgeeks\b/i.test(text) || /\bgfg\b/i.test(text)) return 'GeeksForGeeks';
+    if (/\binterviewbit\b/i.test(text)) return 'InterviewBit';
+
+    // Problem number + difficulty pattern (strong LeetCode signal)
+    if (/\b\d{1,4}\.\s+[A-Z][A-Za-z\s]+\b/.test(text) && /\b(?:easy|medium|hard)\b/i.test(text)) return 'LeetCode';
+
+    // "Run" + "Submit" buttons pattern (LeetCode UI)
+    if (/\brun\b/i.test(text) && /\bsubmit\b/i.test(text) && /\btestcase/i.test(text)) return 'LeetCode';
+
+    return null;
+}
+
+/**
  * Mode-specific behavior descriptors for the LLM prompt.
  */
 export const MODE_BEHAVIOR: Record<ScreenContentMode, {
@@ -141,10 +177,11 @@ export const MODE_BEHAVIOR: Record<ScreenContentMode, {
 }> = {
     coding: {
         label: '⚡ Expert Code Analysis',
-        objective: 'Detect the exact problem with its name/number, explain the optimal approach with complexity, and provide the complete working code solution.',
-        format: `• Problem (name, number, platform)
-• Approach (algorithm, complexity, why it works)
-• Solution (complete code block)`,
+        objective: 'FIRST identify the exact problem name and number (e.g. "42. Trapping Rain Water" on LeetCode). Then explain the optimal algorithm approach with time/space complexity analysis. Finally provide the COMPLETE working code solution that can be submitted directly.',
+        format: `**Problem:** [Number]. [Exact Problem Name] — [Platform] (e.g. "42. Trapping Rain Water — LeetCode")
+**Approach:** Algorithm name, data structures used, why this approach is optimal
+**Complexity:** Time: O(?), Space: O(?)
+**Solution:** Complete, submission-ready code in a fenced code block`,
     },
     interview_question: {
         label: '🎯 Interview Answer',
@@ -245,7 +282,9 @@ const CODING_CONTEXT_PREFIX = `Context:
 - OCR text may contain noise, UI artifacts, and broken words
 - Focus ONLY on meaningful problem description and code
 - Ignore menus, toolbars, and unrelated text
-- Identify the exact problem and solve it confidently`;
+- You MUST identify the exact problem name and number (e.g. "42. Trapping Rain Water")
+- Look for problem numbers, titles, difficulty tags, constraint patterns to identify the problem
+- Solve the problem completely with optimal approach and full working code`;
 
 const INTERVIEW_CONTEXT_PREFIX = `Context:
 - This is an interview screen with a question visible

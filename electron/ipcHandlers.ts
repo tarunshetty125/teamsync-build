@@ -2746,22 +2746,32 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const llmHelper = appState.processingHelper.getLLMHelper();
       const { CredentialsManager } = require('./services/CredentialsManager');
+      const { isBedrockModelId, resolveBedrockModelId } = require('./llm/BedrockModelIds');
       const cm = CredentialsManager.getInstance();
+
+      // Resolve Bedrock model IDs (same as set-default-model)
+      const bedrockPreferred = cm.getPreferredModel('bedrock') || cm.getBedrockCredentials()?.preferredModel;
+      const finalModelId = isBedrockModelId(modelId, bedrockPreferred)
+        ? (resolveBedrockModelId(modelId, bedrockPreferred) || modelId)
+        : modelId;
+
+      // Persist so getDefaultModel returns the updated value
+      cm.setDefaultModel(finalModelId);
 
       // Get all providers (Curl + Custom)
       const curlProviders = cm.getCurlProviders();
       const legacyProviders = cm.getCustomProviders() || [];
       const allProviders = [...curlProviders, ...legacyProviders];
 
-      llmHelper.setModel(modelId, allProviders);
+      llmHelper.setModel(finalModelId, allProviders);
 
       // Close the selector window if open
       appState.modelSelectorWindowHelper.hideWindow();
 
-      // Broadcast to all windows so TeamSyncInterface can update its selector (session-only update)
+      // Broadcast to all windows so both overlay and settings update in real-time
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) {
-          win.webContents.send('model-changed', modelId);
+          win.webContents.send('model-changed', finalModelId);
         }
       });
 

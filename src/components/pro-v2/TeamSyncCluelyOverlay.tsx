@@ -62,10 +62,11 @@ const ProAttachmentStrip: React.FC<ProAttachmentStripProps> = ({
 
     return (
         <motion.div
+            layout
             initial={{ opacity: 0, y: -4, height: 0 }}
             animate={{ opacity: 1, y: 0, height: 'auto' }}
-            exit={{ opacity: 0, y: -4, height: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, y: -4, height: 0, overflow: 'hidden' }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             className="v2-attachment-strip v2-no-drag"
         >
             <div className="v2-attachment-strip__meta">
@@ -77,28 +78,39 @@ const ProAttachmentStrip: React.FC<ProAttachmentStripProps> = ({
                 </span>
             </div>
             <div className="v2-attachment-strip__rail">
-                {attachments.map((attachment, index) => (
-                    <div key={`${attachment.path}-${index}`} className="v2-attachment-thumb">
-                        {attachment.preview ? (
-                            <img src={attachment.preview} alt={`Screenshot ${index + 1}`} />
-                        ) : (
-                            <div className="v2-attachment-thumb__empty">
-                                <ImageIcon size={15} strokeWidth={1.8} />
-                            </div>
-                        )}
-                        {isPending && onRemove && (
-                            <button
-                                type="button"
-                                className="v2-attachment-thumb__remove"
-                                onClick={() => onRemove(index)}
-                                aria-label="Remove screenshot"
-                                title="Remove screenshot"
-                            >
-                                <X size={10} strokeWidth={2.4} />
-                            </button>
-                        )}
-                    </div>
-                ))}
+                <AnimatePresence initial={false}>
+                    {attachments.map((attachment, index) => (
+                        <motion.div
+                            layout
+                            key={attachment.path}
+                            initial={{ opacity: 0, scale: 0.6, width: 0 }}
+                            animate={{ opacity: 1, scale: 1, width: 32 }}
+                            exit={{ opacity: 0, scale: 0.5, width: 0, marginRight: 0 }}
+                            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                            style={{ overflow: 'hidden' }}
+                            className="v2-attachment-thumb"
+                        >
+                            {attachment.preview ? (
+                                <img src={attachment.preview} alt={`Screenshot ${index + 1}`} />
+                            ) : (
+                                <div className="v2-attachment-thumb__empty">
+                                    <ImageIcon size={15} strokeWidth={1.8} />
+                                </div>
+                            )}
+                            {isPending && onRemove && (
+                                <button
+                                    type="button"
+                                    className="v2-attachment-thumb__remove"
+                                    onClick={() => onRemove(index)}
+                                    aria-label="Remove screenshot"
+                                    title="Remove screenshot"
+                                >
+                                    <X size={10} strokeWidth={2.4} />
+                                </button>
+                            )}
+                        </motion.div>
+                    ))}
+                </AnimatePresence>
             </div>
             {isPending && attachments.length > 1 && onClear && (
                 <button

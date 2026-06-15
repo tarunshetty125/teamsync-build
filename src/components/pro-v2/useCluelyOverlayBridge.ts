@@ -986,6 +986,9 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             if (isActive) {
                 setMeetingStartTime(Date.now());
             } else {
+                // Collapse overlay immediately to prevent mode template actions from flashing
+                setIsExpanded(false);
+                setMessages([]);
                 resetAllRecommendationState();
             }
         });

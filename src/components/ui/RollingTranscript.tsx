@@ -124,7 +124,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
             padding: 0,
             border: '1px solid rgba(255,255,255,0.07)',
             background: 'rgba(0,0,0,0.94)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03), 0 6px 20px rgba(0,0,0,0.36)',
+            boxShadow: 'none',
             backdropFilter: 'none',
             WebkitBackdropFilter: 'none',
             overflow: 'hidden',

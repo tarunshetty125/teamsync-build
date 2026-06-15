@@ -345,7 +345,6 @@ export class AppState {
           this.toggleOverlayMousePassthrough();
         } else if (actionId === 'general:take-screenshot') {
           try {
-            this.assertVisionCaptureSupported();
             const screenshotPath = await this.takeScreenshot(false);
             const preview = await this.getImagePreview(screenshotPath);
             const mainWindow = this.getMainWindow();
@@ -360,7 +359,6 @@ export class AppState {
           }
         } else if (actionId === 'general:selective-screenshot') {
           try {
-            this.assertVisionCaptureSupported();
             const screenshotPath = await this.takeSelectiveScreenshot(false);
             const preview = await this.getImagePreview(screenshotPath);
             const mainWindow = this.getMainWindow();
@@ -3183,7 +3181,6 @@ export class AppState {
         accelerator: screenshotAccel,
         click: async () => {
           try {
-            this.assertVisionCaptureSupported();
             const screenshotPath = await this.takeScreenshot()
             const preview = await this.getImagePreview(screenshotPath)
             const mainWindow = this.getMainWindow()

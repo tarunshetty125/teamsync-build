@@ -28,7 +28,7 @@ import {
     ScreenScanLLM,
     AssistantResponse as LLMAssistantResponse, getAnswerShapeGuidance,
     buildBoundedRecapContext,
-    detectScreenContentMode, MODE_BEHAVIOR
+    detectScreenContentMode, detectCodingPlatform, MODE_BEHAVIOR
 } from './llm';
 import type { ConversationIntent, ScreenContentMode } from './llm';
 import { detectVisibleScreenLanguage } from './llm/prompts';
@@ -808,6 +808,22 @@ export class IntelligenceEngine extends EventEmitter {
         modelOverride?: string;
         reuseRequestLifecycle?: boolean;
 	    }): Promise<string | null> {
+        // ── Universal OCR fallback for text-only models ──
+        // When the selected model has no vision capability and images are attached,
+        // redirect to runScreenScan which has the perfect prompt pipeline:
+        // content detection, signal extraction, coding/interview context prefixes,
+        // editor language detection — all already battle-tested.
+        // The UI still shows thumbnails — the redirect is transparent.
+        if (params.imagePaths?.length && !this.llmHelper.currentModelSupportsVision()) {
+            console.log(`[IntelligenceEngine] OCR fallback: model is text-only, redirecting ${params.imagePaths.length} image(s) to runScreenScan pipeline`);
+            return this.runScreenScan(
+                params.imagePaths,
+                undefined,       // let runScreenScan do its own OCR
+                undefined,       // auto-detect content mode
+                params.requestId,
+            );
+        }
+
         const activeRequestId = params.requestId ?? null;
         const telemetryRequestId = createTelemetryRequestId(activeRequestId, params.intent);
         const sessionMode = params.modeOverride ?? this.session.getMode();
@@ -2993,6 +3009,14 @@ export class IntelligenceEngine extends EventEmitter {
                         profilePreference: 'force_off',
                         additionalContext: [
                             `SCREEN MODE: ${detectedMode}`,
+                            (detectedMode === 'coding' || detectedMode === 'interview_question')
+                                ? (() => {
+                                    const platform = detectCodingPlatform(screenText);
+                                    return platform
+                                        ? `DETECTED PLATFORM: ${platform}\nYou MUST include the platform name "${platform}" and the problem number in your response header.`
+                                        : null;
+                                })()
+                                : null,
                             detectedEditorLanguage
                                 ? [
                                     `VISIBLE EDITOR LANGUAGE: ${detectedEditorLanguage.label}`,

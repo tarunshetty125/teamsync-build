@@ -638,14 +638,26 @@ export const AIProvidersSettings: React.FC = () => {
         loadCredentials();
 
         // Listen for changes from other windows (2-way sync)
+        const cleanups: (() => void)[] = [];
+
         if (window.electronAPI?.onGroqFastTextChanged) {
             // @ts-ignore
-            const unsubscribe = window.electronAPI.onGroqFastTextChanged((enabled: boolean) => {
+            const unsub = window.electronAPI.onGroqFastTextChanged((enabled: boolean) => {
                 setFastResponseMode(enabled);
                 localStorage.setItem('teamsync_groq_fast_text', String(enabled));
             });
-            return () => unsubscribe();
+            cleanups.push(unsub);
         }
+
+        // Sync model changes from overlay → settings in real-time
+        if (window.electronAPI?.onModelChanged) {
+            const unsub = window.electronAPI.onModelChanged((modelId: string) => {
+                setDefaultModel((prev) => (prev === modelId ? prev : modelId));
+            });
+            if (unsub) cleanups.push(unsub);
+        }
+
+        return () => cleanups.forEach((fn) => fn());
     }, []);
 
     // Effect to enforce fast mode disabled if neither Groq key nor Quietly API is configured.

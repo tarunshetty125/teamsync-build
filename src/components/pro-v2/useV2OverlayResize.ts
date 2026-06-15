@@ -27,7 +27,7 @@ const RESIZE_THROTTLE_MS = 300;
 const V2_COLLAPSE_HOLD_MS = 380;
 const V2_MEASUREMENT_SETTLE_MS = 180;
 const V2_COLLAPSED_HEIGHT = 60;
-const V2_COLLAPSED_WITH_TRANSCRIPT_HEIGHT = 152;
+const V2_COLLAPSED_WITH_TRANSCRIPT_HEIGHT = 180;
 
 function computeDimensions(
     container: HTMLDivElement | null,

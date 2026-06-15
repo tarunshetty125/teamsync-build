@@ -10,7 +10,7 @@ export { FollowUpLLM } from "./FollowUpLLM";
 export { FollowUpQuestionsLLM } from "./FollowUpQuestionsLLM";
 export { RecapLLM } from "./RecapLLM";
 export { ScreenScanLLM } from "./ScreenScanLLM";
-export { detectScreenContentMode, MODE_BEHAVIOR } from "./ScreenScanLLM";
+export { detectScreenContentMode, detectCodingPlatform, MODE_BEHAVIOR } from "./ScreenScanLLM";
 export type { ScreenContentMode } from "./ScreenScanLLM";
 export { SystemDesignTradeoffsLLM } from "./SystemDesignTradeoffsLLM";
 export { WhatToAnswerLLM } from "./WhatToAnswerLLM";
