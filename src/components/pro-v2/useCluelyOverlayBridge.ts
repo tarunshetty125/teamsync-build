@@ -332,6 +332,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const currentModelRef = useRef('gemini-3-flash-preview');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isMousePassthrough, setIsMousePassthrough] = useState(false);
+    const [isUndetectable, setIsUndetectable] = useState(false);
     const [customNotesEnabled, setCustomNotesEnabled] = useState(true);
     const currentSourceRef = useRef<string | undefined>();
     const seqRef = useRef(0);
@@ -1180,6 +1181,15 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         return () => unsub?.();
     }, []);
 
+    // Undetectable / stealth state — parity with V1 (TeamSyncInterface)
+    useEffect(() => {
+        window.electronAPI?.getUndetectable?.().then(setIsUndetectable).catch(() => {});
+        const unsub = window.electronAPI?.onUndetectableChanged?.((state: boolean) => {
+            setIsUndetectable(state);
+        });
+        return () => unsub?.();
+    }, []);
+
     const toggleMousePassthrough = useCallback(() => {
         setIsMousePassthrough((prev) => {
             const next = !prev;
@@ -1845,6 +1855,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         currentModel,
         isSettingsOpen,
         isMousePassthrough,
+        isUndetectable,
         customNotesEnabled,
         setInputValue,
         setShowTranscript,
