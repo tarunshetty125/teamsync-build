@@ -206,8 +206,14 @@ export class SettingsWindowHelper {
         // For now, let it stay open until toggled or ESC.
         this.settingsWindow.on('blur', () => {
             if (this.ignoreBlur) return;
-            this.lastBlurTime = Date.now();
-            this.closeWindow();
+            // Debounce: allow IPC handlers (e.g. toggle-model-selector) to set
+            // ignoreBlur before we actually close. Without this, the first click
+            // on the model dropdown closes settings because blur fires before IPC arrives.
+            setTimeout(() => {
+                if (this.ignoreBlur) return;
+                this.lastBlurTime = Date.now();
+                this.closeWindow();
+            }, 120);
         })
 
 

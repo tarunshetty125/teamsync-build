@@ -2841,6 +2841,13 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   safeHandle("toggle-model-selector", (_, coords: { x: number; y: number }) => {
+    // Temporarily ignore blur on settings window so it doesn't close
+    // when the model selector steals focus
+    const settingsOpen = appState.settingsWindowHelper.getSettingsWindow()?.isVisible();
+    if (settingsOpen) {
+      appState.settingsWindowHelper.setIgnoreBlur(true);
+      setTimeout(() => { appState.settingsWindowHelper.setIgnoreBlur(false); }, 500);
+    }
     appState.modelSelectorWindowHelper.toggleWindow(coords.x, coords.y);
   });
 
