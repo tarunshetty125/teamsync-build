@@ -255,7 +255,6 @@ export class WindowHelper {
 
     // Apply both dimensions and coordinates atomically to prevent separate-frame resize flicker
     if (sizeChanged || positionChanged) {
-      console.log('[WindowHelper] setOverlayDimensions:', newWidth, newHeight);
       this.overlayWindow.setBounds({
         x: newX,
         y: newY,

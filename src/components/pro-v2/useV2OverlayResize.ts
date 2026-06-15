@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import {
     V2_BAR_ONLY_WIDTH,
     V2_OVERLAY_WINDOW_DEFAULT_HEIGHT,
-    V2_OVERLAY_WINDOW_MAX_HEIGHT,
+    V2_OVERLAY_WINDOW_HEIGHT_CAP,
     clampNumber,
     type OverlayLayoutConstraints,
     type V2ResponsiveLayout,
@@ -38,7 +38,7 @@ function computeDimensions(
     shouldHoldExpandedShell: boolean,
 ): { width: number; height: number } {
     const maxWidth = constraints.maxWidth;
-    const maxHeight = Math.min(constraints.maxHeight, V2_OVERLAY_WINDOW_MAX_HEIGHT);
+    const maxHeight = Math.min(constraints.maxHeight, V2_OVERLAY_WINDOW_HEIGHT_CAP);
     const minWidth = Math.min(constraints.minWidth, maxWidth);
 
     if (!isExpanded) {

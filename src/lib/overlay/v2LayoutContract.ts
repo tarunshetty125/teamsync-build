@@ -56,6 +56,11 @@ export const V2_STACKED_PANEL_MAX_WIDTH = 720;
 
 export const V2_OVERLAY_WINDOW_DEFAULT_HEIGHT = 780;
 export const V2_OVERLAY_WINDOW_MAX_HEIGHT = 1290;
+/** Height cap: once the overlay reaches this height, response content scrolls
+ *  internally and the window stops growing.  Derived from component anatomy:
+ *  all non-scrollable chrome (bar + insights + header) fits within 600 px,
+ *  leaving ~292 px (14 lines) of comfortable visible text before scrolling. */
+export const V2_OVERLAY_WINDOW_HEIGHT_CAP = 600;
 
 export function clampNumber(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
