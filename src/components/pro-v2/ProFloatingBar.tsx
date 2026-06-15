@@ -2,7 +2,7 @@
  * ProFloatingBar.tsx — Surface 1
  * 
  * Floating command pill. Most opaque glass surface.
- * Contains: recording dot, waveform, timer, Ask Quietly input, screen scan, show/hide, end.
+ * Contains: pause, waveform, timer, Ask AI input, screen scan, show/hide, end.
  */
 
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
@@ -13,7 +13,6 @@ import {
     Pause,
     Play,
     ScanSearch,
-    Search,
     SendHorizontal,
     Square,
 } from 'lucide-react';
@@ -72,8 +71,6 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
     };
 
     const handleInputKeyDown = useCallback((e: React.KeyboardEvent) => {
-        // Important for overlay: prevent any window-level key handlers from also
-        // acting on keystrokes while the user is typing in the input.
         e.stopPropagation();
 
         if (e.key === 'Enter' && (inputValue.trim() || hasAttachments)) {
@@ -100,22 +97,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             className={`v2-surface-bar v2-draggable ${!isMeetingActive ? 'v2-surface-bar--paused' : ''}`}
         >
-            <div className="v2-bar-status">
-                {/* Waveform */}
-                <div className={`v2-waveform ${!isMeetingActive ? 'v2-waveform-paused' : ''}`} aria-hidden="true">
-                    <div className="v2-waveform-bar" />
-                    <div className="v2-waveform-bar" />
-                    <div className="v2-waveform-bar" />
-                    <div className="v2-waveform-bar" />
-                    <div className="v2-waveform-bar" />
-                </div>
-
-                {/* Timer */}
-                <span className="v2-bar-timer">
-                    {formatTime(elapsed)}
-                </span>
-            </div>
-
+            {/* Pause/Resume */}
             <div className="relative group" style={{ display: 'flex', alignItems: 'center' }}>
                 <button
                     type="button"
@@ -137,6 +119,20 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                 </div>
             </div>
 
+            {/* Waveform + Timer */}
+            <div className="v2-bar-status">
+                <div className={`v2-waveform ${!isMeetingActive ? 'v2-waveform-paused' : ''}`} aria-hidden="true">
+                    <div className="v2-waveform-bar" />
+                    <div className="v2-waveform-bar" />
+                    <div className="v2-waveform-bar" />
+                    <div className="v2-waveform-bar" />
+                    <div className="v2-waveform-bar" />
+                </div>
+                <span className="v2-bar-timer">
+                    {formatTime(elapsed)}
+                </span>
+            </div>
+
             {/* Logo — Back to Launcher */}
             <div className="relative group" style={{ display: 'flex', alignItems: 'center' }}>
                 <button
@@ -154,9 +150,8 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
 
             <div className="v2-bar-sep" />
 
-            {/* Ask Quietly — fixed width inline input */}
+            {/* Ask AI input */}
             <div className="v2-no-drag v2-bar-input-shell">
-                <Search size={13} strokeWidth={2.2} className="v2-bar-input-icon" aria-hidden="true" />
                 <input
                     ref={inputRef}
                     className="v2-bar-input"
@@ -165,11 +160,9 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                     onKeyDown={handleInputKeyDown}
                     onKeyUp={e => e.stopPropagation()}
                     onKeyPress={e => e.stopPropagation()}
-                    placeholder={hasAttachments ? 'Ask with context...' : 'Ask Quietly...'}
+                    placeholder={hasAttachments ? 'Ask with context...' : 'Ask AI'}
                 />
-
-                {/* Send button */}
-                {(inputValue.trim() || hasAttachments) && (
+                {(inputValue.trim() || hasAttachments) ? (
                     <button
                         type="button"
                         onClick={handleSendClick}
@@ -178,12 +171,17 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                     >
                         <SendHorizontal size={12} strokeWidth={2.4} />
                     </button>
+                ) : (
+                    <span className="v2-bar-shortcut-hint" aria-hidden="true">
+                        <kbd>⌘</kbd>
+                        <kbd>↵</kbd>
+                    </span>
                 )}
             </div>
 
             <div className="v2-bar-sep" />
 
-            {/* Screen Scan — compact icon button */}
+            {/* Screen Scan */}
             <div className="relative group">
                 <button
                     type="button"

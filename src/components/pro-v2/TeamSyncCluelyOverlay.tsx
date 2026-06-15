@@ -4,7 +4,7 @@
  * Layout: Bar → Rolling transcript strip → Two panels side-by-side
  */
 
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCluelyOverlayBridge } from './useCluelyOverlayBridge';
 import ProFloatingBar from './ProFloatingBar';
@@ -228,9 +228,15 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         ].join(':'),
     });
 
+    const [insightsPanelVisible, setInsightsPanelVisible] = useState(true);
+
     const handleToggleTranscript = useCallback(() => {
         bridge.setShowTranscript((prev: boolean) => !prev);
     }, [bridge.setShowTranscript]);
+
+    const handleToggleInsightsPanel = useCallback(() => {
+        setInsightsPanelVisible((prev) => !prev);
+    }, []);
 
     const handleCycleOverlayOpacity = useCallback(() => {
         const currentOpacity = Number.isFinite(bridge.overlayOpacity) ? bridge.overlayOpacity : 1;
@@ -365,35 +371,38 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                             alignItems: responsiveLayout.stacked ? 'stretch' : 'stretch',
                         }}
                     >
-                        <ProInsightsPanel
-                            widthPx={responsiveLayout.insightsWidth}
-                            contextSummary={bridge.contextSummary}
-                            activeQuickActions={bridge.activeQuickActions}
-                            recommendedButton={bridge.recommendedButton}
-                            overlayCopilotMode={bridge.overlayCopilotMode}
-                            lastFinalSentence={bridge.lastFinalSentence}
-                            rollingTranscript={bridge.rollingTranscript}
-                            rollingTranscriptSpeakerLabel={bridge.rollingTranscriptSpeakerLabel}
-                            isInterviewerSpeaking={bridge.isInterviewerSpeaking}
-                            showTranscript={bridge.showTranscript}
-                            contextPreviewByActionId={bridge.contextPreviewByActionId}
-                            onToggleTranscript={handleToggleTranscript}
-                            getQuickActionHandler={bridge.getQuickActionHandler}
-                            currentModel={bridge.currentModel}
-                            isSettingsOpen={bridge.isSettingsOpen}
-                            isMousePassthrough={bridge.isMousePassthrough}
-                            overlayOpacity={bridge.overlayOpacity}
-                            customNotesEnabled={bridge.customNotesEnabled}
-                            hasProContextAccess={bridge.hasProContextAccess}
-                            onToggleMousePassthrough={bridge.toggleMousePassthrough}
-                            onCycleOverlayOpacity={handleCycleOverlayOpacity}
-                            onToggleCustomContext={bridge.toggleCustomContext}
-                        />
+                        {insightsPanelVisible && (
+                            <ProInsightsPanel
+                                widthPx={responsiveLayout.insightsWidth}
+                                contextSummary={bridge.contextSummary}
+                                activeQuickActions={bridge.activeQuickActions}
+                                recommendedButton={bridge.recommendedButton}
+                                overlayCopilotMode={bridge.overlayCopilotMode}
+                                lastFinalSentence={bridge.lastFinalSentence}
+                                rollingTranscript={bridge.rollingTranscript}
+                                rollingTranscriptSpeakerLabel={bridge.rollingTranscriptSpeakerLabel}
+                                isInterviewerSpeaking={bridge.isInterviewerSpeaking}
+                                showTranscript={bridge.showTranscript}
+                                contextPreviewByActionId={bridge.contextPreviewByActionId}
+                                onToggleTranscript={handleToggleTranscript}
+                                getQuickActionHandler={bridge.getQuickActionHandler}
+                                currentModel={bridge.currentModel}
+                                isSettingsOpen={bridge.isSettingsOpen}
+                                isMousePassthrough={bridge.isMousePassthrough}
+                                overlayOpacity={bridge.overlayOpacity}
+                                customNotesEnabled={bridge.customNotesEnabled}
+                                hasProContextAccess={bridge.hasProContextAccess}
+                                onToggleMousePassthrough={bridge.toggleMousePassthrough}
+                                onCycleOverlayOpacity={handleCycleOverlayOpacity}
+                                onToggleCustomContext={bridge.toggleCustomContext}
+                                hasTranscriptContext={!!(bridge.rollingTranscript.trim() || bridge.lastFinalSentence.trim())}
+                            />
+                        )}
 
                         <ProResponseSurface
-                            widthPx={responsiveLayout.responseWidth}
-                            minWidthPx={responsiveLayout.responseMinWidth}
-                            maxWidthPx={responsiveLayout.responseMaxWidth}
+                            widthPx={insightsPanelVisible ? responsiveLayout.responseWidth : responsiveLayout.contentWidth}
+                            minWidthPx={insightsPanelVisible ? responsiveLayout.responseMinWidth : responsiveLayout.contentWidth}
+                            maxWidthPx={insightsPanelVisible ? responsiveLayout.responseMaxWidth : responsiveLayout.contentWidth}
                             activeResponse={bridge.activeResponse}
                             responseHistory={bridge.responseHistory}
                             activeResponseChain={bridge.activeResponseChain}
@@ -409,6 +418,8 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                             onJumpLatestResponse={bridge.jumpToLatestResponse}
                             onSelectTimelineResponse={bridge.selectResponseFromTimeline}
                             scrollContainerRef={bridge.scrollContainerRef}
+                            insightsPanelVisible={insightsPanelVisible}
+                            onToggleInsightsPanel={handleToggleInsightsPanel}
                         />
                     </motion.div>
                 )}

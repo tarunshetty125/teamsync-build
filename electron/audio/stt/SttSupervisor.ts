@@ -1009,9 +1009,8 @@ export class SttSupervisor extends EventEmitter {
   }
 
   private runSpeechWatchdog(now: number): void {
-    if (!this.started || this.isTransitioning || this.watchdogTriggered || this.activeAdapterIndex < 0) {
-      return;
-    }
+    // Watchdog disabled — prevents unnecessary STT reconnections
+    return;
 
     if (!this.providerConnectedAt || now - this.providerConnectedAt < this.providerWarmupMs) {
       return;

@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChevronLeft, ChevronRight, ChevronsRight, Code2, FileText, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsRight, Code2, FileText, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { SkeletonLoader, EmptyListeningState } from '../ui/PremiumStates';
 import CodeBlock from '../ui/CodeBlock';
 import MermaidRenderer from '../ui/MermaidRenderer';
@@ -83,6 +83,8 @@ interface ProResponseSurfaceProps {
     widthPx?: number;
     minWidthPx?: number;
     maxWidthPx?: number;
+    insightsPanelVisible?: boolean;
+    onToggleInsightsPanel?: () => void;
 }
 
 // Source icon mapping
@@ -121,6 +123,8 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
     widthPx = V2_RESPONSE_MIN_WIDTH,
     minWidthPx = V2_RESPONSE_MIN_WIDTH,
     maxWidthPx = V2_RESPONSE_MAX_WIDTH,
+    insightsPanelVisible = true,
+    onToggleInsightsPanel,
 }) {
     const [copied, setCopied] = useState(false);
     const [isExportPreviewOpen, setIsExportPreviewOpen] = useState(false);
@@ -329,6 +333,20 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
             {/* ── Header ── */}
             <div className="v2-panel-header">
                 <div className="v2-panel-title v2-panel-title--primary">
+                    {onToggleInsightsPanel && (
+                        <button
+                            className={`v2-panel-btn v2-sidebar-toggle${!insightsPanelVisible ? ' v2-sidebar-toggle--collapsed' : ''}`}
+                            onClick={onToggleInsightsPanel}
+                            data-tooltip={insightsPanelVisible ? 'Hide insights' : 'Show insights'}
+                            aria-label={insightsPanelVisible ? 'Hide insights panel' : 'Show insights panel'}
+                        >
+                            {insightsPanelVisible ? (
+                                <PanelLeftClose size={14} strokeWidth={1.8} />
+                            ) : (
+                                <PanelLeftOpen size={14} strokeWidth={1.8} />
+                            )}
+                        </button>
+                    )}
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
                         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                         <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
@@ -351,33 +369,6 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                                     animation: 'v2-dot-pulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite',
                                 }} />
                             )}
-                        </div>
-                    )}
-                    {/* Export preview */}
-                    {canPreviewSessionReport && (
-                        <div className="v2-export-actions" aria-label="Preview session export">
-                            <button
-                                type="button"
-                                className={`v2-panel-btn v2-export-btn${isExportPreviewOpen && exportPreviewFormat === 'markdown' ? ' v2-export-btn--active' : ''}`}
-                                onClick={() => handleOpenExportPreview('markdown')}
-                                title="Preview Markdown session report"
-                                aria-label="Preview Markdown session report"
-                                aria-expanded={isExportPreviewOpen && exportPreviewFormat === 'markdown'}
-                            >
-                                <FileText size={13} strokeWidth={2} aria-hidden />
-                                <span>MD</span>
-                            </button>
-                            <button
-                                type="button"
-                                className={`v2-panel-btn v2-export-btn${isExportPreviewOpen && exportPreviewFormat === 'html' ? ' v2-export-btn--active' : ''}`}
-                                onClick={() => handleOpenExportPreview('html')}
-                                title="Preview HTML session report"
-                                aria-label="Preview HTML session report"
-                                aria-expanded={isExportPreviewOpen && exportPreviewFormat === 'html'}
-                            >
-                                <Code2 size={13} strokeWidth={2} aria-hidden />
-                                <span>HTML</span>
-                            </button>
                         </div>
                     )}
                     {renderedResponse?.text && (
@@ -721,7 +712,14 @@ function DiagramGuardrailMessage({
 }: {
     guardrails: DiagramGuardrailReadModel;
 }) {
-    if (guardrails.status === 'supported') return null;
+    const [visible, setVisible] = useState(true);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setVisible(false), 20_000);
+        return () => clearTimeout(timer);
+    }, []);
+
+    if (guardrails.status === 'supported' || !visible) return null;
 
     const copy = getDiagramGuardrailCopy(guardrails);
 
@@ -729,6 +727,7 @@ function DiagramGuardrailMessage({
         <div
             className={`v2-diagram-guardrail v2-diagram-guardrail--${guardrails.status} v2-no-drag`}
             aria-label="Diagram guardrail message"
+            style={{ transition: 'opacity 0.4s ease' }}
         >
             <span>{copy.label}</span>
             <strong>{copy.message}</strong>

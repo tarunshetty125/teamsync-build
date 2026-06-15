@@ -129,6 +129,7 @@ interface ProInsightsPanelProps {
     onToggleTranscript: () => void;
     getQuickActionHandler: (action: OverlayQuickActionDef) => () => void | Promise<void>;
     widthPx?: number;
+    hasTranscriptContext?: boolean;
 }
 
 const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
@@ -154,6 +155,7 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
     onCycleOverlayOpacity,
     onToggleCustomContext,
     widthPx = V2_INSIGHTS_WIDTH,
+    hasTranscriptContext = true,
 }) {
     const panelRef = useRef<HTMLDivElement>(null);
     const [copiedText, setCopiedText] = useState(false);
@@ -256,17 +258,25 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
                         <motion.button
                             key={`${overlayCopilotMode}-${action.id}`}
                             initial={{ opacity: 0, x: 8 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            whileHover={{ x: 1 }}
+                            animate={{ opacity: hasTranscriptContext ? 1 : 0.4, x: 0 }}
+                            whileHover={hasTranscriptContext ? { x: 1 } : undefined}
                             transition={{
                                 duration: 0.22,
                                 delay: idx * 0.035,
                                 ease: [0.22, 1, 0.36, 1],
                             }}
-                            onClick={() => getQuickActionHandler(action)()}
+                            onClick={() => {
+                                if (!hasTranscriptContext) return;
+                                getQuickActionHandler(action)();
+                            }}
                             className={`v2-action-row ${action.id === recommendedButton ? 'v2-action-row--recommended' : ''
-                                }`}
-                            style={{ width: '100%', border: 'none', background: action.id === recommendedButton ? undefined : 'transparent' }}
+                                }${!hasTranscriptContext ? ' v2-action-row--disabled' : ''}`}
+                            style={{
+                                width: '100%',
+                                border: 'none',
+                                background: action.id === recommendedButton && hasTranscriptContext ? undefined : 'transparent',
+                                cursor: hasTranscriptContext ? 'pointer' : 'default',
+                            }}
                         >
                             <span className="v2-action-icon">
                                 {getActionIcon(action)}
@@ -274,7 +284,9 @@ const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
                             <span className="v2-action-copy">
                                 <span className="v2-action-label">{action.label}</span>
                                 <span className="v2-action-context-preview">
-                                    Using: {contextPreviewByActionId[action.id] ?? 'Latest Question'}
+                                    {hasTranscriptContext
+                                        ? `Using: ${contextPreviewByActionId[action.id] ?? 'Latest Question'}`
+                                        : 'Waiting for speech…'}
                                 </span>
                             </span>
                         </motion.button>

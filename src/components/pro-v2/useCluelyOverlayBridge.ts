@@ -989,6 +989,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 // Collapse overlay immediately to prevent mode template actions from flashing
                 setIsExpanded(false);
                 setMessages([]);
+                setActiveModeTemplateId(null);
+                setActiveModeLabel(null);
                 resetAllRecommendationState();
             }
         });
