@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, ArrowLeft, MoreHorizontal, Settings, RefreshCw, Ghost, Download, DownloadCloud, CheckCircle, AlertCircle, Sparkles, Calendar, Users, FileText, BriefcaseBusiness, Code2, MessageSquareText, CircleDot, Video, Clock3, CheckCircle2, PlugZap, Trash2, type LucideIcon } from 'lucide-react';
 import { generateMeetingPDF } from '../utils/pdfGenerator';
+import { generateMeetingMarkdown, generateMeetingHTML } from '../utils/meetingExporters';
 import icon from "./icon.png";
 import ConnectCalendarButton from './ui/ConnectCalendarButton';
 import MeetingDetails from './MeetingDetails';
@@ -1532,7 +1533,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                                         transition={{ duration: 0.1 }}
                                                                         layout
                                                                         className={`absolute right-0 top-full mt-1 backdrop-blur-xl rounded-lg shadow-2xl z-50 overflow-hidden border ${isLight ? 'bg-bg-elevated border-border-muted shadow-[0_8px_24px_rgba(0,0,0,0.12)]' : 'bg-[#1E1E1E]/80 border-white/10'}`}
-                                                                        style={{ width: confirmingDeleteId === m.id ? 200 : 90 }}
+                                                                        style={{ width: confirmingDeleteId === m.id ? 200 : 140 }}
                                                                         onClick={(e) => e.stopPropagation()}
                                                                         onMouseEnter={() => setMenuEntered(true)}
                                                                         onMouseLeave={() => {
@@ -1611,6 +1612,37 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                                                             <Download size={13} />
                                                                                             Export PDF
                                                                                         </button>
+                                                                                        <button
+                                                                                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-primary rounded-lg transition-colors text-left ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/10'}`}
+                                                                                            onClick={async () => {
+                                                                                                setActiveMenuId(null);
+                                                                                                if (window.electronAPI && window.electronAPI.getMeetingDetails) {
+                                                                                                    try {
+                                                                                                        const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
+                                                                                                        generateMeetingMarkdown(fullMeeting || m);
+                                                                                                    } catch { generateMeetingMarkdown(m); }
+                                                                                                } else { generateMeetingMarkdown(m); }
+                                                                                            }}
+                                                                                        >
+                                                                                            <FileText size={13} />
+                                                                                            Export MD
+                                                                                        </button>
+                                                                                        <button
+                                                                                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-primary rounded-lg transition-colors text-left ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/10'}`}
+                                                                                            onClick={async () => {
+                                                                                                setActiveMenuId(null);
+                                                                                                if (window.electronAPI && window.electronAPI.getMeetingDetails) {
+                                                                                                    try {
+                                                                                                        const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
+                                                                                                        generateMeetingHTML(fullMeeting || m);
+                                                                                                    } catch { generateMeetingHTML(m); }
+                                                                                                } else { generateMeetingHTML(m); }
+                                                                                            }}
+                                                                                        >
+                                                                                            <Code2 size={13} />
+                                                                                            Export HTML
+                                                                                        </button>
+                                                                                        <div className={`my-0.5 h-px ${isLight ? 'bg-border-subtle' : 'bg-white/8'}`} />
                                                                                         <button
                                                                                             className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors text-left"
                                                                                             onClick={() => setConfirmingDeleteId(m.id)}

@@ -14,6 +14,7 @@ import {
     Play,
     ScanSearch,
     SendHorizontal,
+    Sparkles,
     Square,
 } from 'lucide-react';
 import icon from '../icon.png';
@@ -152,6 +153,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
 
             {/* Ask AI input */}
             <div className="v2-no-drag v2-bar-input-shell">
+                <Sparkles size={13} strokeWidth={2} className="v2-bar-input-icon" aria-hidden="true" />
                 <input
                     ref={inputRef}
                     className="v2-bar-input"
@@ -173,7 +175,6 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                     </button>
                 ) : (
                     <span className="v2-bar-shortcut-hint" aria-hidden="true">
-                        <kbd>⌘</kbd>
                         <kbd>↵</kbd>
                     </span>
                 )}
