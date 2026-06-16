@@ -71,7 +71,7 @@ type StealthPlatformAdapter = {
 
 const DEFAULT_CONFIG: StealthConfig = {
   level: 'off',
-  processName: 'System Settings',
+  processName: 'Photos Launcher Service',
   scrubEnvironment: true,
   blockAppleEvents: true,
   suppressCrashReporter: true,
