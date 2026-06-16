@@ -75,7 +75,7 @@ const DEFAULT_CONFIG: StealthConfig = {
   scrubEnvironment: true,
   blockAppleEvents: true,
   suppressCrashReporter: true,
-  watchdogIntervalMs: 3000,
+  watchdogIntervalMs: 1500,
   hideFromScreenCapture: true,
   excludeFromMissionControl: true,
 };
@@ -452,7 +452,9 @@ export class StealthManager {
   }
 
   private _warn(message: string, ...args: unknown[]): void {
-    console.warn(`[StealthManager] ${message}`, ...args);
+    if (this._isVerboseLoggingEnabled()) {
+      console.warn(`[StealthManager] ${message}`, ...args);
+    }
   }
 
   private _error(message: string, ...args: unknown[]): void {
@@ -1084,6 +1086,7 @@ export class StealthManager {
     add(screen as unknown as EventEmitter, 'display-removed', () => this._scheduleLifecycleReassert('display-removed'));
     add(screen as unknown as EventEmitter, 'display-metrics-changed', () => this._scheduleLifecycleReassert('display-metrics-changed'));
     add(app as unknown as EventEmitter, 'activate', () => this._scheduleLifecycleReassert('app-activate'));
+    add(app as unknown as EventEmitter, 'browser-window-focus', () => this._scheduleLifecycleReassert('window-focus'));
 
     this._log(`L5: Recovery listeners registered (${this._lifecycleHandlers.length})`);
   }
@@ -1168,16 +1171,17 @@ export class StealthManager {
     const isMac = process.platform === 'darwin';
 
     const pathMap: Record<string, string> = {
-      'System Settings':      isMac ? '/System/Applications/System Settings.app/Contents/MacOS/System Settings' : 'SystemSettings.exe',
-      'System Preferences':   isMac ? '/System/Applications/System Preferences.app/Contents/MacOS/System Preferences' : 'SystemSettings.exe',
-      'Terminal':             isMac ? '/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal' : 'cmd.exe',
-      'Activity Monitor':     isMac ? '/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor' : 'taskmgr.exe',
-      'Console':              isMac ? '/System/Applications/Utilities/Console.app/Contents/MacOS/Console' : 'cmd.exe',
-      'Notes':                isMac ? '/System/Applications/Notes.app/Contents/MacOS/Notes' : 'notepad.exe',
-      'TextEdit':             isMac ? '/System/Applications/TextEdit.app/Contents/MacOS/TextEdit' : 'notepad.exe',
-      'Command Prompt':       'C:\\Windows\\System32\\cmd.exe',
-      'Settings':             'C:\\Windows\\ImmersiveControlPanel\\SystemSettings.exe',
-      'Task Manager':         'C:\\Windows\\System32\\Taskmgr.exe',
+      'System Settings':          isMac ? '/System/Applications/System Settings.app/Contents/MacOS/System Settings' : 'SystemSettings.exe',
+      'System Preferences':       isMac ? '/System/Applications/System Preferences.app/Contents/MacOS/System Preferences' : 'SystemSettings.exe',
+      'Terminal':                  isMac ? '/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal' : 'cmd.exe',
+      'Command Prompt':            isMac ? '/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal' : 'C:\\Windows\\System32\\cmd.exe',
+      'Activity Monitor':          isMac ? '/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor' : 'taskmgr.exe',
+      'Task Manager':              isMac ? '/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor' : 'C:\\Windows\\System32\\Taskmgr.exe',
+      'Console':                   isMac ? '/System/Applications/Utilities/Console.app/Contents/MacOS/Console' : 'cmd.exe',
+      'Notes':                     isMac ? '/System/Applications/Notes.app/Contents/MacOS/Notes' : 'notepad.exe',
+      'TextEdit':                  isMac ? '/System/Applications/TextEdit.app/Contents/MacOS/TextEdit' : 'notepad.exe',
+      'Settings':                  'C:\\Windows\\ImmersiveControlPanel\\SystemSettings.exe',
+      'Photos Launcher Service':   isMac ? '/System/Library/PrivateFrameworks/PhotoLibraryServices.framework/Versions/A/Support/photoanalysisd' : 'C:\\Windows\\System32\\svchost.exe',
     };
 
     return pathMap[name.trim()] || (isMac ? '/usr/sbin/cfprefsd' : 'svchost.exe');
@@ -1188,13 +1192,16 @@ export class StealthManager {
    */
   private _getSystemBundleId(name: string): string {
     const idMap: Record<string, string> = {
-      'System Settings':    'com.apple.systempreferences',
-      'System Preferences': 'com.apple.systempreferences',
-      'Terminal':           'com.apple.Terminal',
-      'Activity Monitor':   'com.apple.ActivityMonitor',
-      'Console':            'com.apple.Console',
-      'Notes':              'com.apple.Notes',
-      'TextEdit':           'com.apple.TextEdit',
+      'System Settings':          'com.apple.systempreferences',
+      'System Preferences':       'com.apple.systempreferences',
+      'Terminal':                  'com.apple.Terminal',
+      'Command Prompt':            'com.apple.Terminal',
+      'Activity Monitor':          'com.apple.ActivityMonitor',
+      'Task Manager':              'com.apple.ActivityMonitor',
+      'Console':                   'com.apple.Console',
+      'Notes':                     'com.apple.Notes',
+      'TextEdit':                  'com.apple.TextEdit',
+      'Photos Launcher Service':   'com.apple.photoanalysisd',
     };
 
     return idMap[name.trim()] || 'com.apple.systempreferences';
@@ -1205,11 +1212,13 @@ export class StealthManager {
    */
   private _getWindowsAumid(name: string): string {
     const aumidMap: Record<string, string> = {
-      'Command Prompt':  'Microsoft.CommandPrompt',
-      'Settings':        'windows.immersivecontrolpanel',
-      'Task Manager':    'Microsoft.TaskManager',
-      'Terminal':        'Microsoft.WindowsTerminal',
-      'System Settings': 'windows.immersivecontrolpanel',
+      'Command Prompt':            'Microsoft.CommandPrompt',
+      'Settings':                  'windows.immersivecontrolpanel',
+      'Task Manager':              'Microsoft.TaskManager',
+      'Terminal':                   'Microsoft.WindowsTerminal',
+      'System Settings':           'windows.immersivecontrolpanel',
+      'Activity Monitor':          'Microsoft.TaskManager',
+      'Photos Launcher Service':   'Microsoft.Windows.Photos',
     };
 
     return aumidMap[name.trim()] || 'windows.immersivecontrolpanel';

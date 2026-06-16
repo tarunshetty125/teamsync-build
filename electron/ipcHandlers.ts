@@ -200,9 +200,12 @@ export function initializeIpcHandlers(appState: AppState): void {
     // Stealth: protect from screen capture even though window is hidden.
     // Without this, the PDF render window is the only BrowserWindow that
     // leaks content to screen capture tools during stealth mode.
+    // Check both StealthManager engagement AND appState.isUndetectable to
+    // cover the race condition where undetectable is ON but engage() hasn't
+    // completed yet.
     try {
       const { StealthManager } = require('./services/StealthManager');
-      if (StealthManager.getInstance().isEngaged()) {
+      if (StealthManager.getInstance().isEngaged() || appState.getUndetectable()) {
         pdfWindow.setContentProtection(true);
       }
     } catch { /* StealthManager may not be initialised yet */ }

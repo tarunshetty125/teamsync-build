@@ -163,7 +163,7 @@ export class PermissionManager extends EventEmitter {
         status.screenRecording === 'granted'
           ? 'Screen access enabled.'
           : status.screenRecording === 'restart_required'
-            ? 'Please restart TeamSync to finish enabling screen access.'
+            ? 'Please restart the app to finish enabling screen access.'
             : 'Grant Screen Recording in the macOS prompt or System Settings to continue.',
     };
   }

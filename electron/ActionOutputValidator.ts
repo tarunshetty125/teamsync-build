@@ -1030,7 +1030,7 @@ function buildManualChatFallback(question: string): string {
     const isGreeting = /^(hi|hello|hey|yo|sup|gm|good\s+(morning|afternoon|evening))\b/i.test(normalized);
 
     if (asksIdentity || isGreeting) {
-        return "Hi, I'm TeamSync Intelligence. I can answer typed questions, help with coding and interview responses, and use meeting or screen context when you ask for it.";
+        return "Hi, I'm your AI assistant. I can answer typed questions, help with coding and interview responses, and use meeting or screen context when you ask for it.";
     }
 
     if (normalized.length <= 120) {

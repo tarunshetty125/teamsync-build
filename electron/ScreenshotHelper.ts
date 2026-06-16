@@ -37,12 +37,12 @@ function assertScreenRecordingPermission(): void {
       return;
     case 'restart_required':
       throw new Error(
-        'Screen Recording was granted, but TeamSync must restart before screen capture is safe to use.'
+        'Screen Recording was granted, but the app must restart before screen capture is safe to use.'
       );
     case 'denied':
       throw new Error(
         'Screen Recording permission is denied. Enable it in System Settings > ' +
-        'Privacy & Security > Screen Recording, then restart TeamSync.'
+        'Privacy & Security > Screen Recording, then restart the app.'
       );
     case 'not_requested':
       // The one-time TCC prompt should have fired at app startup (initializeApp).
@@ -51,7 +51,7 @@ function assertScreenRecordingPermission(): void {
       // appears behind other apps on macOS Sequoia). Tell the user to restart instead.
       throw new Error(
         'Screen Recording permission has not been granted yet. ' +
-        'Please restart TeamSync — you will be prompted to grant access on next launch.'
+        'Please restart the app — you will be prompted to grant access on next launch.'
       );
     case 'unsupported':
       throw new Error(

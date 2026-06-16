@@ -556,8 +556,8 @@ export class AppState {
       message:
         message ??
         (permissionStatus.restartRequired
-          ? 'Please restart TeamSync to finish enabling screen access before starting a meeting.'
-          : `TeamSync needs ${formatBlockingPermissions(permissionStatus)} access before it can continue.`),
+          ? 'Please restart the app to finish enabling screen access before starting a meeting.'
+          : `Quietly needs ${formatBlockingPermissions(permissionStatus)} access before it can continue.`),
     });
   }
 
@@ -2089,8 +2089,8 @@ export class AppState {
     const permissionStatus = await PermissionManager.getInstance().getStatus();
     if (!isPermissionStatusOperational(permissionStatus)) {
       const message = permissionStatus.restartRequired
-        ? 'Please restart TeamSync to finish enabling screen access before starting a meeting.'
-        : `TeamSync needs ${formatBlockingPermissions(permissionStatus)} access before it can start a meeting.`;
+        ? 'Please restart the app to finish enabling screen access before starting a meeting.'
+        : `Quietly needs ${formatBlockingPermissions(permissionStatus)} access before it can start a meeting.`;
 
       console.warn('[Main] Meeting blocked by permissions:', permissionStatus);
       this._isStarting = false;
@@ -3091,40 +3091,63 @@ export class AppState {
 
     // Try to find a template image first for macOS
     const resourcesPath = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    const isWin = process.platform === 'win32';
 
-    // Potential paths for tray icon
-    const templatePath = path.join(resourcesPath, 'assets', 'iconTemplate.png');
-    const defaultIconPath = app.isPackaged
-      ? path.join(resourcesPath, 'src/components/icon.png')
-      : path.join(app.getAppPath(), 'src/components/icon.png');
+    // When a disguise is active (especially important on Windows where tray stays visible),
+    // use the matching fake icon instead of the TeamSync icon.
+    let iconToUse: string | undefined;
 
-    let iconToUse = defaultIconPath;
-
-    // Check if template exists (sync check is fine for startup/rare toggle)
-    try {
-      if (require('fs').existsSync(templatePath)) {
-        iconToUse = templatePath;
-        console.log('[Tray] Using template icon:', templatePath);
-      } else {
-        // Also check src/components for dev
-        const devTemplatePath = path.join(app.getAppPath(), 'src/components/iconTemplate.png');
-        if (require('fs').existsSync(devTemplatePath)) {
-          iconToUse = devTemplatePath;
-          console.log('[Tray] Using dev template icon:', devTemplatePath);
-        } else {
-          console.log('[Tray] Template icon not found, using default:', defaultIconPath);
-        }
+    if (this.disguiseMode !== 'none') {
+      const iconNameMap: Record<string, string> = {
+        terminal: 'terminal.png',
+        settings: 'settings.png',
+        activity: 'activity.png',
+      };
+      const iconName = iconNameMap[this.disguiseMode];
+      if (iconName) {
+        const platformDir = isWin ? 'win' : 'mac';
+        const disguiseIconPath = app.isPackaged
+          ? path.join(process.resourcesPath, `assets/fakeicon/${platformDir}/${iconName}`)
+          : path.join(app.getAppPath(), `assets/fakeicon/${platformDir}/${iconName}`);
+        try {
+          if (require('fs').existsSync(disguiseIconPath)) {
+            iconToUse = disguiseIconPath;
+          }
+        } catch { /* fall through to default */ }
       }
-    } catch (e) {
-      console.error('[Tray] Error checking for icon:', e);
+    }
+
+    // Fallback: use default TeamSync icon
+    if (!iconToUse) {
+      const templatePath = path.join(resourcesPath, 'assets', 'iconTemplate.png');
+      const defaultIconPath = app.isPackaged
+        ? path.join(resourcesPath, 'src/components/icon.png')
+        : path.join(app.getAppPath(), 'src/components/icon.png');
+
+      iconToUse = defaultIconPath;
+
+      try {
+        if (require('fs').existsSync(templatePath)) {
+          iconToUse = templatePath;
+        } else {
+          const devTemplatePath = path.join(app.getAppPath(), 'src/components/iconTemplate.png');
+          if (require('fs').existsSync(devTemplatePath)) {
+            iconToUse = devTemplatePath;
+          }
+        }
+      } catch (e) {
+        console.error('[Tray] Error checking for icon:', e);
+      }
     }
 
     const trayIcon = nativeImage.createFromPath(iconToUse).resize({ width: 16, height: 16 });
     // IMPORTANT: specific template settings for macOS if needed, but 'Template' in name usually suffices
     trayIcon.setTemplateImage(iconToUse.endsWith('Template.png'));
 
+    // Use disguise name for tray tooltip — avoids leaking real app name
+    const disguiseName = this._getDisguiseDisplayName();
     this.tray = new Tray(trayIcon)
-    this.tray.setToolTip('TeamSync') // This tooltip might also need update if we change global shortcut, but global shortcut is removed.
+    this.tray.setToolTip(disguiseName)
     this.updateTrayMenu();
 
     // Double-click to show window
@@ -3141,8 +3164,8 @@ export class AppState {
 
     console.log('[Main] updateTrayMenu called. Screenshot Accelerator:', screenshotAccel);
 
-    // Update tooltip for verification
-    this.tray.setToolTip('TeamSync');
+    // Update tooltip to match current disguise
+    this.tray.setToolTip(this._getDisguiseDisplayName());
 
     // Helper to format accelerator for display (e.g. CommandOrControl+H -> Cmd+H)
     const formatAccel = (accel: string) => {
@@ -3162,7 +3185,7 @@ export class AppState {
 
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: 'Show TeamSync',
+        label: `Show ${this._getDisguiseDisplayName()}`,
         click: () => {
           this.centerAndShowWindow()
         }
@@ -3230,7 +3253,7 @@ export class AppState {
     // duplicate dock hide/show cycles from renderer feedback loops
     if (this.isUndetectable === state) return;
 
-    console.log(`[Stealth] setUndetectable(${state}) called`);
+    if (this._verboseLogging) console.log(`[Stealth] setUndetectable(${state}) called`);
 
     this.isUndetectable = state
     this.windowHelper.setContentProtection(state)
@@ -3273,7 +3296,7 @@ export class AppState {
         !targetFocusWindow.isDestroyed() &&
         targetFocusWindow.isFocused();
 
-      console.log('[Stealth] Calling app.dock.hide() BEFORE engage');
+      if (this._verboseLogging) console.log('[Stealth] Calling app.dock.hide() BEFORE engage');
       app.dock.hide();
       this.hideTray();
 
@@ -3336,7 +3359,7 @@ export class AppState {
         }
 
         if (!settled) {
-          console.log('[Stealth] Calling app.dock.show()');
+          if (this._verboseLogging) console.log('[Stealth] Calling app.dock.show()');
           app.dock.show();
           this.showTray();
           // Do NOT call focus() — let the user's current app retain focus
@@ -3426,7 +3449,7 @@ export class AppState {
 
     switch (mode) {
       case 'terminal':
-        appName = isWin ? "Command Prompt " : "Terminal ";
+        appName = isWin ? "Command Prompt" : "Terminal";
         if (isWin) {
           iconPath = app.isPackaged
             ? path.join(process.resourcesPath, "assets/fakeicon/win/terminal.png")
@@ -3438,7 +3461,7 @@ export class AppState {
         }
         break;
       case 'settings':
-        appName = isWin ? "Settings " : "System Settings ";
+        appName = isWin ? "Settings" : "System Settings";
         if (isWin) {
           iconPath = app.isPackaged
             ? path.join(process.resourcesPath, "assets/fakeicon/win/settings.png")
@@ -3450,7 +3473,7 @@ export class AppState {
         }
         break;
       case 'activity':
-        appName = isWin ? "Task Manager " : "Activity Monitor ";
+        appName = isWin ? "Task Manager" : "Activity Monitor";
         if (isWin) {
           iconPath = app.isPackaged
             ? path.join(process.resourcesPath, "assets/fakeicon/win/activity.png")
@@ -3568,6 +3591,16 @@ export class AppState {
     scheduleUpdate(200);
     scheduleUpdate(1000);
     scheduleUpdate(5000);
+
+    // 6. Refresh tray to match new disguise (icon + tooltip)
+    //    On Windows the tray is always visible so it must reflect the disguise.
+    //    On macOS the tray is hidden during stealth but we refresh it regardless
+    //    for consistency when stealth is off.
+    if (this.tray) {
+      this.tray.destroy();
+      this.tray = null;
+      this.showTray();
+    }
   }
 
   // Helper: broadcast an IPC event to all windows
@@ -3585,6 +3618,20 @@ export class AppState {
         sent.add(win.id);
         win.webContents.send(channel, ...args);
       }
+    }
+  }
+
+  /**
+   * Returns a user-facing display name based on the current disguise mode.
+   * Used by tray tooltip and context menu so they don't leak the real app name.
+   */
+  private _getDisguiseDisplayName(): string {
+    const isWin = process.platform === 'win32';
+    switch (this.disguiseMode) {
+      case 'terminal':  return isWin ? 'Command Prompt' : 'Terminal';
+      case 'settings':  return isWin ? 'Settings' : 'System Settings';
+      case 'activity':  return isWin ? 'Task Manager' : 'Activity Monitor';
+      default:          return 'TeamSync';
     }
   }
 
