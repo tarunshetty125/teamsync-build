@@ -407,6 +407,11 @@ export class WindowHelper {
       movable: true,
       skipTaskbar: true, // Don't show separately in dock/taskbar
       hasShadow: false, // Prevent shadow from adding perceived size/artifacts
+      // NSPanel on macOS: prevents the overlay from activating the app when
+      // clicked or shown, so the user's foreground app (Zoom, browser) keeps
+      // macOS focus. Required for applyStealthToWindow SPI calls to take effect.
+      // Windows/Linux: omitted — no behavioral change.
+      ...(process.platform === 'darwin' ? { type: 'panel' as any } : {}),
     }
 
     this.overlayWindow = new BrowserWindow(overlaySettings)
@@ -426,6 +431,24 @@ export class WindowHelper {
       this.overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
       this.overlayWindow.setHiddenInMissionControl(true)
       this.overlayWindow.setAlwaysOnTop(true, "floating")
+
+      // Apply Rust-level NSPanel SPI attributes after the native window handle
+      // is allocated. This sets becomesKeyOnlyIfNeeded + _setPreventsActivation
+      // so the overlay never steals macOS focus from the user's foreground app.
+      this.overlayWindow.once('ready-to-show', () => {
+        if (!this.overlayWindow || this.overlayWindow.isDestroyed()) return;
+        try {
+          const { loadNativeModule } = require('./audio/nativeModuleLoader');
+          const native = loadNativeModule();
+          if (native && typeof native.applyStealthToWindow === 'function') {
+            native.applyStealthToWindow(this.overlayWindow.getNativeWindowHandle());
+            console.log('[WindowHelper] Applied native stealth attributes to overlay (NSPanel SPI)');
+          }
+        } catch (e) {
+          // Non-fatal: overlay still works as a regular panel without SPI attributes.
+          console.warn('[WindowHelper] applyStealthToWindow unavailable:', e);
+        }
+      });
     }
 
     this.overlayWindow.loadURL(`${startUrl}?window=overlay`).catch(e => {

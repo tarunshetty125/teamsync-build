@@ -20,6 +20,22 @@ export interface NativeModule {
     start(callback: (...args: any[]) => any, onSpeechEnded?: (...args: any[]) => any): void;
     stop(): void;
   };
+
+  // ── Optional stealth exports (macOS only) ─────────────────────────────
+  // Present in production binaries but NOT required for app startup.
+  // Accessed via `typeof` checks at call sites — never validated on load.
+
+  /** Applies NSPanel SPI attributes (becomesKeyOnlyIfNeeded, _setPreventsActivation)
+   *  to prevent the window from stealing macOS focus. Requires the window to be
+   *  created with `type: 'panel'` to have any effect. */
+  applyStealthToWindow?: (windowHandle: Buffer) => void;
+
+  /** Returns true if the app has been granted macOS Accessibility permission
+   *  (AXIsProcessTrusted). Required for CGEventTap-based stealth keyboard. */
+  isAccessibilityGranted?: () => boolean;
+
+  // Phase 2 — StealthKeyboardTap (not yet wired)
+  // Phase 3 — getDefaultOutputDeviceId (not yet wired)
 }
 
 // Hard-required native capabilities are limited to device/audio primitives.
