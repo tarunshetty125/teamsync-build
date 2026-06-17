@@ -339,6 +339,7 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                                 isActive={bridge.isInterviewerSpeaking}
                                 aiHasResponded={!bridge.isProcessing}
                                 variant="pro-v2"
+                                sttConfigured={bridge.sttConfigured}
                                 interviewerChannel={{
                                     status: bridge.sttInterviewerStatus as 'connected' | 'reconnecting' | 'failed',
                                     error: bridge.sttInterviewerError,

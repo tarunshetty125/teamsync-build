@@ -24,7 +24,7 @@ type ResizeOpts = {
 };
 
 const RESIZE_THROTTLE_MS = 300;
-const V2_COLLAPSE_HOLD_MS = 380;
+const V2_COLLAPSE_HOLD_MS = 500;
 const V2_MEASUREMENT_SETTLE_MS = 180;
 const V2_COLLAPSED_HEIGHT = 60;
 const V2_COLLAPSED_WITH_TRANSCRIPT_HEIGHT = 180;
@@ -46,20 +46,22 @@ function computeDimensions(
             const height = container
                 ? Math.max(Math.ceil(container.scrollHeight) + 16, V2_OVERLAY_WINDOW_DEFAULT_HEIGHT)
                 : V2_OVERLAY_WINDOW_DEFAULT_HEIGHT;
-            return {
+            const dims = {
                 width: clampNumber(layout.windowWidth, minWidth, maxWidth),
                 height: clampNumber(height, constraints.minHeight, maxHeight),
             };
+            return dims;
         }
         // Keep collapsed sizing deterministic so AnimatePresence exit frames from the
         // panels cannot re-measure the old expanded stack and force a tall shell.
         const height = showTranscriptStrip
             ? V2_COLLAPSED_WITH_TRANSCRIPT_HEIGHT
             : V2_COLLAPSED_HEIGHT;
-        return {
+        const dims = {
             width: clampNumber(Math.min(V2_BAR_ONLY_WIDTH, maxWidth), minWidth, maxWidth),
             height: clampNumber(height, constraints.minHeight, maxHeight),
         };
+        return dims;
     }
 
     const measuredHeight = container
@@ -94,6 +96,7 @@ export function useV2OverlayResize({
     const diagramInteractingRef = useRef(false);
     const overlayDraggingRef = useRef(false);
     const measurementSettlesAtRef = useRef(0);
+    const collapseFadingRef = useRef(false);
 
     const prevExpandedRef = useRef(isExpanded);
     const prevTranscriptRef = useRef(showTranscriptStrip);
@@ -103,6 +106,7 @@ export function useV2OverlayResize({
             collapseHoldUntilRef.current = Date.now() + V2_COLLAPSE_HOLD_MS;
         } else if (isExpanded) {
             collapseHoldUntilRef.current = 0;
+            collapseFadingRef.current = false;
         }
         prevExpandedRef.current = isExpanded;
         prevTranscriptRef.current = showTranscriptStrip;
@@ -122,6 +126,10 @@ export function useV2OverlayResize({
         if (!constraints) return;
         if (overlayDraggingRef.current) return;
         if (diagramInteractingRef.current) return;
+        // Don't push during the collapse→fade cycle — the release timer handles the final snap
+        if (collapseFadingRef.current || (!isExpanded && Date.now() >= collapseHoldUntilRef.current && collapseHoldUntilRef.current > 0)) {
+            return;
+        }
         const shouldHoldExpandedShell =
             !isExpanded && Date.now() < collapseHoldUntilRef.current;
         let dims = computeDimensions(
@@ -195,7 +203,28 @@ export function useV2OverlayResize({
             const remaining = collapseHoldUntilRef.current - Date.now();
             collapseReleaseTimerRef.current = setTimeout(() => {
                 collapseReleaseTimerRef.current = null;
-                pushDimensions();
+                // Mark as fading so burst/throttled pushes are suppressed
+                collapseFadingRef.current = true;
+                const el = containerRef.current;
+                if (el) {
+                    el.style.transition = 'opacity 80ms ease-out';
+                    el.style.opacity = '0';
+                }
+                setTimeout(() => {
+                    // Clear guards so our own pushDimensions call goes through
+                    collapseHoldUntilRef.current = 0;
+                    collapseFadingRef.current = false;
+                    pushDimensions();
+                    // Re-block other callers until fade-in completes
+                    collapseFadingRef.current = true;
+                    setTimeout(() => {
+                        collapseFadingRef.current = false;
+                        if (el) {
+                            el.style.transition = 'opacity 120ms ease-in';
+                            el.style.opacity = '1';
+                        }
+                    }, 30);
+                }, 100);
             }, remaining + 16);
         }
 

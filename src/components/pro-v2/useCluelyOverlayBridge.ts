@@ -307,6 +307,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const [sttInterviewerProvider, setSttInterviewerProvider] = useState<string>('');
     const [sttUserStatus, setSttUserStatus] = useState<string>('connected');
     const [sttUserError, setSttUserError] = useState<string | undefined>();
+    const [sttConfigured, setSttConfigured] = useState(true);
 
     const currentTurnTextRef = useRef('');
     const lastFinalSentenceRef = useRef('');
@@ -985,8 +986,12 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         const unsubscribe = window.electronAPI.onMeetingStateChanged(({ isActive }: { isActive: boolean }) => {
             setIsMeetingActive(isActive);
             if (isActive) {
+                meetingEndingRef.current = false;
                 setMeetingStartTime(Date.now());
             } else {
+                // Flag meeting as ending BEFORE setIsExpanded(false) so the
+                // visibility effect knows not to call hideWindow().
+                meetingEndingRef.current = true;
                 // Collapse overlay immediately to prevent mode template actions from flashing
                 setIsExpanded(false);
                 setMessages([]);
@@ -1012,6 +1017,15 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         });
         return () => unsub();
     }, []);
+
+    // Derive whether STT is configured from the existing channel error state.
+    // If both channels fail with "No STT adapters" it means no STT key is configured.
+    useEffect(() => {
+        const noAdapters =
+            (sttInterviewerStatus === 'failed' && sttInterviewerError?.includes('No STT adapters')) ||
+            (sttUserStatus === 'failed' && sttUserError?.includes('No STT adapters'));
+        setSttConfigured(!noAdapters);
+    }, [sttInterviewerStatus, sttInterviewerError, sttUserStatus, sttUserError]);
 
     useEffect(() => {
         const cleanups: (() => void)[] = [];
@@ -1641,14 +1655,26 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         setIsExpanded((prev) => !prev);
     }, []);
 
-    // Keyboard shortcut to toggle expanded state (via Main Process — Cmd+B)
+    // Keyboard shortcut Cmd+B — full window hide/show.
+    // This does NOT toggle isExpanded (panel collapse). The main process
+    // already handles hide/show via toggleMainWindow() → hideMainWindow()/showMainWindow().
+    // The onToggleExpand IPC only arrives so the renderer can react if needed;
+    // the actual window visibility is managed by the main process.
     useEffect(() => {
-        if (!window.electronAPI?.onToggleExpand) return;
-        const unsubscribe = window.electronAPI.onToggleExpand(() => {
-            setIsExpanded((prev) => !prev);
-        });
-        return () => unsubscribe();
+        // No renderer-side action needed — main process handles visibility.
+        // Hook kept to maintain React hook ordering.
     }, []);
+
+    // (Hook slot preserved for React hook ordering — was visibility sync effect)
+    const overlayHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const meetingEndingRef = useRef(false);
+
+    useEffect(() => {
+        // No-op: window visibility is now handled by main process for Cmd+B,
+        // and panel collapse (isExpanded) no longer hides the window.
+        void overlayHideTimerRef; // keep ref alive to avoid lint
+        void meetingEndingRef;
+    }, [isExpanded]);
 
     const handleReset = useCallback(async () => {
         if (isProcessing) {
@@ -1859,6 +1885,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         sttInterviewerProvider,
         sttUserStatus,
         sttUserError,
+        sttConfigured,
         overlayOpacity,
         hasProContextAccess,
         currentModel,

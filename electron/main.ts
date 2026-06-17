@@ -2892,11 +2892,9 @@ export class AppState {
       // In launcher mode, just physically hide/show the window
       this.windowHelper.toggleMainWindow();
     } else {
-      // In overlay mode, send toggle-expand IPC to expand/collapse the UI
-      const targetWindow = this.windowHelper.getOverlayWindow();
-      if (targetWindow && !targetWindow.isDestroyed()) {
-        targetWindow.webContents.send('toggle-expand');
-      }
+      // In overlay mode, hide/show the entire overlay window.
+      // Panel collapse (sidebar toggle) is handled by the UI button in the renderer.
+      this.windowHelper.toggleMainWindow();
     }
   }
 

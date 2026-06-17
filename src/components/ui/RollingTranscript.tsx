@@ -26,6 +26,8 @@ interface RollingTranscriptProps {
     microphoneChannel?: ChannelStatus;
     onCopyDiagnostics?: () => void;
     variant?: 'default' | 'pro-v2';
+    /** When true, STT is configured — hide diagnostics panel. Only show diagnostics when STT is NOT configured. */
+    sttConfigured?: boolean;
 }
 
 const RollingTranscript: React.FC<RollingTranscriptProps> = ({
@@ -33,6 +35,7 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
     interviewerChannel, microphoneChannel,
     onCopyDiagnostics,
     variant = 'default',
+    sttConfigured = true,
 }) => {
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -47,7 +50,8 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
 
     const anyFailed = intStatus === 'failed' || micStatus === 'failed';
     const anyReconnecting = intStatus === 'reconnecting' || micStatus === 'reconnecting';
-    const isNormal = !anyFailed && !anyReconnecting && micStatus === 'connected';
+    // When STT is configured, treat all states as normal — show transcript pill, hide diagnostics
+    const isNormal = sttConfigured || (!anyFailed && !anyReconnecting && micStatus === 'connected');
 
     const intErrorCategory: SttErrorCategory | null = (intStatus === 'failed' && intError)
         ? categorizeSttError(intError)
@@ -158,8 +162,8 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                 } : undefined}
                 transition={isProV2 ? proV2Spring : undefined}
             >
-                {anyFailed && <div className="absolute inset-0 bg-red-500/10 stt-pulse-red" />}
-                {anyReconnecting && !anyFailed && <div className="absolute inset-0 bg-amber-500/10 stt-pulse-amber" />}
+                {!sttConfigured && anyFailed && <div className="absolute inset-0 bg-red-500/10 stt-pulse-red" />}
+                {!sttConfigured && anyReconnecting && !anyFailed && <div className="absolute inset-0 bg-amber-500/10 stt-pulse-amber" />}
 
                 <motion.div
                     layout={isProV2}
@@ -260,8 +264,8 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                         </motion.div>
                     )}
 
-                    {/* Reconnecting state */}
-                    {anyReconnecting && !anyFailed && (
+                    {/* Reconnecting state — only when STT is NOT configured */}
+                    {!sttConfigured && anyReconnecting && !anyFailed && (
                         <span className="flex items-center justify-center w-full text-[10px] leading-5 stt-state-enter">
                             <span className="text-amber-400/70 font-medium tracking-wide">
                                 Reconnecting
@@ -270,8 +274,8 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                     )}
                 </motion.div>
 
-                {/* Error chips row */}
-                {(anyFailed || anyReconnecting) && (
+                {/* Error chips row — only when STT is NOT configured */}
+                {!sttConfigured && (anyFailed || anyReconnecting) && (
                     <div className="relative w-[90%] mx-auto">
                         <span className="flex items-center justify-center w-full text-[10px] leading-5 pl-2 stt-state-enter gap-2">
                             {intStatus === 'failed' && intErrorCategory && (
@@ -328,8 +332,8 @@ const RollingTranscript: React.FC<RollingTranscriptProps> = ({
                 )}
             </motion.div>
 
-            {/* Expanded diagnostics panel */}
-            {expanded && (
+            {/* Expanded diagnostics panel — only when STT is NOT configured */}
+            {!sttConfigured && expanded && (
                 <motion.div
                     initial={{ opacity: 0, height: 0, scale: 0.98 }}
                     animate={{ opacity: 1, height: 'auto', scale: 1 }}
