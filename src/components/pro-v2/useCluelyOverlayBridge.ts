@@ -1641,6 +1641,15 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         setIsExpanded((prev) => !prev);
     }, []);
 
+    // Keyboard shortcut to toggle expanded state (via Main Process — Cmd+B)
+    useEffect(() => {
+        if (!window.electronAPI?.onToggleExpand) return;
+        const unsubscribe = window.electronAPI.onToggleExpand(() => {
+            setIsExpanded((prev) => !prev);
+        });
+        return () => unsubscribe();
+    }, []);
+
     const handleReset = useCallback(async () => {
         if (isProcessing) {
             await cancelInFlightOverlayRequests();
