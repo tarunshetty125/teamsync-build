@@ -133,7 +133,7 @@ interface ProInsightsPanelProps {
 }
 
 const ProInsightsPanel = memo<ProInsightsPanelProps>(function ProInsightsPanel({
-    contextSummary,
+    contextSummary: _contextSummary,
     activeQuickActions,
     recommendedButton,
     overlayCopilotMode,

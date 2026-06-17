@@ -7,6 +7,8 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { STANDARD_CLOUD_MODELS, prettifyModelId } from '../../utils/modelUtils';
 import { validateCurl } from '../../lib/curl-validator';
+import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { buildProviderHealthReadModel } from '../../lib/providers/providerHealthReadModel';
 import { buildProviderDiagnosticsReadModel } from '../../lib/providers/providerDiagnosticsReadModel';
 import { buildProviderRoutingReadModel } from '../../lib/providers/providerRoutingReadModel';
@@ -1660,47 +1662,47 @@ export const AIProvidersSettings: React.FC = () => {
 
                         {bedrockCredentials.authMode === 'aws_cli' ? (
                             <div className="grid grid-cols-2 gap-3 mb-4">
-                                <input
+                                <Input
                                     value={bedrockCredentials.profileName || ''}
                                     onChange={(e) => setBedrockCredentials(prev => ({ ...prev, profileName: e.target.value }))}
                                     placeholder="Profile Name (optional)"
-                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                    className="text-xs"
                                 />
-                                <input
+                                <Input
                                     value={bedrockCredentials.region}
                                     onChange={(e) => setBedrockCredentials(prev => ({ ...prev, region: e.target.value }))}
                                     placeholder="Region"
-                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                    className="text-xs"
                                 />
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 gap-3 mb-4">
-                                <input
+                                <Input
                                     type="password"
                                     value={bedrockCredentials.accessKeyId || ''}
                                     onChange={(e) => setBedrockCredentials(prev => ({ ...prev, accessKeyId: e.target.value }))}
                                     placeholder="Access Key ID"
-                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                    className="text-xs"
                                 />
-                                <input
+                                <Input
                                     type="password"
                                     value={bedrockCredentials.secretAccessKey || ''}
                                     onChange={(e) => setBedrockCredentials(prev => ({ ...prev, secretAccessKey: e.target.value }))}
                                     placeholder="Secret Access Key"
-                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                    className="text-xs"
                                 />
-                                <input
+                                <Input
                                     type="password"
                                     value={bedrockCredentials.sessionToken || ''}
                                     onChange={(e) => setBedrockCredentials(prev => ({ ...prev, sessionToken: e.target.value }))}
                                     placeholder="Session Token (optional)"
-                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                    className="text-xs"
                                 />
-                                <input
+                                <Input
                                     value={bedrockCredentials.region}
                                     onChange={(e) => setBedrockCredentials(prev => ({ ...prev, region: e.target.value }))}
                                     placeholder="Region"
-                                    className="bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                    className="text-xs"
                                 />
                             </div>
                         )}
@@ -1860,23 +1862,23 @@ export const AIProvidersSettings: React.FC = () => {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-1">Provider Name</label>
-                                <input
+                                <Input
                                     type="text"
                                     value={customName}
                                     onChange={(e) => setCustomName(e.target.value)}
                                     placeholder="My Custom LLM"
-                                    className="w-full bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                                    className="text-xs"
                                 />
                             </div>
 
                             <div>
                                 <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-1">cURL Command</label>
                                 <div className="relative">
-                                    <textarea
+                                    <Textarea
                                         value={customCurl}
                                         onChange={(e) => setCustomCurl(e.target.value)}
                                         placeholder={`curl https://api.openai.com/v1/chat/completions ... "content": "{{TEXT}}"`}
-                                        className="w-full h-32 bg-bg-input border border-border-subtle rounded-lg p-4 text-xs font-mono text-text-primary focus:outline-none focus:border-accent-primary transition-colors resize-none leading-relaxed"
+                                        className="h-32 font-mono text-xs resize-none leading-relaxed"
                                     />
                                 </div>
                             </div>
@@ -1885,12 +1887,12 @@ export const AIProvidersSettings: React.FC = () => {
                                 <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-1">
                                     Response JSON Path <span className="text-text-tertiary normal-case font-normal">(Optional)</span>
                                 </label>
-                                <input
+                                <Input
                                     type="text"
                                     value={customResponsePath}
                                     onChange={(e) => setCustomResponsePath(e.target.value)}
                                     placeholder="e.g. choices[0].message.content"
-                                    className="w-full bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors font-mono"
+                                    className="text-xs font-mono"
                                 />
                                 <p className="text-[10px] text-text-secondary mt-1">
                                     Dot notation path to the answer text in the JSON response. If empty, the full JSON is returned.

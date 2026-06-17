@@ -13,6 +13,10 @@ import { AboutSection } from './AboutSection';
 import { HelpSettings } from './settings/HelpSettings';
 import { AIProvidersSettings } from './settings/AIProvidersSettings';
 import { TeamSyncApiSettings } from './settings/TeamSyncApiSettings';
+import { Switch } from './ui/switch';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
@@ -571,8 +575,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const [disguiseMode, setDisguiseMode] = useState<'terminal' | 'settings' | 'activity' | 'none'>('none');
     const [openOnLogin, setOpenOnLogin] = useState(false);
     const [themeMode, setThemeMode] = useState<'system' | 'light' | 'dark'>('system');
-    const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
-    const [isAiLangDropdownOpen, setIsAiLangDropdownOpen] = useState(false);
     const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'uptodate' | 'error'>('idle');
     const [updateErrorMessage, setUpdateErrorMessage] = useState<string | null>(null);
     const [latestUpdateVersion, setLatestUpdateVersion] = useState<string | null>(null);
@@ -580,8 +582,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const [updaterCacheLoading, setUpdaterCacheLoading] = useState(false);
     const [updaterCacheError, setUpdaterCacheError] = useState<string | null>(null);
     const updateStatusTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    const themeDropdownRef = React.useRef<HTMLDivElement>(null);
-    const aiLangDropdownRef = React.useRef<HTMLDivElement>(null);
+
 
     // Profile Engine State
     const [profileStatus, setProfileStatus] = useState<{
@@ -1115,24 +1116,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         }
     }, []);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (themeDropdownRef.current && !themeDropdownRef.current.contains(event.target as Node)) {
-                setIsThemeDropdownOpen(false);
-            }
-            if (aiLangDropdownRef.current && !aiLangDropdownRef.current.contains(event.target as Node)) {
-                setIsAiLangDropdownOpen(false);
-            }
-        };
 
-        if (isThemeDropdownOpen || isAiLangDropdownOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [isThemeDropdownOpen, isAiLangDropdownOpen]);
 
     const [showTranscript, setShowTranscript] = useState(() => {
         const stored = localStorage.getItem('teamsync_interviewer_transcript');
@@ -2274,12 +2258,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             <label className="text-xs font-medium text-text-secondary block">{label}</label>
             {extraFields}
             <div className="flex gap-2">
-                <input
+                <Input
                     type="password"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     placeholder={hasStoredKey ? (maskedKey || '••••••••••••') : placeholder}
-                    className="flex-1 bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
                 />
                 <button
                     onClick={() => handleSttKeySubmit(provider, value)}
@@ -2581,57 +2564,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const sidebarIndicatorTransition = shouldReduceMotion
         ? { duration: 0 }
         : { type: 'spring' as const, stiffness: 520, damping: 42, mass: 0.75 };
-    const switchTransition = shouldReduceMotion
-        ? { duration: 0 }
-        : { type: 'spring' as const, stiffness: 560, damping: 34, mass: 0.72 };
     const statusChipBaseClass = 'inline-flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-full border px-2.5 text-[10px] font-semibold leading-none whitespace-nowrap';
     const skeletonLineClass = 'rounded-full bg-bg-input/80 animate-pulse';
-    const getSwitchTrackClass = (checked: boolean, tone: 'accent' | 'sky' | 'purple' | 'amber' = 'accent') => {
-        if (!checked) return 'bg-bg-toggle-switch border border-border-muted';
-        if (tone === 'sky') return 'bg-sky-500';
-        if (tone === 'purple') return 'bg-purple-500';
-        if (tone === 'amber') return 'bg-amber-500';
-        return 'bg-accent-primary';
-    };
-    const renderSettingsSwitch = ({
-        checked,
-        onToggle,
-        label,
-        tone = 'accent',
-        disabled = false,
-        size = 'default',
-    }: {
-        checked: boolean;
-        onToggle: () => void;
-        label: string;
-        tone?: 'accent' | 'sky' | 'purple' | 'amber';
-        disabled?: boolean;
-        size?: 'default' | 'small';
-    }) => {
-        const isSmall = size === 'small';
-        const thumbSize = isSmall ? 'h-3 w-3' : 'h-4 w-4';
-        const trackSize = isSmall ? 'h-5 w-9' : 'h-6 w-11';
-        const thumbOffset = isSmall ? 16 : 20;
-
-        return (
-            <motion.button
-                type="button"
-                role="switch"
-                aria-checked={checked}
-                aria-label={label}
-                onClick={disabled ? undefined : onToggle}
-                disabled={disabled}
-                whileTap={shouldReduceMotion || disabled ? undefined : { scale: 0.97 }}
-                className={`relative shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent-primary/25 disabled:cursor-not-allowed disabled:opacity-50 ${trackSize} ${getSwitchTrackClass(checked, tone)}`}
-            >
-                <motion.span
-                    className={`absolute left-1 top-1 rounded-full bg-white shadow-sm ${thumbSize}`}
-                    animate={{ x: checked ? thumbOffset : 0 }}
-                    transition={switchTransition}
-                />
-            </motion.button>
-        );
-    };
 
     const renderDeleteProfileIntelligenceCard = (surface: 'profile') => (
         <section
@@ -2718,13 +2652,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                         >
 
                             {/* Sidebar */}
-                            <div className="flex w-[210px] shrink-0 flex-col border-r border-border-subtle bg-bg-secondary text-text-primary">
-                                <div className="px-4 pt-4 pb-3 border-b border-border-subtle">
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">Quietly</p>
-                                    <div className="mt-1.5 flex items-center justify-between gap-3">
-                                        <h2 className="text-[17px] font-semibold tracking-tight text-text-primary">Settings</h2>
+                            <div className="flex w-[200px] shrink-0 flex-col border-r border-border-subtle bg-bg-secondary text-text-primary">
+                                <div className="px-4 pt-4 pb-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <h2 className="text-[15px] font-semibold tracking-tight text-text-primary">Settings</h2>
                                         {settingsHeaderBadge && (
-                                            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${settingsHeaderBadge.className}`}>
+                                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-semibold ${settingsHeaderBadge.className}`}>
                                                 {isPremium && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
                                                 {settingsHeaderBadge.label}
                                             </span>
@@ -2732,14 +2665,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                     </div>
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto px-2.5 py-3.5">
-                                    <nav className="space-y-4" aria-label="Settings sections">
+                                <div className="flex-1 overflow-y-auto px-2 py-2">
+                                    <nav className="space-y-3" aria-label="Settings sections">
                                         {sidebarGroups.map((group) => (
                                             <div key={group.label}>
-                                                <div className="px-2 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-text-tertiary">
+                                                <div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
                                                     {group.label}
                                                 </div>
-                                                <div className="space-y-0.5">
+                                                <div className="space-y-px">
                                                     {group.items.map((item) => {
                                                         const isActive = activeTab === item.id;
                                                         return (
@@ -2747,24 +2680,24 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 key={item.id}
                                                                 onClick={() => openSettingsSection(item.id)}
                                                                 aria-current={isActive ? 'page' : undefined}
-                                                                className={`group relative w-full overflow-hidden rounded-xl px-2.5 py-2.5 text-left text-[12.5px] font-medium transition-colors duration-200 flex items-center gap-2.5 active:scale-[0.99] ${isActive
+                                                                className={`group relative w-full overflow-hidden rounded-lg px-2 py-1.5 text-left text-[13px] font-medium transition-colors duration-150 flex items-center gap-2 active:scale-[0.99] ${isActive
                                                                     ? 'text-text-primary'
-                                                                    : 'text-text-secondary hover:bg-bg-item-active/50 hover:text-text-primary'
+                                                                    : 'text-text-secondary hover:bg-bg-item-active/40 hover:text-text-primary'
                                                                     }`}
                                                             >
                                                                 {isActive && (
                                                                     <motion.span
                                                                         layoutId="settings-sidebar-active"
-                                                                        className="absolute inset-0 rounded-xl border border-border-subtle bg-bg-item-active shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                                                                        className="absolute inset-0 rounded-lg bg-bg-item-active"
                                                                         transition={sidebarIndicatorTransition}
                                                                     />
                                                                 )}
-                                                                <span className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors ${isActive ? 'bg-bg-input shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]' : 'group-hover:bg-bg-input'}`}>
+                                                                <span className="relative z-10 shrink-0 text-text-tertiary">
                                                                     {item.icon}
                                                                 </span>
                                                                 <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
                                                                 {item.meta && (
-                                                                    <span className={`relative z-10 max-w-[72px] truncate ${statusChipBaseClass} ${isActive ? 'border-border-subtle bg-bg-input text-text-primary' : 'border-border-subtle bg-bg-input text-text-secondary'}`}>
+                                                                    <span className={`relative z-10 max-w-[60px] truncate text-[10px] font-medium ${isActive ? 'text-text-secondary' : 'text-text-tertiary'}`}>
                                                                         {item.meta}
                                                                     </span>
                                                                 )}
@@ -2843,115 +2776,78 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             </div>
 
                             {/* Content */}
-                            <div className="settings-right-surface min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-5 py-5 sm:px-6 lg:px-7">
+                            <div className="settings-right-surface min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-6 py-5">
                                 <AnimatePresence mode="wait" initial={false}>
                                     <motion.div
                                         key={activeTab}
                                         {...sectionMotionProps}
-                                        className="mx-auto min-h-full min-w-0 max-w-[720px]"
+                                        className="mx-auto min-h-full min-w-0 max-w-[640px]"
                                     >
                                         {activeTab === 'privacy' && (
-                                            <div className="space-y-6 animated fadeIn select-text pb-4">
+                                            <div className="space-y-5 animated fadeIn select-text pb-4">
                                                 <div className="min-w-0">
-                                                    <h3 className="text-[20px] font-semibold tracking-tight text-text-primary">Privacy</h3>
-                                                    <p className="mt-1.5 max-w-[560px] text-[13px] leading-relaxed text-text-secondary">
+                                                    <h3 className="text-lg font-semibold tracking-tight text-text-primary">Privacy</h3>
+                                                    <p className="mt-1 text-[13px] text-text-secondary">
                                                         Screen sharing behavior, mouse passthrough, and system permissions.
                                                     </p>
                                                 </div>
 
-                                                <div className="grid grid-cols-1 gap-4">
+                                                {/* Screen sharing — grouped card */}
+                                                <div>
+                                                    <h3 className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-2 px-1">Screen sharing</h3>
+                                                    <div className="rounded-xl border border-border-subtle overflow-hidden divide-y divide-border-subtle">
 
-
-                                                    <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
-                                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                                            <div className="flex min-w-0 items-start gap-3">
-                                                                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${getTrustChipClass(stealthTrustState)}`}>
-                                                                    <Ghost size={18} />
+                                                        <div className="flex items-center justify-between px-4 py-2.5">
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className="text-[13px] font-medium text-text-primary">Screen sharing privacy</p>
+                                                                    <span className={`${statusChipBaseClass} ${getTrustChipClass(stealthTrustState)}`}>
+                                                                        {isUndetectable ? 'Protected' : 'Disabled'}
+                                                                    </span>
                                                                 </div>
-                                                                <div className="min-w-0">
-                                                                    <h4 className="text-[15px] font-semibold text-text-primary">Privacy during screen sharing</h4>
-                                                                    <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
-                                                                        Controls how Quietly windows behave when another app is sharing or recording the screen.
-                                                                    </p>
-                                                                </div>
+                                                                <p className="text-[12px] text-text-secondary mt-0.5">
+                                                                    {isUndetectable ? 'Content protection applied to supported windows' : 'Windows may be visible during screen sharing'}
+                                                                </p>
                                                             </div>
-                                                            <span className={`${statusChipBaseClass} ${getTrustChipClass(stealthTrustState)}`}>
-                                                                {isUndetectable ? 'Protected' : 'Disabled'}
-                                                            </span>
+                                                            <Switch checked={isUndetectable} onCheckedChange={handleToggleUndetectable} aria-label="Toggle screen sharing privacy" />
                                                         </div>
 
-                                                        <div className="mt-5 space-y-3">
-                                                            <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle bg-bg-input/60 px-3 py-3">
-                                                                <div>
-                                                                    <p className="text-[12px] font-semibold text-text-primary">Screen sharing privacy</p>
-                                                                    <p className="mt-0.5 text-[11px] text-text-secondary">
-                                                                        {isUndetectable ? 'Quietly applies content protection to supported windows.' : 'Quietly windows may be visible in screen sharing.'}
-                                                                    </p>
-                                                                </div>
-                                                                {renderSettingsSwitch({
-                                                                    checked: isUndetectable,
-                                                                    onToggle: handleToggleUndetectable,
-                                                                    label: 'Toggle screen sharing privacy',
-                                                                })}
+                                                        <div className="flex items-center justify-between px-4 py-2.5">
+                                                            <div>
+                                                                <p className="text-[13px] font-medium text-text-primary">Mouse passthrough</p>
+                                                                <p className="text-[12px] text-text-secondary mt-0.5">
+                                                                    {isMousePassthrough ? 'Clicks pass through to the app underneath' : 'Overlay remains interactive'}
+                                                                </p>
                                                             </div>
-
-                                                            <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle bg-bg-input/60 px-3 py-3">
-                                                                <div>
-                                                                    <p className="text-[12px] font-semibold text-text-primary">Mouse passthrough</p>
-                                                                    <p className="mt-0.5 text-[11px] text-text-secondary">
-                                                                        {isMousePassthrough ? 'Clicks pass through Quietly to the app underneath.' : 'Quietly keeps normal overlay interaction.'}
-                                                                    </p>
-                                                                </div>
-                                                                {renderSettingsSwitch({
-                                                                    checked: isMousePassthrough,
-                                                                    onToggle: handleToggleMousePassthrough,
-                                                                    label: 'Toggle mouse passthrough',
-                                                                    tone: 'sky',
-                                                                })}
-                                                            </div>
-
-                                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                                                {[
-                                                                    ['Limitations', 'Protection depends on the meeting app and macOS capture path.'],
-                                                                    ['Recovery shortcut', shortcuts.toggleVisibility.length ? shortcuts.toggleVisibility.join(' ') : 'Set in Keybinds'],
-                                                                    ['Platform notes', permissionStatus?.platform === 'darwin' ? 'macOS privacy controls are active.' : 'Permission handling follows this OS.'],
-                                                                    ['Interaction', isMousePassthrough ? 'Pointer clicks pass through the overlay.' : 'Overlay controls remain clickable.'],
-                                                                ].map(([label, value]) => (
-                                                                    <div key={label} className="rounded-xl border border-border-subtle bg-bg-input/50 px-3 py-2.5">
-                                                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">{label}</p>
-                                                                        <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{value}</p>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
+                                                            <Switch checked={isMousePassthrough} onCheckedChange={handleToggleMousePassthrough} aria-label="Toggle mouse passthrough" variant="sky" />
                                                         </div>
-                                                    </section>
+                                                    </div>
+                                                    <p className="text-[11px] text-text-tertiary mt-2 px-1">
+                                                        Recovery: {shortcuts.toggleVisibility.length ? shortcuts.toggleVisibility.join(' ') : 'Set in Keybinds'}
+                                                        {' · '}Protection depends on meeting app and macOS capture path
+                                                    </p>
                                                 </div>
 
-                                                <section className="rounded-2xl border border-border-subtle bg-bg-card p-5">
-                                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                                        <div>
-                                                            <h4 className="text-[15px] font-semibold text-text-primary">Permission checklist</h4>
-                                                            <p className="mt-1 max-w-[540px] text-[12px] leading-relaxed text-text-secondary">
-                                                                Each permission has a clear reason, benefit, and repair path. Nothing here changes how permissions are requested.
-                                                            </p>
-                                                        </div>
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-2 px-1">
+                                                        <h3 className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary">Permissions</h3>
                                                         <button
                                                             onClick={() => refreshPermissions().catch(() => { })}
                                                             disabled={permissionsChecking}
-                                                            className="shrink-0 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-[12px] font-semibold text-text-primary transition-all hover:bg-bg-elevated active:scale-[0.98] disabled:opacity-50"
+                                                            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
                                                         >
-                                                            {permissionsChecking ? <Activity size={13} /> : <RefreshCw size={13} />}
-                                                            {permissionsChecking ? 'Checking' : 'Check again'}
+                                                            {permissionsChecking ? <Activity size={12} /> : <RefreshCw size={12} />}
+                                                            {permissionsChecking ? 'Checking' : 'Check'}
                                                         </button>
                                                     </div>
 
                                                     {permissionError && (
-                                                        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-500">
+                                                        <div className="mb-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-500">
                                                             {permissionError}
                                                         </div>
                                                     )}
 
-                                                    <div className="mt-5 divide-y divide-border-subtle overflow-hidden rounded-2xl border border-border-subtle">
+                                                    <div className="divide-y divide-border-subtle overflow-hidden rounded-xl border border-border-subtle">
                                                         {!permissionsInitialized && permissionsChecking ? (
                                                             <div className="space-y-4 bg-bg-item-surface p-4" aria-live="polite" aria-label="Checking permissions">
                                                                 {[0, 1, 2].map((item) => (
@@ -3018,42 +2914,42 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             );
                                                         })}
                                                     </div>
-                                                </section>
+                                                </div>
 
 
                                             </div>
                                         )}
                                         {activeTab === 'appearance' && (
-                                            <div className="space-y-6 animated fadeIn">
-                                                <div className="space-y-3.5">
+                                            <div className="space-y-5 animated fadeIn">
+
                                                     {/* Pro UI Toggle — Premium/Trial only */}
-                                                    <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle flex items-center justify-between transition-all ${hasProAccess && useProUI ? 'shadow-lg shadow-purple-500/10' : ''} ${!hasProAccess ? 'opacity-80' : ''}`}>
-                                                        <div className="flex flex-col gap-1">
+                                                    <div className={`rounded-xl border border-border-subtle px-4 py-3 flex items-center justify-between gap-4 transition-all ${hasProAccess && useProUI ? 'border-purple-500/30 bg-purple-500/5' : ''} ${!hasProAccess ? 'opacity-80' : ''}`}>
+                                                        <div className="min-w-0">
                                                             <div className="flex items-center gap-2">
-                                                                <Sparkles size={18} className={hasProAccess && useProUI ? 'text-purple-400' : 'text-text-primary'} />
-                                                                <h3 className="text-lg font-bold text-text-primary">Pro UI</h3>
-                                                                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20">Beta</span>
-                                                                {!hasProAccess && <Lock size={14} className="text-text-tertiary" />}
+                                                                <Sparkles size={14} className={hasProAccess && useProUI ? 'text-purple-400' : 'text-text-secondary'} />
+                                                                <p className="text-[13px] font-medium text-text-primary">Pro UI</p>
+                                                                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20">Beta</span>
+                                                                {!hasProAccess && <Lock size={12} className="text-text-tertiary" />}
                                                             </div>
-                                                            <p className="text-xs text-text-secondary">
+                                                            <p className="text-[12px] text-text-secondary mt-0.5">
                                                                 {hasProAccess
-                                                                    ? 'Switch to the new floating panels layout with split insights and response surfaces.'
-                                                                    : 'Upgrade to Pro to unlock the new floating panels layout.'
+                                                                    ? 'Floating panels layout with split insights and response surfaces'
+                                                                    : 'Upgrade to Pro to unlock the new layout'
                                                                 }
                                                             </p>
                                                         </div>
                                                         {hasProAccess ? (
-                                                            renderSettingsSwitch({
-                                                                checked: useProUI,
-                                                                onToggle: () => {
+                                                            <Switch
+                                                                checked={useProUI}
+                                                                onCheckedChange={() => {
                                                                     const newState = !useProUI;
                                                                     setUseProUI(newState);
                                                                     localStorage.setItem('teamsync_overlay_v2', String(newState));
                                                                     window.dispatchEvent(new CustomEvent('teamsync-overlay-v2-changed', { detail: newState }));
-                                                                },
-                                                                label: 'Toggle Pro UI',
-                                                                tone: 'purple',
-                                                            })
+                                                                }}
+                                                                aria-label="Toggle Pro UI"
+                                                                variant="purple"
+                                                            />
                                                         ) : (
                                                             <button
                                                                 onClick={() => setIsPremiumModalOpen(true)}
@@ -3064,191 +2960,148 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         )}
                                                     </div>
 
-                                                    <div>
-                                                        <h3 className="text-lg font-bold text-text-primary mb-1">General settings</h3>
-                                                        <p className="text-xs text-text-secondary mb-2">Customize how Quietly works for you</p>
+                                                {/* General Settings — grouped card */}
+                                                <div>
+                                                    <h3 className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-2 px-1">General</h3>
+                                                    <div className="rounded-xl border border-border-subtle overflow-hidden divide-y divide-border-subtle">
 
-                                                        <div className={`rounded-xl border ${isLight ? 'bg-bg-card border-border-subtle divide-y divide-border-subtle' : 'bg-transparent border-transparent divide-y divide-border-subtle/20'}`}>
-                                                            <div className="space-y-0">
-                                                                {/* Open at Login */}
-                                                                <div className="flex items-center justify-between px-4 py-3">
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                                            <Power size={20} />
-                                                                        </div>
-                                                                        <div>
-                                                                            <h3 className="text-sm font-bold text-text-primary">Open Quietly when you log in</h3>
-                                                                            <p className="text-xs text-text-secondary mt-0.5">Quietly will open automatically when you log in to your computer</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    {renderSettingsSwitch({
-                                                                        checked: openOnLogin,
-                                                                        onToggle: () => {
-                                                                            const newState = !openOnLogin;
-                                                                            setOpenOnLogin(newState);
-                                                                            window.electronAPI?.setOpenAtLogin(newState);
-                                                                        },
-                                                                        label: 'Toggle open Quietly at login',
-                                                                    })}
-                                                                </div>
+                                                        {/* Open at Login */}
+                                                        <div className="flex items-center justify-between px-4 py-2.5">
+                                                            <div>
+                                                                <p className="text-[13px] font-medium text-text-primary">Open at login</p>
+                                                                <p className="text-[12px] text-text-secondary mt-0.5">Launch automatically when your computer starts</p>
+                                                            </div>
+                                                            <Switch
+                                                                checked={openOnLogin}
+                                                                onCheckedChange={() => {
+                                                                    const newState = !openOnLogin;
+                                                                    setOpenOnLogin(newState);
+                                                                    window.electronAPI?.setOpenAtLogin(newState);
+                                                                }}
+                                                                aria-label="Toggle open Quietly at login"
+                                                            />
+                                                        </div>
 
-                                                                {/* Debug Logging */}
-                                                                <div className="flex items-center justify-between px-4 py-3">
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className={`w-10 h-10 bg-bg-item-surface rounded-lg border flex items-center justify-center transition-colors ${verboseLogging ? 'border-amber-500/40 text-amber-400' : 'border-border-subtle text-text-tertiary'}`}>
-                                                                            <Terminal size={20} />
-                                                                        </div>
-                                                                        <div>
-                                                                            <h3 className="text-sm font-bold text-text-primary">Verbose debug logging</h3>
-                                                                            <p className="text-xs text-text-secondary mt-0.5">Print detailed audio, STT, and pipeline diagnostics</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    {renderSettingsSwitch({
-                                                                        checked: verboseLogging,
-                                                                        onToggle: () => {
-                                                                            const newState = !verboseLogging;
-                                                                            setVerboseLogging(newState);
-                                                                            window.electronAPI?.setVerboseLogging?.(newState);
-                                                                            if (newState) {
-                                                                                setShowVerboseToast(true);
-                                                                            }
-                                                                        },
-                                                                        label: 'Toggle verbose debug logging',
-                                                                        tone: 'amber',
-                                                                    })}
-                                                                </div>
+                                                        {/* Debug Logging */}
+                                                        <div className="flex items-center justify-between px-4 py-2.5">
+                                                            <div>
+                                                                <p className="text-[13px] font-medium text-text-primary">Verbose logging</p>
+                                                                <p className="text-[12px] text-text-secondary mt-0.5">Print audio, STT, and pipeline diagnostics</p>
+                                                            </div>
+                                                            <Switch
+                                                                checked={verboseLogging}
+                                                                onCheckedChange={() => {
+                                                                    const newState = !verboseLogging;
+                                                                    setVerboseLogging(newState);
+                                                                    window.electronAPI?.setVerboseLogging?.(newState);
+                                                                    if (newState) {
+                                                                        setShowVerboseToast(true);
+                                                                    }
+                                                                }}
+                                                                aria-label="Toggle verbose debug logging"
+                                                                variant="amber"
+                                                            />
+                                                        </div>
 
-                                                                {/* Verbose logging toast */}
-                                                                <AnimatePresence>
-                                                                    {showVerboseToast && (
-                                                                        <motion.div
-                                                                            key="verbose-toast"
-                                                                            initial={{ opacity: 0, y: -6, height: 0 }}
-                                                                            animate={{ opacity: 1, y: 0, height: 'auto' }}
-                                                                            exit={{ opacity: 0, y: -4, height: 0 }}
-                                                                            transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-                                                                            className="mx-4 mb-1 overflow-hidden"
-                                                                        >
-                                                                            <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                                                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                                                    <Terminal size={14} className="text-amber-400 shrink-0" />
-                                                                                    <p className="text-xs text-amber-200/80 leading-snug truncate">
-                                                                                        Logs → <span className="font-mono text-amber-300">~/Documents/debug.log</span>
-                                                                                    </p>
-                                                                                </div>
-                                                                                <button
-                                                                                    onClick={() => window.electronAPI?.openLogFile?.()}
-                                                                                    className="shrink-0 text-[11px] font-medium text-amber-400 hover:text-amber-300 transition-colors px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25"
-                                                                                >
-                                                                                    Open
-                                                                                </button>
-                                                                            </div>
-                                                                            {/* 5-second drain bar */}
-                                                                            <motion.div
-                                                                                className="h-[2px] bg-amber-500/40 rounded-b-xl"
-                                                                                initial={{ scaleX: 1, originX: 0 }}
-                                                                                animate={{ scaleX: 0 }}
-                                                                                transition={{ duration: 5, ease: 'linear', delay: 0.2 }}
-                                                                            />
-                                                                        </motion.div>
-                                                                    )}
-                                                                </AnimatePresence>
-
-                                                                {/* Interviewer Transcript */}
-                                                                <div className="flex items-center justify-between px-4 py-3">
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                                            <MessageSquare size={20} />
-                                                                        </div>
-                                                                        <div>
-                                                                            <h3 className="text-sm font-bold text-text-primary">Interviewer Transcript</h3>
-                                                                            <p className="text-xs text-text-secondary mt-0.5">Show real-time transcription of the interviewer</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    {renderSettingsSwitch({
-                                                                        checked: showTranscript,
-                                                                        onToggle: () => {
-                                                                            const newState = !showTranscript;
-                                                                            setShowTranscript(newState);
-                                                                            localStorage.setItem('teamsync_interviewer_transcript', String(newState));
-                                                                            window.dispatchEvent(new Event('storage'));
-                                                                        },
-                                                                        label: 'Toggle interviewer transcript',
-                                                                    })}
-                                                                </div>
-
-
-                                                                {/* Theme */}
-                                                                <div className="flex items-center justify-between px-4 py-3">
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary">
-                                                                            <Palette size={20} />
-                                                                        </div>
-                                                                        <div>
-                                                                            <h3 className="text-sm font-bold text-text-primary">Theme</h3>
-                                                                            <p className="text-xs text-text-secondary mt-0.5">Customize how Quietly looks on your device</p>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="relative" ref={themeDropdownRef}>
-                                                                        <button
-                                                                            onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
-                                                                            className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 min-w-[110px] justify-between"
-                                                                        >
-                                                                            <div className="flex items-center gap-2 overflow-hidden">
-                                                                                <span className="text-text-secondary shrink-0">
-                                                                                    {themeMode === 'system' && <Monitor size={14} />}
-                                                                                    {themeMode === 'light' && <Sun size={14} />}
-                                                                                    {themeMode === 'dark' && <Moon size={14} />}
-                                                                                </span>
-                                                                                <span className="capitalize text-ellipsis overflow-hidden whitespace-nowrap">{themeMode}</span>
-                                                                            </div>
-                                                                            <ChevronDown size={12} className={`shrink-0 transition-transform ${isThemeDropdownOpen ? 'rotate-180' : ''}`} />
-                                                                        </button>
-
-                                                                        {/* Dropdown Menu */}
-                                                                        {isThemeDropdownOpen && (
-                                                                            <div className="absolute right-0 top-full mt-1 min-w-full w-max bg-bg-elevated border border-border-subtle rounded-lg shadow-xl overflow-hidden z-20 p-1 animated fadeIn select-none">
-                                                                                {[
-                                                                                    { mode: 'system', label: 'System', icon: <Monitor size={14} /> },
-                                                                                    { mode: 'light', label: 'Light', icon: <Sun size={14} /> },
-                                                                                    { mode: 'dark', label: 'Dark', icon: <Moon size={14} /> }
-                                                                                ].map((option) => (
-                                                                                    <button
-                                                                                        key={option.mode}
-                                                                                        onClick={() => {
-                                                                                            handleSetTheme(option.mode as any);
-                                                                                            setIsThemeDropdownOpen(false);
-                                                                                        }}
-                                                                                        className={`w-full text-left px-2 py-1.5 rounded-md text-xs flex items-center gap-2 transition-colors ${themeMode === option.mode ? 'text-text-primary bg-bg-item-active/50' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
-                                                                                    >
-                                                                                        <span className={themeMode === option.mode ? 'text-text-primary' : 'text-text-secondary group-hover:text-text-primary'}>{option.icon}</span>
-                                                                                        <span className="font-medium">{option.label}</span>
-                                                                                    </button>
-                                                                                ))}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-
-
-                                                                {/* Version */}
-                                                                <div className="flex items-start justify-between gap-4 px-4 py-3">
-                                                                    <div className="flex items-start gap-4">
-                                                                        <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
-                                                                            <BadgeCheck size={20} />
-                                                                        </div>
-                                                                        <div>
-                                                                            <h3 className="text-sm font-bold text-text-primary">Version</h3>
-                                                                            <p className="text-xs text-text-secondary mt-0.5">
-                                                                                {updateStatus === 'checking' ? 'Checking for updates...' :
-                                                                                    updateStatus === 'uptodate' ? `You're on the latest version (v${packageJson.version})` :
-                                                                                        updateStatus === 'available' ? 'A new update is available!' :
-                                                                                            updateStatus === 'error' ? (updateErrorMessage || 'Could not check for updates') :
-                                                                                                `You are currently using Quietly version ${packageJson.version}`}
+                                                        {/* Verbose logging toast */}
+                                                        <AnimatePresence>
+                                                            {showVerboseToast && (
+                                                                <motion.div
+                                                                    key="verbose-toast"
+                                                                    initial={{ opacity: 0, y: -6, height: 0 }}
+                                                                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                                                                    exit={{ opacity: 0, y: -4, height: 0 }}
+                                                                    transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+                                                                    className="mx-4 mb-1 overflow-hidden"
+                                                                >
+                                                                    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                                            <Terminal size={14} className="text-amber-400 shrink-0" />
+                                                                            <p className="text-xs text-amber-200/80 leading-snug truncate">
+                                                                                Logs → <span className="font-mono text-amber-300">~/Documents/debug.log</span>
                                                                             </p>
                                                                         </div>
+                                                                        <button
+                                                                            onClick={() => window.electronAPI?.openLogFile?.()}
+                                                                            className="shrink-0 text-[11px] font-medium text-amber-400 hover:text-amber-300 transition-colors px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25"
+                                                                        >
+                                                                            Open
+                                                                        </button>
                                                                     </div>
+                                                                    {/* 5-second drain bar */}
+                                                                    <motion.div
+                                                                        className="h-[2px] bg-amber-500/40 rounded-b-xl"
+                                                                        initial={{ scaleX: 1, originX: 0 }}
+                                                                        animate={{ scaleX: 0 }}
+                                                                        transition={{ duration: 5, ease: 'linear', delay: 0.2 }}
+                                                                    />
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
+
+                                                        {/* Interviewer Transcript */}
+                                                        <div className="flex items-center justify-between px-4 py-2.5">
+                                                            <div>
+                                                                <p className="text-[13px] font-medium text-text-primary">Interviewer transcript</p>
+                                                                <p className="text-[12px] text-text-secondary mt-0.5">Show real-time transcription of the interviewer</p>
+                                                            </div>
+                                                            <Switch
+                                                                checked={showTranscript}
+                                                                onCheckedChange={() => {
+                                                                    const newState = !showTranscript;
+                                                                    setShowTranscript(newState);
+                                                                    localStorage.setItem('teamsync_interviewer_transcript', String(newState));
+                                                                    window.dispatchEvent(new Event('storage'));
+                                                                }}
+                                                                aria-label="Toggle interviewer transcript"
+                                                            />
+                                                        </div>
+
+                                                        {/* Theme */}
+                                                        <div className="flex items-center justify-between px-4 py-2.5">
+                                                            <div>
+                                                                <p className="text-[13px] font-medium text-text-primary">Theme</p>
+                                                                <p className="text-[12px] text-text-secondary mt-0.5">Appearance mode for the interface</p>
+                                                            </div>
+                                                            <Select value={themeMode} onValueChange={(value) => handleSetTheme(value as any)}>
+                                                                <SelectTrigger className="min-w-[110px]">
+                                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                                        <span className="text-text-secondary shrink-0">
+                                                                            {themeMode === 'system' && <Monitor size={14} />}
+                                                                            {themeMode === 'light' && <Sun size={14} />}
+                                                                            {themeMode === 'dark' && <Moon size={14} />}
+                                                                        </span>
+                                                                        <SelectValue />
+                                                                    </div>
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="system">System</SelectItem>
+                                                                    <SelectItem value="light">Light</SelectItem>
+                                                                    <SelectItem value="dark">Dark</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+
+                                                {/* Version & Updates — grouped card */}
+                                                <div>
+                                                    <h3 className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-2 px-1">Updates</h3>
+                                                    <div className="rounded-xl border border-border-subtle overflow-hidden divide-y divide-border-subtle">
+
+                                                        {/* Version */}
+                                                        <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+                                                            <div>
+                                                                <p className="text-[13px] font-medium text-text-primary">Version</p>
+                                                                <p className="text-[12px] text-text-secondary mt-0.5">
+                                                                    {updateStatus === 'checking' ? 'Checking for updates...' :
+                                                                        updateStatus === 'uptodate' ? `Up to date — v${packageJson.version}` :
+                                                                            updateStatus === 'available' ? 'A new update is available' :
+                                                                                updateStatus === 'error' ? (updateErrorMessage || 'Could not check') :
+                                                                                    `v${packageJson.version}`}
+                                                                </p>
+                                                            </div>
                                                                     <button
                                                                         onClick={async () => {
                                                                             if (updateStatus === 'available') {
@@ -3264,7 +3117,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                             }
                                                                         }}
                                                                         disabled={updateStatus === 'checking'}
-                                                                        className={`px-5 py-2 rounded-lg text-[13px] font-bold transition-all flex items-center gap-2 shrink-0 ${updateStatus === 'checking' ? 'bg-bg-input text-text-tertiary cursor-wait' :
+                                                                        className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all flex items-center gap-1.5 shrink-0 ${updateStatus === 'checking' ? 'bg-bg-input text-text-tertiary cursor-wait' :
                                                                             updateStatus === 'available' ? 'bg-accent-primary text-white hover:bg-accent-secondary shadow-lg shadow-blue-500/20' :
                                                                                 updateStatus === 'uptodate' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
                                                                                     updateStatus === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
@@ -3300,40 +3153,33 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     </button>
                                                                 </div>
 
-                                                                {/* Update Diagnostics */}
-                                                                <div className="px-4 py-4">
-                                                                    <div className="flex items-start justify-between gap-4 mb-3">
-                                                                        <div className="flex items-start gap-4 min-w-0">
-                                                                            <div className="w-10 h-10 bg-bg-item-surface rounded-lg border border-border-subtle flex items-center justify-center text-text-tertiary shrink-0">
-                                                                                <FolderOpen size={20} />
-                                                                            </div>
-                                                                            <div className="min-w-0">
-                                                                                <h3 className="text-sm font-bold text-text-primary">Update Diagnostics</h3>
-                                                                                <p className="text-xs text-text-secondary mt-0.5">
-                                                                                    Download cache details for the current updater feed
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
+                                                        {/* Update Diagnostics */}
+                                                        <div className="px-4 py-3">
+                                                            <div className="flex items-center justify-between gap-4 mb-3">
+                                                                <div>
+                                                                    <p className="text-[13px] font-medium text-text-primary">Update diagnostics</p>
+                                                                    <p className="text-[12px] text-text-secondary mt-0.5">Download cache details for the updater feed</p>
+                                                                </div>
 
-                                                                        <div className="flex items-center gap-2 shrink-0">
-                                                                            <button
-                                                                                onClick={refreshUpdaterCacheInfo}
-                                                                                disabled={updaterCacheLoading}
-                                                                                className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-bg-component hover:bg-bg-input text-text-primary transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-wait"
+                                                                <div className="flex items-center gap-2 shrink-0">
+                                                                    <button
+                                                                        onClick={refreshUpdaterCacheInfo}
+                                                                        disabled={updaterCacheLoading}
+                                                                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-bg-component hover:bg-bg-input text-text-primary transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-wait"
                                                                             >
                                                                                 <RefreshCw size={13} className={updaterCacheLoading ? 'animate-spin' : ''} />
                                                                                 Refresh
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={handleOpenUpdaterCacheFolder}
-                                                                                disabled={!updaterCacheInfo?.cacheDir}
-                                                                                className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-accent-primary hover:bg-accent-secondary text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={handleOpenUpdaterCacheFolder}
+                                                                        disabled={!updaterCacheInfo?.cacheDir}
+                                                                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-accent-primary hover:bg-accent-secondary text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                                                                             >
                                                                                 <FolderOpen size={13} />
-                                                                                Open Update Cache Folder
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
+                                                                        Open cache
+                                                                    </button>
+                                                                </div>
+                                                            </div>
 
                                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                                                         <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
@@ -3378,109 +3224,95 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                             <span className="truncate">{updaterCacheError}</span>
                                                                         </div>
                                                                     )}
-                                                                </div>
-                                                            </div>
                                                         </div>
-
-                                                        {/* ------------------------------------------------------------------ */}
-                                                        {/* Interface Opacity (Stealth Mode)                                   */}
-                                                        {/* ------------------------------------------------------------------ */}
-                                                        <div
-                                                            id="opacity-slider-card"
-                                                            style={isPreviewingOpacity ? { visibility: 'visible', position: 'relative', zIndex: 9999 } : {}}
-                                                            className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle mt-4`}
-                                                        >
-                                                            <div className="flex items-center justify-between mb-3">
-                                                                <label className="flex items-center gap-2 text-xs font-medium text-text-secondary uppercase tracking-wide">
-                                                                    <Eye size={13} className="text-text-secondary" />
-                                                                    Interface Opacity
-                                                                </label>
-                                                                <span className="opacity-percent-label text-xs font-semibold text-text-primary tabular-nums">
-                                                                    {Math.round(overlayOpacity * 100)}%
-                                                                </span>
-                                                            </div>
-
-                                                            <input
-                                                                type="range"
-                                                                min={OVERLAY_OPACITY_MIN}
-                                                                max={1.0}
-                                                                step={0.01}
-                                                                defaultValue={overlayOpacity}
-                                                                onChange={(e) => handleOpacityChange(parseFloat(e.target.value))}
-                                                                onPointerDown={startPreviewingOpacity}
-                                                                onPointerUp={stopPreviewingOpacity}
-                                                                onPointerCancel={stopPreviewingOpacity}
-                                                                onPointerLeave={stopPreviewingOpacity}
-                                                                className="w-full h-1.5 rounded-full appearance-none bg-bg-input accent-accent-primary"
-                                                                style={{ WebkitAppearance: 'none' } as React.CSSProperties}
-                                                            />
-
-                                                            <div className="flex justify-between mt-1.5">
-                                                                <span className="text-[10px] text-text-tertiary">More Stealth</span>
-                                                                <span className="text-[10px] text-text-tertiary">Fully Visible</span>
-                                                            </div>
-
-                                                            <p className="text-xs text-text-tertiary mt-2">
-                                                                Controls the visibility of the in-meeting overlay.{' '}
-                                                                <span className="text-text-secondary">Hold the slider to preview.</span>
-                                                            </p>
-                                                        </div>
-
                                                     </div>
+                                                </div>
 
+                                                {/* Interface Opacity */}
+                                                <div>
+                                                    <h3 className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-2 px-1">Opacity</h3>
+                                                    <div
+                                                        id="opacity-slider-card"
+                                                        style={isPreviewingOpacity ? { visibility: 'visible', position: 'relative', zIndex: 9999 } : {}}
+                                                        className="rounded-xl border border-border-subtle px-4 py-3"
+                                                    >
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <p className="text-[13px] font-medium text-text-primary">Interface opacity</p>
+                                                            <span className="text-[12px] font-medium text-text-secondary tabular-nums">
+                                                                {Math.round(overlayOpacity * 100)}%
+                                                            </span>
+                                                        </div>
+
+                                                        <input
+                                                            type="range"
+                                                            min={OVERLAY_OPACITY_MIN}
+                                                            max={1.0}
+                                                            step={0.01}
+                                                            defaultValue={overlayOpacity}
+                                                            onChange={(e) => handleOpacityChange(parseFloat(e.target.value))}
+                                                            onPointerDown={startPreviewingOpacity}
+                                                            onPointerUp={stopPreviewingOpacity}
+                                                            onPointerCancel={stopPreviewingOpacity}
+                                                            onPointerLeave={stopPreviewingOpacity}
+                                                            className="w-full h-1.5 rounded-full appearance-none bg-bg-input accent-accent-primary"
+                                                            style={{ WebkitAppearance: 'none' } as React.CSSProperties}
+                                                        />
+
+                                                        <div className="flex justify-between mt-1.5">
+                                                            <span className="text-[10px] text-text-tertiary">More Stealth</span>
+                                                            <span className="text-[10px] text-text-tertiary">Fully Visible</span>
+                                                        </div>
+
+                                                        <p className="text-[11px] text-text-tertiary mt-1.5">
+                                                            Controls overlay visibility during meetings. <span className="text-text-secondary">Hold to preview.</span>
+                                                        </p>
+                                                    </div>
                                                 </div>
 
                                                 {/* Process Disguise */}
-                                                {/* Process Disguise */}
-                                                <div className={`${isLight ? 'bg-bg-card' : 'bg-bg-item-surface'} rounded-xl p-5 border border-border-subtle`}>
-                                                    <div className="flex flex-col gap-1 mb-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <h3 className="text-lg font-bold text-text-primary">Process Disguise</h3>
-                                                        </div>
-                                                        <p className="text-xs text-text-secondary">
-                                                            Disguise Quietly as another application to prevent detection during screen sharing.
-                                                            <span className="block mt-1 text-text-tertiary">
-                                                                Select a disguise to be automatically applied when Undetectable mode is on.
-                                                            </span>
-                                                        </p>
-                                                    </div>
-
-                                                    <div className={`grid grid-cols-2 gap-3 ${isUndetectable ? 'opacity-50 pointer-events-none' : ''}`}>
-                                                        {isUndetectable && (
-                                                            <p className="col-span-2 text-xs text-yellow-500/80 -mt-1 mb-1">
-                                                                ⚠️ Disable Undetectable mode first to change disguise.
+                                                <div>
+                                                    <h3 className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-2 px-1">Disguise</h3>
+                                                    <div className="rounded-xl border border-border-subtle px-4 py-3">
+                                                        <div className="mb-3">
+                                                            <p className="text-[13px] font-medium text-text-primary">Process disguise</p>
+                                                            <p className="text-[12px] text-text-secondary mt-0.5">
+                                                                Disguise as another app during screen sharing
                                                             </p>
-                                                        )}
-                                                        {[
-                                                            { id: 'none', label: 'None (Default)', icon: <Layout size={14} /> },
-                                                            { id: 'terminal', label: 'Terminal', icon: <Terminal size={14} /> },
-                                                            { id: 'settings', label: 'System Settings', icon: <Settings size={14} /> },
-                                                            { id: 'activity', label: 'Activity Monitor', icon: <Activity size={14} /> }
-                                                        ].map((option) => (
-                                                            <button
-                                                                key={option.id}
-                                                                disabled={isUndetectable}
-                                                                onClick={() => {
-                                                                    if (isUndetectable) return;
-                                                                    // @ts-ignore
-                                                                    setDisguiseMode(option.id);
-                                                                    // @ts-ignore
-                                                                    window.electronAPI?.setDisguise(option.id);
-                                                                    // Analytics
-                                                                    analytics.trackModeSelected(`disguise_${option.id}`);
-                                                                }}
-                                                                className={`p-3 rounded-lg border text-left flex items-center gap-3 transition-all ${disguiseMode === option.id
-                                                                    ? 'bg-accent-primary border-accent-primary text-white shadow-lg shadow-blue-500/20'
-                                                                    : 'bg-bg-input border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-subtle-hover'
-                                                                    } ${isUndetectable ? 'cursor-not-allowed' : ''}`}
-                                                            >
-                                                                <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${disguiseMode === option.id ? 'bg-white/20 text-white' : 'bg-bg-item-surface text-text-secondary'
-                                                                    }`}>
-                                                                    {option.icon}
-                                                                </div>
-                                                                <span className="text-xs font-medium">{option.label}</span>
-                                                            </button>
-                                                        ))}
+                                                        </div>
+
+                                                        <div className={`grid grid-cols-2 gap-2 ${isUndetectable ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                            {isUndetectable && (
+                                                                <p className="col-span-2 text-[11px] text-yellow-500/80 -mt-1 mb-1">
+                                                                    ⚠️ Disable Undetectable mode first to change disguise.
+                                                                </p>
+                                                            )}
+                                                            {[
+                                                                { id: 'none', label: 'None', icon: <Layout size={13} /> },
+                                                                { id: 'terminal', label: 'Terminal', icon: <Terminal size={13} /> },
+                                                                { id: 'settings', label: 'Settings', icon: <Settings size={13} /> },
+                                                                { id: 'activity', label: 'Activity', icon: <Activity size={13} /> }
+                                                            ].map((option) => (
+                                                                <button
+                                                                    key={option.id}
+                                                                    disabled={isUndetectable}
+                                                                    onClick={() => {
+                                                                        if (isUndetectable) return;
+                                                                        // @ts-ignore
+                                                                        setDisguiseMode(option.id);
+                                                                        // @ts-ignore
+                                                                        window.electronAPI?.setDisguise(option.id);
+                                                                        analytics.trackModeSelected(`disguise_${option.id}`);
+                                                                    }}
+                                                                    className={`px-3 py-2 rounded-lg border text-left flex items-center gap-2 transition-all text-[12px] font-medium ${disguiseMode === option.id
+                                                                        ? 'bg-accent-primary border-accent-primary text-white'
+                                                                        : 'border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-elevated'
+                                                                        } ${isUndetectable ? 'cursor-not-allowed' : ''}`}
+                                                                >
+                                                                    <span className={disguiseMode === option.id ? 'text-white/80' : 'text-text-tertiary'}>{option.icon}</span>
+                                                                    {option.label}
+                                                                </button>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -3558,20 +3390,18 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                         title={!hasProfileAccess ? 'Requires Pro license' : !profileStatus.hasProfile ? 'Upload a resume to enable Profile Intelligence' : ''}
                                                                     >
                                                                         <span className="text-xs font-medium text-text-secondary">Profile Intelligence</span>
-                                                                        {renderSettingsSwitch({
-                                                                            checked: Boolean(profileStatus.profileMode && canEnableProfileIntelligence),
-                                                                            disabled: !canEnableProfileIntelligence,
-                                                                            size: 'small',
-                                                                            label: 'Toggle profile intelligence',
-                                                                            onToggle: async () => {
+                                                                        <Switch
+                                                                            checked={Boolean(profileStatus.profileMode && canEnableProfileIntelligence)}
+                                                                            disabled={!canEnableProfileIntelligence}
+                                                                            size="sm"
+                                                                            aria-label="Toggle profile intelligence"
+                                                                            onCheckedChange={async () => {
                                                                                 if (!canEnableProfileIntelligence) return;
                                                                                 const newState = !profileStatus.profileMode;
-                                                                                // Optimistic update — reflect change immediately
                                                                                 setProfileStatus((prev) => ({ ...prev, profileMode: newState }));
                                                                                 try {
                                                                                     const result = await window.electronAPI?.profileSetMode?.(newState);
                                                                                     if (!result?.success) {
-                                                                                        // Revert on failure
                                                                                         setProfileStatus((prev) => ({ ...prev, profileMode: !newState }));
                                                                                         console.error('Failed to toggle profile intelligence:', result?.error);
                                                                                     }
@@ -3579,8 +3409,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                                     setProfileStatus((prev) => ({ ...prev, profileMode: !newState }));
                                                                                     console.error('Failed to toggle profile intelligence:', e);
                                                                                 }
-                                                                            },
-                                                                        })}
+                                                                            }}
+                                                                        />
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -3821,7 +3651,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     </div>
                                                                 </div>
                                                                 <div className="space-y-3">
-                                                                    <textarea
+                                                                    <Textarea
                                                                         value={customNotes}
                                                                         onChange={(e) => {
                                                                             const val = e.target.value;
@@ -3839,7 +3669,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                         }}
                                                                         placeholder={`Examples:\n• Q4 ARR was $2.1M, grew 40% YoY — use when pitching growth story\n• Solved LRU Cache (LeetCode 146) with O(1) get/put using HashMap + doubly linked list\n• I prefer concise, direct answers without filler phrases\n• My target salary is $180k base — don't go below $160k`}
                                                                         rows={6}
-                                                                        className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2.5 text-xs text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary/50 focus:ring-1 focus:ring-accent-primary/20 transition-all resize-none leading-relaxed"
+                                                                        className="resize-none leading-relaxed text-xs"
                                                                     />
                                                                     <div className="flex items-center justify-between px-0.5">
                                                                         <p className="text-[10px] text-text-tertiary">
@@ -3890,12 +3720,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                             </button>
                                                                         )}
                                                                     </div>
-                                                                    <input
+                                                                    <Input
                                                                         type="password"
                                                                         value={tavilyApiKey}
                                                                         onChange={(e) => { setTavilyApiKey(e.target.value); setTavilyError(''); }}
                                                                         placeholder={hasStoredTavilyKey ? '••••••••••••' : 'Enter Tavily API key (tvly-...)'}
-                                                                        className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary/50 focus:ring-1 focus:ring-accent-primary/20 transition-all"
+                                                                        className="text-xs"
                                                                     />
                                                                 </div>
                                                                 {tavilyError && (
@@ -4276,34 +4106,18 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 </p>
                                                             </div>
 
-                                                            <div className="relative" ref={aiLangDropdownRef}>
-                                                                <button
-                                                                    onClick={() => setIsAiLangDropdownOpen(!isAiLangDropdownOpen)}
-                                                                    className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 min-w-[110px] justify-between"
-                                                                >
-                                                                    <span className="capitalize text-ellipsis overflow-hidden whitespace-nowrap flex items-center gap-1">
-                                                                        {aiResponseLanguage === 'auto' ? 'Auto' : aiResponseLanguage}
-                                                                    </span>
-                                                                    <ChevronDown size={12} className={`shrink-0 transition-transform ${isAiLangDropdownOpen ? 'rotate-180' : ''}`} />
-                                                                </button>
-
-                                                                {isAiLangDropdownOpen && (
-                                                                    <div className="absolute right-0 top-full mt-1 min-w-full w-max bg-bg-elevated border border-border-subtle rounded-lg shadow-xl overflow-hidden z-20 p-1 animated fadeIn select-none max-h-60 overflow-y-auto custom-scrollbar">
-                                                                        {availableAiLanguages.map((option) => (
-                                                                            <button
-                                                                                key={option.code}
-                                                                                onClick={() => {
-                                                                                    handleAiLanguageChange(option.code);
-                                                                                    setIsAiLangDropdownOpen(false);
-                                                                                }}
-                                                                                className={`w-full text-left px-2 py-1.5 rounded-md text-xs flex items-center gap-2 transition-colors ${aiResponseLanguage === option.code ? 'text-text-primary bg-bg-item-active/50' : 'text-text-secondary hover:bg-bg-input hover:text-text-primary'}`}
-                                                                            >
-                                                                                <span className="font-medium">{option.code === 'auto' ? 'Auto' : option.label}</span>
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                                            <Select value={aiResponseLanguage} onValueChange={(value) => handleAiLanguageChange(value)}>
+                                                                <SelectTrigger className="min-w-[110px]">
+                                                                    <SelectValue>{aiResponseLanguage === 'auto' ? 'Auto' : aiResponseLanguage}</SelectValue>
+                                                                </SelectTrigger>
+                                                                <SelectContent className="max-h-60">
+                                                                    {availableAiLanguages.map((option) => (
+                                                                        <SelectItem key={option.code} value={option.code}>
+                                                                            {option.code === 'auto' ? 'Auto' : option.label}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
                                                         </div>
 
                                                         {/* Personalization preferences */}
@@ -4313,60 +4127,53 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 <p className="mt-0.5 text-[11px] text-text-secondary">Coding language, provider routing, response depth, and interview focus.</p>
                                                             </div>
                                                             <div className="grid grid-cols-2 gap-2 max-w-[360px]">
-                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                                                                    Code
-                                                                    <select
-                                                                        value={personalizationPreferences.preferredCodingLanguage ?? 'auto'}
-                                                                        onChange={(event) => handlePersonalizationChange(
-                                                                            'preferredCodingLanguage',
-                                                                            event.target.value === 'auto' ? null : event.target.value as PreferredCodingLanguage,
-                                                                        )}
-                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
-                                                                    >
-                                                                        {CODING_LANGUAGE_OPTIONS.map((option) => (
-                                                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </label>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[10px] font-medium uppercase tracking-wide text-text-tertiary">Code</span>
+                                                                    <Select value={personalizationPreferences.preferredCodingLanguage ?? 'auto'} onValueChange={(value) => handlePersonalizationChange('preferredCodingLanguage', value === 'auto' ? null : value as PreferredCodingLanguage)}>
+                                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {CODING_LANGUAGE_OPTIONS.map((option) => (
+                                                                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
 
-                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                                                                    Provider
-                                                                    <select
-                                                                        value={personalizationPreferences.preferredProvider}
-                                                                        onChange={(event) => handlePersonalizationChange('preferredProvider', event.target.value as PreferredProvider)}
-                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
-                                                                    >
-                                                                        {PROVIDER_PREFERENCE_OPTIONS.map((option) => (
-                                                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </label>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[10px] font-medium uppercase tracking-wide text-text-tertiary">Provider</span>
+                                                                    <Select value={personalizationPreferences.preferredProvider} onValueChange={(value) => handlePersonalizationChange('preferredProvider', value as PreferredProvider)}>
+                                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {PROVIDER_PREFERENCE_OPTIONS.map((option) => (
+                                                                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
 
-                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                                                                    Style
-                                                                    <select
-                                                                        value={personalizationPreferences.responseStyle}
-                                                                        onChange={(event) => handlePersonalizationChange('responseStyle', event.target.value as ResponseStylePreference)}
-                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
-                                                                    >
-                                                                        {RESPONSE_STYLE_OPTIONS.map((option) => (
-                                                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </label>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[10px] font-medium uppercase tracking-wide text-text-tertiary">Style</span>
+                                                                    <Select value={personalizationPreferences.responseStyle} onValueChange={(value) => handlePersonalizationChange('responseStyle', value as ResponseStylePreference)}>
+                                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {RESPONSE_STYLE_OPTIONS.map((option) => (
+                                                                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
 
-                                                                <label className="flex flex-col gap-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                                                                    Focus
-                                                                    <select
-                                                                        value={personalizationPreferences.interviewFocus}
-                                                                        onChange={(event) => handlePersonalizationChange('interviewFocus', event.target.value as InterviewFocusPreference)}
-                                                                        className="bg-bg-component hover:bg-bg-elevated border border-border-subtle text-text-primary px-2 py-1.5 rounded-lg text-xs font-medium outline-none"
-                                                                    >
-                                                                        {INTERVIEW_FOCUS_OPTIONS.map((option) => (
-                                                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </label>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[10px] font-medium uppercase tracking-wide text-text-tertiary">Focus</span>
+                                                                    <Select value={personalizationPreferences.interviewFocus} onValueChange={(value) => handlePersonalizationChange('interviewFocus', value as InterviewFocusPreference)}>
+                                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {INTERVIEW_FOCUS_OPTIONS.map((option) => (
+                                                                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -4374,48 +4181,51 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             </div>
                                         )}
                                         {activeTab === 'account' && (
-                                            <div className="space-y-6 animated fadeIn select-text pb-4">
+                                            <div className="space-y-5 animated fadeIn select-text pb-4">
                                                 <div>
-                                                    <h3 className="text-lg font-bold text-text-primary mb-1">Account</h3>
-                                                    <p className="text-xs text-text-secondary">Manage your signed-in Google account.</p>
+                                                    <h3 className="text-lg font-semibold text-text-primary mb-1">Account</h3>
+                                                    <p className="text-[13px] text-text-secondary">Manage your signed-in Google account.</p>
                                                 </div>
 
                                                 {authUser ? (
-                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-5 space-y-4">
-                                                        <div className="flex items-center gap-4">
-                                                            {authUser.picture ? (
-                                                                <img src={authUser.picture} alt="" className="w-12 h-12 rounded-full ring-2 ring-border-subtle" referrerPolicy="no-referrer" />
-                                                            ) : (
-                                                                <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-lg font-bold">
-                                                                    {(authUser.name || authUser.email || '?')[0].toUpperCase()}
+                                                    <div>
+                                                        <h3 className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-2 px-1">Signed in</h3>
+                                                        <div className="rounded-xl border border-border-subtle overflow-hidden">
+                                                            <div className="flex items-center justify-between px-4 py-3">
+                                                                <div className="flex items-center gap-3 min-w-0">
+                                                                    {authUser.picture ? (
+                                                                        <img src={authUser.picture} alt="" className="w-8 h-8 rounded-full ring-1 ring-border-subtle shrink-0" referrerPolicy="no-referrer" />
+                                                                    ) : (
+                                                                        <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 text-[13px] font-semibold shrink-0">
+                                                                            {(authUser.name || authUser.email || '?')[0].toUpperCase()}
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-[13px] font-medium text-text-primary truncate">{authUser.name || 'User'}</p>
+                                                                        <p className="text-[12px] text-text-secondary truncate">{authUser.email}</p>
+                                                                    </div>
                                                                 </div>
-                                                            )}
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="text-sm font-semibold text-text-primary truncate">{authUser.name || 'User'}</p>
-                                                                <p className="text-xs text-text-secondary truncate">{authUser.email}</p>
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        await window.electronAPI?.googleLogout?.();
+                                                                        localStorage.removeItem('teamsync_auth_token');
+                                                                        localStorage.removeItem('teamsync_auth_user');
+                                                                        setAuthUser(null);
+                                                                        setCalendarStatus({ connected: false });
+                                                                    }}
+                                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 transition-all shrink-0"
+                                                                >
+                                                                    <LogOut size={13} /> Sign Out
+                                                                </button>
                                                             </div>
-                                                        </div>
-                                                        <div className="pt-3 border-t border-border-subtle">
-                                                            <button
-                                                                onClick={async () => {
-                                                                    await window.electronAPI?.googleLogout?.();
-                                                                    localStorage.removeItem('teamsync_auth_token');
-                                                                    localStorage.removeItem('teamsync_auth_user');
-                                                                    setAuthUser(null);
-                                                                    setCalendarStatus({ connected: false });
-                                                                }}
-                                                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 transition-all"
-                                                            >
-                                                                <LogOut size={14} /> Sign Out
-                                                            </button>
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-5 text-center">
-                                                        <p className="text-sm text-text-secondary mb-3">Not signed in</p>
+                                                    <div className="rounded-xl border border-border-subtle px-4 py-5 text-center">
+                                                        <p className="text-[13px] text-text-secondary mb-3">Not signed in</p>
                                                         <button
                                                             onClick={() => window.location.reload()}
-                                                            className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                                                            className="px-4 py-2 rounded-lg text-[13px] font-medium bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
                                                         >
                                                             Sign In with Google
                                                         </button>
@@ -4427,7 +4237,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             <div className="space-y-5 animated fadeIn select-text pb-4">
                                                 <div className="flex items-start justify-between">
                                                     <div>
-                                                        <h3 className="text-lg font-bold text-text-primary mb-1">Keyboard shortcuts</h3>
+                                                        <h3 className="text-lg font-semibold text-text-primary mb-1">Keyboard shortcuts</h3>
                                                         <p className="text-xs text-text-secondary">Quietly works with these easy to remember commands.</p>
                                                     </div>
                                                     <button
@@ -4439,12 +4249,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     </button>
                                                 </div>
 
-                                                <div className="grid gap-6">
+                                                <div className="grid gap-5">
                                                     {/* General Category */}
                                                     <div>
-                                                        <h4 className="text-sm font-bold text-text-primary mb-3">General</h4>
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center justify-between py-1.5 group">
+                                                        <h4 className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-2 px-1">General</h4>
+                                                        <div className="rounded-xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+                                                            <div className="flex items-center justify-between px-4 py-2 group">
                                                                 <div className="flex items-center gap-3">
                                                                     <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Eye size={14} /></span>
                                                                     <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Toggle Visibility</span>
@@ -4454,7 +4264,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     onSave={(keys) => updateShortcut('toggleVisibility', keys)}
                                                                 />
                                                             </div>
-                                                            <div className="flex items-center justify-between py-1.5 group">
+                                                            <div className="flex items-center justify-between px-4 py-2 group">
                                                                 <div className="flex items-center gap-3">
                                                                     <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><PointerOff size={14} /></span>
                                                                     <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Toggle Mouse Passthrough</span>
@@ -4464,7 +4274,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     onSave={(keys) => updateShortcut('toggleMousePassthrough', keys)}
                                                                 />
                                                             </div>
-                                                            <div className="flex items-center justify-between py-1.5 group">
+                                                            <div className="flex items-center justify-between px-4 py-2 group">
                                                                 <div className="flex items-center gap-3">
                                                                     <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><MessageSquare size={14} /></span>
                                                                     <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Process Screenshots</span>
@@ -4474,7 +4284,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     onSave={(keys) => updateShortcut('processScreenshots', keys)}
                                                                 />
                                                             </div>
-                                                            <div className="flex items-center justify-between py-1.5 group">
+                                                            <div className="flex items-center justify-between px-4 py-2 group">
                                                                 <div className="flex items-center gap-3">
                                                                     <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Sparkles size={14} /></span>
                                                                     <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Capture Screen & Ask AI</span>
@@ -4484,7 +4294,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     onSave={(keys) => updateShortcut('captureAndProcess', keys)}
                                                                 />
                                                             </div>
-                                                            <div className="flex items-center justify-between py-1.5 group">
+                                                            <div className="flex items-center justify-between px-4 py-2 group">
                                                                 <div className="flex items-center gap-3">
                                                                     <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><RotateCcw size={14} /></span>
                                                                     <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Reset / Cancel</span>
@@ -4494,7 +4304,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     onSave={(keys) => updateShortcut('resetCancel', keys)}
                                                                 />
                                                             </div>
-                                                            <div className="flex items-center justify-between py-1.5 group">
+                                                            <div className="flex items-center justify-between px-4 py-2 group">
                                                                 <div className="flex items-center gap-3">
                                                                     <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Camera size={14} /></span>
                                                                     <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Take Screenshot</span>
@@ -4504,7 +4314,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     onSave={(keys) => updateShortcut('takeScreenshot', keys)}
                                                                 />
                                                             </div>
-                                                            <div className="flex items-center justify-between py-1.5 group">
+                                                            <div className="flex items-center justify-between px-4 py-2 group">
                                                                 <div className="flex items-center gap-3">
                                                                     <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center"><Crop size={14} /></span>
                                                                     <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">Selective Screenshot</span>
@@ -4519,10 +4329,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                                                     {/* Chat Category */}
                                                     <div>
-                                                        <div className="mb-3">
-                                                            <h4 className="text-sm font-bold text-text-primary">Chat</h4>
-                                                        </div>
-                                                        <div className="space-y-1">
+                                                        <h4 className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-2 px-1">Chat</h4>
+                                                        <div className="rounded-xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                                                             {[
                                                                 { id: 'whatToAnswer', label: 'What to Answer', icon: <Sparkles size={14} /> },
                                                                 { id: 'clarify', label: 'Clarify', icon: <MessageSquare size={14} /> },
@@ -4534,7 +4342,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 { id: 'scrollUp', label: 'Scroll Up', icon: <ArrowUp size={14} /> },
                                                                 { id: 'scrollDown', label: 'Scroll Down', icon: <ArrowDown size={14} /> },
                                                             ].map((item, i) => (
-                                                                <div key={i} className="flex items-center justify-between py-1.5 group">
+                                                                <div key={i} className="flex items-center justify-between px-4 py-2 group">
                                                                     <div className="flex items-center gap-3">
                                                                         <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center">{item.icon}</span>
                                                                         <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">{item.label}</span>
@@ -4550,15 +4358,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                                                     {/* Window Category */}
                                                     <div>
-                                                        <h4 className="text-sm font-bold text-text-primary mb-3">Window</h4>
-                                                        <div className="space-y-1">
+                                                        <h4 className="text-[11px] font-medium uppercase tracking-wider text-text-tertiary mb-2 px-1">Window</h4>
+                                                        <div className="rounded-xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
                                                             {[
                                                                 { id: 'moveWindowUp', label: 'Move Window Up', icon: <ArrowUp size={14} /> },
                                                                 { id: 'moveWindowDown', label: 'Move Window Down', icon: <ArrowDown size={14} /> },
                                                                 { id: 'moveWindowLeft', label: 'Move Window Left', icon: <ArrowLeft size={14} /> },
                                                                 { id: 'moveWindowRight', label: 'Move Window Right', icon: <ArrowRight size={14} /> }
                                                             ].map((item, i) => (
-                                                                <div key={i} className="flex items-center justify-between py-1.5 group">
+                                                                <div key={i} className="flex items-center justify-between px-4 py-2 group">
                                                                     <div className="flex items-center gap-3">
                                                                         <span className="text-text-tertiary group-hover:text-text-primary transition-colors w-5 flex justify-center">{item.icon}</span>
                                                                         <span className="text-sm text-text-secondary font-medium group-hover:text-text-primary transition-colors">{item.label}</span>
@@ -4579,7 +4387,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             <div className="space-y-6 animated fadeIn" data-tour-id="settings-audio-provider">
                                                 {/* ── Speech Provider Section ── */}
                                                 <div>
-                                                    <h3 className="text-lg font-bold text-text-primary mb-1">Speech Provider</h3>
+                                                    <h3 className="text-lg font-semibold text-text-primary mb-1">Speech Provider</h3>
                                                     <p className="text-xs text-text-secondary mb-5">Choose the engine that transcribes audio to text.</p>
 
                                                     <div className="space-y-4">
@@ -4650,23 +4458,23 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             extraFields: (
                                                                 <div className="space-y-2">
                                                                     <label className="text-[10px] uppercase tracking-wide text-text-tertiary block">Model</label>
-                                                                    <select
-                                                                        value={groqSttModel}
-                                                                        onChange={async (e) => {
-                                                                            const nextModel = e.target.value;
-                                                                            setGroqSttModel(nextModel);
-                                                                            try {
-                                                                                // @ts-ignore
-                                                                                await window.electronAPI?.setGroqSttModel?.(nextModel);
-                                                                            } catch (error) {
-                                                                                console.error('Failed to update Groq STT model:', error);
-                                                                            }
-                                                                        }}
-                                                                        className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
-                                                                    >
-                                                                        <option value="whisper-large-v3-turbo">Whisper Large V3 Turbo</option>
-                                                                        <option value="whisper-large-v3">Whisper Large V3</option>
-                                                                    </select>
+                                                                    <Select value={groqSttModel} onValueChange={async (nextModel) => {
+                                                                        setGroqSttModel(nextModel);
+                                                                        try {
+                                                                            // @ts-ignore
+                                                                            await window.electronAPI?.setGroqSttModel?.(nextModel);
+                                                                        } catch (error) {
+                                                                            console.error('Failed to update Groq STT model:', error);
+                                                                        }
+                                                                    }}>
+                                                                        <SelectTrigger className="w-full">
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="whisper-large-v3-turbo">Whisper Large V3 Turbo</SelectItem>
+                                                                            <SelectItem value="whisper-large-v3">Whisper Large V3</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
                                                                 </div>
                                                             ),
                                                             helperText: 'Saving the key switches the live meeting pipeline to Groq immediately.',
@@ -4708,12 +4516,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             extraFields: (
                                                                 <div className="space-y-2">
                                                                     <label className="text-[10px] uppercase tracking-wide text-text-tertiary block">Azure Region</label>
-                                                                    <input
+                                                                    <Input
                                                                         type="text"
                                                                         value={sttAzureRegion}
                                                                         onChange={(e) => setSttAzureRegion(e.target.value)}
                                                                         placeholder="eastus"
-                                                                        className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
                                                                     />
                                                                 </div>
                                                             ),
@@ -4732,12 +4539,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             extraFields: (
                                                                 <div className="space-y-2">
                                                                     <label className="text-[10px] uppercase tracking-wide text-text-tertiary block">IBM Region</label>
-                                                                    <input
+                                                                    <Input
                                                                         type="text"
                                                                         value={sttIbmRegion}
                                                                         onChange={(e) => setSttIbmRegion(e.target.value)}
                                                                         placeholder="us-south"
-                                                                        className="w-full bg-bg-input border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent-primary transition-colors"
                                                                     />
                                                                 </div>
                                                             ),
@@ -4833,7 +4639,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                                                 {/* ── Audio Configuration Section ── */}
                                                 <div>
-                                                    <h3 className="text-lg font-bold text-text-primary mb-1">Audio Configuration</h3>
+                                                    <h3 className="text-lg font-semibold text-text-primary mb-1">Audio Configuration</h3>
                                                     <p className="text-xs text-text-secondary mb-5">Manage input and output devices.</p>
 
                                                     <div className="space-y-4">
@@ -4953,16 +4759,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                         </p>
                                                                     </div>
                                                                 </div>
-                                                                {renderSettingsSwitch({
-                                                                    checked: useExperimentalSck,
-                                                                    onToggle: () => {
+                                                                <Switch
+                                                                    checked={useExperimentalSck}
+                                                                    onCheckedChange={() => {
                                                                         const newState = !useExperimentalSck;
                                                                         setUseExperimentalSck(newState);
                                                                         window.localStorage.setItem('useExperimentalSckBackend', newState ? 'true' : 'false');
-                                                                    },
-                                                                    label: 'Toggle ScreenCaptureKit backend',
-                                                                    tone: 'amber',
-                                                                })}
+                                                                    }}
+                                                                    aria-label="Toggle ScreenCaptureKit backend"
+                                                                    variant="amber"
+                                                                />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -4974,7 +4780,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                         {activeTab === 'calendar' && (
                                             <div className="space-y-6 animated fadeIn h-full" data-tour-id="settings-calendar-sync">
                                                 <div>
-                                                    <h3 className="text-lg font-bold text-text-primary mb-2">Visible Calendars</h3>
+                                                    <h3 className="text-lg font-semibold text-text-primary mb-2">Visible Calendars</h3>
                                                     <p className="text-xs text-text-secondary mb-4">Upcoming meetings are synchronized from these calendars</p>
                                                 </div>
 
