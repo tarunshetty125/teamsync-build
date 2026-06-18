@@ -3,7 +3,7 @@
  * Configuration for STT providers (Google gRPC, REST, WebSocket)
  */
 
-export type SttProviderId = 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'teamsync';
+export type SttProviderId = 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'teamsync' | 'whisper';
 
 export interface SttProviderConfig {
     id: SttProviderId;
@@ -120,6 +120,24 @@ export const STT_PROVIDERS: Record<SttProviderId, SttProviderConfig> = {
         endpoint: '', 
         model: '',
         uploadType: 'websocket',
+        authHeader: () => ({}),
+        responseContentPath: '',
+    },
+    whisper: {
+        id: 'whisper',
+        name: 'Offline (Local Whisper)',
+        description: 'On-device transcription — no internet or API key required',
+        endpoint: '',
+        model: 'Xenova/whisper-tiny.en',
+        availableModels: [
+            { id: 'onnx-community/moonshine-tiny-ONNX', label: 'Moonshine Tiny (Fastest, 26 MB)' },
+            { id: 'onnx-community/moonshine-base-ONNX', label: 'Moonshine Base (Fast, 60 MB)' },
+            { id: 'distil-whisper/distil-small.en', label: 'Distil Small EN (164 MB)' },
+            { id: 'distil-whisper/distil-medium.en', label: 'Distil Medium EN (383 MB)' },
+            { id: 'Xenova/whisper-tiny.en', label: 'Whisper Tiny EN (39 MB)' },
+            { id: 'Xenova/whisper-base.en', label: 'Whisper Base EN (142 MB)' },
+            { id: 'Xenova/whisper-small.en', label: 'Whisper Small EN (244 MB)' },
+        ],
         authHeader: () => ({}),
         responseContentPath: '',
     },

@@ -107,10 +107,10 @@ export function loadSttRuntimeConfig(credentialsManager?: any): SttRuntimeConfig
     sonioxApiKey: credentialsManager?.getSonioxApiKey?.()?.trim() || undefined,
     teamsyncApiKey: credentialsManager?.getTeamSyncApiKey?.()?.trim() || undefined,
     googleCredentialsPath,
-    whisperEnabled: process.env.ENABLE_WHISPER_STT === "true",
+    whisperEnabled: process.env.ENABLE_WHISPER_STT === "true" || selectedProvider === "whisper",
     whisperModelId: process.env.STT_WHISPER_MODEL || "Xenova/whisper-tiny.en",
     whisperModelPath,
-    whisperAllowRemote: process.env.STT_WHISPER_ALLOW_REMOTE === "true",
+    whisperAllowRemote: process.env.STT_WHISPER_ALLOW_REMOTE === "true" || selectedProvider === "whisper",
   };
 }
 
