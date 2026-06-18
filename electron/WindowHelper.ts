@@ -628,13 +628,13 @@ export class WindowHelper {
       this.isWindowVisible = false
     })
 
-    // --- Launcher focus debug logging ---
-    this.launcherWindow.on('focus', () => {
-      console.log('[FocusDebug] Launcher GAINED focus');
-    });
-    this.launcherWindow.on('blur', () => {
-      console.log('[FocusDebug] Launcher LOST focus (blur)');
-    });
+    // --- Launcher focus debug logging (commented out to reduce terminal noise) ---
+    // this.launcherWindow.on('focus', () => {
+    //   console.log('[FocusDebug] Launcher GAINED focus');
+    // });
+    // this.launcherWindow.on('blur', () => {
+    //   console.log('[FocusDebug] Launcher LOST focus (blur)');
+    // });
 
     // Listen for overlay close (e.g. Cmd+W). Never truly destroy it — either
     // hide it (during a meeting) or switch back to launcher (between meetings).
@@ -672,13 +672,13 @@ export class WindowHelper {
         }
       })
 
-      // --- Focus debug logging ---
-      this.overlayWindow.on('focus', () => {
-        console.log('[FocusDebug] Overlay GAINED focus');
-      });
-      this.overlayWindow.on('blur', () => {
-        console.log('[FocusDebug] Overlay LOST focus (blur)');
-      });
+      // --- Focus debug logging (commented out to reduce terminal noise) ---
+      // this.overlayWindow.on('focus', () => {
+      //   console.log('[FocusDebug] Overlay GAINED focus');
+      // });
+      // this.overlayWindow.on('blur', () => {
+      //   console.log('[FocusDebug] Overlay LOST focus (blur)');
+      // });
     }
   }
 
@@ -780,11 +780,11 @@ export class WindowHelper {
     if (this.appState.getOverlayMousePassthrough()) {
       // In passthrough/stealth mode: appear on screen without stealing OS focus.
       // The underlying app (Zoom, browser, etc.) must keep focus.
-      console.log('[FocusDebug] showOverlay: passthrough mode, using showInactive()');
+      // console.log('[FocusDebug] showOverlay: passthrough mode, using showInactive()');
       this.overlayWindow.showInactive();
     } else {
       // Normal interactive mode: show and focus so the user can click/type.
-      console.log(`[FocusDebug] showOverlay: interactive mode, showInactive() + focus(). undetectable=${this.appState.getUndetectable()}`);
+      // console.log(`[FocusDebug] showOverlay: interactive mode, showInactive() + focus(). undetectable=${this.appState.getUndetectable()}`);
       this.overlayWindow.showInactive();
       // Bring to front without a full app-activate (avoids dock bounce on macOS).
       // setAlwaysOnTop is already set at creation; a focus() call alone is safe.
@@ -832,7 +832,7 @@ export class WindowHelper {
     // In undetectable mode, pass inactive=true so focus() is skipped — prevents
     // [NSApp activate] which would override NSPanel stealth attributes.
     const stealthShow = this.appState.getUndetectable();
-    console.log(`[FocusDebug] centerAndShowWindow: mode=${this.currentWindowMode}, undetectable=${stealthShow}, inactive=${stealthShow ? true : false}`);
+    // console.log(`[FocusDebug] centerAndShowWindow: mode=${this.currentWindowMode}, undetectable=${stealthShow}, inactive=${stealthShow ? true : false}`);
     if (this.currentWindowMode === 'overlay') {
       this.switchToOverlay(stealthShow ? true : undefined);
     } else {
@@ -926,10 +926,10 @@ export class WindowHelper {
         if (process.platform === 'darwin') {
           this.overlayWindow.showInactive();
           if (!inactive) {
-            console.log(`[FocusDebug] switchToOverlay: macOS showInactive() + focus(). undetectable=${this.appState.getUndetectable()}`);
+            // console.log(`[FocusDebug] switchToOverlay: macOS showInactive() + focus(). undetectable=${this.appState.getUndetectable()}`);
             this.overlayWindow.focus();
           } else {
-            console.log('[FocusDebug] switchToOverlay: macOS showInactive() only (inactive=true)');
+            // console.log('[FocusDebug] switchToOverlay: macOS showInactive() only (inactive=true)');
           }
         } else {
           if (inactive) this.overlayWindow.showInactive(); else this.overlayWindow.show();
