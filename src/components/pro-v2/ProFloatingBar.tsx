@@ -35,11 +35,12 @@ interface ProFloatingBarProps {
     onScreenScan: () => void;
     onToggleTranscriptPause: () => void;
     onOpenLauncher: () => void;
+    stealthTapActive?: boolean;
 }
 
 const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
     isExpanded,
-    isProcessing: _isProcessing,
+    isProcessing,
     isMeetingActive,
     isTranscriptPaused,
     hasAttachments = false,
@@ -53,6 +54,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
     onScreenScan,
     onToggleTranscriptPause,
     onOpenLauncher,
+    stealthTapActive = false,
 }) {
     const [elapsed, setElapsed] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -152,7 +154,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             <div className="v2-bar-sep" />
 
             {/* Ask AI input */}
-            <div className="v2-no-drag v2-bar-input-shell">
+            <div className="v2-no-drag v2-bar-input-shell" data-stealth-engage="true">
                 <Sparkles size={13} strokeWidth={2} className="v2-bar-input-icon" aria-hidden="true" />
                 <input
                     ref={inputRef}
@@ -164,6 +166,24 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                     onKeyPress={e => e.stopPropagation()}
                     placeholder={hasAttachments ? 'Ask with context...' : 'Ask AI'}
                 />
+                {stealthTapActive && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'none', marginRight: 4 }}>
+                        <span style={{ position: 'relative', display: 'inline-flex', width: 6, height: 6 }}>
+                            <span style={{
+                                position: 'absolute', inset: 0, borderRadius: '50%',
+                                background: 'rgb(167, 139, 250)', opacity: 0.6,
+                                animation: 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite',
+                            }} />
+                            <span style={{
+                                position: 'relative', display: 'inline-flex', width: 6, height: 6,
+                                borderRadius: '50%', background: 'rgb(139, 92, 246)',
+                            }} />
+                        </span>
+                        <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase' as const, color: 'rgba(167, 139, 250, 0.8)' }}>
+                            Stealth
+                        </span>
+                    </div>
+                )}
                 {(inputValue.trim() || hasAttachments) ? (
                     <button
                         type="button"
@@ -187,13 +207,14 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
                 <button
                     type="button"
                     onClick={onScreenScan}
-                    className="v2-no-drag v2-bar-btn v2-bar-btn--scan"
+                    className={`v2-no-drag v2-bar-btn v2-bar-btn--scan ${isProcessing ? 'v2-bar-btn--scanning' : ''}`}
                     aria-label="Analyse screen"
+                    disabled={isProcessing}
                 >
-                    <ScanSearch size={14} strokeWidth={2.1} />
+                    <ScanSearch size={14} strokeWidth={2.1} style={isProcessing ? { animation: 'spin 1.2s linear infinite' } : undefined} />
                 </button>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                    Analyse Screen
+                    {isProcessing ? 'Analysing…' : 'Analyse Screen'}
                 </div>
             </div>
 

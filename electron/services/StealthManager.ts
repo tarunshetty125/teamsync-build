@@ -111,6 +111,9 @@ export class StealthManager {
   private _windowsHiddenFromTaskbar: Set<number> = new Set();
   private _lifecycleHandlers: Array<{ target: EventEmitter; event: string; handler: (...args: any[]) => void }> = [];
   private _reassertTimer: NodeJS.Timeout | null = null;
+  /** Timestamp of the last engage() call — used to suppress spurious L6 window-focus events
+   *  that fire as a side-effect of dock.hide() → focus() during the engagement sequence. */
+  private _engageTimestamp: number = 0;
   /** Tracked Apple Event handlers so they can be removed on disengage */
   private _appleEventHandlers: Array<{ event: string; handler: (...args: any[]) => void }> = [];
   /** Tracked browser-window-created handler for cleanup */
@@ -188,6 +191,10 @@ export class StealthManager {
     this._transitioning = true;
 
     this._log('▶ Engaging advanced stealth mode');
+
+    // Record timestamp so _scheduleLifecycleReassert() can suppress
+    // spurious window-focus events that fire during the engage sequence.
+    this._engageTimestamp = Date.now();
 
     // Set flag BEFORE applying layers so protectWindow() works for
     // windows created during the engage sequence.
@@ -463,7 +470,7 @@ export class StealthManager {
 
   // ─── L0: Process Identity ─────────────────────────────────────────────────
 
-  private _applyProcessDisguise(): void {
+  private _applyProcessDisguise(options?: { skipLsAppInfo?: boolean }): void {
     const targetName = this.config.processName;
 
     // 1. Override process.title (this is what Activity Monitor reads on macOS)
@@ -493,7 +500,9 @@ export class StealthManager {
     }
 
     // 5. Override app name in LaunchServices (what lsappinfo reports)
-    if (process.platform === 'darwin') {
+    // Skip during L6 reassertion — the shell command is expensive and only
+    // needs to run once during initial engage().
+    if (process.platform === 'darwin' && !options?.skipLsAppInfo) {
       try {
         const { execSync } = require('child_process');
         execSync(`lsappinfo setinfo -app "${this._originalProcessTitle}" --name "${targetName}" 2>/dev/null || true`, { stdio: 'pipe', timeout: 2000 });
@@ -647,15 +656,15 @@ export class StealthManager {
         }
       } catch { /* Older Electron — skip */ }
 
-      // Make window visible on all workspaces (consistent with stealth overlay).
+      // Only apply z-order and workspace changes if NOT already set.
+      // Re-applying these during L6 reassertion causes z-order fighting
+      // between the overlay and settings popup, producing a visible glitch.
       try {
-        win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+        if (!win.isVisibleOnAllWorkspaces()) {
+          win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+        }
       } catch { /* ignore */ }
 
-      // Stage Manager mitigation: keep the window out of the taskbar and
-      // ensure floating z-order.  True Stage Manager hiding requires private
-      // NSWindowCollectionBehavior.auxiliary which Electron does not expose,
-      // but these reduce sidebar visibility.
       try {
         win.setSkipTaskbar(true);
         if (!win.isAlwaysOnTop()) {
@@ -749,7 +758,7 @@ export class StealthManager {
     this._log('L2: OS integration restored');
   }
 
-  private _applyDarwinOSVisibility(): void {
+  private _applyDarwinOSVisibility(options?: { skipSetName?: boolean }): void {
     try {
       if (app.dock && typeof app.dock.hide === 'function') {
         app.dock.hide();
@@ -758,10 +767,15 @@ export class StealthManager {
       this._warn('L2: dock.hide() failed:', e);
     }
 
-    try {
-      app.setName(this.config.processName);
-    } catch (e) {
-      this._warn('L2: setName() failed:', e);
+    // Skip app.setName() during L6 reassertion — calling it repeatedly
+    // causes macOS to re-register the app identity, which flashes a new
+    // dock icon and defeats the purpose of undetectable mode.
+    if (!options?.skipSetName) {
+      try {
+        app.setName(this.config.processName);
+      } catch (e) {
+        this._warn('L2: setName() failed:', e);
+      }
     }
 
     this._log('L2: OS integration hidden (darwin)');
@@ -918,8 +932,11 @@ export class StealthManager {
       this._warn('L2: dock.show() failed:', e);
     }
 
+    // Use the configured processName ('TeamSync') instead of _originalAppName
+    // because in dev mode _originalAppName is 'Electron', which causes macOS
+    // to flash a new 'Electron' dock icon on disengage.
     try {
-      app.setName(this._originalAppName);
+      app.setName(this.config.processName || this._originalAppName);
     } catch (e) {
       this._warn('L2: Revert setName() failed:', e);
     }
@@ -1105,19 +1122,63 @@ export class StealthManager {
     this._lifecycleHandlers = [];
   }
 
+  /** Timestamp of the last completed full L6 reassertion */
+  private _lastFullReassertTimestamp: number = 0;
+
+  // Events from user interaction — only need lightweight reassertion
+  // (process.title check). No window protection re-application needed.
+  private static readonly LIGHTWEIGHT_EVENTS = new Set(['window-focus', 'app-activate']);
+
   private _scheduleLifecycleReassert(reason: string): void {
     if (!this._engaged) return;
+
+    // Suppress ALL lifecycle reassertion events that fire within 500ms of
+    // engage(). Multiple events (window-focus, app-activate, display-metrics)
+    // fire as side-effects of the dock.hide() → engage() sequence and cause
+    // redundant L0/L1/L2 reassertion + dock flash on macOS.
+    if ((Date.now() - this._engageTimestamp) < 500) return;
+
+    const isLightweight = StealthManager.LIGHTWEIGHT_EVENTS.has(reason);
+
+    if (isLightweight) {
+      // Lightweight path: only reassert process identity (process.title,
+      // CFBundleName). These are cheap, invisible operations.
+      // Do NOT touch window protection or OS visibility — those cause
+      // z-order fighting and visual glitching when the user is opening
+      // settings popups, model selectors, etc.
+      const targetName = this.config.processName;
+      if (process.title !== targetName) {
+        process.title = targetName;
+      }
+      if (process.platform === 'darwin' && process.env.CFBundleName !== targetName.trim()) {
+        process.env.CFBundleName = targetName.trim();
+      }
+      return;
+    }
+
+    // Full path: system events (resume, unlock-screen, display changes)
+    // need full reassertion because the OS may have reset protections.
+    // Throttle to once every 5 seconds for display-metrics-changed which
+    // can fire rapidly during monitor rearrangement.
+    if ((Date.now() - this._lastFullReassertTimestamp) < 5000) return;
+
     if (this._reassertTimer) clearTimeout(this._reassertTimer);
 
     this._reassertTimer = setTimeout(() => {
       this._reassertTimer = null;
       if (!this._engaged) return;
 
-      try { this._applyProcessDisguise(); } catch (e) { this._warn(`L5: process reassert failed after ${reason}:`, e); }
+      this._lastFullReassertTimestamp = Date.now();
+
+      // Skip lsappInfo during reassertion — shell exec is expensive and
+      // only needs to run once during initial engage().
+      try { this._applyProcessDisguise({ skipLsAppInfo: true }); } catch (e) { this._warn(`L5: process reassert failed after ${reason}:`, e); }
       try { this._applyWindowProtection(); } catch (e) { this._warn(`L5: window reassert failed after ${reason}:`, e); }
-      try { this._platformAdapter.reassertAfterLifecycle(reason); } catch (e) { this._warn(`L5: OS visibility reassert failed after ${reason}:`, e); }
+      // Skip app.setName() during reassertion — it was set during initial
+      // engage() and re-calling it causes macOS to flash a new dock icon.
+      try { this._applyDarwinOSVisibility({ skipSetName: true }); } catch (e) { this._warn(`L5: OS visibility reassert failed after ${reason}:`, e); }
       this._markRuntimeEngaged();
-    }, 50);
+    }, 200);
 
     if (this._reassertTimer.unref) {
       this._reassertTimer.unref();

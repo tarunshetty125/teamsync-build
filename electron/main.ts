@@ -450,6 +450,32 @@ export class AppState {
               win.webContents.send('global-shortcut', { action: 'resetCancel' });
             }
           });
+
+        // Stealth typing toggle — engage/disengage the native keyboard tap
+        } else if (actionId === 'chat:focusInput') {
+          this.showMainWindow(true);
+          const overlay = this.windowHelper.getOverlayWindow();
+          if (overlay && !overlay.isDestroyed()) {
+            overlay.webContents.send('ensure-expanded');
+          }
+          // Try native stealth tap (macOS now, Windows when native hook is compiled)
+          if (process.platform === 'darwin' || process.platform === 'win32') {
+            try {
+              const { StealthKeyboardManager } = require('./services/StealthKeyboardManager');
+              const mgr = StealthKeyboardManager.getInstance();
+              if (mgr.isAvailable()) {
+                mgr.toggle();
+                return;
+              }
+            } catch (e) {
+              console.warn('[Main] StealthKeyboardManager unavailable:', e);
+            }
+          }
+          // Fallback: focus the overlay directly (non-stealth)
+          if (overlay && !overlay.isDestroyed()) {
+            overlay.webContents.send('global-shortcut', { action: 'focusInput' });
+            overlay.focus();
+          }
         }
       } catch (e: any) {
         if (e.message !== "Selection cancelled" && e.message !== "Screenshot capture already in progress") {
@@ -462,7 +488,64 @@ export class AppState {
     this.settingsWindowHelper.setWindowHelper(this.windowHelper);
     this.modelSelectorWindowHelper.setWindowHelper(this.windowHelper);
 
+    // ── Stealth Keyboard Tap IPC Handlers ────────────────────────────
+    // Lazy require()'d to avoid pulling the manager into early boot.
+    // Platform-aware: macOS uses native CGEventTap, Windows stubs until
+    // the Rust hook is compiled. All handlers gracefully no-op.
+    {
+      const getStealth = () => {
+        try {
+          const { StealthKeyboardManager } = require('./services/StealthKeyboardManager');
+          return StealthKeyboardManager.getInstance();
+        } catch {
+          return null;
+        }
+      };
 
+      // Guard: remove any existing handlers to prevent duplicate-registration errors
+      // during HMR or AppState re-creation.
+      const stealthTapChannels = [
+        'stealth-tap:available',
+        'stealth-tap:start',
+        'stealth-tap:stop',
+        'stealth-tap:open-settings',
+        'stealth-tap:should-auto-engage',
+        'stealth-tap:refresh-ime',
+      ];
+      for (const ch of stealthTapChannels) {
+        try { ipcMain.removeHandler(ch); } catch { /* no prior handler */ }
+      }
+
+      ipcMain.handle('stealth-tap:available', () => {
+        return getStealth()?.isAvailable() ?? false;
+      });
+      ipcMain.handle('stealth-tap:start', () => {
+        return getStealth()?.start() ?? false;
+      });
+      ipcMain.handle('stealth-tap:stop', () => {
+        getStealth()?.stop();
+      });
+      ipcMain.handle('stealth-tap:open-settings', () => {
+        getStealth()?.openSettings();
+      });
+      ipcMain.handle('stealth-tap:should-auto-engage', () => {
+        try {
+          const { shouldAutoEngageStealthTap } = require('./services/ImeDetector');
+          return shouldAutoEngageStealthTap();
+        } catch {
+          return true;
+        }
+      });
+      ipcMain.handle('stealth-tap:refresh-ime', () => {
+        try {
+          const { refreshImeDetection, shouldAutoEngageStealthTap } = require('./services/ImeDetector');
+          refreshImeDetection();
+          return shouldAutoEngageStealthTap();
+        } catch {
+          return true;
+        }
+      });
+    }
 
 
 
@@ -3281,27 +3364,16 @@ export class AppState {
         this._dockDebounceTimer = null;
       }
 
-      // Capture focus state BEFORE dock.hide() — that call triggers an
-      // implicit macOS app-deactivation which shifts keyboard focus.
-      const activeWindow = this.windowHelper.getMainWindow();
-      const settingsWindow = this.settingsWindowHelper.getSettingsWindow();
-      let targetFocusWindow = activeWindow;
-      if (settingsWindow && !settingsWindow.isDestroyed() && settingsWindow.isVisible()) {
-        targetFocusWindow = settingsWindow;
-      }
-      const teamsyncWasFocused =
-        targetFocusWindow != null &&
-        !targetFocusWindow.isDestroyed() &&
-        targetFocusWindow.isFocused();
-
       if (this._verboseLogging) console.log('[Stealth] Calling app.dock.hide() BEFORE engage');
       app.dock.hide();
       this.hideTray();
 
-      // Restore focus after dock.hide()
-      if (teamsyncWasFocused && targetFocusWindow && !targetFocusWindow.isDestroyed()) {
-        targetFocusWindow.focus();
-      }
+      // NOTE: We intentionally do NOT call focus() after dock.hide().
+      // Restoring focus fires browser-window-focus which triggers the
+      // StealthManager L6 reassertion loop, causing macOS to flash a
+      // new dock icon (app.setName() re-registers the app identity).
+      // The overlay is a type:'panel' window and retains visual
+      // presence without explicit focus restoration.
     } else if (state && process.platform === 'win32') {
       this.hideTray();
     }
@@ -3323,52 +3395,40 @@ export class AppState {
     // Broadcast state change to all relevant windows
     this._broadcastToAllWindows('undetectable-changed', state);
 
-    // --- DOCK SHOW (disengage only): debounced to prevent flicker from
-    // rapid toggles. The dock hide path above is NOT debounced — stealth
-    // engagement must be instantaneous. ---
+    // --- DOCK SHOW (disengage only) ---
+    // StealthManager.disengage() already calls dock.show() + setName(original)
+    // via _revertDarwinOSVisibility(). We only need to handle tray restoration
+    // and blur guards here. The previous implementation called dock.show() a
+    // second time after a 150ms debounce, which caused macOS to flash/glitch
+    // the dock icon.
     if (!state && process.platform === 'darwin') {
       if (this._dockDebounceTimer) {
         clearTimeout(this._dockDebounceTimer);
         this._dockDebounceTimer = null;
       }
 
+      // Restore tray immediately — no need to debounce
+      this.showTray();
+
+      // Debounce only the blur guard logic to prevent flicker from rapid toggles
       this._dockDebounceTimer = setTimeout(() => {
         this._dockDebounceTimer = null;
 
         // Read the settled state — may differ from the `state` captured above
         // if the user toggled again before the timer fired.
         const settled = this.isUndetectable;
+        if (settled) return; // User re-engaged during debounce — do nothing
 
-        const activeWindow = this.windowHelper.getMainWindow();
         const settingsWindow = this.settingsWindowHelper.getSettingsWindow();
-        let targetFocusWindow = activeWindow;
-        if (settingsWindow && !settingsWindow.isDestroyed() && settingsWindow.isVisible()) {
-          targetFocusWindow = settingsWindow;
-        }
-
         const modelSelectorWindow = this.modelSelectorWindowHelper.getWindow();
         const isModelSelectorVisible = modelSelectorWindow && !modelSelectorWindow.isDestroyed() && modelSelectorWindow.isVisible();
 
-        if (targetFocusWindow && targetFocusWindow === settingsWindow) {
+        if (settingsWindow && !settingsWindow.isDestroyed() && settingsWindow.isVisible()) {
           this.settingsWindowHelper.setIgnoreBlur(true);
-        }
-        if (isModelSelectorVisible) {
-          this.modelSelectorWindowHelper.setIgnoreBlur(true);
-        }
-
-        if (!settled) {
-          if (this._verboseLogging) console.log('[Stealth] Calling app.dock.show()');
-          app.dock.show();
-          this.showTray();
-          // Do NOT call focus() — let the user's current app retain focus
-        }
-        // If settled is now true (user re-engaged during debounce), do nothing —
-        // dock is already hidden from the synchronous hide above.
-
-        if (targetFocusWindow && targetFocusWindow === settingsWindow) {
           setTimeout(() => { this.settingsWindowHelper.setIgnoreBlur(false); }, 500);
         }
         if (isModelSelectorVisible) {
+          this.modelSelectorWindowHelper.setIgnoreBlur(true);
           setTimeout(() => { this.modelSelectorWindowHelper.setIgnoreBlur(false); }, 500);
         }
       }, 150);
@@ -3857,6 +3917,14 @@ async function initializeApp() {
 
     // Kill Ollama if we started it
     OllamaManager.getInstance().stop();
+
+    // Stop stealth keyboard tap — detaches CGEventTap / keyboard hook + full cleanup
+    try {
+      const { StealthKeyboardManager } = require('./services/StealthKeyboardManager');
+      StealthKeyboardManager.getInstance().destroy();
+    } catch (e) {
+      console.warn('[Main] StealthKeyboardManager cleanup failed:', e);
+    }
 
     // Destroy StealthManager — stops watchdog timer, reverts process identity
     try {

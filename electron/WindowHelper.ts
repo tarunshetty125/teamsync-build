@@ -451,6 +451,30 @@ export class WindowHelper {
       });
     }
 
+    // ── StealthKeyboardManager integration ────────────────────────────
+    // Register the overlay so captured keystrokes are scoped to it.
+    // Platform-aware: macOS (CGEventTap) now, Windows (stub) later.
+    if (process.platform === 'darwin' || process.platform === 'win32') {
+      try {
+        const { StealthKeyboardManager } = require('./services/StealthKeyboardManager');
+        const stealth = StealthKeyboardManager.getInstance();
+        stealth.setOverlayWindow(this.overlayWindow);
+
+        // Provide a bounds callback for mouse-down hit detection
+        stealth.setOverlayBoundsProvider(() => {
+          if (!this.overlayWindow || this.overlayWindow.isDestroyed() || !this.overlayWindow.isVisible()) return null;
+          return this.overlayWindow.getBounds();
+        });
+
+        // Sync bounds on move/resize so the tap knows where the overlay is
+        const pushBounds = () => stealth.pushBoundsToTap();
+        this.overlayWindow.on('move', pushBounds);
+        this.overlayWindow.on('resize', pushBounds);
+      } catch (e) {
+        console.error('[WindowHelper] failed to register overlay with StealthKeyboardManager:', e);
+      }
+    }
+
     this.overlayWindow.loadURL(`${startUrl}?window=overlay`).catch(e => {
       console.error('[WindowHelper] Failed to load Overlay URL:', e);
     })

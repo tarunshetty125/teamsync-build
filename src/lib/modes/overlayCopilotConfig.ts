@@ -75,7 +75,7 @@ type OverlayModeConfig = {
   defaultRecommendedActionId: OverlayRecommendationId;
 };
 
-const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
+export const ACTIONS: Record<OverlayQuickActionId, OverlayQuickActionDef> = {
   what_to_answer: {
     id: 'what_to_answer',
     label: 'Suggest',

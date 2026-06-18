@@ -34,7 +34,23 @@ export interface NativeModule {
    *  (AXIsProcessTrusted). Required for CGEventTap-based stealth keyboard. */
   isAccessibilityGranted?: () => boolean;
 
-  // Phase 2 — StealthKeyboardTap (not yet wired)
+  /** CGEventTap-based (macOS) or SetWindowsHookEx-based (Windows, future)
+   *  keyboard interception for stealth typing. Constructor creates an
+   *  unstarted instance; call start() with a callback to begin capturing. */
+  StealthKeyboardTap?: new () => {
+    start(
+      callback: (err: Error | null, ev: {
+        isKeyDown: boolean;
+        keyCode: number;
+        chars: string;
+        isOutsideMouseDown: boolean;
+      } | null) => void,
+      overlayBounds: { x: number; y: number; width: number; height: number } | null,
+    ): boolean;
+    stop(): void;
+    updateOverlayBounds(bounds: { x: number; y: number; width: number; height: number } | null): void;
+  };
+
   // Phase 3 — getDefaultOutputDeviceId (not yet wired)
 }
 

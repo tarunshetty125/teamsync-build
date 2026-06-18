@@ -530,6 +530,17 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   // Global shortcut events (stealth: fired even when window is not focused)
   onGlobalShortcut: (callback: (data: { action: string }) => void) => () => void
 
+  // Stealth Keyboard Tap (CGEventTap on macOS, stub on Windows)
+  stealthTapAvailable: () => Promise<boolean>
+  stealthTapStart: () => Promise<boolean>
+  stealthTapStop: () => Promise<void>
+  stealthTapOpenSettings: () => Promise<void>
+  stealthTapShouldAutoEngage: () => Promise<boolean>
+  stealthTapRefreshIme: () => Promise<boolean>
+  onStealthTapState: (callback: (state: { active: boolean; reason?: string }) => void) => () => void
+  onStealthKeyCaptured: (callback: (ev: { isKeyDown: boolean; keyCode: number; chars: string; isOutsideMouseDown: boolean }) => void) => () => void
+  onKeybindRegistrationFailed?: (callback: (data: { id: string; accelerator: string }) => void) => () => void
+
   // Donation API
   getDonationStatus: () => Promise<{ shouldShow: boolean; hasDonated: boolean; lifetimeShows: number }>;
   markDonationToastShown: () => Promise<{ success: boolean }>;
@@ -832,6 +843,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const subscription = (_: any, state: any) => callback(state);
     ipcRenderer.on('stealth-state-changed', subscription);
     return () => { ipcRenderer.removeListener('stealth-state-changed', subscription); };
+  },
+
+  // Stealth Keyboard Tap API (CGEventTap on macOS, stub on Windows)
+  stealthTapAvailable: () => ipcRenderer.invoke('stealth-tap:available'),
+  stealthTapStart: () => ipcRenderer.invoke('stealth-tap:start'),
+  stealthTapStop: () => ipcRenderer.invoke('stealth-tap:stop'),
+  stealthTapOpenSettings: () => ipcRenderer.invoke('stealth-tap:open-settings'),
+  stealthTapShouldAutoEngage: () => ipcRenderer.invoke('stealth-tap:should-auto-engage'),
+  stealthTapRefreshIme: () => ipcRenderer.invoke('stealth-tap:refresh-ime'),
+  onStealthTapState: (callback: (state: { active: boolean; reason?: string }) => void) => {
+    const sub = (_: any, state: { active: boolean; reason?: string }) => callback(state);
+    ipcRenderer.on('stealth-tap-state', sub);
+    return () => { ipcRenderer.removeListener('stealth-tap-state', sub); };
+  },
+  onStealthKeyCaptured: (callback: (ev: { isKeyDown: boolean; keyCode: number; chars: string; isOutsideMouseDown: boolean }) => void) => {
+    const sub = (_: any, ev: any) => callback(ev);
+    ipcRenderer.on('stealth-key-captured', sub);
+    return () => { ipcRenderer.removeListener('stealth-key-captured', sub); };
   },
 
   onSettingsVisibilityChange: (callback: (isVisible: boolean) => void) => {

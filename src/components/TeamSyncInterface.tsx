@@ -60,6 +60,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { analytics, detectProviderType } from '../lib/analytics/analytics.service';
 import { useShortcuts } from '../hooks/useShortcuts';
+import { useStealthKeyboard } from '../hooks/useStealthKeyboard';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { getOverlayAppearance, OVERLAY_OPACITY_DEFAULT } from '../lib/overlayAppearance';
 import type { ModeTemplateId } from '../lib/modes/types';
@@ -2999,12 +3000,13 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         }
     };
 
-    const handleManualSubmit = async () => {
-        if (!inputValue.trim() && attachedContextRef.current.length === 0) return;
+    const handleManualSubmit = async (overrideText?: string) => {
+        const submitText = overrideText !== undefined ? overrideText : inputValue;
+        if (!submitText.trim() && attachedContextRef.current.length === 0) return;
         await cancelInFlightOverlayRequests();
         currentSourceRef.current = 'Manual Input';
 
-        const userText = inputValue;
+        const userText = submitText;
         const currentAttachments = attachedContextRef.current;
         if (userText.trim()) {
             markCurrentTurnFromText(userText, 'manual_input');
@@ -3710,6 +3712,14 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
         return unsubscribe;
     }, []);
 
+    // ── Stealth Keyboard Tap (shared hook) ─────────────────────────────
+    const { stealthTapActive } = useStealthKeyboard({
+        inputValue,
+        setInputValue,
+        setIsExpanded,
+        onSubmit: (text: string) => handleManualSubmit(text),
+    });
+
     // ── Derived STT status for the rolling transcript indicator (interviewer channel) ──
     const interviewerSttIndicatorStatus = sttInterviewerStatus;
     // Strip consecutive error count from display — show only in expanded diagnostics
@@ -4295,7 +4305,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                     </div>
                                 )}
 
-                                <div className="relative group">
+                                <div className="relative group" data-stealth-engage="true">
                                     <input
                                         ref={textInputRef}
                                         type="text"
@@ -4305,6 +4315,19 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                         className={`w-full border rounded-[12px] pl-3.5 pr-10 py-2.5 focus:outline-none transition-all duration-200 backdrop-blur-3xl shadow-sm text-[13px] ${isLightTheme ? 'bg-black/[0.04] border-black/[0.08] hover:border-black/[0.12] focus:border-black/[0.18] focus:ring-2 focus:ring-black/[0.06] text-gray-800 placeholder-gray-400' : 'bg-white/[0.06] border-white/[0.08] hover:border-white/[0.14] focus:border-white/[0.22] focus:ring-2 focus:ring-white/[0.08] text-white/90 placeholder-white/30'} ${inputClass}`}
                                         style={appearance.inputStyle}
                                     />
+
+                                    {/* Stealth Typing Indicator */}
+                                    {stealthTapActive && (
+                                        <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none z-10">
+                                            <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-60"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+                                            </span>
+                                            <span className={`text-[10px] font-medium tracking-wide uppercase ${isLightTheme ? 'text-violet-600/70' : 'text-violet-400/80'}`}>
+                                                Stealth
+                                            </span>
+                                        </div>
+                                    )}
 
                                     {/* Custom Rich Placeholder */}
                                     {!inputValue && (
@@ -4567,7 +4590,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
 
 
                                     <button
-                                        onClick={handleManualSubmit}
+                                        onClick={() => handleManualSubmit()}
                                         disabled={!inputValue.trim()}
                                         className={`
                                     w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200

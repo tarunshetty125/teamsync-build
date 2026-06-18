@@ -3649,6 +3649,18 @@
   color: rgba(191, 219, 254, 0.98);
 }
 
+.v2-bar-btn--scanning {
+  color: rgba(56, 189, 248, 0.85);
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .v2-bar-btn--end:hover {
   border-color: rgba(248, 113, 113, 0.30);
   background:

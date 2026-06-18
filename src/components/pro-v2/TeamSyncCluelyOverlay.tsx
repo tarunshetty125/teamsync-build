@@ -7,6 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCluelyOverlayBridge } from './useCluelyOverlayBridge';
+import { useStealthKeyboard } from '../../hooks/useStealthKeyboard';
 import ProFloatingBar from './ProFloatingBar';
 import ProInsightsPanel from './ProInsightsPanel';
 import ProResponseSurface from './ProResponseSurface';
@@ -149,6 +150,19 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         onEndMeeting,
         overlayOpacity,
         hasProContextAccess,
+    });
+
+    // ── Stealth Keyboard Tap (shared hook) ─────────────────────────────
+    const {
+        stealthTapActive,
+        stealthTapPermissionDenied,
+        openAccessibilitySettings,
+        dismissPermissionWarning,
+    } = useStealthKeyboard({
+        inputValue: bridge.inputValue,
+        setInputValue: bridge.setInputValue,
+        setIsExpanded: bridge.setIsExpanded,
+        onSubmit: (text: string) => bridge.handleManualSubmit(text),
     });
 
     // Register pro-v2 layout with main only while this shell is mounted (v1 stays on 600px defaults).
@@ -297,7 +311,82 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 onToggleTranscriptPause={bridge.toggleTranscriptPause}
                 onOpenLauncher={handleOpenLauncher}
                 hasAttachments={bridge.attachedContext.length > 0}
+                stealthTapActive={stealthTapActive}
             />
+
+            {/* ── Stealth keyboard permission warning ── */}
+            <AnimatePresence>
+                {stealthTapPermissionDenied && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0, y: -4 }}
+                        animate={{ opacity: 1, height: 'auto', y: 0 }}
+                        exit={{ opacity: 0, height: 0, y: -4 }}
+                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                        style={{
+                            width: '100%',
+                            maxWidth: responsiveLayout.contentWidth,
+                            margin: '0 auto',
+                            padding: '6px 18px 0',
+                        }}
+                    >
+                        <div
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                padding: '8px 12px',
+                                borderRadius: 10,
+                                background: 'rgba(255, 159, 10, 0.12)',
+                                border: '1px solid rgba(255, 159, 10, 0.25)',
+                                fontSize: 12,
+                                color: 'rgba(255, 255, 255, 0.85)',
+                                lineHeight: 1.4,
+                            }}
+                        >
+                            <span style={{ fontSize: 15, flexShrink: 0 }}>⚠️</span>
+                            <span style={{ flex: 1 }}>
+                                Stealth Typing requires Accessibility permission.
+                            </span>
+                            <button
+                                onClick={() => {
+                                    openAccessibilitySettings();
+                                    dismissPermissionWarning();
+                                }}
+                                style={{
+                                    padding: '3px 10px',
+                                    borderRadius: 6,
+                                    background: 'rgba(255, 159, 10, 0.2)',
+                                    border: '1px solid rgba(255, 159, 10, 0.4)',
+                                    color: 'rgba(255, 200, 80, 1)',
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                Open Settings
+                            </button>
+                            <button
+                                onClick={dismissPermissionWarning}
+                                style={{
+                                    padding: '3px 8px',
+                                    borderRadius: 6,
+                                    background: 'transparent',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    color: 'rgba(255, 255, 255, 0.5)',
+                                    fontSize: 11,
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                }}
+                            >
+                                Dismiss
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <AnimatePresence initial={false}>
                 {attachmentStripItems.length > 0 && (

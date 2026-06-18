@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, useReducer, type Dispatch, type SetStateAction } from 'react';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import {
+    ACTIONS,
     getOverlayQuickActions,
     resolveOverlayCopilotMode,
     type OverlayQuickActionDef,
@@ -1651,6 +1652,93 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         });
     }, [appendScreenshotAttachment, handleScreenScan]);
 
+    // ── Refs for stable shortcut handler ────────────────────────────────
+    // These refs track the latest values so the global-shortcut useEffect
+    // (stable deps=[]) can always invoke the most current handlers.
+    const executeQuickActionRef = useRef(executeQuickAction);
+    useEffect(() => { executeQuickActionRef.current = executeQuickAction; });
+    const handleResetRef = useRef<typeof handleReset>(null as any);
+    const handleScreenScanRef = useRef<typeof handleScreenScan>(null as any);
+    const visibleActiveQuickActionsRef = useRef(liveActiveQuickActions);
+
+    // ── Global Shortcut Handler (V2 parity with V1) ────────────────────
+    // V1 subscribes in TeamSyncInterface.tsx:3682. V2 must independently
+    // subscribe because it is a separate component tree routed in App.tsx.
+    //
+    // Shortcut action strings are dispatched by main.ts to all windows via
+    // webContents.send('global-shortcut', { action }). See main.ts:420-452.
+    //
+    // Mapping: V1 shortcut action → V2 OverlayQuickActionId
+    const SHORTCUT_TO_QUICK_ACTION: Record<string, string> = {
+        whatToAnswer: 'what_to_answer',
+        clarify: 'clarify',
+        followUp: 'follow_up_questions',
+        answer: 'what_to_answer',      // V1 "answer now" → V2 uses suggest
+        codeHint: 'tech_hint',
+        brainstorm: 'brainstorm',
+    };
+
+    useEffect(() => {
+        if (!window.electronAPI?.onGlobalShortcut) return;
+        const unsubscribe = window.electronAPI.onGlobalShortcut(({ action }: { action: string }) => {
+            const actions = visibleActiveQuickActionsRef.current;
+
+            // Quick action shortcuts — map to the current active quick actions
+            const quickActionId = SHORTCUT_TO_QUICK_ACTION[action];
+            if (quickActionId) {
+                // Prefer the matching action from the visible set (preserves mode-specific overrides)
+                const actionDef = actions.find(a => a.id === quickActionId);
+                if (actionDef) {
+                    void executeQuickActionRef.current(actionDef);
+                    return;
+                }
+                // Fallback: execute from the global ACTIONS registry.
+                // This ensures Cmd+1–7 always work regardless of UI visibility.
+                // V1 never gates shortcuts by visibility — V2 must match.
+                const fallbackDef = ACTIONS[quickActionId as OverlayQuickActionId];
+                if (fallbackDef) {
+                    void executeQuickActionRef.current(fallbackDef);
+                }
+                return;
+            }
+
+            // Dynamic action 4 — fire the 4th quick action if it exists
+            if (action === 'dynamicAction4') {
+                if (actions.length >= 4) {
+                    void executeQuickActionRef.current(actions[3]);
+                }
+                return;
+            }
+
+            // Scroll shortcuts
+            if (action === 'scrollUp') {
+                scrollContainerRef.current?.scrollBy({ top: -100, behavior: 'smooth' });
+                return;
+            }
+            if (action === 'scrollDown') {
+                scrollContainerRef.current?.scrollBy({ top: 100, behavior: 'smooth' });
+                return;
+            }
+
+            // Screenshot processing — handled by onCaptureAndProcess IPC above
+            if (action === 'processScreenshots') {
+                void handleScreenScanRef.current();
+                return;
+            }
+
+            // Reset / Cancel
+            if (action === 'resetCancel') {
+                void handleResetRef.current();
+                return;
+            }
+
+            // takeScreenshot and selectiveScreenshot are handled by the
+            // onScreenshotTaken/onScreenshotAttached IPC listeners above.
+            // No additional renderer-side action needed.
+        });
+        return unsubscribe;
+    }, []);
+
     const toggleExpanded = useCallback(() => {
         setIsExpanded((prev) => !prev);
     }, []);
@@ -1684,6 +1772,9 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
         await window.electronAPI.resetIntelligence();
         onSessionReset();
     }, [cancelInFlightOverlayRequests, isProcessing, onSessionReset]);
+    // Sync refs for stable global-shortcut handler (refs defined above)
+    useEffect(() => { handleResetRef.current = handleReset; });
+    useEffect(() => { handleScreenScanRef.current = handleScreenScan; });
 
     const responseHistory = useMemo(
         () => messages.filter((message) => message.role === 'system'),
@@ -1815,6 +1906,8 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     const visibleActiveQuickActions = isTranscriptPaused
         ? frozenTranscriptUiSnapshot?.activeQuickActions ?? liveActiveQuickActions
         : liveActiveQuickActions;
+    // Sync the ref used by the global shortcut handler (defined above)
+    useEffect(() => { visibleActiveQuickActionsRef.current = visibleActiveQuickActions; });
     const visibleRecommendedButton = isTranscriptPaused
         ? frozenTranscriptUiSnapshot?.recommendedButton ?? recommendedButton
         : recommendedButton;

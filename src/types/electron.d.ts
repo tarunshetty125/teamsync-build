@@ -719,6 +719,16 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
     watchdogActive: boolean;
   }) => void) => () => void;
 
+  // Stealth Keyboard Tap (CGEventTap on macOS, stub on Windows)
+  stealthTapAvailable?: () => Promise<boolean>;
+  stealthTapStart?: () => Promise<boolean>;
+  stealthTapStop?: () => Promise<void>;
+  stealthTapOpenSettings?: () => Promise<void>;
+  stealthTapShouldAutoEngage?: () => Promise<boolean>;
+  stealthTapRefreshIme?: () => Promise<boolean>;
+  onStealthTapState?: (callback: (state: { active: boolean; reason?: string }) => void) => () => void;
+  onStealthKeyCaptured?: (callback: (ev: { isKeyDown: boolean; keyCode: number; chars: string; isOutsideMouseDown: boolean }) => void) => () => void;
+
   // Verbose / Debug Logging
   getVerboseLogging: () => Promise<boolean>;
   setVerboseLogging: (enabled: boolean) => Promise<{ success: boolean }>;
