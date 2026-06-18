@@ -3123,11 +3123,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                             {/* Content */}
                             <div className="settings-right-surface relative min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-6 py-5">
-                                {/* Close button — top right */}
+                                {/* Close button — sticky top right */}
                                 <button
                                     onClick={onClose}
                                     title="Close Settings"
-                                    className="absolute top-4 right-4 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-bg-secondary/80 backdrop-blur-sm text-text-tertiary hover:text-text-primary hover:bg-bg-item-active transition-colors"
+                                    className="sticky top-2 float-right z-20 flex h-7 w-7 items-center justify-center rounded-full bg-bg-input border border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-item-active transition-colors mr-[-8px]"
                                 >
                                     <X size={15} />
                                 </button>
