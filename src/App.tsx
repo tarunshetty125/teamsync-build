@@ -716,7 +716,7 @@ const App: React.FC = () => {
                     isPremium={isPremiumActive}
                     isLoaded={hasLoadedLicense}
                     isTrialActive={!!activeTrial}
-                    onUnlockPro={() => { setIsProfileOpen(false); setSettingsInitialTab('api'); setIsSettingsOpen(true); }}
+                    onUnlockPro={() => { setIsProfileOpen(false); setShowPremiumModal(true); }}
                   />
                 </motion.div>
               </motion.div>
