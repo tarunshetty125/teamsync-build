@@ -322,7 +322,7 @@ export function WelcomePermissionsStep({ isAdvancing, onLaunch }: WelcomePermiss
             willChange: 'transform, opacity',
           }}
         />
-        {/* Radial fade — exact Natively: ellipse 80% 80% at 50% 50% */}
+        {/* Radial fade */}
         <div
           className="absolute inset-0 z-0 pointer-events-none"
           style={{
