@@ -203,9 +203,9 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
 
           {/* ── Professional Identity Section ───────────────── */}
           <motion.div variants={itemVariants}>
-            <h3 className="text-[13px] font-bold text-white/90 tracking-[-0.02em] mb-1">Professional Identity</h3>
+            <h3 className="text-[13px] font-bold text-white/90 tracking-[-0.02em] mb-1">Intelligence Graph</h3>
             <p className="text-[12px] text-white/38 mb-4">
-              This engine constructs an intelligent representation of your career history and skills graph.
+              Your career, skills, and context — mapped into a persistent knowledge layer the AI references in every conversation.
             </p>
 
             {/* Identity Card */}
