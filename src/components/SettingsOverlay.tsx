@@ -2988,24 +2988,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             </span>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={async () => {
-                                                let isActive = false;
-                                                try { isActive = await window.electronAPI?.getMeetingActive?.() ?? false; } catch {}
-                                                if (isActive) { setShowQuitConfirm(true); } else { window.electronAPI.quitApp(); }
-                                            }}
-                                            title="Quit Quietly"
-                                            className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary hover:text-red-400 hover:bg-bg-item-active/50 transition-colors"
-                                        >
-                                            <LogOut size={14} />
-                                        </button>
+                                    <div className="flex items-center gap-1.5">
                                         <button
                                             onClick={onClose}
                                             title="Close Settings"
-                                            className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors"
+                                            className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium text-text-tertiary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors"
                                         >
-                                            <X size={14} />
+                                            <X size={13} />
                                         </button>
                                     </div>
                                 </div>
@@ -3086,6 +3075,21 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 </button>
                                             );
                                         })}
+                                    </div>
+
+                                    {/* Quit button */}
+                                    <div className="px-2 pt-1 pb-2">
+                                        <button
+                                            onClick={async () => {
+                                                let isActive = false;
+                                                try { isActive = await window.electronAPI?.getMeetingActive?.() ?? false; } catch {}
+                                                if (isActive) { setShowQuitConfirm(true); } else { window.electronAPI.quitApp(); }
+                                            }}
+                                            className="group relative w-full overflow-hidden rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-text-tertiary hover:text-red-400 hover:bg-red-500/5 transition-colors duration-150 flex items-center gap-2 active:scale-[0.99]"
+                                        >
+                                            <span className="shrink-0"><LogOut size={16} /></span>
+                                            <span>Quit Quietly</span>
+                                        </button>
                                     </div>
 
                                     {/* Quit confirmation (appears when meeting is active) */}
