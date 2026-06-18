@@ -394,8 +394,9 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
                           : 'Upload Job Description'}
                       </h4>
                       {!hasProfileAccess && (
-                        <span className="text-[7px] font-black text-[#FACC15] bg-[#FACC15]/12 px-1.5 py-0.5 rounded-[3px] border border-[#FACC15]/20 uppercase tracking-[0.08em] shrink-0">
+                        <span className="relative overflow-hidden text-[7px] font-black text-[#FACC15] bg-[#FACC15]/12 px-1.5 py-0.5 rounded-[3px] border border-[#FACC15]/20 uppercase tracking-[0.08em] shrink-0 animate-glow-pulse">
                           Pro
+                          <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-[#FACC15]/30 to-transparent" />
                         </span>
                       )}
                     </div>
