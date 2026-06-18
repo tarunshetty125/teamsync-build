@@ -205,11 +205,11 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
           <motion.div variants={itemVariants}>
             <h3 className="text-[13px] font-bold text-white/90 tracking-[-0.02em] mb-1">Intelligence Graph</h3>
             <p className="text-[12px] text-white/38 mb-4">
-              Your career, skills, and context — mapped into a persistent knowledge layer the AI references in every conversation.
+              Your career, skills, and context — mapped into a knowledge layer for every conversation.
             </p>
 
             {/* Identity Card */}
-            <div className="rounded-[16px] border border-white/[0.08] bg-[#1c1c1e] overflow-hidden">
+            <div className="rounded-[16px] border-2 border-white/[0.12] bg-[#1c1c1e]/80 backdrop-blur-xl overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.2)]">
               {/* Identity header */}
               <div className="p-5 pb-4">
                 <div className="flex items-center justify-between">
@@ -319,7 +319,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
           {/* ── Upload Cards (side by side) ─────────────────── */}
           <motion.div variants={itemVariants} className="grid gap-3 grid-cols-2">
             {/* Resume Upload */}
-            <div className="rounded-[16px] border border-white/[0.08] bg-[#1c1c1e] overflow-hidden min-h-[190px] flex flex-col">
+            <div className="rounded-[16px] border-2 border-white/[0.12] bg-[#1c1c1e]/80 backdrop-blur-xl overflow-hidden min-h-[190px] flex flex-col shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.2)]">
               <div className="p-6 flex-1 flex flex-col">
                 <div className="flex items-start gap-3.5 mb-4">
                   <div className="w-[42px] h-[42px] rounded-[12px] bg-[#252528] border border-white/[0.06] flex items-center justify-center text-white/40 shrink-0">
@@ -376,8 +376,8 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
 
             {/* JD Upload */}
             <div className={clsx(
-              'rounded-[16px] border overflow-hidden transition-colors duration-200 min-h-[190px] flex flex-col',
-              profileData?.hasActiveJD ? 'border-blue-500/25 bg-blue-500/[0.03]' : 'border-white/[0.08] bg-[#1c1c1e]'
+              'rounded-[16px] border-2 overflow-hidden transition-colors duration-200 min-h-[190px] flex flex-col backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.2)]',
+              profileData?.hasActiveJD ? 'border-blue-500/25 bg-blue-500/[0.03]' : 'border-white/[0.12] bg-[#1c1c1e]/80'
             )}>
               <div className="p-6 flex-1 flex flex-col">
                 <div className="flex items-start gap-3.5 mb-4">
@@ -450,7 +450,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
 
           {/* ── Custom Context ──────────────────────────────── */}
           <motion.div variants={itemVariants}>
-            <div className="rounded-[16px] border border-white/[0.08] bg-[#1c1c1e] p-5">
+            <div className="rounded-[16px] border-2 border-white/[0.12] bg-[#1c1c1e]/80 backdrop-blur-xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.2)]">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-[38px] h-[38px] rounded-[10px] bg-[#252528] border border-white/[0.06] flex items-center justify-center text-white/40 shrink-0">
                   <Pencil size={17} />
