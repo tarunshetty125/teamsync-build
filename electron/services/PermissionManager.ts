@@ -95,7 +95,7 @@ export class PermissionManager extends EventEmitter {
   }
 
   public async requestMicrophonePermission(): Promise<PermissionRequestResult> {
-    if (this.isDevelopmentBypass || process.platform !== 'darwin') {
+    if (process.platform !== 'darwin') {
       return {
         success: true,
         status: await this.getStatus(),
@@ -122,7 +122,7 @@ export class PermissionManager extends EventEmitter {
   }
 
   public async requestScreenRecordingPermission(): Promise<PermissionRequestResult> {
-    if (this.isDevelopmentBypass || process.platform !== 'darwin') {
+    if (process.platform !== 'darwin') {
       return {
         success: true,
         status: await this.getStatus(),
@@ -169,7 +169,7 @@ export class PermissionManager extends EventEmitter {
   }
 
   public async requestAccessibilityPermission(): Promise<PermissionRequestResult> {
-    if (this.isDevelopmentBypass || process.platform !== 'darwin') {
+    if (process.platform !== 'darwin') {
       return {
         success: true,
         status: await this.getStatus(),
@@ -200,12 +200,7 @@ export class PermissionManager extends EventEmitter {
   }
 
   public async openSettings(permission: PermissionKind): Promise<PermissionSettingsResult> {
-    if (this.isDevelopmentBypass) {
-      return {
-        success: true,
-        message: 'Permission deep links are bypassed in development mode.',
-      };
-    }
+    // Always open settings, even in dev mode — so user can manage permissions
 
     const target = this.getSettingsUrl(permission);
     if (!target) {
@@ -253,16 +248,7 @@ export class PermissionManager extends EventEmitter {
   }
 
   private buildStatusSnapshot(): PermissionStatusSnapshot {
-    if (this.isDevelopmentBypass) {
-      return {
-        screenRecording: 'granted',
-        microphone: 'granted',
-        accessibility: 'granted',
-        restartRequired: false,
-        platform: process.platform,
-        checkedAt: new Date().toISOString(),
-      };
-    }
+    // Read real permission states even in dev mode
 
     if (process.platform !== 'darwin') {
       return {
