@@ -4596,6 +4596,73 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  // ── Codex CLI ──────────────────────────────────────────────────────────
+
+  safeHandle("get-codex-cli-config", () => {
+    try {
+      const { CodexCliService } = require('./services/CodexCliService');
+      const { SettingsManager } = require('./services/SettingsManager');
+      const sm = SettingsManager.getInstance();
+      return CodexCliService.normalizeConfig({
+        enabled: sm.get('codexCliEnabled'),
+        path: sm.get('codexCliPath'),
+        model: sm.get('codexCliModel'),
+        fastModel: sm.get('codexCliFastModel'),
+        timeoutMs: sm.get('codexCliTimeoutMs'),
+        sandboxMode: sm.get('codexCliSandboxMode'),
+        serviceTier: sm.get('codexCliServiceTier'),
+        modelReasoningEffort: sm.get('codexCliModelReasoningEffort'),
+      });
+    } catch (e: any) {
+      console.warn('[IPC] get-codex-cli-config error:', e?.message);
+      const { CodexCliService } = require('./services/CodexCliService');
+      return CodexCliService.normalizeConfig({});
+    }
+  });
+
+  safeHandle("set-codex-cli-config", (_, config: any) => {
+    try {
+      const { CodexCliService } = require('./services/CodexCliService');
+      const { SettingsManager } = require('./services/SettingsManager');
+      const normalized = CodexCliService.normalizeConfig(config || {});
+      const sm = SettingsManager.getInstance();
+      sm.set('codexCliEnabled', normalized.enabled);
+      sm.set('codexCliPath', normalized.path);
+      sm.set('codexCliModel', normalized.model);
+      sm.set('codexCliFastModel', normalized.fastModel);
+      sm.set('codexCliTimeoutMs', normalized.timeoutMs);
+      sm.set('codexCliSandboxMode', normalized.sandboxMode);
+      sm.set('codexCliServiceTier', normalized.serviceTier);
+      sm.set('codexCliModelReasoningEffort', normalized.modelReasoningEffort);
+      console.log('[IPC] Codex CLI config saved:', JSON.stringify(normalized));
+      return { success: true, config: normalized };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to save Codex CLI config' };
+    }
+  });
+
+  safeHandle("test-codex-cli", async (_, config: any) => {
+    try {
+      const { CodexCliService } = require('./services/CodexCliService');
+      const { SettingsManager } = require('./services/SettingsManager');
+      const sm = SettingsManager.getInstance();
+      const current = CodexCliService.normalizeConfig({
+        enabled: sm.get('codexCliEnabled'),
+        path: sm.get('codexCliPath'),
+      });
+      const merged = CodexCliService.normalizeConfig({ ...current, ...(config || {}) });
+      const result = await CodexCliService.validateExecutable(merged.path);
+      // If auto-detect found a different path, persist it
+      if (result.success && result.resolvedPath && result.resolvedPath !== merged.path) {
+        sm.set('codexCliPath', result.resolvedPath);
+        return { success: true, resolvedPath: result.resolvedPath };
+      }
+      return result;
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Test failed' };
+    }
+  });
+
   safeHandle("modes:get-reference-files", async (_, modeId: string) => {
     try {
       const { ModesManager } = require('./services/ModesManager');

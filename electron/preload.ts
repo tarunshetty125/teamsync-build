@@ -487,6 +487,11 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   skillsRefresh: () => Promise<Array<{ id: string; name: string; description: string; source: 'builtin' | 'userData' }>>
   skillsOpenFolder: () => Promise<{ success: boolean; path: string; error?: string }>
 
+  // Codex CLI
+  getCodexCliConfig: () => Promise<any>
+  setCodexCliConfig: (config: any) => Promise<{ success: boolean; config?: any; error?: string }>
+  testCodexCli: (config?: any) => Promise<{ success: boolean; error?: string; resolvedPath?: string }>
+
   // Google Auth (Server-side OAuth + MongoDB)
   googleSignIn: () => Promise<GoogleAuthResult>
   googleGetAuthState: () => Promise<GoogleAuthState>
@@ -1522,6 +1527,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Skills API
   skillsRefresh: () => ipcRenderer.invoke('skills:list'),
   skillsOpenFolder: () => ipcRenderer.invoke('skills:open-folder'),
+
+  // Codex CLI
+  getCodexCliConfig: () => ipcRenderer.invoke('get-codex-cli-config'),
+  setCodexCliConfig: (config: any) => ipcRenderer.invoke('set-codex-cli-config', config),
+  testCodexCli: (config?: any) => ipcRenderer.invoke('test-codex-cli', config),
 
   // Auto-Update
   onUpdateAvailable: (callback: (info: any) => void) => {

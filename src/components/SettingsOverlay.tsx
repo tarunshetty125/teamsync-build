@@ -674,6 +674,176 @@ const SkillsSettingsTab: React.FC = () => {
     );
 };
 
+// ── Codex CLI Settings (standalone component for hooks safety) ──────
+const CodexCliSettings: React.FC = () => {
+    const [config, setConfig] = React.useState({
+        enabled: false, path: 'codex', model: 'gpt-5.4', fastModel: 'gpt-5.3-codex',
+        timeoutMs: 60000, sandboxMode: 'read-only', serviceTier: 'default', modelReasoningEffort: '',
+    });
+    const [loading, setLoading] = React.useState(true);
+    const [testStatus, setTestStatus] = React.useState<null | { success: boolean; message: string }>(null);
+    const [testing, setTesting] = React.useState(false);
+    const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    React.useEffect(() => {
+        window.electronAPI?.getCodexCliConfig?.().then((c: any) => {
+            if (c) setConfig({ ...c, modelReasoningEffort: c.modelReasoningEffort || '' });
+        }).catch(() => {}).finally(() => setLoading(false));
+    }, []);
+
+    const updateField = (field: string, value: any) => {
+        setConfig(prev => {
+            const next = { ...prev, [field]: value };
+            // Debounced auto-save
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = setTimeout(() => {
+                window.electronAPI?.setCodexCliConfig?.(next).catch(() => {});
+            }, 500);
+            return next;
+        });
+        setTestStatus(null);
+    };
+
+    const handleTest = async () => {
+        setTesting(true);
+        setTestStatus(null);
+        try {
+            const result = await window.electronAPI?.testCodexCli?.({ path: config.path });
+            if (result?.success) {
+                setTestStatus({ success: true, message: result.resolvedPath ? `Found at ${result.resolvedPath}` : 'Codex CLI is working' });
+                if (result.resolvedPath && result.resolvedPath !== config.path) {
+                    updateField('path', result.resolvedPath);
+                }
+            } else {
+                setTestStatus({ success: false, message: result?.error || 'Test failed' });
+            }
+        } catch (e: any) {
+            setTestStatus({ success: false, message: e?.message || 'Test failed' });
+        } finally {
+            setTesting(false);
+        }
+    };
+
+    if (loading) return null;
+
+    return (
+        <section className="rounded-2xl border border-border-subtle bg-bg-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-border-subtle">
+                <h4 className="text-[14px] font-semibold text-text-primary">Local Provider (Codex CLI)</h4>
+                <p className="mt-1 text-[12px] text-text-secondary">Route text and screenshot responses through a locally authenticated Codex CLI.</p>
+            </div>
+
+            <div className="divide-y divide-border-subtle">
+                {/* Enable toggle */}
+                <div className="flex items-center justify-between px-5 py-3.5">
+                    <div>
+                        <p className="text-[12px] font-semibold text-text-primary uppercase tracking-wide">Enable Codex CLI</p>
+                        <p className="mt-0.5 text-[11px] text-text-secondary">Adds Codex CLI as a selectable local backend and fallback.</p>
+                    </div>
+                    <button
+                        onClick={() => updateField('enabled', !config.enabled)}
+                        className={`relative w-10 h-[22px] rounded-full transition-colors duration-200 ${config.enabled ? 'bg-accent-primary' : 'bg-bg-elevated'}`}
+                    >
+                        <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${config.enabled ? 'translate-x-[21px]' : 'translate-x-[3px]'}`} />
+                    </button>
+                </div>
+
+                {/* Fields grid */}
+                <div className="px-5 py-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-text-tertiary">Executable</span>
+                            <input
+                                type="text" value={config.path}
+                                onChange={e => updateField('path', e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg text-[12px] bg-bg-input border border-border-subtle text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-text-tertiary">Timeout (ms)</span>
+                            <input
+                                type="number" value={config.timeoutMs}
+                                onChange={e => updateField('timeoutMs', parseInt(e.target.value) || 60000)}
+                                className="w-full px-3 py-2 rounded-lg text-[12px] bg-bg-input border border-border-subtle text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-text-tertiary">Normal Model</span>
+                            <input
+                                type="text" value={config.model}
+                                onChange={e => updateField('model', e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg text-[12px] bg-bg-input border border-border-subtle text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-text-tertiary">Fast Model</span>
+                            <input
+                                type="text" value={config.fastModel}
+                                onChange={e => updateField('fastModel', e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg text-[12px] bg-bg-input border border-border-subtle text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-text-tertiary">Service Tier</span>
+                            <select
+                                value={config.serviceTier}
+                                onChange={e => updateField('serviceTier', e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg text-[12px] bg-bg-input border border-border-subtle text-text-primary focus:outline-none focus:border-accent-primary transition-colors appearance-none"
+                            >
+                                <option value="default">Default</option>
+                                <option value="fast">Fast</option>
+                                <option value="flex">Flex</option>
+                            </select>
+                            <p className="text-[10px] text-text-tertiary">Use faster service tier if available. Codex Cloud only.</p>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-text-tertiary">Reasoning Effort</span>
+                            <select
+                                value={config.modelReasoningEffort}
+                                onChange={e => updateField('modelReasoningEffort', e.target.value || undefined)}
+                                className="w-full px-3 py-2 rounded-lg text-[12px] bg-bg-input border border-border-subtle text-text-primary focus:outline-none focus:border-accent-primary transition-colors appearance-none"
+                            >
+                                <option value="">None</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="xhigh">Extra High</option>
+                            </select>
+                            <p className="text-[10px] text-text-tertiary">How much reasoning effort the model uses. Model-dependent.</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Test + Status */}
+                <div className="px-5 py-3.5 flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                        {testStatus && (
+                            <div className={`flex items-center gap-2 text-[12px] ${testStatus.success ? 'text-emerald-500' : 'text-red-400'}`}>
+                                {testStatus.success ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                                <span className="truncate">{testStatus.message}</span>
+                            </div>
+                        )}
+                    </div>
+                    <button
+                        onClick={handleTest}
+                        disabled={testing}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-medium bg-bg-elevated border border-border-subtle text-text-primary hover:bg-bg-input transition-colors disabled:opacity-50 flex-shrink-0"
+                    >
+                        {testing ? <RefreshCw size={13} className="animate-spin" /> : <Terminal size={13} />}
+                        Test CLI
+                    </button>
+                </div>
+            </div>
+        </section>
+    );
+};
+
 interface SettingsOverlayProps {
     isOpen: boolean;
     onClose: () => void;
@@ -4238,6 +4408,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                         {activeTab === 'ai-providers' && (
                                             <div data-tour-id="settings-ai-providers" className="space-y-6 pb-4">
                                                 <AIProvidersSettings />
+                                                <CodexCliSettings />
 
                                                 {/* Response Behavior — relocated from General */}
                                                 <section className="rounded-2xl border border-border-subtle bg-bg-card overflow-hidden">

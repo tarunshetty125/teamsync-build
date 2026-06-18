@@ -552,6 +552,11 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   skillsRefresh: () => Promise<Array<{ id: string; name: string; description: string; source: 'builtin' | 'userData' }>>
   skillsOpenFolder: () => Promise<{ success: boolean; path: string; error?: string }>
 
+  // Codex CLI
+  getCodexCliConfig: () => Promise<any>
+  setCodexCliConfig: (config: any) => Promise<{ success: boolean; config?: any; error?: string }>
+  testCodexCli: (config?: any) => Promise<{ success: boolean; error?: string; resolvedPath?: string }>
+
   // Auto-Update
   onUpdateAvailable: (callback: (info: any) => void) => () => void
   onUpdateDownloaded: (callback: (info: any) => void) => () => void
