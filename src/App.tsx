@@ -38,6 +38,7 @@ import {
 import { analytics } from "./lib/analytics/analytics.service"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import ModesSettings from "./components/settings/ModesSettings"
+import ProfileIntelligencePanel from "./components/settings/ProfileIntelligencePanel"
 import { usePermissionsStore } from "./stores/usePermissionsStore"
 import { formatBlockingPermissions, isPermissionStatusOperational } from "./lib/permissions/utils"
 
@@ -115,6 +116,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState('appearance');
   const [isModesOpen, setIsModesOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremiumActive, setIsPremiumActive] = useState(false);
   const [hasLoadedLicense, setHasLoadedLicense] = useState(false);
@@ -627,6 +629,7 @@ const App: React.FC = () => {
                 setIsSettingsOpen(true);
               }}
               onOpenModes={() => setIsModesOpen(true)}
+              onOpenProfile={() => setIsProfileOpen(true)}
               onPageChange={setIsLauncherMainView}
               ollamaPullStatus={ollamaPullStatus}
               ollamaPullPercent={ollamaPullPercent}
@@ -685,6 +688,36 @@ const App: React.FC = () => {
                   ) : (
                     <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
                   )}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {isProfileOpen && (
+              <motion.div
+                key="profile-panel"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                onClick={(e) => { if (e.target === e.currentTarget) setIsProfileOpen(false); }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.985, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.99, y: 6 }}
+                  transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
+                  className="h-[78vh] w-[58vw] max-h-[740px] max-w-[780px] transform-gpu overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#111113] shadow-2xl"
+                  style={{ willChange: 'transform, opacity' }}
+                >
+                  <ProfileIntelligencePanel
+                    onClose={() => setIsProfileOpen(false)}
+                    isPremium={isPremiumActive}
+                    isLoaded={hasLoadedLicense}
+                    isTrialActive={!!activeTrial}
+                    onUnlockPro={() => { setIsProfileOpen(false); setSettingsInitialTab('api'); setIsSettingsOpen(true); }}
+                  />
                 </motion.div>
               </motion.div>
             )}
