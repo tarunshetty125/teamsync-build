@@ -2987,6 +2987,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 {settingsHeaderBadge.label}
                                             </span>
                                         )}
+                                    </div>
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto px-2 py-2">
