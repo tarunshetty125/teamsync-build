@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, screen } from "electron"
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, screen, globalShortcut } from "electron"
 import path from "path"
 import fs from "fs"
 import os from "os"
@@ -3989,6 +3989,10 @@ async function initializeApp() {
   app.on("before-quit", (event) => {
     console.log("App is quitting, cleaning up resources...");
     appState.setQuitting(true);
+
+    // Release all global keyboard shortcuts so macOS system shortcuts
+    // (e.g. Cmd+Shift+3/4 for screenshots) work immediately after quit
+    globalShortcut.unregisterAll();
 
     // Dispose CropperWindowHelper to clean up IPC listeners and prevent memory leaks
     // This is critical to prevent resource leaks and ensure proper cleanup
