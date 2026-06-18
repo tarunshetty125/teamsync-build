@@ -2838,11 +2838,21 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 className: 'border-sky-500/25 bg-sky-500/10 text-sky-500',
             }
             : null;
+    // Codex CLI status probe
+    const [codexCliStatus, setCodexCliStatus] = React.useState<'checking' | 'active' | 'inactive'>('checking');
+    React.useEffect(() => {
+        if (!isOpen) return;
+        window.electronAPI?.testCodexCli?.().then((r: any) => {
+            setCodexCliStatus(r?.success ? 'active' : 'inactive');
+        }).catch(() => setCodexCliStatus('inactive'));
+    }, [isOpen]);
+
     type SettingsSidebarItem = {
         id: string;
         label: string;
         icon: React.ReactNode;
         meta?: string;
+        statusDot?: 'green' | 'red' | 'yellow';
     };
     const sidebarGroups: Array<{ label: string; items: SettingsSidebarItem[] }> = [
         {
@@ -2858,7 +2868,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             items: [
                 { id: 'profile', label: 'Profile', icon: <User size={16} /> },
                 { id: 'ai-providers', label: 'AI & Providers', icon: <Sparkles size={16} /> },
-                { id: 'codex-cli', label: 'Codex CLI', icon: <Terminal size={16} /> },
+                { id: 'codex-cli', label: 'Codex CLI', icon: <Terminal size={16} />, meta: codexCliStatus === 'checking' ? '...' : codexCliStatus === 'active' ? 'Active' : 'Not found', statusDot: codexCliStatus === 'active' ? 'green' : codexCliStatus === 'inactive' ? 'red' : undefined },
                 { id: 'skills', label: 'Skills', icon: <FlaskConical size={16} /> },
                 { id: 'calendar', label: 'Calendar', icon: <Calendar size={16} /> },
             ],
@@ -3021,7 +3031,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 </span>
                                                                 <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
                                                                 {item.meta && (
-                                                                    <span className={`relative z-10 max-w-[60px] truncate text-[10px] font-medium ${isActive ? 'text-text-secondary' : 'text-text-tertiary'}`}>
+                                                                    <span className={`relative z-10 flex items-center gap-1 max-w-[80px] truncate text-[10px] font-medium ${item.statusDot === 'green' ? 'text-emerald-500' : item.statusDot === 'red' ? 'text-red-400' : isActive ? 'text-text-secondary' : 'text-text-tertiary'}`}>
+                                                                        {item.statusDot && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.statusDot === 'green' ? 'bg-emerald-500' : item.statusDot === 'red' ? 'bg-red-400' : 'bg-yellow-400'}`} />}
                                                                         {item.meta}
                                                                     </span>
                                                                 )}
