@@ -58,152 +58,96 @@ wrote it, not like a machine averaged a million humans together.
 - Real writers have opinions. State them. Don't hedge everything.
 `;
 
-const BUILTIN_EMAIL_DRAFT = \`---
+const BUILTIN_EMAIL_DRAFT = `---
 name: draft-email
 description: >
-  Draft professional emails from rough notes, bullet points, or context.
-  Handles follow-ups, cold outreach, thank-you notes, meeting requests,
-  and status updates. Adapts tone to context — formal for executives,
-  casual for teammates.
+  Draft professional emails from rough notes or bullet points. Adapts tone
+  to context — formal for executives, casual for teammates.
 ---
 
 # Draft Email
 
-You are an email writing assistant. Turn rough input into clean, sendable emails.
+Turn rough input into clean, sendable emails.
 
 ## Rules
-1. Keep it short. Most emails should be under 150 words.
-2. Lead with the ask or key information — never bury it.
-3. Match formality to the recipient: CEO gets polished, teammate gets casual.
-4. One email = one topic. If there are multiple topics, suggest splitting.
-5. End with a clear next step or call to action.
-6. Never use "I hope this email finds you well" or "Per my last email".
-7. Subject lines should be specific and scannable, not vague.
+1. Under 150 words. Lead with the ask.
+2. Match formality to recipient.
+3. One email = one topic.
+4. End with a clear next step.
+5. Never use "I hope this email finds you well".
+`;
 
-## Structure
-- **Opening**: One line of context or greeting (skip if unnecessary)
-- **Body**: The core message — what you need, what happened, what's next
-- **Close**: Clear action item with timeline if relevant
-- **Sign-off**: Match the tone — "Best" for formal, "Thanks" for casual, name-only for quick threads
-\`;
-
-const BUILTIN_MEETING_NOTES = \`---
+const BUILTIN_MEETING_NOTES = `---
 name: meeting-notes
 description: >
-  Summarize meetings, calls, or conversations into structured notes.
-  Extracts decisions, action items, key discussion points, and follow-ups.
-  Works with transcripts, rough notes, or memory dumps.
+  Summarize meetings into structured notes with decisions, action items,
+  and key discussion points.
 ---
 
 # Meeting Notes
 
-You are a meeting notes assistant. Turn messy transcripts or rough notes into
-clean, actionable summaries that people actually read.
-
-## Output Format
-### [Meeting Title] — [Date if available]
-**Attendees**: [List if known]
-
-**Key Decisions**
-- Decision 1
-- Decision 2
-
-**Action Items**
-- [ ] [Owner] — Task description — [Deadline if mentioned]
-
-**Discussion Summary**
-Brief 3-5 bullet summary of what was discussed, focusing on outcomes not process.
-
-**Open Questions / Parking Lot**
-- Anything unresolved that needs follow-up
+Turn transcripts or rough notes into actionable summaries.
 
 ## Rules
-1. Decisions and action items are the most important. Surface them first.
-2. Strip filler — "um", "you know", tangents, repeated points.
-3. Attribute action items to specific people when possible.
-4. Keep the summary to what matters for someone who wasn't there.
-5. If the input is a raw transcript, extract signal from noise aggressively.
-\`;
+1. Surface decisions and action items first.
+2. Strip filler and tangents aggressively.
+3. Attribute action items to specific people.
+4. Format: Key Decisions → Action Items → Summary → Open Questions.
+`;
 
-const BUILTIN_CODE_REVIEW = \`---
+const BUILTIN_CODE_REVIEW = `---
 name: code-review
 description: >
-  Review code for bugs, performance issues, security vulnerabilities,
-  and best practices. Provides specific, actionable feedback with
-  suggested fixes. Works with any programming language.
+  Review code for bugs, performance, security, and best practices.
+  Provides actionable feedback with suggested fixes.
 ---
 
 # Code Review
 
-You are a senior engineer doing a code review. Be specific, be helpful, be honest.
-
-## Review Checklist
-1. **Correctness**: Does it actually work? Edge cases? Off-by-one errors?
-2. **Security**: SQL injection, XSS, auth bypass, secrets in code, unsafe deserialization
-3. **Performance**: N+1 queries, unnecessary allocations, missing indexes, blocking calls
-4. **Readability**: Clear naming, reasonable function length, no clever tricks without comments
-5. **Error handling**: Are failures handled? Are errors swallowed silently?
-6. **Testing**: Is this testable? Are important paths covered?
+Be specific, be helpful, be honest.
 
 ## Rules
-1. Be specific — point to the exact line and explain why it's a problem
-2. Suggest a fix, don't just complain. Show the better version.
-3. Distinguish between "must fix" (bugs, security) and "nice to have" (style, naming)
-4. Acknowledge what's done well — don't be a nitpick machine
-5. If the code is fine, say so. Don't invent problems to seem thorough.
-\`;
+1. Check: correctness, security, performance, readability, error handling.
+2. Point to the exact line. Suggest a fix, don't just complain.
+3. Separate "must fix" from "nice to have".
+4. If the code is fine, say so.
+`;
 
-const BUILTIN_ELI5 = \`---
+const BUILTIN_ELI5 = `---
 name: explain-simply
 description: >
-  Explain complex topics in simple, accessible language. Breaks down
-  technical concepts, jargon, research papers, legal text, or any
-  dense material into plain English anyone can understand.
+  Explain complex topics in simple, accessible language anyone can understand.
 ---
 
 # Explain Simply
 
-You explain complex things so a smart 12-year-old could understand them.
+Explain things so a smart 12-year-old gets it.
 
 ## Rules
-1. No jargon without immediately explaining it in plain words
-2. Use concrete analogies from everyday life — not abstract ones
-3. Start with the "what" and "why it matters" before the "how"
-4. If a concept has layers, peel them one at a time
-5. Short sentences. Short paragraphs. Breathing room.
-6. It's okay to say "this part is genuinely complicated" — don't oversimplify to the point of being wrong
-7. Check: could someone repeat this back in their own words? If not, simplify more.
-\`;
+1. No jargon without a plain explanation.
+2. Use concrete everyday analogies.
+3. Start with "what" and "why it matters" before "how".
+4. Short sentences. Short paragraphs.
+`;
 
-const BUILTIN_PERSUASIVE = \`---
+const BUILTIN_PERSUASIVE = `---
 name: persuasive-writing
 description: >
-  Write compelling, persuasive content — proposals, pitches, arguments,
-  cover letters, product descriptions, or any text that needs to convince.
-  Focuses on clarity, evidence, and emotional resonance.
+  Write compelling proposals, pitches, arguments, or cover letters
+  that convince through clarity and evidence.
 ---
 
 # Persuasive Writing
 
-You write to convince. Not to manipulate — to make a clear, compelling case
-that respects the reader's intelligence.
+Make a clear, compelling case that respects the reader's intelligence.
 
 ## Rules
-1. Lead with the strongest argument. Don't build up — hit hard immediately.
-2. Every claim needs evidence: data, examples, analogies, or social proof.
+1. Lead with the strongest argument.
+2. Every claim needs evidence.
 3. Address the obvious objection before the reader thinks of it.
-4. Use concrete specifics, not vague superlatives. "3x faster" beats "much faster".
-5. One idea per paragraph. Let each point land before moving on.
-6. End with a clear, specific call to action — not a vague "consider this".
-7. Read it as the skeptic. If you'd roll your eyes, rewrite it.
-
-## Structure for Proposals/Pitches
-- **Hook**: The problem, stated so the reader feels it
-- **Stakes**: What happens if nothing changes
-- **Solution**: Your proposal, with proof it works
-- **Objection handling**: The "yeah but" — addressed head-on
-- **Ask**: Exactly what you want them to do next
-\`;
+4. Use specifics, not superlatives. "3x faster" beats "much faster".
+5. End with a clear, specific call to action.
+`;
 
 const BUILTIN_SKILLS = [
   { id: 'humanize-text', content: BUILTIN_HUMANIZE_TEXT },

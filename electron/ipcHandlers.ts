@@ -918,6 +918,10 @@ export function initializeIpcHandlers(appState: AppState): void {
       console.log("[IPC] gemini-chat-stream started using IntelligenceManager.handleAction");
       const senderId = event.sender.id;
 
+      // ── Skill resolution ──
+      const skillResolved = resolveSkillFromMessage(message);
+      message = skillResolved.message;
+
       await cancelActiveChatStream(senderId);
       const currentStreamState = activeChatStreams.get(senderId);
       const myStreamId = (currentStreamState?.streamId ?? 0) + 1;
@@ -927,6 +931,10 @@ export function initializeIpcHandlers(appState: AppState): void {
       const intelligenceManager = appState.getIntelligenceManager();
 
       let additionalContext = context;
+      // Prepend skill block to context if a skill was triggered
+      if (skillResolved.skillBlock) {
+        additionalContext = (additionalContext ? skillResolved.skillBlock + '\n\n' + additionalContext : skillResolved.skillBlock);
+      }
       let ragContext: { content: string; scope: 'live'; title?: string } | null = null;
 
       // Context Injection for "Answer" button (short rolling window)
@@ -3243,10 +3251,15 @@ export function initializeIpcHandlers(appState: AppState): void {
   // MODE 5: Manual Answer (Fallback)
   safeHandle("submit-manual-question", async (_, question: string, requestId?: string) => {
     try {
+      // ── Skill resolution ──
+      const skillResolved = resolveSkillFromMessage(question);
+      question = skillResolved.message;
+
       const intelligenceManager = appState.getIntelligenceManager();
       const answer = await intelligenceManager.handleAction('manual_chat', {
         message: question,
         requestId,
+        ...(skillResolved.skillBlock ? { additionalContext: skillResolved.skillBlock } : {}),
       });
       return { answer, question };
     } catch (error: any) {
@@ -4540,6 +4553,28 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   // ── Skills ────────────────────────────────────────────────────────────────
+
+  /**
+   * Parse $skill-name or /skill-name from the beginning of a user message.
+   * Returns the cleaned message (trigger removed) and the prompt block if found.
+   */
+  function resolveSkillFromMessage(rawMessage: string): { message: string; skillBlock: string | null } {
+    const match = rawMessage.match(/^[$/]([a-z0-9_-]+)\s*/i);
+    if (!match) return { message: rawMessage, skillBlock: null };
+    const skillId = match[1].toLowerCase();
+    try {
+      const { SkillsManager } = require('./services/SkillsManager');
+      const skill = SkillsManager.getInstance().getSkill(skillId);
+      if (!skill) return { message: rawMessage, skillBlock: null };
+      const block = SkillsManager.getInstance().buildPromptBlock(skill);
+      const cleaned = rawMessage.slice(match[0].length).trim();
+      console.log(`[Skills] Activated skill "${skillId}" for message`);
+      return { message: cleaned || rawMessage, skillBlock: block };
+    } catch (e: any) {
+      console.warn('[Skills] resolveSkillFromMessage error:', e?.message || e);
+      return { message: rawMessage, skillBlock: null };
+    }
+  }
 
   safeHandle("skills:list", () => {
     try {
