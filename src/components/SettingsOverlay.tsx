@@ -2955,6 +2955,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
                     id="settings-backdrop"
+                    onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
                     className={`fixed inset-0 z-[3000] flex items-center justify-center p-4 transition-colors duration-150 sm:p-6 lg:p-8 ${isPreviewingOpacity ? 'bg-transparent backdrop-blur-none' : 'bg-black/60 backdrop-blur-sm'}`}
                 >
                     <motion.div
