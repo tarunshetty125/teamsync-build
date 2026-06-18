@@ -2987,16 +2987,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 {settingsHeaderBadge.label}
                                             </span>
                                         )}
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <button
-                                            onClick={onClose}
-                                            title="Close Settings"
-                                            className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium text-text-tertiary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors"
-                                        >
-                                            <X size={13} />
-                                        </button>
-                                    </div>
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -3131,7 +3121,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             </div>
 
                             {/* Content */}
-                            <div className="settings-right-surface min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-6 py-5">
+                            <div className="settings-right-surface relative min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-6 py-5">
+                                {/* Close button — top right */}
+                                <button
+                                    onClick={onClose}
+                                    title="Close Settings"
+                                    className="absolute top-4 right-4 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-bg-secondary/80 backdrop-blur-sm text-text-tertiary hover:text-text-primary hover:bg-bg-item-active transition-colors"
+                                >
+                                    <X size={15} />
+                                </button>
                                 <AnimatePresence mode="wait" initial={false}>
                                     <motion.div
                                         key={activeTab}
