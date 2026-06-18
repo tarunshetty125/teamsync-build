@@ -14,6 +14,14 @@ import { getBuiltInModeTemplate, getPublicModeTemplates } from './modeTemplateRe
 
 export type ModeTemplateType = ModeTemplateId;
 
+export interface MeetingContext {
+    eventTitle: string;
+    description?: string;
+    startTime: string;
+    endTime: string;
+    participants?: Array<{ email: string; name: string }>;
+}
+
 export interface Mode {
     id: string;
     name: string;
@@ -177,6 +185,7 @@ function createModeInstance(templateId: ModeTemplateType, name?: string): UserMo
 export class ModesManager {
     private static instance: ModesManager;
     private readonly store: Store<PersistedModesState>;
+    private activeMeetingContext: MeetingContext | null = null;
 
     private constructor() {
         this.store = new Store<PersistedModesState>({
@@ -458,11 +467,24 @@ export class ModesManager {
     }
 
     public setActiveMode(id: string | null): void {
+        this.activeMeetingContext = null;
         this.mutateState((state) => ({
             ...state,
             activeModeId: id,
             selectedModeId: id ?? state.selectedModeId,
         }));
+    }
+
+    public setMeetingContext(context: MeetingContext | null): void {
+        this.activeMeetingContext = context;
+    }
+
+    public getMeetingContext(): MeetingContext | null {
+        return this.activeMeetingContext;
+    }
+
+    public clearMeetingContext(): void {
+        this.activeMeetingContext = null;
     }
 
     public getReferenceFiles(modeId: string): ModeReferenceFile[] {
@@ -620,6 +642,38 @@ export class ModesManager {
 
         if (includeCustomContext && activeMode.userPrompt.trim()) {
             parts.push(`<user_context>\n${activeMode.userPrompt.trim()}\n</user_context>`);
+        }
+
+        // Inject calendar meeting context if available
+        if (this.activeMeetingContext) {
+            const ctx = this.activeMeetingContext;
+            const lines: string[] = [];
+            lines.push(`Meeting: ${ctx.eventTitle}`);
+
+            try {
+                const startDate = new Date(ctx.startTime);
+                const endDate = new Date(ctx.endTime);
+                const fmt = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                lines.push(`Time: ${fmt(startDate)} – ${fmt(endDate)}`);
+            } catch { /* skip malformed dates */ }
+
+            if (ctx.participants?.length) {
+                const participantLines = ctx.participants.slice(0, 10).map((p) => {
+                    const domain = p.email?.split('@')[1];
+                    return p.name && p.name !== p.email
+                        ? `${p.name} (${p.email})`
+                        : p.email + (domain ? ` [${domain}]` : '');
+                });
+                const extra = ctx.participants.length > 10 ? ` +${ctx.participants.length - 10} more` : '';
+                lines.push(`Participants: ${participantLines.join(', ')}${extra}`);
+            }
+
+            if (ctx.description?.trim()) {
+                const desc = ctx.description.trim().slice(0, 1000);
+                lines.push(`Agenda/Description:\n${desc}`);
+            }
+
+            parts.push(`<meeting_context>\n${lines.join('\n')}\n</meeting_context>`);
         }
 
         let totalChars = 0;

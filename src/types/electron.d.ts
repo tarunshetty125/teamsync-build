@@ -546,6 +546,11 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   calendarIntelligenceEvaluateEvents: (events: CalendarEventPayload[]) => Promise<CalendarModeRecommendation | null>
   calendarIntelligenceGetRecommendation: () => Promise<CalendarModeRecommendation | null>
   calendarIntelligenceDismiss: (eventId: string) => Promise<{ success: boolean }>
+  modesSetMeetingContext: (context: { eventTitle: string; description?: string; startTime: string; endTime: string; participants?: Array<{ email: string; name: string }> } | null) => Promise<{ success: boolean }>
+
+  // Skills
+  skillsRefresh: () => Promise<Array<{ id: string; name: string; description: string; source: 'builtin' | 'userData' }>>
+  skillsOpenFolder: () => Promise<{ success: boolean; path: string; error?: string }>
 
   // Auto-Update
   onUpdateAvailable: (callback: (info: any) => void) => () => void

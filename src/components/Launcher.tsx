@@ -708,6 +708,19 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             // Sync the selected mode in ModesSettings so it highlights the newly active mode
             await window.electronAPI?.modesSetSelected?.(targetMode.id).catch(() => {});
 
+            // Inject calendar event context into the AI prompt pipeline
+            try {
+                await window.electronAPI?.modesSetMeetingContext?.({
+                    eventTitle: calendarRecommendation.title,
+                    description: calendarRecommendation.description,
+                    startTime: calendarRecommendation.startTime,
+                    endTime: calendarRecommendation.endTime,
+                    participants: nextEventParticipants ?? undefined,
+                });
+            } catch (contextError) {
+                console.warn('Failed to set meeting context:', contextError);
+            }
+
             setCalendarRecommendation(null);
             setIsCalendarRecommendationOpen(false);
 

@@ -481,6 +481,11 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   calendarIntelligenceGetRecommendation: () => Promise<CalendarModeRecommendation | null>
   calendarIntelligenceDismiss: (eventId: string) => Promise<{ success: boolean }>
   onCalendarRecommendationChanged: (callback: (recommendation: CalendarModeRecommendation | null) => void) => () => void
+  modesSetMeetingContext: (context: { eventTitle: string; description?: string; startTime: string; endTime: string; participants?: Array<{ email: string; name: string }> } | null) => Promise<{ success: boolean }>
+
+  // Skills
+  skillsRefresh: () => Promise<Array<{ id: string; name: string; description: string; source: 'builtin' | 'userData' }>>
+  skillsOpenFolder: () => Promise<{ success: boolean; path: string; error?: string }>
 
   // Google Auth (Server-side OAuth + MongoDB)
   googleSignIn: () => Promise<GoogleAuthResult>
@@ -1512,6 +1517,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   calendarIntelligenceEvaluateEvents: (events: CalendarEventPayload[]) => ipcRenderer.invoke('calendar-intelligence:evaluate-events', events),
   calendarIntelligenceGetRecommendation: () => ipcRenderer.invoke('calendar-intelligence:get-recommendation'),
   calendarIntelligenceDismiss: (eventId: string) => ipcRenderer.invoke('calendar-intelligence:dismiss', eventId),
+  modesSetMeetingContext: (context: any) => ipcRenderer.invoke('modes:set-meeting-context', context),
+
+  // Skills API
+  skillsRefresh: () => ipcRenderer.invoke('skills:list'),
+  skillsOpenFolder: () => ipcRenderer.invoke('skills:open-folder'),
 
   // Auto-Update
   onUpdateAvailable: (callback: (info: any) => void) => {

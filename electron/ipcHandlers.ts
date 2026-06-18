@@ -4510,6 +4510,57 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  safeHandle("modes:set-meeting-context", async (_, context: any) => {
+    try {
+      const { ModesManager } = require('./services/ModesManager');
+      const mgr = ModesManager.getInstance();
+      if (context && typeof context === 'object' && context.eventTitle) {
+        mgr.setMeetingContext({
+          eventTitle: String(context.eventTitle),
+          description: context.description ? String(context.description) : undefined,
+          startTime: String(context.startTime || ''),
+          endTime: String(context.endTime || ''),
+          participants: Array.isArray(context.participants)
+            ? context.participants.slice(0, 20).map((p: any) => ({
+                email: String(p.email || ''),
+                name: String(p.name || p.email || ''),
+              }))
+            : undefined,
+        });
+        console.log(`[IPC] modes:set-meeting-context → "${context.eventTitle}" with ${context.participants?.length ?? 0} participants`);
+      } else {
+        mgr.clearMeetingContext();
+        console.log('[IPC] modes:set-meeting-context → cleared');
+      }
+      return { success: true };
+    } catch (e: any) {
+      console.error('[IPC] modes:set-meeting-context error:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  // ── Skills ────────────────────────────────────────────────────────────────
+
+  safeHandle("skills:list", () => {
+    try {
+      const { SkillsManager } = require('./services/SkillsManager');
+      return SkillsManager.getInstance().listSkills();
+    } catch (e: any) {
+      console.warn('[IPC] skills:list error:', e?.message || e);
+      return [];
+    }
+  });
+
+  safeHandle("skills:open-folder", async () => {
+    try {
+      const { SkillsManager } = require('./services/SkillsManager');
+      return await SkillsManager.getInstance().openSkillsFolder();
+    } catch (e: any) {
+      console.warn('[IPC] skills:open-folder error:', e?.message || e);
+      return { success: false, path: '', error: e?.message || 'failed to open skills folder' };
+    }
+  });
+
   safeHandle("modes:get-reference-files", async (_, modeId: string) => {
     try {
       const { ModesManager } = require('./services/ModesManager');
