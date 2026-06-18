@@ -2969,7 +2969,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             mass: 1
                         }}
                         className="relative h-[74vh] max-h-[680px] w-[84vw] max-w-[860px] overflow-hidden rounded-[22px] border border-border-subtle bg-bg-primary shadow-[0_20px_60px_rgba(0,0,0,0.25),0_0_0_1px_rgba(0,0,0,0.05)]"
-                    >
+                        >
+                        {/* Close button — top right corner of panel */}
+                        <button
+                            onClick={onClose}
+                            title="Close Settings"
+                            className="absolute top-3 right-3 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/15 border border-orange-500/25 text-orange-400 hover:bg-orange-500/25 hover:text-orange-300 transition-colors"
+                        >
+                            <X size={15} />
+                        </button>
                         <div
                             id="settings-panel"
                             className="relative z-10 flex h-full w-full min-w-0"
@@ -3123,14 +3131,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                             {/* Content */}
                             <div className="settings-right-surface relative min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-6 py-5">
-                                {/* Close button — sticky top right */}
-                                <button
-                                    onClick={onClose}
-                                    title="Close Settings"
-                                    className="sticky top-0 float-right z-20 flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/15 border border-orange-500/25 text-orange-400 hover:bg-orange-500/25 hover:text-orange-300 transition-colors mr-[-16px] mt-[-18px]"
-                                >
-                                    <X size={15} />
-                                </button>
                                 <AnimatePresence mode="wait" initial={false}>
                                     <motion.div
                                         key={activeTab}
