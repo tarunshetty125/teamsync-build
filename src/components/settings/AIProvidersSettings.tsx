@@ -146,6 +146,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
         bedrock: 'Amazon Bedrock',
         custom: 'Custom Providers',
         ollama: 'Ollama / Local',
+        codex: 'Codex CLI',
     };
     const providerAccents: Record<string, { dot: string; header: string; rule: string }> = {
         teamsync: { dot: 'bg-cyan-400', header: 'text-cyan-300', rule: 'bg-cyan-400/30' },
@@ -156,6 +157,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
         bedrock: { dot: 'bg-rose-400', header: 'text-rose-300', rule: 'bg-rose-400/30' },
         custom: { dot: 'bg-violet-400', header: 'text-violet-300', rule: 'bg-violet-400/30' },
         ollama: { dot: 'bg-lime-400', header: 'text-lime-300', rule: 'bg-lime-400/30' },
+        codex: { dot: 'bg-teal-400', header: 'text-teal-300', rule: 'bg-teal-400/30' },
     };
     let lastProvider = '';
 
@@ -413,6 +415,14 @@ export const AIProvidersSettings: React.FC = () => {
     const [defaultModel, setDefaultModel] = useState<string>('gemini-3.1-flash-lite-preview');
     const [fastResponseMode, setFastResponseMode] = useState(false);
     const [credentialsLoaded, setCredentialsLoaded] = useState(false);
+
+    // Codex CLI config for model injection
+    const [codexCliConfig, setCodexCliConfig] = useState<{ enabled: boolean; model: string; fastModel: string } | null>(null);
+    useEffect(() => {
+        window.electronAPI?.getCodexCliConfig?.().then((c: any) => {
+            if (c) setCodexCliConfig({ enabled: c.enabled, model: c.model, fastModel: c.fastModel });
+        }).catch(() => {});
+    }, []);
 
     // --- Dynamic Model Discovery ---
     const [preferredModels, setPreferredModels] = useState<Record<string, string>>({});
@@ -1119,12 +1129,20 @@ export const AIProvidersSettings: React.FC = () => {
         customProviders.forEach(p => opts.push({ id: p.id, name: p.name, provider: 'custom' }));
         ollamaModels.forEach(m => opts.push({ id: `ollama-${m}`, name: `${m} (Local)`, provider: 'ollama' }));
 
+        // Codex CLI models (when enabled)
+        if (codexCliConfig?.enabled) {
+            opts.push({ id: `codex-cli:${codexCliConfig.model}`, name: `Codex CLI (${codexCliConfig.model})`, provider: 'codex' });
+            if (codexCliConfig.fastModel && codexCliConfig.fastModel !== codexCliConfig.model) {
+                opts.push({ id: `codex-cli:${codexCliConfig.fastModel}`, name: `Codex CLI (${codexCliConfig.fastModel})`, provider: 'codex' });
+            }
+        }
+
         if (defaultModel && !opts.find(o => o.id === defaultModel)) {
             opts.unshift({ id: defaultModel, name: prettifyModelId(defaultModel), provider: 'custom' });
         }
 
         return opts;
-    }, [customProviders, defaultModel, dynamicModels, hasStoredKey, ollamaModels, preferredModels]);
+    }, [codexCliConfig, customProviders, defaultModel, dynamicModels, hasStoredKey, ollamaModels, preferredModels]);
 
     const activeModelOption = activeModelOptions.find(option => option.id === defaultModel);
     const connectedProviderCount =

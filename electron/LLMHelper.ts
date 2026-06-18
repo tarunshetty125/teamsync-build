@@ -806,6 +806,7 @@ export class LLMHelper {
   public getProviderForModel(modelId: string): string {
     const normalized = this.normalizeModelId(modelId);
     if (normalized.startsWith('ollama-') || (this.useOllama && normalized === this.normalizeModelId(this.ollamaModel))) return 'ollama';
+    if (normalized === 'codex-cli' || normalized.startsWith('codex-cli:')) return 'codex';
     if (this.isBedrockModel(normalized)) return 'bedrock';
     if (this.isOpenAiModel(normalized)) return 'openai';
     if (this.isClaudeModel(normalized)) return 'claude';
@@ -925,6 +926,17 @@ export class LLMHelper {
       this.customProvider = null;
       this.activeCurlProvider = null;
       console.log(`[LLMHelper] Switched to Ollama: ${this.ollamaModel}`);
+      return;
+    }
+
+    // Handle Codex CLI models (codex-cli or codex-cli:model-name)
+    if (targetModelId === 'codex-cli' || targetModelId.startsWith('codex-cli:')) {
+      this.useOllama = false;
+      this.customProvider = null;
+      this.activeCurlProvider = null;
+      this.currentModelId = targetModelId;
+      const codexModel = targetModelId.startsWith('codex-cli:') ? targetModelId.slice('codex-cli:'.length) : 'default';
+      console.log(`[LLMHelper] Switched to Codex CLI: ${codexModel}`);
       return;
     }
 

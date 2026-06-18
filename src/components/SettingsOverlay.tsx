@@ -2838,31 +2838,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 className: 'border-sky-500/25 bg-sky-500/10 text-sky-500',
             }
             : null;
-    // Codex CLI status probe — only show "Active" if enabled AND binary found
-    const [codexCliStatus, setCodexCliStatus] = React.useState<'checking' | 'active' | 'inactive'>('checking');
-    React.useEffect(() => {
-        if (!isOpen) return;
-        Promise.all([
-            window.electronAPI?.getCodexCliConfig?.(),
-            window.electronAPI?.testCodexCli?.(),
-        ]).then(([config, test]) => {
-            setCodexCliStatus(config?.enabled && test?.success ? 'active' : 'inactive');
-        }).catch(() => setCodexCliStatus('inactive'));
-    }, [isOpen]);
-
-    // AI Providers active check
-    const [hasAnyProvider, setHasAnyProvider] = React.useState(false);
-    React.useEffect(() => {
-        if (!isOpen) return;
-        // @ts-ignore
-        window.electronAPI?.getStoredCredentials?.().then((creds: any) => {
-            if (creds) {
-                const active = !!(creds.hasGeminiKey || creds.hasGroqKey || creds.hasOpenaiKey || creds.hasClaudeKey || creds.hasBedrockCredentials || creds.hasTeamSyncKey);
-                setHasAnyProvider(active);
-            }
-        }).catch(() => {});
-    }, [isOpen]);
-
     type SettingsSidebarItem = {
         id: string;
         label: string;
@@ -2883,8 +2858,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             label: 'Intelligence',
             items: [
                 { id: 'profile', label: 'Profile', icon: <User size={16} /> },
-                { id: 'ai-providers', label: 'AI & Providers', icon: <Sparkles size={16} />, ...(hasAnyProvider ? { meta: 'Active', statusDot: 'green' as const } : {}) },
-                { id: 'codex-cli', label: 'Codex CLI', icon: <Terminal size={16} />, ...(codexCliStatus === 'checking' ? { meta: '...' } : codexCliStatus === 'active' ? { meta: 'Active', statusDot: 'green' as const } : {}) },
+                { id: 'ai-providers', label: 'AI & Providers', icon: <Sparkles size={16} /> },
+                { id: 'codex-cli', label: 'Codex CLI', icon: <Terminal size={16} /> },
                 { id: 'skills', label: 'Skills', icon: <FlaskConical size={16} /> },
                 { id: 'calendar', label: 'Calendar', icon: <Calendar size={16} /> },
             ],
