@@ -324,13 +324,13 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
       className="relative flex h-full flex-col overflow-hidden"
       style={{ fontFamily: '"SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', background: '#0c0e14' }}
     >
-      {/* ── Ambient mesh gradients ─────────────────────────── */}
+      {/* ── Ambient mesh gradients (barely-there) ──────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-[500px] w-[500px] rounded-full opacity-[0.06]"
+        <div className="absolute -top-40 -right-40 h-[500px] w-[500px] rounded-full opacity-[0.025]"
           style={{ background: 'radial-gradient(circle, #a855f7, transparent 70%)' }} />
-        <div className="absolute -bottom-32 -left-32 h-[400px] w-[400px] rounded-full opacity-[0.04]"
+        <div className="absolute -bottom-32 -left-32 h-[400px] w-[400px] rounded-full opacity-[0.015]"
           style={{ background: 'radial-gradient(circle, #22c55e, transparent 70%)' }} />
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 h-[300px] w-[600px] rounded-full opacity-[0.025]"
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 h-[300px] w-[600px] rounded-full opacity-[0.012]"
           style={{ background: 'radial-gradient(ellipse, #3b82f6, transparent 70%)' }} />
       </div>
 
@@ -376,7 +376,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
           <motion.div variants={itemVariants} className="mb-5">
             <div className="group relative overflow-hidden rounded-[26px] border-[2px] border-white/[0.14] bg-[#1a1a1d] shadow-[0_0_0_1px_rgba(255,255,255,0.055),0_24px_56px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.10)]">
               {/* Radial glow */}
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(132,109,206,0.18),transparent_50%),radial-gradient(circle_at_80%_85%,rgba(34,197,94,0.10),transparent_50%)]" />
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(132,109,206,0.08),transparent_50%),radial-gradient(circle_at_80%_85%,rgba(34,197,94,0.04),transparent_50%)]" />
               {/* Inner bevels */}
               <div className="pointer-events-none absolute inset-[1px] rounded-[24px] border border-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" />
               <div className="pointer-events-none absolute inset-[5px] rounded-[20px] border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.14),inset_0_-1px_0_rgba(255,255,255,0.03)]" />
@@ -389,7 +389,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
                     <div className="flex items-center gap-4">
                       {/* Avatar */}
                       <div className="relative">
-                        <div className="w-[52px] h-[52px] rounded-full bg-gradient-to-br from-violet-500/30 to-violet-600/10 border-[2px] border-white/[0.12] flex items-center justify-center text-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.08),0_0_24px_rgba(139,92,246,0.15)]">
+                        <div className="w-[52px] h-[52px] rounded-full bg-gradient-to-br from-violet-500/15 to-violet-600/5 border-[2px] border-white/[0.10] flex items-center justify-center text-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.06),0_0_16px_rgba(139,92,246,0.06)]">
                           <span className="font-bold text-[18px] tracking-tight">
                             {profileData?.identity?.name ? profileData.identity.name.charAt(0).toUpperCase() : 'U'}
                           </span>
@@ -490,7 +490,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
               buttonLabel={profileUploading ? 'Ingesting...' : 'Select File'}
               buttonColor="linear-gradient(135deg, #7c3aed, #a855f7)"
               accentColor="#a855f7"
-              glowGradient="bg-[radial-gradient(circle_at_16%_20%,rgba(168,85,247,0.16),transparent_50%)]"
+              glowGradient="bg-[radial-gradient(circle_at_16%_20%,rgba(168,85,247,0.08),transparent_50%)]"
               icon={Upload}
               proBadge={!hasProfileAccess}
               onUpload={handleSelectResume}
@@ -509,7 +509,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
               buttonLabel={jdUploading ? 'Parsing...' : profileData?.hasActiveJD ? 'Replace JD' : 'Upload JD'}
               buttonColor="linear-gradient(135deg, #2563eb, #3b82f6)"
               accentColor="#3b82f6"
-              glowGradient="bg-[radial-gradient(circle_at_84%_22%,rgba(59,130,246,0.16),transparent_50%)]"
+              glowGradient="bg-[radial-gradient(circle_at_84%_22%,rgba(59,130,246,0.08),transparent_50%)]"
               icon={Briefcase}
               proBadge={!hasProfileAccess}
               onUpload={handleSelectJD}
