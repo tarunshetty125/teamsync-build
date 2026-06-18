@@ -4634,6 +4634,11 @@ export function initializeIpcHandlers(appState: AppState): void {
       sm.set('codexCliSandboxMode', normalized.sandboxMode);
       sm.set('codexCliServiceTier', normalized.serviceTier);
       sm.set('codexCliModelReasoningEffort', normalized.modelReasoningEffort);
+      // Push to LLMHelper so the streaming path can use it immediately
+      try {
+        const llmHelper = appState.processingHelper.getLLMHelper();
+        llmHelper.setCodexCliConfig(normalized);
+      } catch (e) { /* LLMHelper may not be ready yet */ }
       console.log('[IPC] Codex CLI config saved:', JSON.stringify(normalized));
       return { success: true, config: normalized };
     } catch (e: any) {

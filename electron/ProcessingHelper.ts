@@ -133,6 +133,26 @@ export class ProcessingHelper {
       this.llmHelper.setModel(defaultModel, allProviders);
     }
 
+    // Load Codex CLI config from SettingsManager
+    try {
+      const { SettingsManager } = require('./services/SettingsManager');
+      const { CodexCliService } = require('./services/CodexCliService');
+      const sm = SettingsManager.getInstance();
+      const codexConfig = CodexCliService.normalizeConfig({
+        enabled: sm.get('codexCliEnabled'),
+        path: sm.get('codexCliPath'),
+        model: sm.get('codexCliModel'),
+        fastModel: sm.get('codexCliFastModel'),
+        timeoutMs: sm.get('codexCliTimeoutMs'),
+        sandboxMode: sm.get('codexCliSandboxMode'),
+        serviceTier: sm.get('codexCliServiceTier'),
+        modelReasoningEffort: sm.get('codexCliModelReasoningEffort'),
+      });
+      this.llmHelper.setCodexCliConfig(codexConfig);
+    } catch (e) {
+      console.warn('[ProcessingHelper] Failed to load Codex CLI config:', (e as Error).message);
+    }
+
     // Load Languages
     const sttLanguage = credManager.getSttLanguage();
     const aiResponseLanguage = credManager.getAiResponseLanguage();

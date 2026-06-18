@@ -3,6 +3,7 @@ import Groq from "groq-sdk"
 import { GroqKeyManager } from './services/GroqKeyManager'
 import { GroqClient } from './services/GroqClient'
 import { BedrockClient } from './services/BedrockClient'
+import { CodexCliService, CodexCliConfig, DEFAULT_CODEX_CLI_CONFIG } from './services/CodexCliService'
 import OpenAI from "openai"
 import Anthropic from "@anthropic-ai/sdk"
 import fs from "fs"
@@ -476,6 +477,7 @@ export class LLMHelper {
   private customProvider: CustomProvider | null = null;
   private activeCurlProvider: CurlProvider | null = null;
   private groqFastTextMode: boolean = false;
+  private codexCliConfig: CodexCliConfig = { ...DEFAULT_CODEX_CLI_CONFIG };
   private knowledgeOrchestrator: any = null;
   // Profile intelligence generation guard — incremented on every setKnowledgeOrchestrator
   // (session reset) so a stale processQuestion() result can be detected and discarded.
@@ -769,6 +771,15 @@ export class LLMHelper {
     return this.groqFastTextMode;
   }
 
+  public setCodexCliConfig(config: Partial<CodexCliConfig>): void {
+    this.codexCliConfig = CodexCliService.normalizeConfig(config);
+    console.log(`[LLMHelper] Codex CLI ${this.codexCliConfig.enabled ? 'enabled' : 'disabled'} with model: ${this.codexCliConfig.model}`);
+  }
+
+  public getCodexCliConfig(): CodexCliConfig {
+    return this.codexCliConfig;
+  }
+
   public getAiResponseLanguage(): string {
     return this.aiResponseLanguage;
   }
@@ -793,6 +804,10 @@ export class LLMHelper {
 
   public isBedrockModel(modelId: string): boolean {
     return isBedrockModelId(modelId, this.bedrockCredentials?.preferredModel);
+  }
+
+  public isCodexCliModel(modelId: string): boolean {
+    return modelId === 'codex-cli' || modelId.startsWith('codex-cli:');
   }
 
   public normalizeModelId(modelId: string): string {
@@ -966,6 +981,64 @@ export class LLMHelper {
     this.customProvider = null;
     this.activeCurlProvider = provider;
     console.log(`[LLMHelper] Switched to cURL provider: ${provider.name}`);
+  }
+
+  // ── Codex CLI helpers ───────────────────────────────────────────────
+
+  private buildCodexCliPrompt(userContent: string, systemPrompt?: string): string {
+    return [systemPrompt, userContent].filter(Boolean).join('\n\n');
+  }
+
+  private getSelectedCodexCliModel(fastMode: boolean = false): string {
+    if (fastMode) return this.codexCliConfig.fastModel;
+    if (this.currentModelId.startsWith('codex-cli:')) {
+      return this.currentModelId.slice('codex-cli:'.length) || this.codexCliConfig.model;
+    }
+    return this.codexCliConfig.model;
+  }
+
+  public async generateWithCodexCli(
+    userContent: string,
+    systemPrompt?: string,
+    fastMode: boolean = false,
+    imagePaths?: string[],
+    signal?: AbortSignal,
+  ): Promise<string> {
+    if (!this.codexCliConfig.enabled) throw new Error('Codex CLI transport is disabled.');
+    const model = this.getSelectedCodexCliModel(fastMode);
+    console.log(`[LLMHelper] 🚀 [Codex CLI] Attempting (${model}, ${imagePaths?.length ? imagePaths.length + ' image(s)' : 'text-only'})...`);
+    return CodexCliService.run(this.codexCliConfig.path, {
+      prompt: this.buildCodexCliPrompt(userContent, systemPrompt),
+      model,
+      timeoutMs: this.codexCliConfig.timeoutMs,
+      imagePaths,
+      sandboxMode: this.codexCliConfig.sandboxMode,
+      serviceTier: this.codexCliConfig.serviceTier,
+      modelReasoningEffort: this.codexCliConfig.modelReasoningEffort,
+      signal,
+    });
+  }
+
+  public async *streamWithCodexCli(
+    userContent: string,
+    systemPrompt?: string,
+    fastMode: boolean = false,
+    imagePaths?: string[],
+    signal?: AbortSignal,
+  ): AsyncGenerator<string> {
+    if (!this.codexCliConfig.enabled) throw new Error('Codex CLI transport is disabled.');
+    const model = this.getSelectedCodexCliModel(fastMode);
+    console.log(`[LLMHelper] 🚀 [Codex CLI] Streaming (${model}, ${imagePaths?.length ? imagePaths.length + ' image(s)' : 'text-only'})...`);
+    yield* CodexCliService.stream(this.codexCliConfig.path, {
+      prompt: this.buildCodexCliPrompt(userContent, systemPrompt),
+      model,
+      timeoutMs: this.codexCliConfig.timeoutMs,
+      imagePaths,
+      sandboxMode: this.codexCliConfig.sandboxMode,
+      serviceTier: this.codexCliConfig.serviceTier,
+      modelReasoningEffort: this.codexCliConfig.modelReasoningEffort,
+      signal,
+    });
   }
 
   private cleanJsonResponse(text: string): string {
@@ -3549,6 +3622,15 @@ Return only the final answer. No meta commentary.
     }
 
     // 3. Cloud Provider Routing
+
+    // Codex CLI (local subprocess — uses OpenAI-compatible system prompts)
+    if (this.isCodexCliModel(routeModelId) && this.codexCliConfig.enabled) {
+      const codexSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
+      const finalCodexSystem = this.injectLanguageInstruction(codexSystem);
+      console.log(`[PROVIDER_INVOKE] provider=codex model=${routeModelId}`);
+      yield* this.streamWithCodexCli(userContent, finalCodexSystem, false, imagePaths);
+      return;
+    }
 
     // Bedrock
 	    if (this.isBedrockModel(routeModelId) && this.bedrockClient) {
