@@ -175,8 +175,9 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-[16px] font-semibold tracking-[-0.03em] text-white">Profile Intelligence</h1>
-              <span className="rounded-[4px] bg-[#FACC15] px-[6px] py-[1.5px] text-[8px] font-black uppercase tracking-[0.06em] text-black">
+              <span className="relative overflow-hidden rounded-[4px] bg-[#FACC15] px-[6px] py-[1.5px] text-[8px] font-black uppercase tracking-[0.06em] text-black shadow-[0_0_12px_rgba(250,204,21,0.35)]">
                 Beta
+                <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-white/40 to-transparent" />
               </span>
             </div>
             <p className="text-[12px] tracking-[-0.01em] text-white/40 mt-0.5">
@@ -331,8 +332,9 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
                         {profileStatus.hasProfile ? 'Update Resume' : 'Initialize Knowledge Base'}
                       </h4>
                       {!hasProfileAccess && (
-                        <span className="text-[7px] font-black text-[#FACC15] bg-[#FACC15]/12 px-1.5 py-0.5 rounded-[3px] border border-[#FACC15]/20 uppercase tracking-[0.08em] shrink-0">
+                        <span className="relative overflow-hidden text-[7px] font-black text-[#FACC15] bg-[#FACC15]/12 px-1.5 py-0.5 rounded-[3px] border border-[#FACC15]/20 uppercase tracking-[0.08em] shrink-0 animate-glow-pulse">
                           Pro
+                          <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-[#FACC15]/30 to-transparent" />
                         </span>
                       )}
                     </div>
@@ -568,10 +570,11 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
             <button
               type="button"
               onClick={onUnlockPro}
-              className="inline-flex h-[44px] items-center justify-between rounded-full bg-white pl-5 pr-2.5 text-[14px] font-semibold tracking-[-0.035em] text-[#141414] shadow-[0_18px_42px_rgba(0,0,0,0.24)] transition-transform duration-200 hover:scale-[1.01] active:scale-[0.99]"
+              className="relative overflow-hidden inline-flex h-[44px] items-center justify-between rounded-full bg-white pl-5 pr-2.5 text-[14px] font-semibold tracking-[-0.035em] text-[#141414] shadow-[0_18px_42px_rgba(0,0,0,0.24)] transition-transform duration-200 hover:scale-[1.01] active:scale-[0.99]"
             >
-              <span className="min-w-[94px] text-left">Unlock Pro</span>
-              <span className="ml-2.5 flex h-[32px] w-[32px] items-center justify-center rounded-full bg-[#ececec] text-[#161616]">
+              <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-white/60 to-transparent" style={{ backgroundSize: '200% 100%' }} />
+              <span className="relative min-w-[94px] text-left">Unlock Pro</span>
+              <span className="relative ml-2.5 flex h-[32px] w-[32px] items-center justify-center rounded-full bg-[#ececec] text-[#161616]">
                 <ArrowUpRight className="h-[16px] w-[16px] stroke-[2.3]" />
               </span>
             </button>
