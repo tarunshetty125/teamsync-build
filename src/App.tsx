@@ -773,7 +773,7 @@ const App: React.FC = () => {
       <div className="h-full min-h-0 w-full relative bg-[#000000]">
         {shouldMountLauncherWorkspace && renderLauncherWorkspace(isStartupCoveringLauncher)}
 
-        <AnimatePresence initial={false}>
+        <AnimatePresence>
           {shouldRenderStartup ? (
             <StartupSequence
               key="startup"

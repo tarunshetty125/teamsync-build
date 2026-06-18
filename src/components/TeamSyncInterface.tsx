@@ -534,7 +534,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
             setHasNegotiationScript(scriptAvailable);
             // Always start OFF on fresh mount. Salary detection will auto-enable when needed.
             if (window.electronAPI?.profileSetNegotiationContextEnabled) {
-                await window.electronAPI.profileSetNegotiationContextEnabled(false).catch(() => {});
+                await window.electronAPI.profileSetNegotiationContextEnabled(false).catch(() => { });
             }
             setNegotiationContextEnabled(false);
         } catch {
@@ -2042,7 +2042,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                 const intel = data._intelligence;
                 const confidenceTier: 'high' | 'moderate' | 'low' =
                     intel.signalStrength === 'strong' ? 'high' :
-                    intel.signalStrength === 'moderate' ? 'moderate' : 'low';
+                        intel.signalStrength === 'moderate' ? 'moderate' : 'low';
                 intelligenceMetadata = {
                     confidenceTier,
                     confidencePercent: typeof intel.confidence === 'number'
@@ -3077,10 +3077,10 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                     ((manualDetectedMode === 'coding' || manualDetectedMode === 'system_design') && manualWordCount <= 18)
                     || (manualDetectedMode === 'general' && manualWordCount <= 14)
                 );
-	            const streamContext = [
-	                conversationContext.trim(),
-	                standaloneManualInput ? '' : `RECENT OVERLAY TRANSCRIPT:\n${finalizedTranscriptRef.current.slice(-transcriptWindow)}`,
-	            ].filter(Boolean).join('\n') || undefined;
+            const streamContext = [
+                conversationContext.trim(),
+                standaloneManualInput ? '' : `RECENT OVERLAY TRANSCRIPT:\n${finalizedTranscriptRef.current.slice(-transcriptWindow)}`,
+            ].filter(Boolean).join('\n') || undefined;
             await window.electronAPI.streamGeminiChat(
                 userText || 'Analyze this screenshot',
                 currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
@@ -3848,527 +3848,527 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                 }}
                             >
 
-                            {/* ScreenScanOverlay removed — screen scan results now appear only in the chat messages to avoid duplicate responses */}
+                                {/* ScreenScanOverlay removed — screen scan results now appear only in the chat messages to avoid duplicate responses */}
 
 
 
 
-                            {/* System Audio Permission Warning Banner */}
-                            {systemAudioWarning && (
-                                <div className="flex items-center justify-between mx-4 mt-3 mb-1 px-3.5 py-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-[12px] shadow-sm relative no-drag group/warning">
-                                    <div className="flex flex-col gap-1 pr-3">
-                                        <div className="flex items-center gap-2 text-[12.5px] text-yellow-600 dark:text-yellow-400/90 font-medium leading-tight">
-                                            <div className="shrink-0 p-1 bg-yellow-500/20 rounded-full">
-                                                <svg className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                </svg>
+                                {/* System Audio Permission Warning Banner */}
+                                {systemAudioWarning && (
+                                    <div className="flex items-center justify-between mx-4 mt-3 mb-1 px-3.5 py-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-[12px] shadow-sm relative no-drag group/warning">
+                                        <div className="flex flex-col gap-1 pr-3">
+                                            <div className="flex items-center gap-2 text-[12.5px] text-yellow-600 dark:text-yellow-400/90 font-medium leading-tight">
+                                                <div className="shrink-0 p-1 bg-yellow-500/20 rounded-full">
+                                                    <svg className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                    </svg>
+                                                </div>
+                                                <span>Screen Recording Permission Denied</span>
                                             </div>
-                                            <span>Screen Recording Permission Denied</span>
+                                            <p className="text-[11px] text-yellow-600/70 dark:text-yellow-400/60 leading-snug pl-[26px]">
+                                                {systemAudioWarning}
+                                            </p>
                                         </div>
-                                        <p className="text-[11px] text-yellow-600/70 dark:text-yellow-400/60 leading-snug pl-[26px]">
-                                            {systemAudioWarning}
-                                        </p>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button
+                                                onClick={() => { window.electronAPI.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'); }}
+                                                className="px-3 py-1.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-700 dark:text-yellow-500 text-[11px] font-semibold transition-all active:scale-95 border border-yellow-500/20 shadow-sm"
+                                            >
+                                                Open Settings
+                                            </button>
+                                            <button
+                                                onClick={() => setSystemAudioWarning(null)}
+                                                className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-yellow-600/50 hover:text-yellow-700 dark:text-yellow-500/50 dark:hover:text-yellow-400 transition-colors absolute top-1 right-1 opacity-0 group-hover/warning:opacity-100"
+                                                title="Dismiss"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                            onClick={() => { window.electronAPI.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'); }}
-                                            className="px-3 py-1.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-700 dark:text-yellow-500 text-[11px] font-semibold transition-all active:scale-95 border border-yellow-500/20 shadow-sm"
-                                        >
-                                            Open Settings
-                                        </button>
-                                        <button
-                                            onClick={() => setSystemAudioWarning(null)}
-                                            className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-yellow-600/50 hover:text-yellow-700 dark:text-yellow-500/50 dark:hover:text-yellow-400 transition-colors absolute top-1 right-1 opacity-0 group-hover/warning:opacity-100"
-                                            title="Dismiss"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+                                )}
 
-                            {/* PR #173: STT Not Configured Warning Banner */}
-                            {sttNotConfigured && (
-                                <div className="flex items-center justify-between mx-4 mt-3 mb-1 px-3.5 py-2.5 bg-orange-500/10 border border-orange-500/20 rounded-[12px] shadow-sm relative no-drag group/stt-warning">
-                                    <div className="flex flex-col gap-1 pr-3">
-                                        <div className="flex items-center gap-2 text-[12.5px] text-orange-600 dark:text-orange-400/90 font-medium leading-tight">
-                                            <div className="shrink-0 p-1 bg-orange-500/20 rounded-full">
-                                                <svg className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                                                </svg>
+                                {/* PR #173: STT Not Configured Warning Banner */}
+                                {sttNotConfigured && (
+                                    <div className="flex items-center justify-between mx-4 mt-3 mb-1 px-3.5 py-2.5 bg-orange-500/10 border border-orange-500/20 rounded-[12px] shadow-sm relative no-drag group/stt-warning">
+                                        <div className="flex flex-col gap-1 pr-3">
+                                            <div className="flex items-center gap-2 text-[12.5px] text-orange-600 dark:text-orange-400/90 font-medium leading-tight">
+                                                <div className="shrink-0 p-1 bg-orange-500/20 rounded-full">
+                                                    <svg className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                                    </svg>
+                                                </div>
+                                                <span>Transcription Not Configured</span>
                                             </div>
-                                            <span>Transcription Not Configured</span>
+                                            <p className="text-[11px] text-orange-600/70 dark:text-orange-400/60 leading-snug pl-[26px]">
+                                                No STT provider selected. Open Settings → Audio to pick one.
+                                            </p>
                                         </div>
-                                        <p className="text-[11px] text-orange-600/70 dark:text-orange-400/60 leading-snug pl-[26px]">
-                                            No STT provider selected. Open Settings → Audio to pick one.
-                                        </p>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button
+                                                onClick={() => { window.electronAPI?.toggleSettingsWindow?.(); }}
+                                                className="px-3 py-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 text-orange-700 dark:text-orange-500 text-[11px] font-semibold transition-all active:scale-95 border border-orange-500/20 shadow-sm"
+                                            >
+                                                Open Settings
+                                            </button>
+                                            <button
+                                                onClick={() => setSttNotConfigured(false)}
+                                                className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-orange-600/50 hover:text-orange-700 dark:text-orange-500/50 dark:hover:text-orange-400 transition-colors absolute top-1 right-1 opacity-0 group-hover/stt-warning:opacity-100"
+                                                title="Dismiss"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                            onClick={() => { window.electronAPI?.toggleSettingsWindow?.(); }}
-                                            className="px-3 py-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 text-orange-700 dark:text-orange-500 text-[11px] font-semibold transition-all active:scale-95 border border-orange-500/20 shadow-sm"
-                                        >
-                                            Open Settings
-                                        </button>
-                                        <button
-                                            onClick={() => setSttNotConfigured(false)}
-                                            className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-orange-600/50 hover:text-orange-700 dark:text-orange-500/50 dark:hover:text-orange-400 transition-colors absolute top-1 right-1 opacity-0 group-hover/stt-warning:opacity-100"
-                                            title="Dismiss"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
+                                )}
+
+                                {/* Rolling Transcript Bar — includes STT status indicator inline */}
+                                {(showTranscript && rollingTranscript) || interviewerSttIndicatorStatus !== 'connected' || sttUserStatus !== 'connected' ? (
+                                    <>
+                                        <RollingTranscript
+                                            text={showTranscript ? lastFinalSentence : ''}
+                                            speakerLabel={showTranscript ? rollingTranscriptSpeakerLabel : ''}
+                                            isActive={isInterviewerSpeaking}
+                                            aiHasResponded={lastResponseSentenceId === currentSentenceId && currentSentenceId > 0}
+                                            surfaceStyle={showTranscript ? appearance.transcriptStyle : undefined}
+                                            interviewerChannel={{
+                                                status: interviewerSttIndicatorStatus,
+                                                error: interviewerSttIndicatorError,
+                                                provider: sttMetrics.interviewer?.activeProvider || sttInterviewerProvider,
+                                            }}
+                                            microphoneChannel={{
+                                                status: sttUserStatus,
+                                                error: sttUserError,
+                                                provider: sttMetrics.user?.activeProvider || sttUserProvider,
+                                            }}
+                                            onCopyDiagnostics={copyDiagnostics}
+                                        />
+                                    </>
+                                ) : null}
+
+                                {/* Chat History - Only show if there are messages OR active states */}
+                                {messages.length === 0 && !isManualRecording && !isProcessing && isConnected && (
+                                    <div className="flex-1 flex items-center justify-center p-4">
+                                        <EmptyListeningState isLightTheme={isLightTheme} />
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {/* Rolling Transcript Bar — includes STT status indicator inline */}
-                            {(showTranscript && rollingTranscript) || interviewerSttIndicatorStatus !== 'connected' || sttUserStatus !== 'connected' ? (
-                                <>
-                                    <RollingTranscript
-                                        text={showTranscript ? lastFinalSentence : ''}
-                                        speakerLabel={showTranscript ? rollingTranscriptSpeakerLabel : ''}
-                                        isActive={isInterviewerSpeaking}
-                                        aiHasResponded={lastResponseSentenceId === currentSentenceId && currentSentenceId > 0}
-                                        surfaceStyle={showTranscript ? appearance.transcriptStyle : undefined}
-                                        interviewerChannel={{
-                                            status: interviewerSttIndicatorStatus,
-                                            error: interviewerSttIndicatorError,
-                                            provider: sttMetrics.interviewer?.activeProvider || sttInterviewerProvider,
-                                        }}
-                                        microphoneChannel={{
-                                            status: sttUserStatus,
-                                            error: sttUserError,
-                                            provider: sttMetrics.user?.activeProvider || sttUserProvider,
-                                        }}
-                                        onCopyDiagnostics={copyDiagnostics}
-                                    />
-                                </>
-                            ) : null}
-
-                            {/* Chat History - Only show if there are messages OR active states */}
-                            {messages.length === 0 && !isManualRecording && !isProcessing && isConnected && (
-                                <div className="flex-1 flex items-center justify-center p-4">
-                                    <EmptyListeningState isLightTheme={isLightTheme} />
-                                </div>
-                            )}
-
-                            {(messages.length > 0 || isManualRecording || isProcessing) && (
-                                <>
-                                    <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[clamp(300px,35vh,450px)] no-drag" style={{ scrollbarWidth: 'none' }}>
-                                        {messages.map((msg) => (
-                                            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up w-full`}>
-                                                <div className={`
+                                {(messages.length > 0 || isManualRecording || isProcessing) && (
+                                    <>
+                                        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[clamp(300px,35vh,450px)] no-drag" style={{ scrollbarWidth: 'none' }}>
+                                            {messages.map((msg) => (
+                                                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up w-full`}>
+                                                    <div className={`
                                                 ${msg.role === 'user' ? `max-w-[72.25%] px-[13.6px] py-[10.2px] backdrop-blur-md rounded-[20px] rounded-tr-[4px] shadow-sm font-medium ${isLightTheme ? 'bg-[#007AFF]/10 border border-[#007AFF]/15 text-[#007AFF]' : 'bg-[#0A84FF]/12 border border-[#0A84FF]/20 text-blue-100'}` : msg.role === 'system' ? 'w-[85%]' : 'w-full'} 
                                                 text-[14px] leading-relaxed relative group whitespace-pre-wrap
                                                 ${msg.role === 'interviewer' ? 'overlay-text-muted italic pl-0 text-[13px] max-w-[85%]' : ''}
                                             `}>
-                                                    {msg.role === 'interviewer' && (
-                                                        <div className="flex items-center gap-1.5 mb-1 text-[10px] font-medium uppercase tracking-wider overlay-text-muted">
-                                                            Interviewer
-                                                            {msg.isStreaming && <span className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />}
-                                                        </div>
-                                                    )}
-                                                    {msg.role === 'user' && msg.hasScreenshot && (
-                                                        <div className="flex items-center gap-1 text-[10px] opacity-70 mb-1 border-b pb-1 border-white/10">
-                                                            <Image className="w-2.5 h-2.5" />
-                                                            <span>Screenshot attached</span>
-                                                        </div>
-                                                    )}
+                                                        {msg.role === 'interviewer' && (
+                                                            <div className="flex items-center gap-1.5 mb-1 text-[10px] font-medium uppercase tracking-wider overlay-text-muted">
+                                                                Interviewer
+                                                                {msg.isStreaming && <span className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />}
+                                                            </div>
+                                                        )}
+                                                        {msg.role === 'user' && msg.hasScreenshot && (
+                                                            <div className="flex items-center gap-1 text-[10px] opacity-70 mb-1 border-b pb-1 border-white/10">
+                                                                <Image className="w-2.5 h-2.5" />
+                                                                <span>Screenshot attached</span>
+                                                            </div>
+                                                        )}
 
-                                                    {/* User & Interviewer Text Render */}
-                                                    {msg.role !== 'system' && renderMessageText(msg)}
+                                                        {/* User & Interviewer Text Render */}
+                                                        {msg.role !== 'system' && renderMessageText(msg)}
 
-                                                    {/* Premium System Response Card / ErrorFallback */}
-                                                    {msg.role === 'system' && (
-                                                        msg.text.startsWith('❌') ? (
-                                                            <ErrorFallback isLightTheme={isLightTheme} />
-                                                        ) : (
-                                                            <>
-                                                                <PremiumResponseCard
-                                                                    message={msg}
-                                                                    isLightTheme={isLightTheme}
-                                                                    sourceIconMap={sourceIconMap}
-                                                                    renderMessageText={renderMessageText}
-                                                                    onCopy={() => analytics.trackCopyAnswer()}
-                                                                />
-                                                                {msg.intelligenceMetadata?.confidenceTier && (
-                                                                    <SignalDiscoveryNudge
-                                                                        signalType={msg.intelligenceMetadata.confidenceTier}
-                                                                        signalLabel={`${msg.intelligenceMetadata.confidenceTier} confidence`}
+                                                        {/* Premium System Response Card / ErrorFallback */}
+                                                        {msg.role === 'system' && (
+                                                            msg.text.startsWith('❌') ? (
+                                                                <ErrorFallback isLightTheme={isLightTheme} />
+                                                            ) : (
+                                                                <>
+                                                                    <PremiumResponseCard
+                                                                        message={msg}
                                                                         isLightTheme={isLightTheme}
+                                                                        sourceIconMap={sourceIconMap}
+                                                                        renderMessageText={renderMessageText}
+                                                                        onCopy={() => analytics.trackCopyAnswer()}
                                                                     />
-                                                                )}
-                                                            </>
-                                                        )
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-
-                                        {/* Active Recording State with Live Transcription */}
-                                        {isManualRecording && (
-                                            <div className="flex flex-col items-end gap-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                                {/* Live transcription preview */}
-                                                {(manualTranscript || voiceInput) && (
-                                                    <div className="max-w-[85%] px-3.5 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-[18px] rounded-tr-[4px]">
-                                                        <span className="text-[13px] text-emerald-300">
-                                                            {voiceInput}{voiceInput && manualTranscript ? ' ' : ''}{manualTranscript}
-                                                        </span>
+                                                                    {msg.intelligenceMetadata?.confidenceTier && (
+                                                                        <SignalDiscoveryNudge
+                                                                            signalType={msg.intelligenceMetadata.confidenceTier}
+                                                                            signalLabel={`${msg.intelligenceMetadata.confidenceTier} confidence`}
+                                                                            isLightTheme={isLightTheme}
+                                                                        />
+                                                                    )}
+                                                                </>
+                                                            )
+                                                        )}
                                                     </div>
-                                                )}
-                                                <div className="px-3 py-2 flex gap-1.5 items-center">
-                                                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                                    <span className="text-[10px] text-emerald-400/70 ml-1">Listening...</span>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {isProcessing && !messages.some(m => m.isStreaming) && (
-                                            <div className="flex justify-start w-[85%]">
-                                                <SkeletonLoader isLightTheme={isLightTheme} />
-                                            </div>
-                                        )}
-                                        <div ref={messagesEndRef} />
-                                    </div>
-
-                                    {/* Scroll Navigation — single contextual button */}
-                                    {showScrollUpButton && !showJumpButton && (
-                                        <div className="flex justify-center py-1.5 no-drag">
-                                            <button
-                                                onClick={scrollToTop}
-                                                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium backdrop-blur-md transition-all duration-200 ${isLightTheme ? 'bg-black/[0.04] hover:bg-black/[0.07] text-gray-500 hover:text-gray-700 border border-black/[0.06]' : 'bg-white/[0.06] hover:bg-white/[0.10] text-white/50 hover:text-white/80 border border-white/[0.08]'}`}
-                                                title="Scroll to top"
-                                            >
-                                                <ChevronUp className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                    )}
-                                    {showJumpButton && (
-                                        <div className="flex justify-center py-1.5 no-drag">
-                                            <button
-                                                onClick={scrollToBottom}
-                                                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium backdrop-blur-md transition-all duration-200 ${isLightTheme ? 'bg-black/[0.04] hover:bg-black/[0.07] text-gray-500 hover:text-gray-700 border border-black/[0.06]' : 'bg-white/[0.06] hover:bg-white/[0.10] text-white/50 hover:text-white/80 border border-white/[0.08]'}`}
-                                                title="Scroll to bottom"
-                                            >
-                                                <ChevronDown className="w-3 h-3" />
-                                                {unreadCount > 0 && (
-                                                    <>
-                                                        <span>{unreadCount} new</span>
-                                                        <span className="flex h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-
-                            {/* Quick Actions - Static Buttons with Recommendation Glow */}
-                            {(() => {
-                                type ActionDef = OverlayQuickActionDef & { handler: () => void | Promise<void> };
-                                const actions: ActionDef[] = activeQuickActions.map((action) => ({
-                                    ...action,
-                                    handler: getQuickActionHandler(action),
-                                }));
-                                const isRecommendedAnswer = recommendedButton === 'answer_now';
-
-                                return (
-                                    <div className={`flex flex-nowrap justify-center items-center gap-2 px-3 pb-3 overflow-x-auto scrollbar-none transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity, width: '95%', margin: '0 auto' }}>
-                                        <AnimatePresence mode="popLayout">
-                                            {/* Mode Indicator Pill — inline with action buttons */}
-                                            {(() => {
-                                                const modeDisplay = MODE_DISPLAY_LABELS[overlayCopilotMode];
-                                                if (!modeDisplay?.label) return null;
-
-                                                const MODE_ICONS: Record<string, React.ComponentType<any>> = {
-                                                    Code2, MessageSquare, Layers, DollarSign, TrendingUp,
-                                                    BookOpen, Target, Users, Briefcase, Sparkles,
-                                                };
-                                                const IconComponent = MODE_ICONS[modeDisplay.icon];
-
-                                                return (
-                                                    <motion.div
-                                                        key={`mode-pill-${overlayCopilotMode}`}
-                                                        initial={{ opacity: 0, x: 8, scale: 0.9 }}
-                                                        animate={{ opacity: 1, x: 0, scale: 1 }}
-                                                        exit={{ opacity: 0, x: -8, scale: 0.9 }}
-                                                        transition={{ duration: 0.15, ease: [0.25, 1, 0.5, 1] }}
-                                                        className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-full flex-none whitespace-nowrap pointer-events-none"
-                                                        style={{
-                                                            background: modeDisplay.color.replace(/[\d.]+\)$/, '0.08)'),
-                                                            border: `1px solid ${modeDisplay.color}`,
-                                                        }}
-                                                    >
-                                                        {IconComponent && <IconComponent className="w-3 h-3" style={{ color: modeDisplay.color.replace(/[\d.]+\)$/, '0.9)') }} />}
-                                                        <span className={`text-[10px] font-semibold tracking-wide ${isLightTheme ? 'text-gray-600' : 'text-white/70'}`}>
-                                                            {modeDisplay.label}
-                                                        </span>
-                                                    </motion.div>
-                                                );
-                                            })()}
-                                            {(() => {
-                                                // macOS Control Center glassmorphism — Apple-style tinted glass per button
-                                                const glassColors: Record<string, { bg: string; border: string; tint: string }> = {
-                                                    // Default actions
-                                                    what_to_answer: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
-                                                    recap: { bg: 'rgba(142,142,147,0.14)', border: 'rgba(142,142,147,0.25)', tint: 'rgba(142,142,147,0.06)' },
-                                                    clarify: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
-                                                    brainstorm: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
-                                                    follow_up_questions: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
-                                                    // Technical interview actions
-                                                    tech_hint: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
-                                                    tech_optimal_solution: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
-                                                    tech_complexity: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
-                                                    tech_edge_case: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
-                                                    // System design actions
-                                                    system_tradeoffs: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
-                                                    system_clarify: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
-                                                    system_approaches: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
-                                                    system_deep_dive: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
-                                                    // Sales actions
-                                                    sales_objection: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
-                                                    sales_pricing: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
-                                                    sales_discovery: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
-                                                    sales_negotiation: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
-                                                    // Lecture actions
-                                                    lecture_explain: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
-                                                    lecture_summary: { bg: 'rgba(142,142,147,0.14)', border: 'rgba(142,142,147,0.25)', tint: 'rgba(142,142,147,0.06)' },
-                                                    lecture_takeaway: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
-                                                    lecture_question: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
-                                                    // Recruiting actions
-                                                    recruiting_strength: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
-                                                    recruiting_red_flag: { bg: 'rgba(255,69,58,0.14)', border: 'rgba(255,69,58,0.28)', tint: 'rgba(255,69,58,0.06)' },
-                                                    recruiting_follow_up: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
-                                                    recruiting_evaluation: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
-                                                    // Team meeting actions
-                                                    team_decision: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
-                                                    team_action_item: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
-                                                    team_risk: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
-                                                    team_owner: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
-                                                    // Job / looking-for-work actions
-                                                    job_star: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
-                                                    job_resume_alignment: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
-                                                    job_confidence: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
-                                                    job_improvement: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
-                                                };
-                                                const fallbackGlass = { bg: 'rgba(255,255,255,0.08)', border: 'rgba(255,255,255,0.15)', tint: 'rgba(255,255,255,0.04)' };
-
-                                                return actions.map((action: ActionDef, idx: number) => {
-                                                    const isRec = action.id === recommendedButton;
-                                                    const glass = glassColors[action.id] || fallbackGlass;
-                                                    return (
-                                                        <motion.button
-                                                            key={`${currentQuestionTurnId}-${overlayCopilotMode}-${action.id}`}
-                                                            layout
-                                                            initial={{ opacity: 0, y: 6, scale: 0.92 }}
-                                                            animate={{ opacity: 1, y: 0, scale: isRec ? 1.03 : 1 }}
-                                                            exit={{ opacity: 0, y: -4, scale: 0.92 }}
-                                                            transition={{ duration: 0.14, delay: idx * 0.03, ease: [0.25, 1, 0.5, 1] }}
-                                                            whileHover={{ scale: isRec ? 1.06 : 1.04, y: -1, transition: { duration: 0.12 } }}
-                                                            whileTap={{ scale: 0.96, transition: { duration: 0.08 } }}
-                                                            onClick={() => {
-                                                                if (isProcessing) return;
-                                                                recommendationLockTurnIdRef.current = currentQuestionTurnIdRef.current;
-                                                                if (recommendedButtonRef.current !== action.id) {
-                                                                    recommendedButtonRef.current = action.id;
-                                                                    setRecommendedButton(action.id);
-                                                                }
-                                                                action.handler();
-                                                            }}
-                                                            className={`group relative flex items-center justify-center gap-1.5 px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap flex-none min-w-fit no-drag backdrop-blur-xl ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}
-                                                            style={{
-                                                                background: isRec
-                                                                    ? `linear-gradient(135deg, ${glass.bg.replace(/[\d.]+\)$/, m => `${parseFloat(m) * 2.5})`)} 0%, ${glass.tint} 100%)`
-                                                                    : `linear-gradient(135deg, ${glass.bg} 0%, ${glass.tint} 100%)`,
-                                                                border: `1px solid ${isRec ? glass.border : glass.border.replace(/[\d.]+\)$/, m => `${parseFloat(m) * 0.7})`)}`,
-                                                                boxShadow: isRec
-                                                                    ? `0 2px 12px ${glass.bg}, inset 0 1px 0 rgba(255,255,255,0.12)`
-                                                                    : `inset 0 1px 0 rgba(255,255,255,0.06)`,
-                                                                transition: 'all 0.15s ease',
-                                                            }}
-                                                        >
-                                                            {/* Content */}
-                                                            <span className="relative z-20 text-[11px] leading-none shrink-0">{action.icon}</span>
-                                                            <span className={`relative z-20 drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)] ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}>{action.label}</span>
-                                                        </motion.button>
-                                                    );
-                                                });
-                                            })()}
-                                        </AnimatePresence>
-
-                                        {/* Answer Button — glassmorphic pill */}
-                                        <motion.button
-                                            onClick={() => {
-                                                recommendationLockTurnIdRef.current = currentQuestionTurnIdRef.current;
-                                                if (recommendedButtonRef.current !== 'answer_now') {
-                                                    recommendedButtonRef.current = 'answer_now';
-                                                    setRecommendedButton('answer_now');
-                                                }
-                                                void handleAnswerNow();
-                                            }}
-                                            whileHover={{ scale: 1.04, transition: { duration: 0.12 } }}
-                                            whileTap={{ scale: 0.96, transition: { duration: 0.08 } }}
-                                            transition={{ duration: 0.14, ease: 'easeOut' }}
-                                            className={`group relative px-3.5 py-[7px] rounded-full font-semibold tracking-normal flex items-center justify-center gap-1.5 flex-none min-w-fit whitespace-nowrap no-drag text-[11px] backdrop-blur-xl ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}
-                                            style={{
-                                                background: isManualRecording
-                                                    ? 'linear-gradient(135deg, rgba(239,68,68,0.22) 0%, rgba(239,68,68,0.08) 100%)'
-                                                    : `linear-gradient(135deg, rgba(16,185,129,${isRecommendedAnswer ? '0.28' : '0.14'}) 0%, rgba(16,185,129,0.06) 100%)`,
-                                                border: isManualRecording
-                                                    ? '1px solid rgba(239,68,68,0.35)'
-                                                    : `1px solid rgba(16,185,129,${isRecommendedAnswer ? '0.35' : '0.22'})`,
-                                                boxShadow: isManualRecording
-                                                    ? '0 2px 12px rgba(239,68,68,0.15), inset 0 1px 0 rgba(255,255,255,0.1)'
-                                                    : isRecommendedAnswer
-                                                        ? '0 2px 12px rgba(16,185,129,0.2), inset 0 1px 0 rgba(255,255,255,0.1)'
-                                                        : 'inset 0 1px 0 rgba(255,255,255,0.06)',
-                                                transition: 'all 0.35s ease',
-                                            }}
-                                        >
-                                            {/* Content */}
-                                            <div className="relative z-20 flex items-center gap-1.5">
-                                                <AnimatePresence mode="wait" initial={false}>
-                                                    {isManualRecording ? (
-                                                        <motion.div
-                                                            key="stop"
-                                                            initial={{ opacity: 0, y: 4 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -4 }}
-                                                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                                                            className="flex items-center gap-1.5"
-                                                        >
-                                                            <span className="relative flex h-[5px] w-[5px]">
-                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
-                                                                <span className="relative inline-flex rounded-full h-[5px] w-[5px] bg-white" />
-                                                            </span>
-                                                            Stop
-                                                        </motion.div>
-                                                    ) : (
-                                                        <motion.div
-                                                            key="answer"
-                                                            initial={{ opacity: 0, y: 4 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -4 }}
-                                                            transition={{ duration: 0.18, ease: 'easeOut' }}
-                                                            className="flex items-center gap-1.5"
-                                                        >
-                                                            <Zap className="w-3 h-3 opacity-90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)]" />
-                                                            Answer
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
-                                        </motion.button>
-                                    </div>
-                                );
-                            })()}
-
-                            {/* Input Area */}
-                            <div className="p-3 pt-0">
-                                {/* Latent Context Preview (Attached Screenshot) */}
-                                {attachedContext.length > 0 && (
-                                    <div className={`mb-2 rounded-lg p-2 transition-all duration-200 border ${subtleSurfaceClass}`} style={appearance.subtleStyle}>
-                                        <div className="flex items-center justify-between mb-1.5">
-                                            <span className="text-[11px] font-medium overlay-text-primary">
-                                                {attachedContext.length} screenshot{attachedContext.length > 1 ? 's' : ''} attached
-                                            </span>
-                                            <button
-                                                onClick={() => setAttachedContext([])}
-                                                className="p-1 rounded-full transition-colors overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive"
-                                                title="Remove all"
-                                                style={appearance.iconStyle}
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                        <div className="flex gap-1.5 overflow-x-auto max-w-full pb-1">
-                                            {attachedContext.map((ctx, idx) => (
-                                                <div key={ctx.path} className="relative group/thumb flex-shrink-0">
-                                                    <img
-                                                        src={ctx.preview}
-                                                        alt={`Screenshot ${idx + 1}`}
-                                                        className={`h-10 w-auto rounded border ${isLightTheme ? 'border-black/15' : 'border-white/20'}`}
-                                                    />
-                                                    <button
-                                                        onClick={() => setAttachedContext(prev => prev.filter((_, i) => i !== idx))}
-                                                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                                                        title="Remove"
-                                                    >
-                                                        <X className="w-2.5 h-2.5 text-white" />
-                                                    </button>
                                                 </div>
                                             ))}
+
+                                            {/* Active Recording State with Live Transcription */}
+                                            {isManualRecording && (
+                                                <div className="flex flex-col items-end gap-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                                    {/* Live transcription preview */}
+                                                    {(manualTranscript || voiceInput) && (
+                                                        <div className="max-w-[85%] px-3.5 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-[18px] rounded-tr-[4px]">
+                                                            <span className="text-[13px] text-emerald-300">
+                                                                {voiceInput}{voiceInput && manualTranscript ? ' ' : ''}{manualTranscript}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    <div className="px-3 py-2 flex gap-1.5 items-center">
+                                                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                                        <span className="text-[10px] text-emerald-400/70 ml-1">Listening...</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {isProcessing && !messages.some(m => m.isStreaming) && (
+                                                <div className="flex justify-start w-[85%]">
+                                                    <SkeletonLoader isLightTheme={isLightTheme} />
+                                                </div>
+                                            )}
+                                            <div ref={messagesEndRef} />
                                         </div>
-                                        <span className="text-[10px] overlay-text-muted">Ask a question or click Answer</span>
-                                    </div>
+
+                                        {/* Scroll Navigation — single contextual button */}
+                                        {showScrollUpButton && !showJumpButton && (
+                                            <div className="flex justify-center py-1.5 no-drag">
+                                                <button
+                                                    onClick={scrollToTop}
+                                                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium backdrop-blur-md transition-all duration-200 ${isLightTheme ? 'bg-black/[0.04] hover:bg-black/[0.07] text-gray-500 hover:text-gray-700 border border-black/[0.06]' : 'bg-white/[0.06] hover:bg-white/[0.10] text-white/50 hover:text-white/80 border border-white/[0.08]'}`}
+                                                    title="Scroll to top"
+                                                >
+                                                    <ChevronUp className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        )}
+                                        {showJumpButton && (
+                                            <div className="flex justify-center py-1.5 no-drag">
+                                                <button
+                                                    onClick={scrollToBottom}
+                                                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium backdrop-blur-md transition-all duration-200 ${isLightTheme ? 'bg-black/[0.04] hover:bg-black/[0.07] text-gray-500 hover:text-gray-700 border border-black/[0.06]' : 'bg-white/[0.06] hover:bg-white/[0.10] text-white/50 hover:text-white/80 border border-white/[0.08]'}`}
+                                                    title="Scroll to bottom"
+                                                >
+                                                    <ChevronDown className="w-3 h-3" />
+                                                    {unreadCount > 0 && (
+                                                        <>
+                                                            <span>{unreadCount} new</span>
+                                                            <span className="flex h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
 
-                                <div className="relative group" data-stealth-engage="true">
-                                    <input
-                                        ref={textInputRef}
-                                        type="text"
-                                        value={inputValue}
-                                        onChange={(e) => setInputValue(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
-                                        className={`w-full border rounded-[12px] pl-3.5 pr-10 py-2.5 focus:outline-none transition-all duration-200 backdrop-blur-3xl shadow-sm text-[13px] ${isLightTheme ? 'bg-black/[0.04] border-black/[0.08] hover:border-black/[0.12] focus:border-black/[0.18] focus:ring-2 focus:ring-black/[0.06] text-gray-800 placeholder-gray-400' : 'bg-white/[0.06] border-white/[0.08] hover:border-white/[0.14] focus:border-white/[0.22] focus:ring-2 focus:ring-white/[0.08] text-white/90 placeholder-white/30'} ${inputClass}`}
-                                        style={appearance.inputStyle}
-                                    />
+                                {/* Quick Actions - Static Buttons with Recommendation Glow */}
+                                {(() => {
+                                    type ActionDef = OverlayQuickActionDef & { handler: () => void | Promise<void> };
+                                    const actions: ActionDef[] = activeQuickActions.map((action) => ({
+                                        ...action,
+                                        handler: getQuickActionHandler(action),
+                                    }));
+                                    const isRecommendedAnswer = recommendedButton === 'answer_now';
 
-                                    {/* Stealth Typing Indicator */}
-                                    {stealthTapActive && (
-                                        <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none z-10">
-                                            <span className="relative flex h-2 w-2">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-60"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
-                                            </span>
-                                            <span className={`text-[10px] font-medium tracking-wide uppercase ${isLightTheme ? 'text-violet-600/70' : 'text-violet-400/80'}`}>
-                                                Stealth
-                                            </span>
+                                    return (
+                                        <div className={`flex flex-nowrap justify-center items-center gap-2 px-3 pb-3 overflow-x-auto scrollbar-none transition-opacity duration-300 ease-in-out ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`} style={{ opacity: localOpacity, width: '95%', margin: '0 auto' }}>
+                                            <AnimatePresence mode="popLayout">
+                                                {/* Mode Indicator Pill — inline with action buttons */}
+                                                {(() => {
+                                                    const modeDisplay = MODE_DISPLAY_LABELS[overlayCopilotMode];
+                                                    if (!modeDisplay?.label) return null;
+
+                                                    const MODE_ICONS: Record<string, React.ComponentType<any>> = {
+                                                        Code2, MessageSquare, Layers, DollarSign, TrendingUp,
+                                                        BookOpen, Target, Users, Briefcase, Sparkles,
+                                                    };
+                                                    const IconComponent = MODE_ICONS[modeDisplay.icon];
+
+                                                    return (
+                                                        <motion.div
+                                                            key={`mode-pill-${overlayCopilotMode}`}
+                                                            initial={{ opacity: 0, x: 8, scale: 0.9 }}
+                                                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                                                            exit={{ opacity: 0, x: -8, scale: 0.9 }}
+                                                            transition={{ duration: 0.15, ease: [0.25, 1, 0.5, 1] }}
+                                                            className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-full flex-none whitespace-nowrap pointer-events-none"
+                                                            style={{
+                                                                background: modeDisplay.color.replace(/[\d.]+\)$/, '0.08)'),
+                                                                border: `1px solid ${modeDisplay.color}`,
+                                                            }}
+                                                        >
+                                                            {IconComponent && <IconComponent className="w-3 h-3" style={{ color: modeDisplay.color.replace(/[\d.]+\)$/, '0.9)') }} />}
+                                                            <span className={`text-[10px] font-semibold tracking-wide ${isLightTheme ? 'text-gray-600' : 'text-white/70'}`}>
+                                                                {modeDisplay.label}
+                                                            </span>
+                                                        </motion.div>
+                                                    );
+                                                })()}
+                                                {(() => {
+                                                    // macOS Control Center glassmorphism — Apple-style tinted glass per button
+                                                    const glassColors: Record<string, { bg: string; border: string; tint: string }> = {
+                                                        // Default actions
+                                                        what_to_answer: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
+                                                        recap: { bg: 'rgba(142,142,147,0.14)', border: 'rgba(142,142,147,0.25)', tint: 'rgba(142,142,147,0.06)' },
+                                                        clarify: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
+                                                        brainstorm: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
+                                                        follow_up_questions: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
+                                                        // Technical interview actions
+                                                        tech_hint: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
+                                                        tech_optimal_solution: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
+                                                        tech_complexity: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
+                                                        tech_edge_case: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
+                                                        // System design actions
+                                                        system_tradeoffs: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
+                                                        system_clarify: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
+                                                        system_approaches: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
+                                                        system_deep_dive: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
+                                                        // Sales actions
+                                                        sales_objection: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
+                                                        sales_pricing: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
+                                                        sales_discovery: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
+                                                        sales_negotiation: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
+                                                        // Lecture actions
+                                                        lecture_explain: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
+                                                        lecture_summary: { bg: 'rgba(142,142,147,0.14)', border: 'rgba(142,142,147,0.25)', tint: 'rgba(142,142,147,0.06)' },
+                                                        lecture_takeaway: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
+                                                        lecture_question: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
+                                                        // Recruiting actions
+                                                        recruiting_strength: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
+                                                        recruiting_red_flag: { bg: 'rgba(255,69,58,0.14)', border: 'rgba(255,69,58,0.28)', tint: 'rgba(255,69,58,0.06)' },
+                                                        recruiting_follow_up: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
+                                                        recruiting_evaluation: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
+                                                        // Team meeting actions
+                                                        team_decision: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
+                                                        team_action_item: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
+                                                        team_risk: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
+                                                        team_owner: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
+                                                        // Job / looking-for-work actions
+                                                        job_star: { bg: 'rgba(255,159,10,0.14)', border: 'rgba(255,159,10,0.28)', tint: 'rgba(255,159,10,0.06)' },
+                                                        job_resume_alignment: { bg: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.28)', tint: 'rgba(10,132,255,0.06)' },
+                                                        job_confidence: { bg: 'rgba(175,82,222,0.14)', border: 'rgba(175,82,222,0.28)', tint: 'rgba(175,82,222,0.06)' },
+                                                        job_improvement: { bg: 'rgba(48,209,88,0.14)', border: 'rgba(48,209,88,0.28)', tint: 'rgba(48,209,88,0.06)' },
+                                                    };
+                                                    const fallbackGlass = { bg: 'rgba(255,255,255,0.08)', border: 'rgba(255,255,255,0.15)', tint: 'rgba(255,255,255,0.04)' };
+
+                                                    return actions.map((action: ActionDef, idx: number) => {
+                                                        const isRec = action.id === recommendedButton;
+                                                        const glass = glassColors[action.id] || fallbackGlass;
+                                                        return (
+                                                            <motion.button
+                                                                key={`${currentQuestionTurnId}-${overlayCopilotMode}-${action.id}`}
+                                                                layout
+                                                                initial={{ opacity: 0, y: 6, scale: 0.92 }}
+                                                                animate={{ opacity: 1, y: 0, scale: isRec ? 1.03 : 1 }}
+                                                                exit={{ opacity: 0, y: -4, scale: 0.92 }}
+                                                                transition={{ duration: 0.14, delay: idx * 0.03, ease: [0.25, 1, 0.5, 1] }}
+                                                                whileHover={{ scale: isRec ? 1.06 : 1.04, y: -1, transition: { duration: 0.12 } }}
+                                                                whileTap={{ scale: 0.96, transition: { duration: 0.08 } }}
+                                                                onClick={() => {
+                                                                    if (isProcessing) return;
+                                                                    recommendationLockTurnIdRef.current = currentQuestionTurnIdRef.current;
+                                                                    if (recommendedButtonRef.current !== action.id) {
+                                                                        recommendedButtonRef.current = action.id;
+                                                                        setRecommendedButton(action.id);
+                                                                    }
+                                                                    action.handler();
+                                                                }}
+                                                                className={`group relative flex items-center justify-center gap-1.5 px-3.5 py-[7px] rounded-full text-[11px] font-semibold whitespace-nowrap flex-none min-w-fit no-drag backdrop-blur-xl ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}
+                                                                style={{
+                                                                    background: isRec
+                                                                        ? `linear-gradient(135deg, ${glass.bg.replace(/[\d.]+\)$/, m => `${parseFloat(m) * 2.5})`)} 0%, ${glass.tint} 100%)`
+                                                                        : `linear-gradient(135deg, ${glass.bg} 0%, ${glass.tint} 100%)`,
+                                                                    border: `1px solid ${isRec ? glass.border : glass.border.replace(/[\d.]+\)$/, m => `${parseFloat(m) * 0.7})`)}`,
+                                                                    boxShadow: isRec
+                                                                        ? `0 2px 12px ${glass.bg}, inset 0 1px 0 rgba(255,255,255,0.12)`
+                                                                        : `inset 0 1px 0 rgba(255,255,255,0.06)`,
+                                                                    transition: 'all 0.15s ease',
+                                                                }}
+                                                            >
+                                                                {/* Content */}
+                                                                <span className="relative z-20 text-[11px] leading-none shrink-0">{action.icon}</span>
+                                                                <span className={`relative z-20 drop-shadow-[0_1px_2px_rgba(0,0,0,0.15)] ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}>{action.label}</span>
+                                                            </motion.button>
+                                                        );
+                                                    });
+                                                })()}
+                                            </AnimatePresence>
+
+                                            {/* Answer Button — glassmorphic pill */}
+                                            <motion.button
+                                                onClick={() => {
+                                                    recommendationLockTurnIdRef.current = currentQuestionTurnIdRef.current;
+                                                    if (recommendedButtonRef.current !== 'answer_now') {
+                                                        recommendedButtonRef.current = 'answer_now';
+                                                        setRecommendedButton('answer_now');
+                                                    }
+                                                    void handleAnswerNow();
+                                                }}
+                                                whileHover={{ scale: 1.04, transition: { duration: 0.12 } }}
+                                                whileTap={{ scale: 0.96, transition: { duration: 0.08 } }}
+                                                transition={{ duration: 0.14, ease: 'easeOut' }}
+                                                className={`group relative px-3.5 py-[7px] rounded-full font-semibold tracking-normal flex items-center justify-center gap-1.5 flex-none min-w-fit whitespace-nowrap no-drag text-[11px] backdrop-blur-xl ${isLightTheme ? 'text-gray-700' : 'text-white/90'}`}
+                                                style={{
+                                                    background: isManualRecording
+                                                        ? 'linear-gradient(135deg, rgba(239,68,68,0.22) 0%, rgba(239,68,68,0.08) 100%)'
+                                                        : `linear-gradient(135deg, rgba(16,185,129,${isRecommendedAnswer ? '0.28' : '0.14'}) 0%, rgba(16,185,129,0.06) 100%)`,
+                                                    border: isManualRecording
+                                                        ? '1px solid rgba(239,68,68,0.35)'
+                                                        : `1px solid rgba(16,185,129,${isRecommendedAnswer ? '0.35' : '0.22'})`,
+                                                    boxShadow: isManualRecording
+                                                        ? '0 2px 12px rgba(239,68,68,0.15), inset 0 1px 0 rgba(255,255,255,0.1)'
+                                                        : isRecommendedAnswer
+                                                            ? '0 2px 12px rgba(16,185,129,0.2), inset 0 1px 0 rgba(255,255,255,0.1)'
+                                                            : 'inset 0 1px 0 rgba(255,255,255,0.06)',
+                                                    transition: 'all 0.35s ease',
+                                                }}
+                                            >
+                                                {/* Content */}
+                                                <div className="relative z-20 flex items-center gap-1.5">
+                                                    <AnimatePresence mode="wait" initial={false}>
+                                                        {isManualRecording ? (
+                                                            <motion.div
+                                                                key="stop"
+                                                                initial={{ opacity: 0, y: 4 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -4 }}
+                                                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                                className="flex items-center gap-1.5"
+                                                            >
+                                                                <span className="relative flex h-[5px] w-[5px]">
+                                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
+                                                                    <span className="relative inline-flex rounded-full h-[5px] w-[5px] bg-white" />
+                                                                </span>
+                                                                Stop
+                                                            </motion.div>
+                                                        ) : (
+                                                            <motion.div
+                                                                key="answer"
+                                                                initial={{ opacity: 0, y: 4 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -4 }}
+                                                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                                className="flex items-center gap-1.5"
+                                                            >
+                                                                <Zap className="w-3 h-3 opacity-90 drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)]" />
+                                                                Answer
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            </motion.button>
                                         </div>
-                                    )}
+                                    );
+                                })()}
 
-                                    {/* Custom Rich Placeholder */}
-                                    {!inputValue && (
-                                        <div className={`absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] ${isLightTheme ? 'text-gray-400' : 'text-white/40'}`}>
-                                            <span>Ask anything on screen or conversation, or</span>
-                                            <div className="flex items-center gap-1 opacity-80">
-                                                {(shortcuts.selectiveScreenshot || ['⌘', 'Shift', 'H']).map((key, i) => (
-                                                    <React.Fragment key={i}>
-                                                        {i > 0 && <span className="text-[10px]">+</span>}
-                                                        <kbd className={`px-1.5 py-0.5 rounded border text-[10px] font-sans min-w-[20px] text-center ${isLightTheme ? 'border-gray-300 bg-gray-100 text-gray-500' : 'border-white/15 bg-white/[0.06] text-white/60'}`}>{key}</kbd>
-                                                    </React.Fragment>
+                                {/* Input Area */}
+                                <div className="p-3 pt-0">
+                                    {/* Latent Context Preview (Attached Screenshot) */}
+                                    {attachedContext.length > 0 && (
+                                        <div className={`mb-2 rounded-lg p-2 transition-all duration-200 border ${subtleSurfaceClass}`} style={appearance.subtleStyle}>
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <span className="text-[11px] font-medium overlay-text-primary">
+                                                    {attachedContext.length} screenshot{attachedContext.length > 1 ? 's' : ''} attached
+                                                </span>
+                                                <button
+                                                    onClick={() => setAttachedContext([])}
+                                                    className="p-1 rounded-full transition-colors overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive"
+                                                    title="Remove all"
+                                                    style={appearance.iconStyle}
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                            <div className="flex gap-1.5 overflow-x-auto max-w-full pb-1">
+                                                {attachedContext.map((ctx, idx) => (
+                                                    <div key={ctx.path} className="relative group/thumb flex-shrink-0">
+                                                        <img
+                                                            src={ctx.preview}
+                                                            alt={`Screenshot ${idx + 1}`}
+                                                            className={`h-10 w-auto rounded border ${isLightTheme ? 'border-black/15' : 'border-white/20'}`}
+                                                        />
+                                                        <button
+                                                            onClick={() => setAttachedContext(prev => prev.filter((_, i) => i !== idx))}
+                                                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                                                            title="Remove"
+                                                        >
+                                                            <X className="w-2.5 h-2.5 text-white" />
+                                                        </button>
+                                                    </div>
                                                 ))}
                                             </div>
-                                            <span>for selective screenshot</span>
+                                            <span className="text-[10px] overlay-text-muted">Ask a question or click Answer</span>
                                         </div>
                                     )}
 
-                                    {!inputValue && (
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none opacity-20">
-                                            <span className="text-[10px]">↵</span>
-                                        </div>
-                                    )}
-                                </div>
+                                    <div className="relative group" data-stealth-engage="true">
+                                        <input
+                                            ref={textInputRef}
+                                            type="text"
+                                            value={inputValue}
+                                            onChange={(e) => setInputValue(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
+                                            className={`w-full border rounded-[12px] pl-3.5 pr-10 py-2.5 focus:outline-none transition-all duration-200 backdrop-blur-3xl shadow-sm text-[13px] ${isLightTheme ? 'bg-black/[0.04] border-black/[0.08] hover:border-black/[0.12] focus:border-black/[0.18] focus:ring-2 focus:ring-black/[0.06] text-gray-800 placeholder-gray-400' : 'bg-white/[0.06] border-white/[0.08] hover:border-white/[0.14] focus:border-white/[0.22] focus:ring-2 focus:ring-white/[0.08] text-white/90 placeholder-white/30'} ${inputClass}`}
+                                            style={appearance.inputStyle}
+                                        />
 
-                                {/* Bottom Row */}
-                                <div className="flex items-center justify-between mt-3 px-0.5">
-                                    <div className="flex items-center gap-1.5">
-                                        <button
-                                            onClick={(e) => {
-                                                // Calculate position for detached window
-                                                if (!contentRef.current) return;
-                                                const contentRect = contentRef.current.getBoundingClientRect();
-                                                const buttonRect = e.currentTarget.getBoundingClientRect();
-                                                const GAP = 6;
+                                        {/* Stealth Typing Indicator */}
+                                        {stealthTapActive && (
+                                            <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none z-10">
+                                                <span className="relative flex h-2 w-2">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-60"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+                                                </span>
+                                                <span className={`text-[10px] font-medium tracking-wide uppercase ${isLightTheme ? 'text-violet-600/70' : 'text-violet-400/80'}`}>
+                                                    Stealth
+                                                </span>
+                                            </div>
+                                        )}
 
-                                                const x = window.screenX + buttonRect.left;
-                                                const y = window.screenY + contentRect.bottom + GAP;
+                                        {/* Custom Rich Placeholder */}
+                                        {!inputValue && (
+                                            <div className={`absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] ${isLightTheme ? 'text-gray-400' : 'text-white/40'}`}>
+                                                <span>Ask anything on screen or conversation, or</span>
+                                                <div className="flex items-center gap-1 opacity-80">
+                                                    {(shortcuts.selectiveScreenshot || ['⌘', 'Shift', 'H']).map((key, i) => (
+                                                        <React.Fragment key={i}>
+                                                            {i > 0 && <span className="text-[10px]">+</span>}
+                                                            <kbd className={`px-1.5 py-0.5 rounded border text-[10px] font-sans min-w-[20px] text-center ${isLightTheme ? 'border-gray-300 bg-gray-100 text-gray-500' : 'border-white/15 bg-white/[0.06] text-white/60'}`}>{key}</kbd>
+                                                        </React.Fragment>
+                                                    ))}
+                                                </div>
+                                                <span>for selective screenshot</span>
+                                            </div>
+                                        )}
 
-                                                window.electronAPI.toggleModelSelector({ x, y });
-                                            }}
-                                            className={`
+                                        {!inputValue && (
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none opacity-20">
+                                                <span className="text-[10px]">↵</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Bottom Row */}
+                                    <div className="flex items-center justify-between mt-3 px-0.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                onClick={(e) => {
+                                                    // Calculate position for detached window
+                                                    if (!contentRef.current) return;
+                                                    const contentRect = contentRef.current.getBoundingClientRect();
+                                                    const buttonRect = e.currentTarget.getBoundingClientRect();
+                                                    const GAP = 6;
+
+                                                    const x = window.screenX + buttonRect.left;
+                                                    const y = window.screenY + contentRect.bottom + GAP;
+
+                                                    window.electronAPI.toggleModelSelector({ x, y });
+                                                }}
+                                                className={`
                                                 flex items-center justify-between px-3 py-1.5
                                                 rounded-[10px] transition-colors duration-150 shadow-sm
                                                 text-[12px] font-medium w-[140px] backdrop-blur-3xl
@@ -4376,236 +4376,236 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                 ${isLightTheme ? 'bg-black/[0.04] hover:bg-black/[0.07] border border-black/[0.06] text-gray-600' : 'bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.08] text-white/80'}
                                                 ${controlSurfaceClass}
                                             `}
-                                            style={appearance.controlStyle}
-                                        >
-                                            <span className="truncate min-w-0 flex-1">
-                                                {(() => {
-                                                    const m = currentModel;
-                                                    if (m.startsWith('ollama-')) return m.replace('ollama-', '');
-                                                    if (m === 'gemini-3.1-flash-lite-preview') return 'Gemini 3.1 Flash';
-                                                    if (m === 'gemini-3.1-pro-preview') return 'Gemini 3.1 Pro';
-                                                    if (m === 'llama-3.3-70b-versatile') return 'Groq Llama 3.3';
-                                                    if (m === 'gpt-5.4') return 'GPT 5.4';
-                                                    if (m === 'claude-sonnet-4-6') return 'Sonnet 4.6';
-                                                    return m;
-                                                })()}
-                                            </span>
-                                            <ChevronDown size={14} className="shrink-0 transition-transform" />
-                                        </button>
+                                                style={appearance.controlStyle}
+                                            >
+                                                <span className="truncate min-w-0 flex-1">
+                                                    {(() => {
+                                                        const m = currentModel;
+                                                        if (m.startsWith('ollama-')) return m.replace('ollama-', '');
+                                                        if (m === 'gemini-3.1-flash-lite-preview') return 'Gemini 3.1 Flash';
+                                                        if (m === 'gemini-3.1-pro-preview') return 'Gemini 3.1 Pro';
+                                                        if (m === 'llama-3.3-70b-versatile') return 'Groq Llama 3.3';
+                                                        if (m === 'gpt-5.4') return 'GPT 5.4';
+                                                        if (m === 'claude-sonnet-4-6') return 'Sonnet 4.6';
+                                                        return m;
+                                                    })()}
+                                                </span>
+                                                <ChevronDown size={14} className="shrink-0 transition-transform" />
+                                            </button>
 
-                                        <div className="w-px h-3 mx-1" style={appearance.dividerStyle} />
+                                            <div className="w-px h-3 mx-1" style={appearance.dividerStyle} />
 
-                                        <div className="relative group">
-                                            <button
-                                                onClick={(e) => {
-                                                    if (isSettingsOpen) {
-                                                        // If open, just close it (toggle will handle logic but we can be explicit or just toggle)
-                                                        // Actually toggle-settings-window handles hiding if visible, so logic is same.
-                                                        window.electronAPI.toggleSettingsWindow();
-                                                        return;
-                                                    }
+                                            <div className="relative group">
+                                                <button
+                                                    onClick={(e) => {
+                                                        if (isSettingsOpen) {
+                                                            // If open, just close it (toggle will handle logic but we can be explicit or just toggle)
+                                                            // Actually toggle-settings-window handles hiding if visible, so logic is same.
+                                                            window.electronAPI.toggleSettingsWindow();
+                                                            return;
+                                                        }
 
-                                                    if (!contentRef.current) return;
+                                                        if (!contentRef.current) return;
 
-                                                    const contentRect = contentRef.current.getBoundingClientRect();
-                                                    const buttonRect = e.currentTarget.getBoundingClientRect();
-                                                    const POPUP_WIDTH = 270; // Matches SettingsWindowHelper actual width
-                                                    const GAP = 8; // Same gap as between TopPill and main body (gap-2 = 8px)
+                                                        const contentRect = contentRef.current.getBoundingClientRect();
+                                                        const buttonRect = e.currentTarget.getBoundingClientRect();
+                                                        const POPUP_WIDTH = 270; // Matches SettingsWindowHelper actual width
+                                                        const GAP = 8; // Same gap as between TopPill and main body (gap-2 = 8px)
 
-                                                    // X: Left-aligned relative to the Settings Button
-                                                    const x = window.screenX + buttonRect.left;
+                                                        // X: Left-aligned relative to the Settings Button
+                                                        const x = window.screenX + buttonRect.left;
 
-                                                    // Y: Below the main content + gap
-                                                    const y = window.screenY + contentRect.bottom + GAP;
+                                                        // Y: Below the main content + gap
+                                                        const y = window.screenY + contentRect.bottom + GAP;
 
-                                                    window.electronAPI.toggleSettingsWindow({ x, y });
-                                                }}
-                                                className={`
+                                                        window.electronAPI.toggleSettingsWindow({ x, y });
+                                                    }}
+                                                    className={`
                                             w-7 h-7 flex items-center justify-center rounded-lg
                                             interaction-base interaction-press
                                             ${isSettingsOpen
-                                                        ? 'overlay-icon-surface overlay-icon-surface-hover overlay-text-primary'
-                                                        : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
+                                                            ? 'overlay-icon-surface overlay-icon-surface-hover overlay-text-primary'
+                                                            : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
                                         `}
 
-                                                style={appearance.iconStyle}
-                                            >
-                                                <SlidersHorizontal className="w-3.5 h-3.5" />
-                                            </button>
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
-                                                Settings
+                                                    style={appearance.iconStyle}
+                                                >
+                                                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                                                </button>
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                    Settings
+                                                </div>
                                             </div>
-                                        </div>
 
 
 
-                                        {/* Mouse Passthrough Toggle */}
-                                        <div className="relative group">
-                                            <button
-                                                onClick={() => {
-                                                    setIsMousePassthrough(prev => {
-                                                        const newState = !prev;
-                                                        console.log(`[Overlay] Mouse passthrough mode ${newState ? 'on' : 'off'}`);
-                                                        window.electronAPI?.setOverlayMousePassthrough?.(newState);
-                                                        return newState;
-                                                    });
-                                                }}
-                                                className={`
+                                            {/* Mouse Passthrough Toggle */}
+                                            <div className="relative group">
+                                                <button
+                                                    onClick={() => {
+                                                        setIsMousePassthrough(prev => {
+                                                            const newState = !prev;
+                                                            console.log(`[Overlay] Mouse passthrough mode ${newState ? 'on' : 'off'}`);
+                                                            window.electronAPI?.setOverlayMousePassthrough?.(newState);
+                                                            return newState;
+                                                        });
+                                                    }}
+                                                    className={`
                                                     w-7 h-7 flex items-center justify-center rounded-lg
                                                     interaction-base interaction-press
                                                     ${isMousePassthrough
-                                                        ? 'overlay-icon-surface overlay-icon-surface-hover text-sky-400 opacity-100'
-                                                        : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
+                                                            ? 'overlay-icon-surface overlay-icon-surface-hover text-sky-400 opacity-100'
+                                                            : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
                                                 `}
 
-                                                style={appearance.iconStyle}
-                                            >
-                                                <PointerOff className={`w-3.5 h-3.5 ${isMousePassthrough ? 'animate-flame' : ''}`} />
-                                            </button>
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
-                                                Mouse Passthrough
+                                                    style={appearance.iconStyle}
+                                                >
+                                                    <PointerOff className={`w-3.5 h-3.5 ${isMousePassthrough ? 'animate-flame' : ''}`} />
+                                                </button>
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                    Mouse Passthrough
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        {/* Stealth Mode (Opacity) Toggle */}
-                                        <div className="relative group">
-                                            <button
-                                                onClick={() => {
-                                                    setLocalOpacity(prev => {
-                                                        // Fallback to 1.0 if prev is NaN or undefined somehow
-                                                        if (!prev || isNaN(prev)) prev = 1.0;
+                                            {/* Stealth Mode (Opacity) Toggle */}
+                                            <div className="relative group">
+                                                <button
+                                                    onClick={() => {
+                                                        setLocalOpacity(prev => {
+                                                            // Fallback to 1.0 if prev is NaN or undefined somehow
+                                                            if (!prev || isNaN(prev)) prev = 1.0;
 
-                                                        const rounded = Math.round(prev * 100);
-                                                        let nextOpacity = 1.0;
+                                                            const rounded = Math.round(prev * 100);
+                                                            let nextOpacity = 1.0;
 
-                                                        if (rounded >= 90) nextOpacity = 0.6;
-                                                        else if (rounded >= 50) nextOpacity = 0.2;
-                                                        else nextOpacity = 1.0;
+                                                            if (rounded >= 90) nextOpacity = 0.6;
+                                                            else if (rounded >= 50) nextOpacity = 0.2;
+                                                            else nextOpacity = 1.0;
 
-                                                        console.log(`[Overlay] Opacity/stealth mode set to ${nextOpacity} (${nextOpacity < 1.0 ? 'on' : 'off'})`);
-                                                        window.electronAPI?.setOverlayOpacity?.(nextOpacity);
-                                                        return nextOpacity;
-                                                    });
-                                                }}
-                                                className={`
+                                                            console.log(`[Overlay] Opacity/stealth mode set to ${nextOpacity} (${nextOpacity < 1.0 ? 'on' : 'off'})`);
+                                                            window.electronAPI?.setOverlayOpacity?.(nextOpacity);
+                                                            return nextOpacity;
+                                                        });
+                                                    }}
+                                                    className={`
                                                     w-7 h-7 flex items-center justify-center rounded-lg
                                                     interaction-base interaction-press
                                                     ${localOpacity < 1.0
-                                                        ? 'overlay-icon-surface overlay-icon-surface-hover text-purple-400 opacity-100'
-                                                        : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
+                                                            ? 'overlay-icon-surface overlay-icon-surface-hover text-purple-400 opacity-100'
+                                                            : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
                                                 `}
 
-                                                style={appearance.iconStyle}
-                                            >
-                                                <Ghost className={`w-3.5 h-3.5 ${localOpacity < 1.0 ? 'animate-flame' : ''}`} />
-                                            </button>
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
-                                                {localOpacity >= 0.9 ? 'Opacity: Full' : `Opacity: ${Math.round(localOpacity * 100)}%`}
+                                                    style={appearance.iconStyle}
+                                                >
+                                                    <Ghost className={`w-3.5 h-3.5 ${localOpacity < 1.0 ? 'animate-flame' : ''}`} />
+                                                </button>
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                    {localOpacity >= 0.9 ? 'Opacity: Full' : `Opacity: ${Math.round(localOpacity * 100)}%`}
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <div className="relative group">
-                                            <button
-                                                onClick={async () => {
-                                                    const nextMode: SessionMode = currentSessionMode === 'system_design' ? 'general' : 'system_design';
-                                                    console.log(`[Overlay] System design mode ${nextMode === 'system_design' ? 'on' : 'off'}`);
-                                                    window.electronAPI?.overlayLogSystemDesignMode?.(nextMode === 'system_design');
-                                                    setSession({ currentMode: nextMode });
-                                                    try {
-                                                        await window.electronAPI?.setSessionMode?.(nextMode);
-                                                    } catch (error) {
-                                                        console.warn('[Overlay] Failed to persist session mode:', error);
-                                                    }
-                                                }}
-                                                className={`
-                                                    w-7 h-7 flex items-center justify-center rounded-lg
-                                                    interaction-base interaction-press
-                                                    ${currentSessionMode === 'system_design'
-                                                        ? 'overlay-icon-surface overlay-icon-surface-hover text-teal-400 opacity-100'
-                                                        : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
-                                                `}
-                                                style={appearance.iconStyle}
-                                            >
-                                                <Cpu className={`w-3.5 h-3.5 ${currentSessionMode === 'system_design' ? 'animate-flame' : ''}`} />
-                                            </button>
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
-                                                System Design Mode
-                                            </div>
-                                        </div>
-
-                                        {hasProContextAccess && (
                                             <div className="relative group">
                                                 <button
                                                     onClick={async () => {
-                                                        const next = !customNotesEnabled;
-                                                        setCustomNotesEnabled(next);
-                                                        console.log(`[Overlay] Custom context ${next ? 'on' : 'off'}`);
-                                                        await window.electronAPI?.setCustomNotesEnabled?.(next);
+                                                        const nextMode: SessionMode = currentSessionMode === 'system_design' ? 'general' : 'system_design';
+                                                        console.log(`[Overlay] System design mode ${nextMode === 'system_design' ? 'on' : 'off'}`);
+                                                        window.electronAPI?.overlayLogSystemDesignMode?.(nextMode === 'system_design');
+                                                        setSession({ currentMode: nextMode });
+                                                        try {
+                                                            await window.electronAPI?.setSessionMode?.(nextMode);
+                                                        } catch (error) {
+                                                            console.warn('[Overlay] Failed to persist session mode:', error);
+                                                        }
                                                     }}
                                                     className={`
+                                                    w-7 h-7 flex items-center justify-center rounded-lg
+                                                    interaction-base interaction-press
+                                                    ${currentSessionMode === 'system_design'
+                                                            ? 'overlay-icon-surface overlay-icon-surface-hover text-teal-400 opacity-100'
+                                                            : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
+                                                `}
+                                                    style={appearance.iconStyle}
+                                                >
+                                                    <Cpu className={`w-3.5 h-3.5 ${currentSessionMode === 'system_design' ? 'animate-flame' : ''}`} />
+                                                </button>
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                    System Design Mode
+                                                </div>
+                                            </div>
+
+                                            {hasProContextAccess && (
+                                                <div className="relative group">
+                                                    <button
+                                                        onClick={async () => {
+                                                            const next = !customNotesEnabled;
+                                                            setCustomNotesEnabled(next);
+                                                            console.log(`[Overlay] Custom context ${next ? 'on' : 'off'}`);
+                                                            await window.electronAPI?.setCustomNotesEnabled?.(next);
+                                                        }}
+                                                        className={`
                                                         w-7 h-7 flex items-center justify-center rounded-lg
                                                         interaction-base interaction-press
                                                         ${customNotesEnabled
-                                                            ? 'overlay-icon-surface overlay-icon-surface-hover text-amber-400 opacity-100'
-                                                            : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
+                                                                ? 'overlay-icon-surface overlay-icon-surface-hover text-amber-400 opacity-100'
+                                                                : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
                                                     `}
-                                                    style={appearance.iconStyle}
-                                                >
-                                                    <FileText className={`w-3.5 h-3.5 ${customNotesEnabled ? 'animate-flame' : ''}`} />
-                                                </button>
-                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
-                                                    {customNotesEnabled ? 'Custom Context: ON' : 'Custom Context: OFF'}
+                                                        style={appearance.iconStyle}
+                                                    >
+                                                        <FileText className={`w-3.5 h-3.5 ${customNotesEnabled ? 'animate-flame' : ''}`} />
+                                                    </button>
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                        {customNotesEnabled ? 'Custom Context: ON' : 'Custom Context: OFF'}
+                                                    </div>
                                                 </div>
+                                            )}
+
+                                            <div className="relative group p-[1px] rounded-full overflow-hidden flex items-center justify-center">
+                                                {/* Rotating Glowing Border */}
+                                                <motion.div
+                                                    animate={isOverlayDragging ? { rotate: 0 } : { rotate: 360 }}
+                                                    transition={isOverlayDragging
+                                                        ? { duration: 0.12, ease: 'linear' }
+                                                        : { duration: 3, repeat: Infinity, ease: "linear" }}
+                                                    className="absolute inset-[-150%] opacity-70"
+                                                    style={{ background: 'conic-gradient(from 0deg, transparent 0deg, transparent 290deg, #F59E0B 360deg)' }}
+                                                />
+                                                <button
+                                                    onClick={handleScreenScan}
+                                                    className={`relative h-[26px] px-3.5 rounded-full flex items-center justify-center gap-1.5 transition-all duration-200 shadow-sm interaction-base interaction-press text-[11px] font-bold tracking-wide whitespace-nowrap z-10 ${isLightTheme ? 'text-[#B76E79]' : 'text-[#E6B7B0]'}`}
+                                                    style={{
+                                                        background: isLightTheme
+                                                            ? 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,248,252,0.94))'
+                                                            : 'linear-gradient(180deg, rgba(28,28,30,0.98), rgba(35,35,38,0.94))',
+                                                        boxShadow: isLightTheme
+                                                            ? 'inset 0 1px 0 rgba(255,255,255,0.92), 0 1px 0 rgba(255,255,255,0.55)'
+                                                            : 'inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.22)',
+                                                    }}
+                                                    title="Capture and scan screen"
+                                                >
+                                                    <Camera className={`w-3 h-3 ${isLightTheme ? 'text-[#C47A86]' : 'text-[#EBC0B8]'}`} />
+                                                    Analyse Screen
+                                                </button>
                                             </div>
-                                        )}
-
-                                        <div className="relative group p-[1px] rounded-full overflow-hidden flex items-center justify-center">
-                                            {/* Rotating Glowing Border */}
-                                            <motion.div
-                                                animate={isOverlayDragging ? { rotate: 0 } : { rotate: 360 }}
-                                                transition={isOverlayDragging
-                                                    ? { duration: 0.12, ease: 'linear' }
-                                                    : { duration: 3, repeat: Infinity, ease: "linear" }}
-                                                className="absolute inset-[-150%] opacity-70"
-                                                style={{ background: 'conic-gradient(from 0deg, transparent 0deg, transparent 290deg, #F59E0B 360deg)' }}
-                                            />
-                                            <button
-                                                onClick={handleScreenScan}
-                                                className={`relative h-[26px] px-3.5 rounded-full flex items-center justify-center gap-1.5 transition-all duration-200 shadow-sm interaction-base interaction-press text-[11px] font-bold tracking-wide whitespace-nowrap z-10 ${isLightTheme ? 'text-[#B76E79]' : 'text-[#E6B7B0]'}`}
-                                                style={{
-                                                    background: isLightTheme
-                                                        ? 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,248,252,0.94))'
-                                                        : 'linear-gradient(180deg, rgba(28,28,30,0.98), rgba(35,35,38,0.94))',
-                                                    boxShadow: isLightTheme
-                                                        ? 'inset 0 1px 0 rgba(255,255,255,0.92), 0 1px 0 rgba(255,255,255,0.55)'
-                                                        : 'inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.22)',
-                                                }}
-                                                title="Capture and scan screen"
-                                            >
-                                                <Camera className={`w-3 h-3 ${isLightTheme ? 'text-[#C47A86]' : 'text-[#EBC0B8]'}`} />
-                                                Analyse Screen
-                                            </button>
                                         </div>
-                                    </div>
 
 
-                                    <button
-                                        onClick={() => handleManualSubmit()}
-                                        disabled={!inputValue.trim()}
-                                        className={`
+                                        <button
+                                            onClick={() => handleManualSubmit()}
+                                            disabled={!inputValue.trim()}
+                                            className={`
                                     w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200
                                     interaction-base interaction-press
                                     ${inputValue.trim()
-                                                ? 'bg-[#007AFF] text-white shadow-[0_2px_8px_rgba(0,122,255,0.4)] hover:bg-[#007AFF]/90 border border-white/10'
-                                                : 'bg-white/[0.08] border border-white/[0.05] text-white/40 cursor-not-allowed'
-                                            }
+                                                    ? 'bg-[#007AFF] text-white shadow-[0_2px_8px_rgba(0,122,255,0.4)] hover:bg-[#007AFF]/90 border border-white/10'
+                                                    : 'bg-white/[0.08] border border-white/[0.05] text-white/40 cursor-not-allowed'
+                                                }
                                 `}
-                                        style={inputValue.trim() ? undefined : appearance.iconStyle}
-                                    >
-                                        <ArrowRight className="w-3.5 h-3.5" />
-                                    </button>
+                                            style={inputValue.trim() ? undefined : appearance.iconStyle}
+                                        >
+                                            <ArrowRight className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
                             </div>
                         </div>
 

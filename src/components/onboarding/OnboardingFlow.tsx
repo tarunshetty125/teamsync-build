@@ -28,6 +28,28 @@ function AmbientBackground() {
         <div className="absolute -bottom-48 right-[2%] h-[420px] w-[520px] rounded-full bg-[radial-gradient(circle,rgba(42,129,111,0.16)_0%,rgba(18,58,51,0.10)_45%,transparent_72%)] blur-[112px]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.18)_58%,rgba(0,0,0,0.48)_100%)]" />
       </div>
+
+      {/* Animated grid lines — breathing pulse on dark bg */}
+      <style>{`
+        @keyframes startupGridPulse {
+          0%, 100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.03); }
+        }
+      `}</style>
+      <div
+        className="pointer-events-none absolute inset-[-20px]"
+        style={{
+          zIndex: 2,
+          backgroundImage: `
+            linear-gradient(to right, rgba(255,255,255,0.12) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255,255,255,0.12) 1px, transparent 1px)
+          `,
+          backgroundSize: '48px 48px',
+          animation: 'startupGridPulse 6s ease-in-out infinite',
+          willChange: 'transform, opacity',
+        }}
+      />
+
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.035] mix-blend-overlay"
         style={{
@@ -80,7 +102,7 @@ export function OnboardingFlow({
 
   const displayStep =
     (startAtPermissions && currentStep === 'welcome') ||
-    (completeAfterPermissions && currentStep === 'ready')
+      (completeAfterPermissions && currentStep === 'ready')
       ? 'permissions'
       : currentStep;
 
@@ -121,7 +143,7 @@ export function OnboardingFlow({
         >
           <AmbientBackground />
 
-          <div className="relative flex flex-col items-center gap-5">
+          <div className="relative z-[3] flex flex-col items-center gap-5">
             <motion.div
               initial={{ scale: 0.6, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -169,7 +191,7 @@ export function OnboardingFlow({
         >
           <AmbientBackground />
 
-          <div className="relative mx-auto flex min-h-screen w-full max-w-[444px] items-center px-4 py-10 sm:px-0">
+          <div className="relative z-[3] mx-auto flex min-h-screen w-full max-w-[444px] items-center px-4 py-10 sm:px-0">
             <div className="w-full">
               {displayStep === 'welcome' ? <WelcomeStep onContinue={handleContinueFromWelcome} /> : null}
 

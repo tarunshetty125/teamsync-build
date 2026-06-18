@@ -376,7 +376,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 if (typeof res?.hasScript === 'boolean') setHasNegotiationScript(res.hasScript);
                 if (typeof res?.isActive === 'boolean') setNegotiationContextEnabled(res.isActive);
             })
-            .catch(() => {});
+            .catch(() => { });
     }, [hasProContextAccess]);
 
     const handleToggleNegotiationContext = useCallback(async (enabled: boolean) => {
@@ -636,9 +636,9 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     }, [selectionMode]);
 
     const onSessionReset = useCallback(() => {
-        void window.electronAPI.cancelGeminiChatStream?.().catch(() => {});
-        void window.electronAPI.cancelIntelligenceRequest?.().catch(() => {});
-        void window.electronAPI.ragCancelQuery?.({ meetingId: LIVE_MEETING_RAG_ID }).catch(() => {});
+        void window.electronAPI.cancelGeminiChatStream?.().catch(() => { });
+        void window.electronAPI.cancelIntelligenceRequest?.().catch(() => { });
+        void window.electronAPI.ragCancelQuery?.({ meetingId: LIVE_MEETING_RAG_ID }).catch(() => { });
 
         setMessages([]);
         setAttachedContext([]);
@@ -911,7 +911,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 setActiveModeLabel(mode?.name ?? null);
                 setActiveModeTemplateId((mode?.templateType as ModeTemplateId | null | undefined) ?? null);
             })
-            .catch(() => {});
+            .catch(() => { });
         const unsub = window.electronAPI?.onModeChanged?.((data: any) => {
             setActiveModeLabel(data.name);
             setActiveModeTemplateId((data.templateId as ModeTemplateId | null | undefined) ?? null);
@@ -939,7 +939,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 const nextMode = result.mode as SessionMode;
                 setSession({ currentMode: nextMode });
             })
-            .catch(() => {});
+            .catch(() => { });
         const unsub = window.electronAPI?.onSessionModeChanged?.((data: any) => {
             if (!data?.mode) return;
             const nextMode = data.mode as SessionMode;
@@ -983,7 +983,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                 setIsMeetingActive(active);
                 if (active) setMeetingStartTime(Date.now());
             })
-            .catch(() => {});
+            .catch(() => { });
         const unsubscribe = window.electronAPI.onMeetingStateChanged(({ isActive }: { isActive: boolean }) => {
             setIsMeetingActive(isActive);
             if (isActive) {
@@ -1145,10 +1145,10 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     if (result?.model) {
                         setCurrentModel(result.model);
                         currentModelRef.current = result.model;
-                        window.electronAPI.setModel?.(result.model).catch(() => {});
+                        window.electronAPI.setModel?.(result.model).catch(() => { });
                     }
                 })
-                .catch(() => {});
+                .catch(() => { });
         }
     }, []);
 
@@ -1169,7 +1169,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
                     setPersonalizationPreferences(preferences);
                 }
             })
-            .catch(() => {});
+            .catch(() => { });
 
         const unsubscribe = window.electronAPI?.onPersonalizationPreferencesChanged?.((preferences) => {
             setPersonalizationPreferences(preferences);
@@ -1189,7 +1189,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     }, []);
 
     useEffect(() => {
-        window.electronAPI?.getOverlayMousePassthrough?.().then(setIsMousePassthrough).catch(() => {});
+        window.electronAPI?.getOverlayMousePassthrough?.().then(setIsMousePassthrough).catch(() => { });
         const unsub = window.electronAPI?.onOverlayMousePassthroughChanged?.((v: boolean) => {
             setIsMousePassthrough(v);
         });
@@ -1198,7 +1198,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
 
     // Undetectable / stealth state — parity with V1 (TeamSyncInterface)
     useEffect(() => {
-        window.electronAPI?.getUndetectable?.().then(setIsUndetectable).catch(() => {});
+        window.electronAPI?.getUndetectable?.().then(setIsUndetectable).catch(() => { });
         const unsub = window.electronAPI?.onUndetectableChanged?.((state: boolean) => {
             setIsUndetectable(state);
         });
@@ -1220,7 +1220,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
             .then((res: { success?: boolean; enabled?: boolean }) => {
                 if (res?.success) setCustomNotesEnabled(Boolean(res.enabled));
             })
-            .catch(() => {});
+            .catch(() => { });
     }, [hasProContextAccess]);
 
     const toggleCustomContext = useCallback(async () => {
@@ -1868,7 +1868,7 @@ export function useCluelyOverlayBridge(props: CluelyOverlayBridgeProps) {
     useEffect(() => {
         if (!window.electronAPI?.setProviderAnalyticsSessionSnapshot) return;
         const snapshot = buildProviderAnalyticsSessionSnapshot(responseHistory, activeResponse?.id ?? null);
-        void window.electronAPI.setProviderAnalyticsSessionSnapshot(snapshot).catch(() => {});
+        void window.electronAPI.setProviderAnalyticsSessionSnapshot(snapshot).catch(() => { });
         // The snapshot key intentionally excludes response text so token streaming does not publish analytics.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [providerAnalyticsSnapshotKey]);

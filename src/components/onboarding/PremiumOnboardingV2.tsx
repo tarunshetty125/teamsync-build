@@ -32,6 +32,7 @@ import {
   type IndustryId,
   type PersonaId,
 } from './onboardingV2Types';
+import { WelcomePermissionsStep } from './steps/WelcomePermissionsStep';
 
 type PremiumOnboardingStep =
   | 'welcome'
@@ -41,7 +42,8 @@ type PremiumOnboardingStep =
   | 'industry'
   | 'discovery'
   | 'building'
-  | 'activation';
+  | 'activation'
+  | 'v3welcome';
 
 type AuthUiState = 'idle' | 'checking' | 'waiting' | 'success' | 'error';
 
@@ -55,6 +57,13 @@ type PremiumOnboardingV2Props = {
 };
 
 const STEP_HANDOFF_DELAY_MS = 700;
+
+const V3_RESUME_KEY = 'teamsync_onboarding_v3_state';
+
+interface V3ResumeState {
+  step: PremiumOnboardingStep;
+  completedAt?: string;
+}
 
 const modalVariants: Variants = {
   hidden: { opacity: 0, y: 56 },
@@ -206,25 +215,25 @@ const PERMISSION_DETAILS: Array<{
   description: string;
   icon: LucideIcon;
 }> = [
-  {
-    kind: 'screenRecording',
-    title: 'Screen Understanding',
-    description: 'See IDEs, browser tabs, docs, shared screens, and interview prompts.',
-    icon: Eye,
-  },
-  {
-    kind: 'microphone',
-    title: 'Live Transcription',
-    description: 'Capture meetings, calls, interviews, and spoken context as they happen.',
-    icon: AudioLines,
-  },
-  {
-    kind: 'accessibility',
-    title: 'Interview Assistance',
-    description: 'Keep the overlay responsive for context-aware answers and quick actions.',
-    icon: Sparkles,
-  },
-];
+    {
+      kind: 'screenRecording',
+      title: 'Screen Understanding',
+      description: 'See IDEs, browser tabs, docs, shared screens, and interview prompts.',
+      icon: Eye,
+    },
+    {
+      kind: 'microphone',
+      title: 'Live Transcription',
+      description: 'Capture meetings, calls, interviews, and spoken context as they happen.',
+      icon: AudioLines,
+    },
+    {
+      kind: 'accessibility',
+      title: 'Interview Assistance',
+      description: 'Keep the overlay responsive for context-aware answers and quick actions.',
+      icon: Sparkles,
+    },
+  ];
 
 const PERSONA_CARD_TREATMENT: Record<PersonaId, { glow: string; border: string }> = {
   interview_preparation: {
@@ -306,6 +315,26 @@ function AuroraBackdrop({ isSoft = false }: { isSoft?: boolean }) {
             ? 'absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.08)_58%,rgba(0,0,0,0.34)_100%)]'
             : 'absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.22)_58%,rgba(0,0,0,0.62)_100%)]'
         }
+      />
+      {/* Animated grid lines — breathing pulse on dark login bg */}
+      <style>{`
+        @keyframes auroraGridPulse {
+          0%, 100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.03); }
+        }
+      `}</style>
+      <div
+        className="absolute inset-[-20px]"
+        style={{
+          zIndex: 1,
+          backgroundImage: `
+            linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)
+          `,
+          backgroundSize: '48px 48px',
+          animation: 'auroraGridPulse 6s ease-in-out infinite',
+          willChange: 'transform, opacity',
+        }}
       />
       <div
         className="absolute inset-0 opacity-[0.035] mix-blend-overlay"
@@ -394,9 +423,8 @@ function StepShell({
       animate={isAdvancing ? 'advanceExit' : 'visible'}
       exit="exit"
       data-testid={testId}
-      className={`relative w-[calc(100vw-32px)] max-w-[620px] transform-gpu overflow-hidden rounded-[18px] bg-[#020202]/[0.94] px-8 py-8 text-white shadow-[0_26px_90px_rgba(0,0,0,0.62),0_0_80px_rgba(89,72,150,0.12)] backdrop-blur-[34px] ${
-        isAdvancing ? 'pointer-events-none' : ''
-      }`}
+      className={`relative w-[calc(100vw-32px)] max-w-[620px] transform-gpu overflow-hidden rounded-[18px] bg-[#020202]/[0.94] px-8 py-8 text-white shadow-[0_26px_90px_rgba(0,0,0,0.62),0_0_80px_rgba(89,72,150,0.12)] backdrop-blur-[34px] ${isAdvancing ? 'pointer-events-none' : ''
+        }`}
       style={{ ...modalFrameStyle, willChange: 'transform, opacity' }}
     >
       <ModalFrameBorder />
@@ -452,9 +480,8 @@ function GoogleAuthScreen({
       animate={isAdvancing ? 'advanceExit' : 'visible'}
       exit="exit"
       data-testid="onboarding-v2-oauth"
-      className={`relative w-[calc(100vw-40px)] max-w-[500px] transform-gpu overflow-hidden rounded-[15px] bg-[#020202] px-[40px] pb-[36px] pt-[44px] text-center text-white shadow-[0_26px_90px_rgba(0,0,0,0.62),0_0_70px_rgba(84,91,120,0.14)] backdrop-blur-[34px] ${
-        isAdvancing ? 'pointer-events-none' : ''
-      }`}
+      className={`relative w-[calc(100vw-40px)] max-w-[500px] transform-gpu overflow-hidden rounded-[15px] bg-[#020202] px-[40px] pb-[36px] pt-[44px] text-center text-white shadow-[0_26px_90px_rgba(0,0,0,0.62),0_0_70px_rgba(84,91,120,0.14)] backdrop-blur-[34px] ${isAdvancing ? 'pointer-events-none' : ''
+        }`}
       style={{ ...modalFrameStyle, willChange: 'transform, opacity' }}
     >
       <ModalFrameBorder radiusClass="rounded-[15px]" borderClass="border-[#a1a3aa]/55" />
@@ -633,13 +660,12 @@ function PermissionsScreen({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-[14px] font-semibold text-white/[0.9]">{permission.title}</h2>
-                    <span className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] ${
-                      isReady
+                    <span className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-bold uppercase tracking-[0.12em] ${isReady
                         ? 'border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-100'
                         : state === 'denied'
                           ? 'border-rose-300/20 bg-rose-300/[0.10] text-rose-100'
                           : 'border-white/[0.10] bg-white/[0.045] text-white/[0.44]'
-                    }`}>
+                      }`}>
                       {isActive ? <Loader2 className="h-3 w-3 animate-spin" /> : isReady ? <Check className="h-3 w-3" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
                       {isReady ? 'Enabled' : state === 'denied' ? 'Blocked' : 'Required'}
                     </span>
@@ -676,9 +702,8 @@ function PersonaScreen({
       initial="hidden"
       animate={isAdvancing ? 'advanceExit' : 'visible'}
       exit="exit"
-      className={`relative w-[calc(100vw-32px)] max-w-[500px] transform-gpu overflow-hidden rounded-[15px] bg-[#0b0d12]/[0.70] px-[40px] pb-[16px] pt-[50px] shadow-[0_26px_90px_rgba(0,0,0,0.50),inset_0_1px_0_rgba(255,255,255,0.065)] backdrop-blur-[34px] will-change-transform ${
-        isAdvancing ? 'pointer-events-none' : ''
-      }`}
+      className={`relative w-[calc(100vw-32px)] max-w-[500px] transform-gpu overflow-hidden rounded-[15px] bg-[#0b0d12]/[0.70] px-[40px] pb-[16px] pt-[50px] shadow-[0_26px_90px_rgba(0,0,0,0.50),inset_0_1px_0_rgba(255,255,255,0.065)] backdrop-blur-[34px] will-change-transform ${isAdvancing ? 'pointer-events-none' : ''
+        }`}
       data-testid="onboarding-v2-persona"
       style={modalFrameStyle}
     >
@@ -779,9 +804,8 @@ function ChipDecisionScreen<T extends string>({
       initial="hidden"
       animate={isAdvancing ? 'advanceExit' : 'visible'}
       exit="exit"
-      className={`relative max-h-none w-[calc(100vw-32px)] max-w-[500px] transform-gpu overflow-hidden rounded-[15px] bg-[#0b0d12]/[0.70] px-[40px] pb-[28px] pt-[49px] shadow-[0_26px_90px_rgba(0,0,0,0.50),inset_0_1px_0_rgba(255,255,255,0.065)] backdrop-blur-[34px] will-change-transform ${
-        isAdvancing ? 'pointer-events-none' : ''
-      }`}
+      className={`relative max-h-none w-[calc(100vw-32px)] max-w-[500px] transform-gpu overflow-hidden rounded-[15px] bg-[#0b0d12]/[0.70] px-[40px] pb-[28px] pt-[49px] shadow-[0_26px_90px_rgba(0,0,0,0.50),inset_0_1px_0_rgba(255,255,255,0.065)] backdrop-blur-[34px] will-change-transform ${isAdvancing ? 'pointer-events-none' : ''
+        }`}
       data-testid={testId}
       style={modalFrameStyle}
     >
@@ -818,11 +842,10 @@ function ChipDecisionScreen<T extends string>({
                     onClick={() => onSelect(option.id)}
                     disabled={isAdvancing}
                     data-testid={`${testId}-option`}
-                    className={`relative h-[34px] overflow-hidden rounded-full border px-[13px] text-[14px] font-semibold transition-colors duration-200 ${
-                      isSelected
+                    className={`relative h-[34px] overflow-hidden rounded-full border px-[13px] text-[14px] font-semibold transition-colors duration-200 ${isSelected
                         ? 'border-[#7b8190] bg-[#242832] text-white/88'
                         : 'border-[#3a4050] bg-[#191c24] text-white/62 hover:border-[#596174] hover:text-white/82'
-                    }`}
+                      }`}
                   >
                     {isSelected ? (
                       <motion.span
@@ -1063,7 +1086,19 @@ export function PremiumOnboardingV2({
     onAuthUserChange(user);
     const completedOnboarding = user.onboardingV1?.onboardingVersion === 1;
     if (completedOnboarding) {
-      // Returning user — skip straight to launcher
+      // Check if V3 onboarding was completed
+      try {
+        const raw = localStorage.getItem(V3_RESUME_KEY);
+        if (raw) {
+          const resume: V3ResumeState = JSON.parse(raw);
+          if (!resume.completedAt) {
+            // Resume V3 onboarding from last step
+            transitionToStep(resume.step);
+            return;
+          }
+        }
+      } catch { /* ignore parse errors */ }
+      // Fully completed — skip to launcher
       onLaunch(user);
       return;
     }
@@ -1132,11 +1167,6 @@ export function PremiumOnboardingV2({
     transitionToStep('permissions');
   };
 
-  const handlePermissionsContinue = () => {
-    if (advancingStep) return;
-    completePermissionsOnboarding();
-    transitionToStep('oauth', () => { void verifyExistingSession(); });
-  };
 
   const handleGoogleSignIn = async () => {
     if (advancingStep) return;
@@ -1179,8 +1209,7 @@ export function PremiumOnboardingV2({
   const handleDiscoverySelect = async (selectedDiscovery: DiscoverySourceId) => {
     if (advancingStep) return;
     setDiscoverySource(selectedDiscovery);
-    // Save onboarding and launch directly
-    completePermissionsOnboarding();
+    // Save onboarding to backend
     setIsSaving(true);
     try {
       const result = await window.electronAPI?.googleSaveOnboardingV1?.({
@@ -1194,24 +1223,33 @@ export function PremiumOnboardingV2({
         const savedUser = result.user;
         setAuthUser(savedUser);
         onAuthUserChange(savedUser);
-        // Animate out then launch
-        clearAdvanceTimer();
-        setAdvancingStep('discovery');
-        advanceTimerRef.current = window.setTimeout(() => {
-          advanceTimerRef.current = null;
-          setAdvancingStep(null);
-          onLaunch(savedUser);
-        }, STEP_HANDOFF_DELAY_MS);
-      } else {
-        // Fallback: launch anyway with current user
-        if (authUser) onLaunch(authUser);
       }
     } catch (error: any) {
       console.error('[Onboarding] Save failed:', error);
-      // Launch anyway — don't block user
-      if (authUser) onLaunch(authUser);
     } finally {
       setIsSaving(false);
+    }
+    // Continue to V3 welcome step regardless of save result
+    persistV3Step('v3welcome');
+    transitionToStep('v3welcome');
+  };
+
+  // ── V3 Step Handlers ──
+
+  const persistV3Step = (nextStep: PremiumOnboardingStep) => {
+    try {
+      localStorage.setItem(V3_RESUME_KEY, JSON.stringify({ step: nextStep } as V3ResumeState));
+    } catch { /* ignore */ }
+  };
+
+  const handleV3WelcomeLaunch = () => {
+    if (advancingStep) return;
+    try {
+      localStorage.setItem(V3_RESUME_KEY, JSON.stringify({ step: 'v3welcome', completedAt: new Date().toISOString() } as V3ResumeState));
+    } catch { /* ignore */ }
+    completePermissionsOnboarding();
+    if (authUser) {
+      finishOnboardingAfterHandoff();
     }
   };
 
@@ -1271,12 +1309,24 @@ export function PremiumOnboardingV2({
       );
     }
 
+    // ── V3 Welcome + Permissions ──
+
+    if (step === 'v3welcome') {
+      return (
+        <WelcomePermissionsStep
+          isAdvancing={advancingStep === 'v3welcome'}
+          onLaunch={handleV3WelcomeLaunch}
+        />
+      );
+    }
+
     return null;
   };
 
   if (!isOpen) return null;
 
   const isIntentStep = step === 'persona' || step === 'industry' || step === 'discovery';
+  const isV3Step = step === 'v3welcome';
 
   return (
     <AnimatePresence mode="wait">
@@ -1286,13 +1336,15 @@ export function PremiumOnboardingV2({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        className={`fixed inset-0 z-[140] flex min-h-screen items-center justify-center overflow-y-auto px-4 py-10 text-white backdrop-blur-[6px] backdrop-saturate-[0.72] ${
-          isIntentStep
-            ? 'bg-[linear-gradient(180deg,rgba(0,0,0,0.34)_0%,rgba(0,0,0,0.22)_42%,rgba(0,0,0,0.12)_100%)]'
-            : 'bg-[linear-gradient(180deg,rgba(0,0,0,0.70)_0%,rgba(0,0,0,0.50)_42%,rgba(0,0,0,0.24)_100%)]'
-        }`}
+        className={`fixed inset-0 z-[140] flex min-h-screen items-center justify-center overflow-y-auto ${isV3Step
+            ? ''
+            : `px-4 py-10 text-white backdrop-blur-[6px] backdrop-saturate-[0.72] ${isIntentStep
+              ? 'bg-[linear-gradient(180deg,rgba(0,0,0,0.34)_0%,rgba(0,0,0,0.22)_42%,rgba(0,0,0,0.12)_100%)]'
+              : 'bg-[linear-gradient(180deg,rgba(0,0,0,0.70)_0%,rgba(0,0,0,0.50)_42%,rgba(0,0,0,0.24)_100%)]'
+            }`
+          }`}
       >
-        <AuroraBackdrop isSoft={isIntentStep} />
+        {!isV3Step && <AuroraBackdrop isSoft={isIntentStep} />}
         <AnimatePresence mode="wait">{renderStep()}</AnimatePresence>
       </motion.div>
     </AnimatePresence>
