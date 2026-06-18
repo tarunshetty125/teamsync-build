@@ -54,7 +54,7 @@ type PremiumOnboardingV2Props = {
   onLaunch: (user: GoogleAuthUserWithOnboardingV2) => void;
 };
 
-const STEP_HANDOFF_DELAY_MS = 2000;
+const STEP_HANDOFF_DELAY_MS = 700;
 
 const modalVariants: Variants = {
   hidden: { opacity: 0, y: 56 },
@@ -72,19 +72,20 @@ const modalVariants: Variants = {
   },
   advanceExit: {
     opacity: 0,
-    y: 118,
-    scale: 0.982,
+    y: 80,
+    scale: 0.97,
     transition: {
-      duration: 0.88,
-      ease: [0.22, 1, 0.36, 1],
+      duration: 0.52,
+      ease: [0.32, 0, 0.67, 0],
     },
   },
   exit: {
     opacity: 0,
-    y: -12,
+    y: 80,
+    scale: 0.97,
     transition: {
-      duration: 0.28,
-      ease: [0.22, 1, 0.36, 1],
+      duration: 0.38,
+      ease: [0.32, 0, 0.67, 0],
     },
   },
 };
@@ -108,15 +109,15 @@ const cardVariants: Variants = {
 };
 
 const legacyExitTransition = {
-  duration: 0.26,
-  ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
+  duration: 0.38,
+  ease: [0.32, 0, 0.67, 0] as [number, number, number, number],
 };
 
 const legacyModalVariants: Variants = {
   hidden: {
     opacity: 0,
-    y: 108,
-    scale: 0.978,
+    y: 80,
+    scale: 0.97,
   },
   visible: {
     opacity: 1,
@@ -124,25 +125,25 @@ const legacyModalVariants: Variants = {
     scale: 1,
     transition: {
       type: 'spring',
-      duration: 0.96,
-      bounce: 0.18,
-      delayChildren: 0.18,
-      staggerChildren: 0.075,
+      duration: 0.72,
+      bounce: 0.14,
+      delayChildren: 0.14,
+      staggerChildren: 0.06,
     },
   },
   advanceExit: {
     opacity: 0,
-    y: 118,
-    scale: 0.982,
+    y: 80,
+    scale: 0.97,
     transition: {
-      duration: 0.88,
-      ease: [0.22, 1, 0.36, 1],
+      duration: 0.52,
+      ease: [0.32, 0, 0.67, 0],
     },
   },
   exit: {
     opacity: 0,
-    y: -14,
-    scale: 0.996,
+    y: 80,
+    scale: 0.97,
     transition: legacyExitTransition,
   },
 };
@@ -975,12 +976,13 @@ function ActivationScreen({
 export function PremiumOnboardingV2({
   isOpen,
   initialUser,
-  skipIntroScreens = false,
-  startAtPermissions = false,
+  skipIntroScreens: _skipIntroScreens = false,
+  startAtPermissions: _startAtPermissions = false,
   onAuthUserChange,
   onLaunch,
 }: PremiumOnboardingV2Props) {
-  const initialStep: PremiumOnboardingStep = skipIntroScreens ? 'oauth' : startAtPermissions ? 'permissions' : 'welcome';
+  // Simplified flow: always start at OAuth login
+  const initialStep: PremiumOnboardingStep = 'oauth';
   const [step, setStep] = useState<PremiumOnboardingStep>(() => initialStep);
   const [authUser, setAuthUser] = useState<GoogleAuthUserWithOnboardingV2 | null>(initialUser);
   const [persona, setPersona] = useState<PersonaId | null>(null);
@@ -1061,16 +1063,11 @@ export function PremiumOnboardingV2({
     onAuthUserChange(user);
     const completedOnboarding = user.onboardingV1?.onboardingVersion === 1;
     if (completedOnboarding) {
-      setPersona(isPersonaId(user.onboardingV1?.persona) ? user.onboardingV1.persona : 'explore_quietly');
-      // If intro screens were skipped (permissions ready + onboarding already completed),
-      // auto-launch instead of showing the activation screen on every restart.
-      if (skipIntroScreens) {
-        onLaunch(user);
-        return;
-      }
-      transitionToStep('activation');
+      // Returning user — skip straight to launcher
+      onLaunch(user);
       return;
     }
+    // New user — show persona selection
     transitionToStep('persona');
   };
 
@@ -1179,94 +1176,47 @@ export function PremiumOnboardingV2({
     transitionToStep('discovery');
   };
 
-  const handleDiscoverySelect = (selectedDiscovery: DiscoverySourceId) => {
+  const handleDiscoverySelect = async (selectedDiscovery: DiscoverySourceId) => {
     if (advancingStep) return;
     setDiscoverySource(selectedDiscovery);
-    transitionToStep('building');
-  };
-
-  const saveOnboarding = async () => {
-    if (!persona || !industry || !discoverySource || isSaving) return;
-
+    // Save onboarding and launch directly
+    completePermissionsOnboarding();
     setIsSaving(true);
-    setSaveError(null);
-    const startedAt = performance.now();
     try {
       const result = await window.electronAPI?.googleSaveOnboardingV1?.({
-        persona,
-        industry,
-        discoverySource,
+        persona: persona || 'explore_quietly',
+        industry: industry || 'other',
+        discoverySource: selectedDiscovery,
         onboardingVersion: 1,
         completedInVersion: '1.0.0',
       });
-      const elapsed = performance.now() - startedAt;
-      if (elapsed < 2300) {
-        await new Promise((resolve) => window.setTimeout(resolve, 2300 - elapsed));
+      if (result?.success && result.user) {
+        const savedUser = result.user;
+        setAuthUser(savedUser);
+        onAuthUserChange(savedUser);
+        // Animate out then launch
+        clearAdvanceTimer();
+        setAdvancingStep('discovery');
+        advanceTimerRef.current = window.setTimeout(() => {
+          advanceTimerRef.current = null;
+          setAdvancingStep(null);
+          onLaunch(savedUser);
+        }, STEP_HANDOFF_DELAY_MS);
+      } else {
+        // Fallback: launch anyway with current user
+        if (authUser) onLaunch(authUser);
       }
-      if (!result?.success || result.user?.onboardingV1?.onboardingVersion !== 1) {
-        throw new Error(result?.error || 'Could not save onboarding. Please try again.');
-      }
-      routeAuthenticatedUser(result.user);
     } catch (error: any) {
-      setSaveError(error?.message || 'Could not save onboarding. Please try again.');
+      console.error('[Onboarding] Save failed:', error);
+      // Launch anyway — don't block user
+      if (authUser) onLaunch(authUser);
     } finally {
       setIsSaving(false);
     }
   };
 
-  useEffect(() => {
-    if (step !== 'building' || !persona || !industry || !discoverySource) return;
-    const saveAttemptKey = `${persona}:${industry}:${discoverySource}`;
-    if (saveAttemptKeyRef.current === saveAttemptKey) return;
-    saveAttemptKeyRef.current = saveAttemptKey;
-    void saveOnboarding();
-  }, [step, persona, industry, discoverySource]);
-
+  // Building step removed — save happens inline in handleDiscoverySelect
   const renderStep = () => {
-    if (step === 'welcome') {
-      return (
-        <StepShell
-          testId="onboarding-v2-welcome"
-          eyebrow="Quietly"
-          title="Welcome to Quietly"
-          description="Your AI copilot for interviews, meetings, coding, and career growth."
-          isAdvancing={advancingStep === 'welcome'}
-          footer={
-            <PrimaryButton onClick={handleWelcomeContinue} icon={<ChevronRight className="h-4 w-4" />}>
-              Get Started
-            </PrimaryButton>
-          }
-        >
-          <motion.div variants={itemVariants} className="mt-8 flex items-center gap-4 rounded-[16px] border border-white/[0.10] bg-white/[0.055] p-4">
-            <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[15px] border border-white/[0.10] bg-black/35">
-              <img src={appIcon} alt="Quietly" className="h-10 w-10 object-contain" />
-            </div>
-            <div>
-              <p className="text-[14px] font-semibold text-white/[0.88]">Realtime intelligence, ready before the dashboard.</p>
-              <p className="mt-1 text-[12px] font-medium leading-5 text-white/[0.46]">Quietly adapts around what you do first.</p>
-            </div>
-          </motion.div>
-        </StepShell>
-      );
-    }
-
-    if (step === 'permissions') {
-      return (
-        <PermissionsScreen
-          status={status}
-          isChecking={isChecking}
-          activePermission={activePermission}
-          lastError={lastError}
-          isAdvancing={advancingStep === 'permissions'}
-          onRequest={(permission) => { void requestPermission(permission); }}
-          onOpenSettings={(permission) => { void openSettings(permission); }}
-          onRetry={() => { void refreshPermissions(); }}
-          onContinue={handlePermissionsContinue}
-          onQuit={() => { void window.electronAPI?.quitApp?.(); }}
-        />
-      );
-    }
-
     if (step === 'oauth') {
       return (
         <GoogleAuthScreen
@@ -1321,28 +1271,7 @@ export function PremiumOnboardingV2({
       );
     }
 
-    if (step === 'building') {
-      return (
-        <BuildingScreen
-          persona={persona}
-          industry={industry}
-          discoverySource={discoverySource}
-          error={saveError}
-          isSaving={isSaving}
-          isAdvancing={advancingStep === 'building'}
-          onRetry={() => { void saveOnboarding(); }}
-        />
-      );
-    }
-
-    return (
-      <ActivationScreen
-        user={authUser}
-        persona={resolvedPersona}
-        isAdvancing={advancingStep === 'activation'}
-        onLaunch={finishOnboardingAfterHandoff}
-      />
-    );
+    return null;
   };
 
   if (!isOpen) return null;
