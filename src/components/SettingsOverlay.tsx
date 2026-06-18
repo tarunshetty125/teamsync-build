@@ -2988,6 +2988,26 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             </span>
                                         )}
                                     </div>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={async () => {
+                                                let isActive = false;
+                                                try { isActive = await window.electronAPI?.getMeetingActive?.() ?? false; } catch {}
+                                                if (isActive) { setShowQuitConfirm(true); } else { window.electronAPI.quitApp(); }
+                                            }}
+                                            title="Quit Quietly"
+                                            className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary hover:text-red-400 hover:bg-bg-item-active/50 transition-colors"
+                                        >
+                                            <LogOut size={14} />
+                                        </button>
+                                        <button
+                                            onClick={onClose}
+                                            title="Close Settings"
+                                            className="flex h-7 w-7 items-center justify-center rounded-lg text-text-tertiary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -3068,17 +3088,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                         })}
                                     </div>
 
-                                    <div className="p-4 pt-2">
-
+                                    {/* Quit confirmation (appears when meeting is active) */}
                                     <AnimatePresence mode="wait" initial={false}>
-                                        {showQuitConfirm ? (
+                                        {showQuitConfirm && (
                                             <motion.div
                                                 key="quit-confirm"
                                                 initial={{ opacity: 0, y: 4 }}
                                                 animate={{ opacity: 1, y: 0 }}
                                                 exit={{ opacity: 0, y: 4 }}
                                                 transition={{ duration: 0.15 }}
-                                                className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-2"
+                                                className="mx-2 mb-2 bg-red-500/10 border border-red-500/30 rounded-xl p-4"
                                             >
                                                 <div className="flex items-center gap-2 text-[13px] font-semibold text-red-400">
                                                     <AlertCircle size={15} />
@@ -3102,35 +3121,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     </button>
                                                 </div>
                                             </motion.div>
-                                        ) : (
-                                            <motion.button
-                                                key="quit-button"
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                                transition={{ duration: 0.1 }}
-                                                onClick={async () => {
-                                                    // Query meeting state directly via IPC
-                                                    let isActive = false;
-                                                    try {
-                                                        isActive = await window.electronAPI?.getMeetingActive?.() ?? false;
-                                                    } catch { /* fallback to false */ }
-                                                    if (isActive) {
-                                                        setShowQuitConfirm(true);
-                                                    } else {
-                                                        window.electronAPI.quitApp();
-                                                    }
-                                                }}
-                                                className="w-full text-left px-3 py-2 mt-1 rounded-xl text-[13px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors flex items-center gap-3"
-                                            >
-                                                <LogOut size={16} className="text-red-400" /> Quit Quietly
-                                            </motion.button>
                                         )}
                                     </AnimatePresence>
-                                    <button onClick={onClose} className="group mt-2 w-full text-left px-3 py-2 rounded-xl text-[13px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 transition-colors flex items-center gap-3">
-                                        <X size={18} className="text-text-tertiary group-hover:text-red-400 transition-colors" /> Close
-                                    </button>
-                                    </div>
                                 </div>
                             </div>
 
