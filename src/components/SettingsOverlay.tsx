@@ -2970,14 +2970,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                         }}
                         className="relative h-[74vh] max-h-[680px] w-[84vw] max-w-[860px] overflow-hidden rounded-[22px] border border-border-subtle bg-bg-primary shadow-[0_20px_60px_rgba(0,0,0,0.25),0_0_0_1px_rgba(0,0,0,0.05)]"
                         >
-                        {/* Close button — top right corner of panel */}
-                        <button
-                            onClick={onClose}
-                            title="Close Settings"
-                            className="absolute top-3 right-3 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/15 border border-orange-500/25 text-orange-400 hover:bg-orange-500/25 hover:text-orange-300 transition-colors"
-                        >
-                            <X size={15} />
-                        </button>
                         <div
                             id="settings-panel"
                             className="relative z-10 flex h-full w-full min-w-0"
@@ -2987,14 +2979,23 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             {/* Sidebar */}
                             <div className="flex w-[200px] shrink-0 flex-col border-r border-border-subtle bg-bg-secondary text-text-primary">
                                 <div className="px-4 pt-4 pb-3">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <h2 className="text-[15px] font-semibold tracking-tight text-text-primary">Settings</h2>
-                                        {settingsHeaderBadge && (
-                                            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-semibold ${settingsHeaderBadge.className}`}>
-                                                {isPremium && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
-                                                {settingsHeaderBadge.label}
-                                            </span>
-                                        )}
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <h2 className="text-[15px] font-semibold tracking-tight text-text-primary">Settings</h2>
+                                            {settingsHeaderBadge && (
+                                                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-semibold ${settingsHeaderBadge.className}`}>
+                                                    {isPremium && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                                                    {settingsHeaderBadge.label}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={onClose}
+                                            title="Close Settings"
+                                            className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-500/15 border border-orange-500/25 text-orange-400 hover:bg-orange-500/25 hover:text-orange-300 transition-colors"
+                                        >
+                                            <X size={13} />
+                                        </button>
                                     </div>
                                 </div>
 
@@ -3084,7 +3085,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                 try { isActive = await window.electronAPI?.getMeetingActive?.() ?? false; } catch {}
                                                 if (isActive) { setShowQuitConfirm(true); } else { window.electronAPI.quitApp(); }
                                             }}
-                                            className="group relative w-full overflow-hidden rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-text-tertiary hover:text-red-400 hover:bg-red-500/5 transition-colors duration-150 flex items-center gap-2 active:scale-[0.99]"
+                                            className="group relative w-full overflow-hidden rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-red-400 bg-red-500/5 hover:bg-red-500/10 transition-colors duration-150 flex items-center gap-2 active:scale-[0.99]"
                                         >
                                             <span className="shrink-0"><LogOut size={16} /></span>
                                             <span>Quit Quietly</span>
