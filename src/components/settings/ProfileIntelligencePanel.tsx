@@ -10,7 +10,6 @@ import {
   AlertCircle,
   Pencil,
   Check,
-  Sparkles,
 } from 'lucide-react';
 
 /* ── Types ──────────────────────────────────────────────────────── */
