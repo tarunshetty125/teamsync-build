@@ -2871,6 +2871,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 { id: 'account', label: 'Account', icon: <User size={16} /> },
             ],
         },
+        {
+            label: 'Support',
+            items: [
+                { id: 'help', label: 'Setup & Guide', icon: <LifeBuoy size={16} /> },
+                { id: 'about', label: 'About', icon: <Info size={16} /> },
+            ],
+        },
     ];
     const settingsMotionEase = [0.22, 1, 0.36, 1] as const;
     const sectionMotionProps = shouldReduceMotion
