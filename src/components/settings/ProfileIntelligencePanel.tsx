@@ -199,7 +199,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
 
       {/* ── Scrollable Content ─────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-6 pb-5 pt-3">
-        <div className="mx-auto max-w-[680px] space-y-5">
+        <div className="mx-auto max-w-[680px] space-y-6">
 
           {/* ── Professional Identity Section ───────────────── */}
           <motion.div variants={itemVariants}>
@@ -319,11 +319,11 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
           {/* ── Upload Cards (side by side) ─────────────────── */}
           <motion.div variants={itemVariants} className="grid gap-3 grid-cols-2">
             {/* Resume Upload */}
-            <div className="rounded-[16px] border border-white/[0.08] bg-[#1c1c1e] overflow-hidden">
-              <div className="p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-[38px] h-[38px] rounded-[10px] bg-[#252528] border border-white/[0.06] flex items-center justify-center text-white/40 shrink-0">
-                    {profileUploading ? <RefreshCw size={17} className="animate-spin text-white/60" /> : <Upload size={17} />}
+            <div className="rounded-[16px] border border-white/[0.08] bg-[#1c1c1e] overflow-hidden min-h-[190px] flex flex-col">
+              <div className="p-6 flex-1 flex flex-col">
+                <div className="flex items-start gap-3.5 mb-4">
+                  <div className="w-[42px] h-[42px] rounded-[12px] bg-[#252528] border border-white/[0.06] flex items-center justify-center text-white/40 shrink-0">
+                    {profileUploading ? <RefreshCw size={18} className="animate-spin text-white/60" /> : <Upload size={18} />}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -346,6 +346,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
                   </div>
                 </div>
 
+                <div className="flex-1" />
                 <button
                   onClick={handleSelectResume}
                   disabled={profileViewStatus === 'processing'}
@@ -375,13 +376,13 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
 
             {/* JD Upload */}
             <div className={clsx(
-              'rounded-[16px] border overflow-hidden transition-colors duration-200',
+              'rounded-[16px] border overflow-hidden transition-colors duration-200 min-h-[190px] flex flex-col',
               profileData?.hasActiveJD ? 'border-blue-500/25 bg-blue-500/[0.03]' : 'border-white/[0.08] bg-[#1c1c1e]'
             )}>
-              <div className="p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-[38px] h-[38px] rounded-[10px] bg-[#252528] border border-white/[0.06] flex items-center justify-center text-white/40 shrink-0">
-                    {jdUploading ? <RefreshCw size={17} className="animate-spin text-blue-400" /> : <Briefcase size={17} />}
+              <div className="p-6 flex-1 flex flex-col">
+                <div className="flex items-start gap-3.5 mb-4">
+                  <div className="w-[42px] h-[42px] rounded-[12px] bg-[#252528] border border-white/[0.06] flex items-center justify-center text-white/40 shrink-0">
+                    {jdUploading ? <RefreshCw size={18} className="animate-spin text-blue-400" /> : <Briefcase size={18} />}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -408,6 +409,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
                   </div>
                 </div>
 
+                <div className="flex-1" />
                 <div className="flex items-center gap-2">
                   {profileData?.hasActiveJD && (
                     <button
