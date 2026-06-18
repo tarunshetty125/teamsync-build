@@ -735,14 +735,14 @@ const CodexCliSettings: React.FC = () => {
 
             <div className="divide-y divide-border-subtle">
                 {/* Enable toggle */}
-                <div className="flex items-center justify-between px-5 py-3.5">
-                    <div>
+                <div className="flex items-center justify-between px-5 py-3.5 gap-4">
+                    <div className="min-w-0">
                         <p className="text-[12px] font-semibold text-text-primary uppercase tracking-wide">Enable Codex CLI</p>
                         <p className="mt-0.5 text-[11px] text-text-secondary">Adds Codex CLI as a selectable local backend and fallback.</p>
                     </div>
                     <button
                         onClick={() => updateField('enabled', !config.enabled)}
-                        className={`relative w-10 h-[22px] rounded-full transition-colors duration-200 ${config.enabled ? 'bg-accent-primary' : 'bg-bg-elevated'}`}
+                        className={`relative flex-shrink-0 w-10 h-[22px] rounded-full transition-colors duration-200 ${config.enabled ? 'bg-accent-primary' : 'bg-bg-elevated'}`}
                     >
                         <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${config.enabled ? 'translate-x-[21px]' : 'translate-x-[3px]'}`} />
                     </button>
