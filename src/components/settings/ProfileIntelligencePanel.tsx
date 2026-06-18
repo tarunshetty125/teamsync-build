@@ -268,7 +268,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
               <div>
                 <div className="flex items-center gap-2.5">
                   <h1 className="text-[22px] font-semibold tracking-[-0.04em] text-white">
-                    Profile Intelligence
+                    Profile Knowledge
                   </h1>
                   <span className="rounded-[6px] bg-[#FACC15]/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[#FACC15] border border-[#FACC15]/20">
                     Beta
@@ -585,12 +585,12 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-[14px] border border-white/[0.06] bg-white/[0.03] text-[12px] font-medium text-white/30 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/[0.06] transition-all"
                 >
                   <Trash2 size={13} />
-                  Delete Profile Intelligence
+                  Delete Profile Knowledge
                 </button>
               ) : (
                 <div className="rounded-[14px] border border-red-500/20 bg-red-500/[0.06] p-4">
                   <p className="text-[12px] text-red-300/80 mb-3">
-                    This permanently removes Resume, Job Description, AOT results, Snapshots, Dossiers, Notes, and Profile Intelligence from this device.
+                    This permanently removes Resume, Job Description, AOT results, Snapshots, Dossiers, Notes, and Profile Knowledge from this device.
                   </p>
                   <div className="flex items-center gap-2 justify-end">
                     <button
@@ -624,7 +624,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
                 Resume ingestion requires Pro access.
               </p>
               <p className="mt-0.5 text-[13px] tracking-[-0.028em] text-[#ffc633]">
-                Unlock Pro to access Profile Intelligence.
+                Unlock Pro to access Profile Knowledge.
               </p>
             </div>
             <button
