@@ -2220,13 +2220,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             color: 'green',
             icon: <Mic size={14} />,
         } as ProviderOption] : []),
-        { id: 'whisper', label: 'Local Whisper', badge: 'Fallback', desc: 'Last-resort local recovery path before degraded mode.', color: 'cyan', icon: <Mic size={14} /> },
+        { id: 'whisper', label: 'Offline (Local Whisper)', badge: 'No API Key', desc: 'On-device transcription — no internet or API key required. Works fully offline.', color: 'emerald', icon: <Mic size={14} /> },
     ];
 
     const sttFallbackChainLabel = (() => {
         const selected = sttProviderOptions.find((option) => option.id === sttProvider)?.label || 'Selected Provider';
         if (sttProvider === 'none') return 'STT disabled.';
-        if (sttProvider === 'whisper') return 'Runtime path: Whisper only.';
+        if (sttProvider === 'whisper') return 'Offline mode: transcription runs entirely on your device. No API key or internet needed.';
         if (sttProvider === 'google') return 'Runtime path: Google Cloud → Whisper.';
         return `Runtime path: ${selected} → Google Cloud → Whisper.`;
     })();
@@ -2536,6 +2536,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             items: [
                 { id: 'profile', label: 'Profile', icon: <User size={16} /> },
                 { id: 'ai-providers', label: 'AI & Providers', icon: <Sparkles size={16} /> },
+                { id: 'skills', label: 'Skills', icon: <FlaskConical size={16} /> },
                 { id: 'calendar', label: 'Calendar', icon: <Calendar size={16} /> },
             ],
         },
@@ -4576,12 +4577,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                                                         {sttProvider === 'whisper' && (
                                                             <div className="bg-bg-card rounded-xl border border-border-subtle p-4 space-y-2">
-                                                                <label className="text-xs font-medium text-text-secondary block">Local Fallback</label>
+                                                                <label className="text-xs font-medium text-text-secondary block">Offline Mode Active</label>
                                                                 <p className="text-xs text-text-secondary">
-                                                                    Whisper is only used after the active provider and Google fail. It does not replace the primary realtime stream.
+                                                                    All transcription runs on your device using the local Whisper engine. No internet connection or API key is needed.
                                                                 </p>
                                                                 <p className="text-[10px] text-text-tertiary">
-                                                                    No API key is required here. If local Whisper is unavailable, Quietly enters degraded mode and warns that speech recognition is temporarily unavailable.
+                                                                    The model will be downloaded automatically on first use (~39 MB for Whisper Tiny EN). To switch back to cloud transcription, select any other provider above.
                                                                 </p>
                                                             </div>
                                                         )}
@@ -4776,6 +4777,145 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                             </div>
                                         )}
 
+
+
+                                        {activeTab === 'skills' && (() => {
+                                            const [skillsList, setSkillsList] = React.useState<Array<{ id: string; name: string; description: string; source: 'builtin' | 'userData' }>>([]);
+                                            const [skillsLoading, setSkillsLoading] = React.useState(true);
+                                            const [skillsFolderPath, setSkillsFolderPath] = React.useState<string | null>(null);
+                                            const [skillsError, setSkillsError] = React.useState<string | null>(null);
+
+                                            const loadSkills = React.useCallback(async () => {
+                                                setSkillsLoading(true);
+                                                try {
+                                                    if (typeof window.electronAPI?.skillsRefresh !== 'function') {
+                                                        setSkillsError('Skills IPC bridge not available.');
+                                                        setSkillsList([]);
+                                                        return;
+                                                    }
+                                                    const result = await window.electronAPI.skillsRefresh();
+                                                    setSkillsList(Array.isArray(result) ? result : []);
+                                                    setSkillsError(null);
+                                                } catch (err: any) {
+                                                    setSkillsError(err?.message || 'Could not load skills.');
+                                                } finally {
+                                                    setSkillsLoading(false);
+                                                }
+                                            }, []);
+
+                                            React.useEffect(() => { loadSkills(); }, [loadSkills]);
+
+                                            const handleOpenFolder = async () => {
+                                                try {
+                                                    if (typeof window.electronAPI?.skillsOpenFolder !== 'function') {
+                                                        setSkillsError('Skills IPC bridge not available.');
+                                                        return;
+                                                    }
+                                                    const res = await window.electronAPI.skillsOpenFolder();
+                                                    if (res?.path) setSkillsFolderPath(res.path);
+                                                    if (!res?.success && res?.error) setSkillsError(res.error);
+                                                } catch (err: any) {
+                                                    setSkillsError(err?.message || 'Could not open skills folder.');
+                                                }
+                                            };
+
+                                            return (
+                                                <div className="space-y-6 animated fadeIn h-full select-text pb-4">
+                                                    {/* Header */}
+                                                    <div className="flex items-start justify-between gap-4">
+                                                        <div>
+                                                            <h3 className="text-lg font-bold text-text-primary mb-1">Skills</h3>
+                                                            <p className="text-xs text-text-secondary">
+                                                                Local SKILL.md instructions that can be invoked from the overlay dropdown or by typing $skill-name or /skill-name.
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            onClick={loadSkills}
+                                                            disabled={skillsLoading}
+                                                            className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary bg-bg-card border border-border-subtle hover:bg-bg-elevated transition-colors disabled:opacity-50"
+                                                        >
+                                                            <RefreshCw size={13} className={skillsLoading ? 'animate-spin' : ''} />
+                                                            Refresh
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Skills Folder Card */}
+                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-5 flex items-center justify-between gap-4">
+                                                        <div className="flex items-start gap-3 min-w-0">
+                                                            <div className="w-9 h-9 rounded-lg bg-bg-elevated flex items-center justify-center text-text-tertiary flex-shrink-0 mt-0.5">
+                                                                <FolderOpen size={18} />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <h4 className="text-sm font-semibold text-text-primary">Skills Folder</h4>
+                                                                <p className="text-xs text-text-secondary mt-0.5">
+                                                                    Add a folder containing a SKILL.md file here. Scripts and assets are ignored in this v1.
+                                                                </p>
+                                                                {skillsFolderPath && (
+                                                                    <p className="mt-2 text-[11px] text-text-tertiary font-mono truncate">{skillsFolderPath}</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={handleOpenFolder}
+                                                            className="px-4 py-2 rounded-lg text-xs font-medium bg-bg-input hover:bg-bg-elevated border border-border-subtle text-text-primary transition-colors flex-shrink-0"
+                                                        >
+                                                            Open Folder
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Error */}
+                                                    {skillsError && (
+                                                        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-xs text-red-400">
+                                                            {skillsError}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Skill Cards */}
+                                                    <div className="space-y-3">
+                                                        {skillsList.map((skill) => (
+                                                            <div
+                                                                key={skill.id}
+                                                                className="bg-bg-card rounded-xl border border-border-subtle p-5 transition-colors hover:border-border-default"
+                                                            >
+                                                                <div className="flex items-start justify-between gap-3 mb-2">
+                                                                    <div className="flex items-center gap-3 min-w-0">
+                                                                        <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                                                                            <FlaskConical size={15} className="text-violet-400" />
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                                <span className="text-sm font-semibold text-text-primary">{skill.name}</span>
+                                                                                <span className="text-[11px] text-text-tertiary font-mono">{skill.id}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                                        <CheckCircle size={12} className="text-green-500" />
+                                                                        <span className="text-[11px] font-medium text-text-secondary">
+                                                                            {skill.source === 'builtin' ? 'Built-in' : 'Local'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <p className="text-xs text-text-secondary leading-relaxed ml-11">
+                                                                    {skill.description}
+                                                                </p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Empty State */}
+                                                    {!skillsLoading && skillsList.length === 0 && (
+                                                        <div className="bg-bg-card rounded-xl border border-border-subtle p-6 text-center">
+                                                            <FlaskConical size={20} className="mx-auto mb-2 text-text-tertiary" />
+                                                            <p className="text-sm text-text-secondary mb-1">No skills found</p>
+                                                            <p className="text-xs text-text-tertiary">
+                                                                Open the skills folder and add a folder with SKILL.md.
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
 
                                         {activeTab === 'calendar' && (
                                             <div className="space-y-6 animated fadeIn h-full" data-tour-id="settings-calendar-sync">
