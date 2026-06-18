@@ -502,11 +502,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             if (mounted) setShowModesOnboarding(true);
         }, 8000); // Increased delay so it doesn't overlap with other startup notifications
 
-        // Profile Knowledge onboarding — appears after modes tooltip
-        setTimeout(() => {
-            if (mounted) setShowProfileOnboarding(true);
-        }, 12000);
-
         // Sync initial undetectable state
         if (window.electronAPI?.getUndetectable) {
             window.electronAPI.getUndetectable().then((undetectable) => {
@@ -1087,6 +1082,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                             data-tour-id="interview-mode"
                             onClick={() => {
                                 setShowModesOnboarding(false);
+                                setTimeout(() => setShowProfileOnboarding(true), 2000);
                                 onOpenModes?.();
                             }}
                             title="Modes"
@@ -1149,6 +1145,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         setShowModesOnboarding(false);
+                                                        setTimeout(() => setShowProfileOnboarding(true), 2000);
                                                     }}
                                                     className={`text-[12px] font-medium px-3.5 py-[6px] rounded-full transition-all active:scale-95 ${isLight
                                                         ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/60'
@@ -1162,6 +1159,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                         e.stopPropagation();
                                                         onOpenModes?.();
                                                         setShowModesOnboarding(false);
+                                                        setTimeout(() => setShowProfileOnboarding(true), 2000);
                                                     }}
                                                     className={`text-[12px] font-medium px-4 py-[6px] rounded-full transition-all active:scale-95 shadow-sm ${isLight
                                                         ? 'bg-slate-900 text-white hover:bg-slate-800'
