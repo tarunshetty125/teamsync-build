@@ -666,6 +666,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     };
     const [isExpanded, setIsExpanded] = useState(true);
     const [inputValue, setInputValue] = useState('');
+    const [skillPickerItems, setSkillPickerItems] = useState<Array<{ id: string; name: string; description: string; source: string }>>([]);
+    const [skillPickerIndex, setSkillPickerIndex] = useState(0);
+    const skillPickerLoaded = useRef(false);
     const { shortcuts, isShortcutPressed } = useShortcuts();
     const [messages, setMessages] = useState<Message[]>([]);
     const [screenScanOverlay, setScreenScanOverlay] = useState<ScreenScanOverlayState>({
@@ -1424,6 +1427,33 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     const quickActionClass = 'overlay-chip-surface overlay-text-interactive';
     const inputClass = `${isLightTheme ? 'focus:ring-black/10' : 'focus:ring-white/10'} overlay-input-surface overlay-input-text`;
     const controlSurfaceClass = 'overlay-control-surface overlay-text-interactive';
+
+    // ── Skill Picker ──────────────────────────────────────────────────────
+    const skillPickerMatch = inputValue.match(/^[$/]([a-z0-9_-]*)$/i);
+    const skillPickerVisible = !!skillPickerMatch && skillPickerItems.length > 0;
+    const skillPickerQuery = skillPickerMatch?.[1]?.toLowerCase() || '';
+    const filteredSkills = skillPickerVisible
+        ? skillPickerItems.filter(s => s.id.includes(skillPickerQuery) || s.name.toLowerCase().includes(skillPickerQuery))
+        : [];
+    const showSkillPicker = filteredSkills.length > 0;
+
+    // Lazy-load skills list on first trigger character
+    useEffect(() => {
+        if ((inputValue.startsWith('$') || inputValue.startsWith('/')) && !skillPickerLoaded.current) {
+            skillPickerLoaded.current = true;
+            window.electronAPI?.skillsRefresh?.().then(result => {
+                if (Array.isArray(result)) setSkillPickerItems(result);
+            }).catch(() => { });
+        }
+    }, [inputValue]);
+
+    // Reset picker index when filter changes
+    useEffect(() => { setSkillPickerIndex(0); }, [skillPickerQuery]);
+
+    const selectSkill = useCallback((skillId: string) => {
+        setInputValue('$' + skillId + ' ');
+        textInputRef.current?.focus();
+    }, []);
 
     const pushOverlayDimensions = useCallback((target: Element | null, options?: { force?: boolean }) => {
         if (!target) return;
@@ -4306,12 +4336,47 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                     )}
 
                                     <div className="relative group" data-stealth-engage="true">
+                                        {/* Skill Picker Dropdown */}
+                                        {showSkillPicker && (
+                                            <div className={`absolute bottom-full left-0 right-0 mb-1.5 rounded-xl border shadow-lg backdrop-blur-xl overflow-hidden z-50 ${isLightTheme ? 'bg-white/95 border-black/10' : 'bg-[#1c1c1e]/95 border-white/10'}`}>
+                                                <div className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${isLightTheme ? 'text-gray-400' : 'text-white/30'}`}>Skills</div>
+                                                {filteredSkills.map((skill, idx) => (
+                                                    <button
+                                                        key={skill.id}
+                                                        onClick={() => selectSkill(skill.id)}
+                                                        className={`w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors ${idx === skillPickerIndex
+                                                            ? (isLightTheme ? 'bg-black/[0.06]' : 'bg-white/[0.08]')
+                                                            : (isLightTheme ? 'hover:bg-black/[0.03]' : 'hover:bg-white/[0.04]')
+                                                        }`}
+                                                        onMouseEnter={() => setSkillPickerIndex(idx)}
+                                                    >
+                                                        <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${isLightTheme ? 'bg-violet-100 text-violet-600' : 'bg-violet-500/15 text-violet-400'}`}>
+                                                            <span className="text-[11px]">⚡</span>
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className={`text-[12px] font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white/90'}`}>{skill.name}</div>
+                                                            <div className={`text-[10px] truncate ${isLightTheme ? 'text-gray-400' : 'text-white/35'}`}>{skill.description}</div>
+                                                        </div>
+                                                        <span className={`text-[10px] font-mono flex-shrink-0 ${isLightTheme ? 'text-gray-300' : 'text-white/20'}`}>${skill.id}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                         <input
                                             ref={textInputRef}
                                             type="text"
                                             value={inputValue}
                                             onChange={(e) => setInputValue(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
+                                            onKeyDown={(e) => {
+                                                if (showSkillPicker) {
+                                                    if (e.key === 'ArrowDown') { e.preventDefault(); setSkillPickerIndex(i => Math.min(i + 1, filteredSkills.length - 1)); return; }
+                                                    if (e.key === 'ArrowUp') { e.preventDefault(); setSkillPickerIndex(i => Math.max(i - 1, 0)); return; }
+                                                    if (e.key === 'Enter') { e.preventDefault(); selectSkill(filteredSkills[skillPickerIndex]?.id); return; }
+                                                    if (e.key === 'Escape') { e.preventDefault(); setInputValue(''); return; }
+                                                    if (e.key === 'Tab' && filteredSkills.length > 0) { e.preventDefault(); selectSkill(filteredSkills[skillPickerIndex]?.id); return; }
+                                                }
+                                                if (e.key === 'Enter') handleManualSubmit();
+                                            }}
                                             className={`w-full border rounded-[12px] pl-3.5 pr-10 py-2.5 focus:outline-none transition-all duration-200 backdrop-blur-3xl shadow-sm text-[13px] ${isLightTheme ? 'bg-black/[0.04] border-black/[0.08] hover:border-black/[0.12] focus:border-black/[0.18] focus:ring-2 focus:ring-black/[0.06] text-gray-800 placeholder-gray-400' : 'bg-white/[0.06] border-white/[0.08] hover:border-white/[0.14] focus:border-white/[0.22] focus:ring-2 focus:ring-white/[0.08] text-white/90 placeholder-white/30'} ${inputClass}`}
                                             style={appearance.inputStyle}
                                         />
