@@ -391,9 +391,9 @@ export class AppState {
             });
           }
 
-        // --- STEALTH SHORTCUTS: no focus, no show, pure IPC dispatch ---
+          // --- STEALTH SHORTCUTS: no focus, no show, pure IPC dispatch ---
 
-        // Chat actions — fire into the renderer without focusing the window
+          // Chat actions — fire into the renderer without focusing the window
         } else if (
           actionId === 'chat:whatToAnswer' ||
           actionId === 'chat:clarify' ||
@@ -425,7 +425,7 @@ export class AppState {
             }
           });
 
-        // Window movement — move window position without focus change
+          // Window movement — move window position without focus change
         } else if (actionId === 'window:move-up') {
           this.windowHelper.moveWindowUp();
         } else if (actionId === 'window:move-down') {
@@ -435,7 +435,7 @@ export class AppState {
         } else if (actionId === 'window:move-right') {
           this.windowHelper.moveWindowRight();
 
-        // General actions that are now global (stealth)
+          // General actions that are now global (stealth)
         } else if (actionId === 'general:process-screenshots') {
           const allWindows = BrowserWindow.getAllWindows();
           allWindows.forEach(win => {
@@ -451,7 +451,7 @@ export class AppState {
             }
           });
 
-        // Stealth typing toggle — engage/disengage the native keyboard tap
+          // Stealth typing toggle — engage/disengage the native keyboard tap
         } else if (actionId === 'chat:focusInput') {
           this.showMainWindow(true);
           const overlay = this.windowHelper.getOverlayWindow();
@@ -572,12 +572,12 @@ export class AppState {
         if (savedNotes) {
           llmHelper.setCustomNotes(savedNotes);
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // Initialize RAGManager (requires database to be ready)
     this.initializeRAGManager()
-    
+
     // Check and prep Ollama embedding model
     this.bootstrapOllamaEmbeddings()
 
@@ -686,7 +686,7 @@ export class AppState {
     this.googleSTT_User?.stop();
 
     if (this.ragManager) {
-      await this.ragManager.stopLiveIndexing().catch(() => {});
+      await this.ragManager.stopLiveIndexing().catch(() => { });
       this.ragManager.deleteMeetingData('live-meeting-current');
     }
 
@@ -715,18 +715,18 @@ export class AppState {
           this.broadcast('ollama:pull-complete');
           // Re-resolve the embedding provider given that Ollama might now be available
           if (this.ragManager) {
-             console.log('[AppState] Ollama model ready, re-evaluating RAG pipeline provider');
-             const { CredentialsManager } = require('./services/CredentialsManager');
-             const cm = CredentialsManager.getInstance();
-             this.ragManager.initializeEmbeddings({
-                openaiKey: cm.getOpenaiApiKey() || process.env.OPENAI_API_KEY || undefined,
-                geminiKey: cm.getGeminiApiKey() || process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || undefined,
-                ollamaUrl: process.env.OLLAMA_URL || "http://localhost:11434"
-             });
+            console.log('[AppState] Ollama model ready, re-evaluating RAG pipeline provider');
+            const { CredentialsManager } = require('./services/CredentialsManager');
+            const cm = CredentialsManager.getInstance();
+            this.ragManager.initializeEmbeddings({
+              openaiKey: cm.getOpenaiApiKey() || process.env.OPENAI_API_KEY || undefined,
+              geminiKey: cm.getGeminiApiKey() || process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || undefined,
+              ollamaUrl: process.env.OLLAMA_URL || "http://localhost:11434"
+            });
           }
         }
       } catch (err) {
-         console.error('[AppState] Failed to bootstrap Ollama:', err);
+        console.error('[AppState] Failed to bootstrap Ollama:', err);
       }
     })();
   }
@@ -741,14 +741,14 @@ export class AppState {
         const cm = CredentialsManager.getInstance();
         const openaiKey = cm.getOpenaiApiKey() || process.env.OPENAI_API_KEY;
         const geminiKey = cm.getGeminiApiKey() || process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-        
-        this.ragManager = new RAGManager({ 
-            db: sqliteDb, 
-            dbPath: db.getDbPath(),
-            extPath: db.getExtPath(),
-            openaiKey,
-            geminiKey,
-            ollamaUrl: process.env.OLLAMA_URL || 'http://localhost:11434'
+
+        this.ragManager = new RAGManager({
+          db: sqliteDb,
+          dbPath: db.getDbPath(),
+          extPath: db.getExtPath(),
+          openaiKey,
+          geminiKey,
+          ollamaUrl: process.env.OLLAMA_URL || 'http://localhost:11434'
         });
         this.ragManager.setLLMHelper(this.processingHelper.getLLMHelper());
         console.log('[AppState] RAGManager initialized');
@@ -756,14 +756,14 @@ export class AppState {
         // Wire ModeMemoryManager with the SAME VectorStore + EmbeddingPipeline
         // instances owned by RAGManager — no duplicate creation.
         try {
-            const { ModeMemoryManager } = require('./intelligence/memory/ModeMemoryManager');
-            ModeMemoryManager.getInstance().initialize(
-                this.ragManager.getVectorStore(),
-                this.ragManager.getEmbeddingPipeline(),
-            );
-            console.log('[AppState] ModeMemoryManager initialized (shared VectorStore + EmbeddingPipeline)');
+          const { ModeMemoryManager } = require('./intelligence/memory/ModeMemoryManager');
+          ModeMemoryManager.getInstance().initialize(
+            this.ragManager.getVectorStore(),
+            this.ragManager.getEmbeddingPipeline(),
+          );
+          console.log('[AppState] ModeMemoryManager initialized (shared VectorStore + EmbeddingPipeline)');
         } catch (err) {
-            console.warn('[AppState] ModeMemoryManager initialization skipped:', err);
+          console.warn('[AppState] ModeMemoryManager initialization skipped:', err);
         }
       }
     } catch (error) {
@@ -2136,13 +2136,13 @@ export class AppState {
     this._isStarting = true;
     this.isMeetingActive = false;
     this.setMeetingLifecycleState('starting');
-    
+
     try {
       console.log('[Main] Starting Meeting...', metadata);
 
       // Clear intelligence session state from any previous meeting
       this.intelligenceManager.reset();
-      
+
       // Explicitly wipe the previous meeting's live RAG chunks to prevent memory leaks and payload explosion
       if (this.ragManager) {
         await this.ragManager.stopLiveIndexing();
@@ -2310,28 +2310,28 @@ export class AppState {
     // ─── Post-processing ──────────────────────────────────────────
     const ragManager = this.ragManager;
     if (meetingId) {
-        try {
-          if (ragManager) {
-            await ragManager.stopLiveIndexing();
-            console.log('[Main] Live RAG indexing stopped.');
-          }
-          await this.processCompletedMeetingForRAG(meetingId);
-          // Guard: only delete live-meeting-current provisional chunks if no new
-          // meeting has started while we were processing. If a new meeting IS active,
-          // 'live-meeting-current' now belongs to that session — leave it alone.
-          if (ragManager && !this.isMeetingActive) {
-            ragManager.deleteMeetingData('live-meeting-current');
-            console.log('[Main] JIT RAG provisional chunks cleaned up.');
-          } else if (this.isMeetingActive) {
-            console.log('[Main] New meeting started during cleanup — skipping live-meeting-current deletion.');
-          }
-        } catch (err) {
-          console.error('[Main] Post-meeting RAG processing failed:', err);
+      try {
+        if (ragManager) {
+          await ragManager.stopLiveIndexing();
+          console.log('[Main] Live RAG indexing stopped.');
         }
+        await this.processCompletedMeetingForRAG(meetingId);
+        // Guard: only delete live-meeting-current provisional chunks if no new
+        // meeting has started while we were processing. If a new meeting IS active,
+        // 'live-meeting-current' now belongs to that session — leave it alone.
+        if (ragManager && !this.isMeetingActive) {
+          ragManager.deleteMeetingData('live-meeting-current');
+          console.log('[Main] JIT RAG provisional chunks cleaned up.');
+        } else if (this.isMeetingActive) {
+          console.log('[Main] New meeting started during cleanup — skipping live-meeting-current deletion.');
+        }
+      } catch (err) {
+        console.error('[Main] Post-meeting RAG processing failed:', err);
+      }
     } else {
       // Meeting was too short — still flush the live indexer and clean up
       if (ragManager) {
-        await ragManager.stopLiveIndexing().catch(() => {});
+        await ragManager.stopLiveIndexing().catch(() => { });
         if (!this.isMeetingActive) ragManager.deleteMeetingData('live-meeting-current');
       }
     }
@@ -2512,25 +2512,25 @@ export class AppState {
         // Attach PremiumUXMetadata if capability is enabled (silent no-op otherwise)
         let _intelligence: any = undefined;
         try {
-            const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
-            const registry = CapabilityRegistry.getInstance();
-            if (registry.isEnabled('adaptiveModeUI') || registry.isEnabled('timelineUI') || registry.isEnabled('explainabilityUI')) {
-                const { buildPremiumUXMetadata } = require('./intelligence/ipc/PremiumUXMetadata');
-                _intelligence = buildPremiumUXMetadata({
-                    confidence: typeof payload?.confidence === 'number' ? payload.confidence : 0,
-                    modeRecommendation: payload?.modeRecommendation ?? null,
-                    multiBrainActive: payload?.multiBrainActive ?? false,
-                    memoryHits: payload?.memoryHits ?? 0,
-                });
-            }
+          const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
+          const registry = CapabilityRegistry.getInstance();
+          if (registry.isEnabled('adaptiveModeUI') || registry.isEnabled('timelineUI') || registry.isEnabled('explainabilityUI')) {
+            const { buildPremiumUXMetadata } = require('./intelligence/ipc/PremiumUXMetadata');
+            _intelligence = buildPremiumUXMetadata({
+              confidence: typeof payload?.confidence === 'number' ? payload.confidence : 0,
+              modeRecommendation: payload?.modeRecommendation ?? null,
+              multiBrainActive: payload?.multiBrainActive ?? false,
+              memoryHits: payload?.memoryHits ?? 0,
+            });
+          }
         } catch {
-            // Silent — PremiumUXMetadata attachment is non-critical
+          // Silent — PremiumUXMetadata attachment is non-critical
         }
         win.webContents.send('intelligence-action-result', {
-            ...payload,
-            _sessionId: sid(),
-            requestId: payload?.requestId ?? rid(),
-            ...(_intelligence ? { _intelligence } : {}),
+          ...payload,
+          _sessionId: sid(),
+          requestId: payload?.requestId ?? rid(),
+          ...(_intelligence ? { _intelligence } : {}),
         })
       }
     })
@@ -2553,10 +2553,10 @@ export class AppState {
 
     // Start batched timeline IPC bridge (capability-gated internally)
     try {
-        const { TimelineIPC } = require('./intelligence/ipc/TimelineIPC');
-        TimelineIPC.getInstance().start();
+      const { TimelineIPC } = require('./intelligence/ipc/TimelineIPC');
+      TimelineIPC.getInstance().start();
     } catch (err) {
-        console.warn('[AppState] TimelineIPC start skipped:', err);
+      console.warn('[AppState] TimelineIPC start skipped:', err);
     }
 
     // Phase 4: Renderer → Main IPC handlers for intelligence surface layer
@@ -2564,35 +2564,35 @@ export class AppState {
 
     // Dismiss adaptive mode suggestion (applies 5-minute per-mode cooldown)
     ipcMain.handle('intelligence:dismiss-suggestion', () => {
-        try {
-            const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
-            if (!CapabilityRegistry.getInstance().isEnabled('adaptiveModeUI')) {
-                return { dismissed: false, reason: 'capability_disabled' };
-            }
-            const { AdaptiveModeIPC } = require('./intelligence/ipc/AdaptiveModeIPC');
-            const dismissedMode = AdaptiveModeIPC.getInstance().dismiss();
-            return { dismissed: !!dismissedMode, mode: dismissedMode };
-        } catch {
-            return { dismissed: false, reason: 'error' };
+      try {
+        const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
+        if (!CapabilityRegistry.getInstance().isEnabled('adaptiveModeUI')) {
+          return { dismissed: false, reason: 'capability_disabled' };
         }
+        const { AdaptiveModeIPC } = require('./intelligence/ipc/AdaptiveModeIPC');
+        const dismissedMode = AdaptiveModeIPC.getInstance().dismiss();
+        return { dismissed: !!dismissedMode, mode: dismissedMode };
+      } catch {
+        return { dismissed: false, reason: 'error' };
+      }
     });
 
     // Request explanation for the last response (on-demand)
     ipcMain.handle('intelligence:request-explanation', (_event: any, params?: { instructionKey?: string }) => {
-        try {
-            const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
-            if (!CapabilityRegistry.getInstance().isEnabled('explainabilityUI')) {
-                return { available: false, reason: 'capability_disabled' };
-            }
-            const { ExplainabilityIPC } = require('./intelligence/ipc/ExplainabilityIPC');
-            const lastExplanation = ExplainabilityIPC.getInstance().getLastExplanation();
-            if (!lastExplanation) {
-                return { available: false, reason: 'no_explanation' };
-            }
-            return { available: true, explanation: lastExplanation };
-        } catch {
-            return { available: false, reason: 'error' };
+      try {
+        const { CapabilityRegistry } = require('./intelligence/capability/CapabilityRegistry');
+        if (!CapabilityRegistry.getInstance().isEnabled('explainabilityUI')) {
+          return { available: false, reason: 'capability_disabled' };
         }
+        const { ExplainabilityIPC } = require('./intelligence/ipc/ExplainabilityIPC');
+        const lastExplanation = ExplainabilityIPC.getInstance().getLastExplanation();
+        if (!lastExplanation) {
+          return { available: false, reason: 'no_explanation' };
+        }
+        return { available: true, explanation: lastExplanation };
+      } catch {
+        return { available: false, reason: 'error' };
+      }
     });
 
   }
@@ -2968,9 +2968,9 @@ export class AppState {
       "Extra screenshots: ",
       this.screenshotHelper.getExtraScreenshotQueue().length
     )
-    
+
     const mode = this.windowHelper.getCurrentWindowMode();
-    
+
     if (mode === 'launcher') {
       // In launcher mode, just physically hide/show the window
       this.windowHelper.toggleMainWindow();
@@ -3363,17 +3363,39 @@ export class AppState {
         clearTimeout(this._dockDebounceTimer);
         this._dockDebounceTimer = null;
       }
+      // Cancel any in-flight reassert timers from previous toggle
+      for (const timer of this._dockReassertTimers) {
+        clearTimeout(timer);
+      }
+      this._dockReassertTimers = [];
+
+      // Determine which window should retain focus after the dock toggle.
+      // dock.hide() flips the activation policy which can defocus all windows.
+      const activeWindow = this.getMainWindow();
+      const wasFocused = activeWindow != null && !activeWindow.isDestroyed() && activeWindow.isFocused();
 
       if (this._verboseLogging) console.log('[Stealth] Calling app.dock.hide() BEFORE engage');
       app.dock.hide();
       this.hideTray();
 
-      // NOTE: We intentionally do NOT call focus() after dock.hide().
-      // Restoring focus fires browser-window-focus which triggers the
-      // StealthManager L6 reassertion loop, causing macOS to flash a
-      // new dock icon (app.setName() re-registers the app identity).
-      // The overlay is a type:'panel' window and retains visual
-      // presence without explicit focus restoration.
+      // Reassert content protection — the activation-policy flip can reset
+      // each window's NSWindowSharingType.
+      this.windowHelper.setContentProtection(true);
+      this.settingsWindowHelper.setContentProtection(true);
+      this.modelSelectorWindowHelper.setContentProtection(true);
+      this.cropperWindowHelper.setContentProtection(true);
+
+      // Re-focus the previously focused window. dock.hide() flips the
+      // activation policy which defocuses all windows. Natively does this;
+      // without it the window appears visually unfocused.
+      if (wasFocused && activeWindow && !activeWindow.isDestroyed()) {
+        activeWindow.focus();
+      }
+
+      // Self-verifying enforcement: macOS asynchronously coalesces and
+      // sometimes DROPS rapid dock.hide()/show() calls. We retry up to 6
+      // times, checking the OS ground truth via app.dock.isVisible().
+      this._enforceDockState(true, activeWindow, 0);
     } else if (state && process.platform === 'win32') {
       this.hideTray();
     }
@@ -3406,9 +3428,18 @@ export class AppState {
         clearTimeout(this._dockDebounceTimer);
         this._dockDebounceTimer = null;
       }
+      // Cancel any in-flight reassert timers from the engage path
+      for (const timer of this._dockReassertTimers) {
+        clearTimeout(timer);
+      }
+      this._dockReassertTimers = [];
 
       // Restore tray immediately — no need to debounce
       this.showTray();
+
+      // Self-verifying enforcement for dock.show() too
+      const activeWindow = this.getMainWindow();
+      this._enforceDockState(false, activeWindow, 0);
 
       // Debounce only the blur guard logic to prevent flicker from rapid toggles
       this._dockDebounceTimer = setTimeout(() => {
@@ -3434,6 +3465,57 @@ export class AppState {
       }, 150);
     } else if (!state && process.platform === 'win32') {
       this.showTray();
+    }
+  }
+
+  // Self-verifying dock/tray enforcement. macOS asynchronously coalesces and
+  // sometimes DROPS rapid app.dock.hide()/show() calls (each flips the app's
+  // activation policy), so a single fire-and-forget call is not reliable after a
+  // toggle burst. We poll app.dock.isVisible() — the OS ground truth — and
+  // re-apply the desired state until it sticks (or the user changes intent).
+  // Also re-asserts content protection on every hide, because the activation-
+  // policy flip can reset each window's NSWindowSharingType.
+  // Ported from Natively's _enforceDockState.
+  private _enforceDockState(
+    wantUndetectable: boolean,
+    targetFocusWindow: Electron.BrowserWindow | null,
+    attempt: number,
+    maxAttempts: number = 6
+  ): void {
+    if (process.platform !== 'darwin') return;
+    // If the user has toggled again since we started, stop.
+    if (this.isUndetectable !== wantUndetectable) return;
+
+    const currentlyHidden = !app.dock.isVisible();
+    const needsApply = wantUndetectable ? !currentlyHidden : currentlyHidden;
+
+    if (needsApply) {
+      if (wantUndetectable) {
+        const wasFocused = targetFocusWindow != null && !targetFocusWindow.isDestroyed() && targetFocusWindow.isFocused();
+        console.log(`[Stealth] app.dock.hide() (enforce attempt ${attempt})`);
+        app.dock.hide();
+        this.hideTray();
+        // Reassert content protection after activation-policy flip
+        this.windowHelper.setContentProtection(true);
+        this.settingsWindowHelper.setContentProtection(true);
+        this.modelSelectorWindowHelper.setContentProtection(true);
+        this.cropperWindowHelper.setContentProtection(true);
+        if (wasFocused && targetFocusWindow && !targetFocusWindow.isDestroyed()) {
+          targetFocusWindow.focus();
+        }
+      } else {
+        console.log(`[Stealth] app.dock.show() (enforce attempt ${attempt})`);
+        app.dock.show();
+        this.showTray();
+      }
+    }
+
+    if (attempt < maxAttempts) {
+      const t = setTimeout(() => {
+        this._dockReassertTimers = this._dockReassertTimers.filter(x => x !== t);
+        this._enforceDockState(wantUndetectable, targetFocusWindow, attempt + 1, maxAttempts);
+      }, 130);
+      this._dockReassertTimers.push(t);
     }
   }
 
@@ -3686,10 +3768,10 @@ export class AppState {
   private _getDisguiseDisplayName(): string {
     const isWin = process.platform === 'win32';
     switch (this.disguiseMode) {
-      case 'terminal':  return isWin ? 'Command Prompt' : 'Terminal';
-      case 'settings':  return isWin ? 'Settings' : 'System Settings';
-      case 'activity':  return isWin ? 'Task Manager' : 'Activity Monitor';
-      default:          return 'TeamSync';
+      case 'terminal': return isWin ? 'Command Prompt' : 'Terminal';
+      case 'settings': return isWin ? 'Settings' : 'System Settings';
+      case 'activity': return isWin ? 'Task Manager' : 'Activity Monitor';
+      default: return 'TeamSync';
     }
   }
 
@@ -3877,15 +3959,14 @@ async function initializeApp() {
   // Note: We do NOT force dock show here anymore, respecting stealth mode.
 
   app.on("activate", () => {
-    console.log("App activated")
     if (process.platform === 'darwin') {
-      // Do NOT call dock.show() while a meeting is running — the dock icon
-      // appearing mid-meeting is a critical stealth failure.
+      // Do NOT call dock.show() while undetectable or during a meeting —
+      // the dock icon appearing would be a critical stealth failure.
       if (!appState.getUndetectable() && !appState.getIsMeetingActive()) {
         app.dock.show();
       }
     }
-    
+
     // If no window exists, create it
     if (appState.getMainWindow() === null) {
       appState.createWindow()

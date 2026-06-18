@@ -148,7 +148,9 @@ export class ModelSelectorWindowHelper {
                 contextIsolation: true,
                 preload: path.join(__dirname, "preload.js"),
                 backgroundThrottling: false
-            }
+            },
+            // NSPanel type on macOS (see SettingsWindowHelper for rationale).
+            ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
         }
 
         if (x !== undefined && y !== undefined) {
@@ -177,6 +179,19 @@ export class ModelSelectorWindowHelper {
         });
 
         this.window.once('ready-to-show', () => {
+            // Apply NSPanel SPI attributes for non-activating focus behavior
+            if (process.platform === 'darwin' && this.window && !this.window.isDestroyed()) {
+                try {
+                    const { loadNativeModule } = require('./audio/nativeModuleLoader');
+                    const native = loadNativeModule();
+                    if (native && typeof native.applyStealthToWindow === 'function') {
+                        native.applyStealthToWindow(this.window.getNativeWindowHandle());
+                        console.log('[ModelSelectorWindowHelper] Applied stealth NSPanel attributes');
+                    }
+                } catch (e) {
+                    console.error('[ModelSelectorWindowHelper] applyStealthToWindow failed:', e);
+                }
+            }
             if (showWhenReady) {
                 this.showWindow(this.window?.getBounds().x || 0, this.window?.getBounds().y || 0)
             }

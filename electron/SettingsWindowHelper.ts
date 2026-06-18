@@ -165,7 +165,12 @@ export class SettingsWindowHelper {
                 contextIsolation: true,
                 preload: path.join(__dirname, "preload.js"),
                 backgroundThrottling: false // Keep window ready even when hidden
-            }
+            },
+            // NSPanel type on macOS: makes becomesKeyOnlyIfNeeded and
+            // _setPreventsActivation SPI calls in applyStealthToWindow actually
+            // work (they are NSPanel-only properties — no-ops on regular NSWindow).
+            // Same mechanism the overlay and Natively use.
+            ...(process.platform === 'darwin' ? { type: 'panel' as const } : {}),
         }
 
         if (x !== undefined && y !== undefined) {
@@ -194,6 +199,19 @@ export class SettingsWindowHelper {
         });
 
         this.settingsWindow.once('ready-to-show', () => {
+            // Apply NSPanel SPI attributes for non-activating focus behavior
+            if (process.platform === 'darwin' && this.settingsWindow && !this.settingsWindow.isDestroyed()) {
+                try {
+                    const { loadNativeModule } = require('./audio/nativeModuleLoader');
+                    const native = loadNativeModule();
+                    if (native && typeof native.applyStealthToWindow === 'function') {
+                        native.applyStealthToWindow(this.settingsWindow.getNativeWindowHandle());
+                        console.log('[SettingsWindowHelper] Applied stealth NSPanel attributes');
+                    }
+                } catch (e) {
+                    console.error('[SettingsWindowHelper] applyStealthToWindow failed:', e);
+                }
+            }
             if (showWhenReady) {
                 this.showWindow(this.settingsWindow?.getBounds().x || 0, this.settingsWindow?.getBounds().y || 0)
             }

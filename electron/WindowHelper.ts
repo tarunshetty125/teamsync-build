@@ -628,6 +628,14 @@ export class WindowHelper {
       this.isWindowVisible = false
     })
 
+    // --- Launcher focus debug logging ---
+    this.launcherWindow.on('focus', () => {
+      console.log('[FocusDebug] Launcher GAINED focus');
+    });
+    this.launcherWindow.on('blur', () => {
+      console.log('[FocusDebug] Launcher LOST focus (blur)');
+    });
+
     // Listen for overlay close (e.g. Cmd+W). Never truly destroy it — either
     // hide it (during a meeting) or switch back to launcher (between meetings).
     if (this.overlayWindow) {
@@ -663,6 +671,14 @@ export class WindowHelper {
           }
         }
       })
+
+      // --- Focus debug logging ---
+      this.overlayWindow.on('focus', () => {
+        console.log('[FocusDebug] Overlay GAINED focus');
+      });
+      this.overlayWindow.on('blur', () => {
+        console.log('[FocusDebug] Overlay LOST focus (blur)');
+      });
     }
   }
 
@@ -764,9 +780,11 @@ export class WindowHelper {
     if (this.appState.getOverlayMousePassthrough()) {
       // In passthrough/stealth mode: appear on screen without stealing OS focus.
       // The underlying app (Zoom, browser, etc.) must keep focus.
+      console.log('[FocusDebug] showOverlay: passthrough mode, using showInactive()');
       this.overlayWindow.showInactive();
     } else {
       // Normal interactive mode: show and focus so the user can click/type.
+      console.log(`[FocusDebug] showOverlay: interactive mode, showInactive() + focus(). undetectable=${this.appState.getUndetectable()}`);
       this.overlayWindow.showInactive();
       // Bring to front without a full app-activate (avoids dock bounce on macOS).
       // setAlwaysOnTop is already set at creation; a focus() call alone is safe.
@@ -811,10 +829,14 @@ export class WindowHelper {
     // If a meeting is active (overlay mode), bring the overlay up instead of the
     // launcher — switching to the launcher during a meeting would expose it in the
     // taskbar/dock and break stealth.
+    // In undetectable mode, pass inactive=true so focus() is skipped — prevents
+    // [NSApp activate] which would override NSPanel stealth attributes.
+    const stealthShow = this.appState.getUndetectable();
+    console.log(`[FocusDebug] centerAndShowWindow: mode=${this.currentWindowMode}, undetectable=${stealthShow}, inactive=${stealthShow ? true : false}`);
     if (this.currentWindowMode === 'overlay') {
-      this.switchToOverlay(); // explicit user action, so we want to grant focus
+      this.switchToOverlay(stealthShow ? true : undefined);
     } else {
-      this.switchToLauncher();
+      this.switchToLauncher(stealthShow ? true : undefined);
       this.launcherWindow?.center();
     }
   }
@@ -869,6 +891,11 @@ export class WindowHelper {
       if (process.platform === 'win32' && this.contentProtection) {
         // Opacity Shield: Show at 0 opacity first to prevent frame leak
         this.overlayWindow.setOpacity(0);
+        // macOS: always showInactive() to prevent app activation (dock flash,
+        // app-switcher appearance, focus steal from Zoom/browser). The NSPanel
+        // type + applyStealthToWindow SPI lets us focus() afterward to gain
+        // key-window status for typing without activating the app.
+        // (This branch is win32-only, so use show()/showInactive() directly.)
         if (inactive) this.overlayWindow.showInactive(); else this.overlayWindow.show();
         this.overlayWindow.setContentProtection(true);
         // Small delay to ensure Windows DWM processes the flag before making it opaque
@@ -895,9 +922,19 @@ export class WindowHelper {
         if (process.platform === 'win32') {
           this.overlayWindow.setAlwaysOnTop(true, 'floating');
         }
-        if (inactive) this.overlayWindow.showInactive(); else this.overlayWindow.show();
-        // Only grab focus for explicit user-initiated shows (not shortcut/ghost shows)
-        if (!inactive) this.overlayWindow.focus();
+        // macOS: always showInactive() — see comment in win32 branch above.
+        if (process.platform === 'darwin') {
+          this.overlayWindow.showInactive();
+          if (!inactive) {
+            console.log(`[FocusDebug] switchToOverlay: macOS showInactive() + focus(). undetectable=${this.appState.getUndetectable()}`);
+            this.overlayWindow.focus();
+          } else {
+            console.log('[FocusDebug] switchToOverlay: macOS showInactive() only (inactive=true)');
+          }
+        } else {
+          if (inactive) this.overlayWindow.showInactive(); else this.overlayWindow.show();
+          if (!inactive) this.overlayWindow.focus();
+        }
       }
       this.isWindowVisible = true;
     }
@@ -918,6 +955,7 @@ export class WindowHelper {
       if (process.platform === 'win32' && this.contentProtection) {
         // Opacity Shield: Show at 0 opacity first
         this.launcherWindow.setOpacity(0);
+        // (This branch is win32-only, so use show()/showInactive() directly.)
         if (inactive) this.launcherWindow.showInactive(); else this.launcherWindow.show();
         this.launcherWindow.setContentProtection(true);
 
@@ -932,8 +970,14 @@ export class WindowHelper {
         // Restore opacity (may have been zeroed pre-screenshot by hideMainWindow)
         this.launcherWindow.setOpacity(1);
         this.launcherWindow.setContentProtection(this.contentProtection);
-        if (inactive) this.launcherWindow.showInactive(); else this.launcherWindow.show();
-        if (!inactive) this.launcherWindow.focus();
+        // macOS: always showInactive() to prevent app activation.
+        if (process.platform === 'darwin') {
+          this.launcherWindow.showInactive();
+          if (!inactive) this.launcherWindow.focus();
+        } else {
+          if (inactive) this.launcherWindow.showInactive(); else this.launcherWindow.show();
+          if (!inactive) this.launcherWindow.focus();
+        }
       }
       this.isWindowVisible = true;
     }
