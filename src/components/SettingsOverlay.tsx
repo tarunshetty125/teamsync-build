@@ -742,9 +742,9 @@ const CodexCliSettings: React.FC = () => {
                     </div>
                     <button
                         onClick={() => updateField('enabled', !config.enabled)}
-                        className={`relative flex-shrink-0 w-10 h-[22px] rounded-full transition-colors duration-200 ${config.enabled ? 'bg-accent-primary' : 'bg-bg-elevated'}`}
+                        className={`relative flex-shrink-0 w-11 h-6 rounded-full overflow-hidden transition-colors duration-200 ${config.enabled ? 'bg-accent-primary' : 'bg-bg-elevated'}`}
                     >
-                        <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${config.enabled ? 'translate-x-[21px]' : 'translate-x-[3px]'}`} />
+                        <span className={`absolute left-0 top-1 w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-200 ${config.enabled ? 'translate-x-[24px]' : 'translate-x-1'}`} />
                     </button>
                 </div>
 
