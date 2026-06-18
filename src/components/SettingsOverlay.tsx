@@ -522,6 +522,145 @@ const ProviderSelect: React.FC<ProviderSelectProps> = ({ value, options, onChang
     );
 };
 
+// ── Skills Settings Tab (extracted to avoid hooks-in-IIFE violation) ──────
+const SkillsSettingsTab: React.FC = () => {
+    const [skillsList, setSkillsList] = React.useState<Array<{ id: string; name: string; description: string; source: 'builtin' | 'userData' }>>([]);
+    const [skillsLoading, setSkillsLoading] = React.useState(true);
+    const [skillsFolderPath, setSkillsFolderPath] = React.useState<string | null>(null);
+    const [skillsError, setSkillsError] = React.useState<string | null>(null);
+
+    const loadSkills = React.useCallback(async () => {
+        setSkillsLoading(true);
+        try {
+            if (typeof window.electronAPI?.skillsRefresh !== 'function') {
+                setSkillsError('Skills IPC bridge not available.');
+                setSkillsList([]);
+                return;
+            }
+            const result = await window.electronAPI.skillsRefresh();
+            setSkillsList(Array.isArray(result) ? result : []);
+            setSkillsError(null);
+        } catch (err: any) {
+            setSkillsError(err?.message || 'Could not load skills.');
+        } finally {
+            setSkillsLoading(false);
+        }
+    }, []);
+
+    React.useEffect(() => { loadSkills(); }, [loadSkills]);
+
+    const handleOpenFolder = async () => {
+        try {
+            if (typeof window.electronAPI?.skillsOpenFolder !== 'function') {
+                setSkillsError('Skills IPC bridge not available.');
+                return;
+            }
+            const res = await window.electronAPI.skillsOpenFolder();
+            if (res?.path) setSkillsFolderPath(res.path);
+            if (!res?.success && res?.error) setSkillsError(res.error);
+        } catch (err: any) {
+            setSkillsError(err?.message || 'Could not open skills folder.');
+        }
+    };
+
+    return (
+        <div className="space-y-6 animated fadeIn h-full select-text pb-4">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <h3 className="text-lg font-bold text-text-primary mb-1">Skills</h3>
+                    <p className="text-xs text-text-secondary">
+                        Local SKILL.md instructions that can be invoked from the overlay dropdown or by typing $skill-name or /skill-name.
+                    </p>
+                </div>
+                <button
+                    onClick={loadSkills}
+                    disabled={skillsLoading}
+                    className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary bg-bg-card border border-border-subtle hover:bg-bg-elevated transition-colors disabled:opacity-50"
+                >
+                    <RefreshCw size={13} className={skillsLoading ? 'animate-spin' : ''} />
+                    Refresh
+                </button>
+            </div>
+
+            {/* Skills Folder Card */}
+            <div className="bg-bg-card rounded-xl border border-border-subtle p-5 flex items-center justify-between gap-4">
+                <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-bg-elevated flex items-center justify-center text-text-tertiary flex-shrink-0 mt-0.5">
+                        <FolderOpen size={18} />
+                    </div>
+                    <div className="min-w-0">
+                        <h4 className="text-sm font-semibold text-text-primary">Skills Folder</h4>
+                        <p className="text-xs text-text-secondary mt-0.5">
+                            Add a folder containing a SKILL.md file here. Scripts and assets are ignored in this v1.
+                        </p>
+                        {skillsFolderPath && (
+                            <p className="mt-2 text-[11px] text-text-tertiary font-mono truncate">{skillsFolderPath}</p>
+                        )}
+                    </div>
+                </div>
+                <button
+                    onClick={handleOpenFolder}
+                    className="px-4 py-2 rounded-lg text-xs font-medium bg-bg-input hover:bg-bg-elevated border border-border-subtle text-text-primary transition-colors flex-shrink-0"
+                >
+                    Open Folder
+                </button>
+            </div>
+
+            {/* Error */}
+            {skillsError && (
+                <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-xs text-red-400">
+                    {skillsError}
+                </div>
+            )}
+
+            {/* Skill Cards */}
+            <div className="space-y-3">
+                {skillsList.map((skill) => (
+                    <div
+                        key={skill.id}
+                        className="bg-bg-card rounded-xl border border-border-subtle p-5 transition-colors hover:border-border-default"
+                    >
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                                    <FlaskConical size={15} className="text-violet-400" />
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-semibold text-text-primary">{skill.name}</span>
+                                        <span className="text-[11px] text-text-tertiary font-mono">{skill.id}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <CheckCircle size={12} className="text-green-500" />
+                                <span className="text-[11px] font-medium text-text-secondary">
+                                    {skill.source === 'builtin' ? 'Built-in' : 'Local'}
+                                </span>
+                            </div>
+                        </div>
+                        <p className="text-xs text-text-secondary leading-relaxed ml-11">
+                            {skill.description}
+                        </p>
+                    </div>
+                ))}
+            </div>
+
+            {/* Empty State */}
+            {!skillsLoading && skillsList.length === 0 && (
+                <div className="bg-bg-card rounded-xl border border-border-subtle p-6 text-center">
+                    <FlaskConical size={20} className="mx-auto mb-2 text-text-tertiary" />
+                    <p className="text-sm text-text-secondary mb-1">No skills found</p>
+                    <p className="text-xs text-text-tertiary">
+                        Open the skills folder and add a folder with SKILL.md.
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+};
+
 interface SettingsOverlayProps {
     isOpen: boolean;
     onClose: () => void;
@@ -4779,143 +4918,11 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
 
 
-                                        {activeTab === 'skills' && (() => {
-                                            const [skillsList, setSkillsList] = React.useState<Array<{ id: string; name: string; description: string; source: 'builtin' | 'userData' }>>([]);
-                                            const [skillsLoading, setSkillsLoading] = React.useState(true);
-                                            const [skillsFolderPath, setSkillsFolderPath] = React.useState<string | null>(null);
-                                            const [skillsError, setSkillsError] = React.useState<string | null>(null);
+                                        {activeTab === 'skills' && (
+                                            <SkillsSettingsTab />
+                                        )}
 
-                                            const loadSkills = React.useCallback(async () => {
-                                                setSkillsLoading(true);
-                                                try {
-                                                    if (typeof window.electronAPI?.skillsRefresh !== 'function') {
-                                                        setSkillsError('Skills IPC bridge not available.');
-                                                        setSkillsList([]);
-                                                        return;
-                                                    }
-                                                    const result = await window.electronAPI.skillsRefresh();
-                                                    setSkillsList(Array.isArray(result) ? result : []);
-                                                    setSkillsError(null);
-                                                } catch (err: any) {
-                                                    setSkillsError(err?.message || 'Could not load skills.');
-                                                } finally {
-                                                    setSkillsLoading(false);
-                                                }
-                                            }, []);
 
-                                            React.useEffect(() => { loadSkills(); }, [loadSkills]);
-
-                                            const handleOpenFolder = async () => {
-                                                try {
-                                                    if (typeof window.electronAPI?.skillsOpenFolder !== 'function') {
-                                                        setSkillsError('Skills IPC bridge not available.');
-                                                        return;
-                                                    }
-                                                    const res = await window.electronAPI.skillsOpenFolder();
-                                                    if (res?.path) setSkillsFolderPath(res.path);
-                                                    if (!res?.success && res?.error) setSkillsError(res.error);
-                                                } catch (err: any) {
-                                                    setSkillsError(err?.message || 'Could not open skills folder.');
-                                                }
-                                            };
-
-                                            return (
-                                                <div className="space-y-6 animated fadeIn h-full select-text pb-4">
-                                                    {/* Header */}
-                                                    <div className="flex items-start justify-between gap-4">
-                                                        <div>
-                                                            <h3 className="text-lg font-bold text-text-primary mb-1">Skills</h3>
-                                                            <p className="text-xs text-text-secondary">
-                                                                Local SKILL.md instructions that can be invoked from the overlay dropdown or by typing $skill-name or /skill-name.
-                                                            </p>
-                                                        </div>
-                                                        <button
-                                                            onClick={loadSkills}
-                                                            disabled={skillsLoading}
-                                                            className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary bg-bg-card border border-border-subtle hover:bg-bg-elevated transition-colors disabled:opacity-50"
-                                                        >
-                                                            <RefreshCw size={13} className={skillsLoading ? 'animate-spin' : ''} />
-                                                            Refresh
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Skills Folder Card */}
-                                                    <div className="bg-bg-card rounded-xl border border-border-subtle p-5 flex items-center justify-between gap-4">
-                                                        <div className="flex items-start gap-3 min-w-0">
-                                                            <div className="w-9 h-9 rounded-lg bg-bg-elevated flex items-center justify-center text-text-tertiary flex-shrink-0 mt-0.5">
-                                                                <FolderOpen size={18} />
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <h4 className="text-sm font-semibold text-text-primary">Skills Folder</h4>
-                                                                <p className="text-xs text-text-secondary mt-0.5">
-                                                                    Add a folder containing a SKILL.md file here. Scripts and assets are ignored in this v1.
-                                                                </p>
-                                                                {skillsFolderPath && (
-                                                                    <p className="mt-2 text-[11px] text-text-tertiary font-mono truncate">{skillsFolderPath}</p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            onClick={handleOpenFolder}
-                                                            className="px-4 py-2 rounded-lg text-xs font-medium bg-bg-input hover:bg-bg-elevated border border-border-subtle text-text-primary transition-colors flex-shrink-0"
-                                                        >
-                                                            Open Folder
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Error */}
-                                                    {skillsError && (
-                                                        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-xs text-red-400">
-                                                            {skillsError}
-                                                        </div>
-                                                    )}
-
-                                                    {/* Skill Cards */}
-                                                    <div className="space-y-3">
-                                                        {skillsList.map((skill) => (
-                                                            <div
-                                                                key={skill.id}
-                                                                className="bg-bg-card rounded-xl border border-border-subtle p-5 transition-colors hover:border-border-default"
-                                                            >
-                                                                <div className="flex items-start justify-between gap-3 mb-2">
-                                                                    <div className="flex items-center gap-3 min-w-0">
-                                                                        <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
-                                                                            <FlaskConical size={15} className="text-violet-400" />
-                                                                        </div>
-                                                                        <div className="min-w-0">
-                                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                                <span className="text-sm font-semibold text-text-primary">{skill.name}</span>
-                                                                                <span className="text-[11px] text-text-tertiary font-mono">{skill.id}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                                                                        <CheckCircle size={12} className="text-green-500" />
-                                                                        <span className="text-[11px] font-medium text-text-secondary">
-                                                                            {skill.source === 'builtin' ? 'Built-in' : 'Local'}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                                <p className="text-xs text-text-secondary leading-relaxed ml-11">
-                                                                    {skill.description}
-                                                                </p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-
-                                                    {/* Empty State */}
-                                                    {!skillsLoading && skillsList.length === 0 && (
-                                                        <div className="bg-bg-card rounded-xl border border-border-subtle p-6 text-center">
-                                                            <FlaskConical size={20} className="mx-auto mb-2 text-text-tertiary" />
-                                                            <p className="text-sm text-text-secondary mb-1">No skills found</p>
-                                                            <p className="text-xs text-text-tertiary">
-                                                                Open the skills folder and add a folder with SKILL.md.
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
 
                                         {activeTab === 'calendar' && (
                                             <div className="space-y-6 animated fadeIn h-full" data-tour-id="settings-calendar-sync">
