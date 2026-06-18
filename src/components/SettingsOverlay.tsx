@@ -528,18 +528,25 @@ const SkillsSettingsTab: React.FC = () => {
     const [skillsLoading, setSkillsLoading] = React.useState(true);
     const [skillsFolderPath, setSkillsFolderPath] = React.useState<string | null>(null);
     const [skillsError, setSkillsError] = React.useState<string | null>(null);
+    const [refreshDone, setRefreshDone] = React.useState(false);
 
     const loadSkills = React.useCallback(async () => {
         setSkillsLoading(true);
+        setRefreshDone(false);
         try {
             if (typeof window.electronAPI?.skillsRefresh !== 'function') {
                 setSkillsError('Skills IPC bridge not available.');
                 setSkillsList([]);
                 return;
             }
-            const result = await window.electronAPI.skillsRefresh();
+            const [result] = await Promise.all([
+                window.electronAPI.skillsRefresh(),
+                new Promise(r => setTimeout(r, 400)), // min visible spin
+            ]);
             setSkillsList(Array.isArray(result) ? result : []);
             setSkillsError(null);
+            setRefreshDone(true);
+            setTimeout(() => setRefreshDone(false), 1500);
         } catch (err: any) {
             setSkillsError(err?.message || 'Could not load skills.');
         } finally {
@@ -576,10 +583,16 @@ const SkillsSettingsTab: React.FC = () => {
                 <button
                     onClick={loadSkills}
                     disabled={skillsLoading}
-                    className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary bg-bg-card border border-border-subtle hover:bg-bg-elevated transition-colors disabled:opacity-50"
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border disabled:opacity-50 ${refreshDone
+                        ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-500'
+                        : 'text-text-secondary hover:text-text-primary bg-bg-card border-border-subtle hover:bg-bg-elevated'
+                    }`}
                 >
-                    <RefreshCw size={13} className={skillsLoading ? 'animate-spin' : ''} />
-                    Refresh
+                    {refreshDone ? (
+                        <><CheckCircle size={13} /> Updated</>
+                    ) : (
+                        <><RefreshCw size={13} className={skillsLoading ? 'animate-spin' : ''} /> Refresh</>
+                    )}
                 </button>
             </div>
 
