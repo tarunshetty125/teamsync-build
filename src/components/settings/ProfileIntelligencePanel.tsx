@@ -572,7 +572,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
               onClick={onUnlockPro}
               className="relative overflow-hidden inline-flex h-[44px] items-center justify-between rounded-full bg-white pl-5 pr-2.5 text-[14px] font-semibold tracking-[-0.035em] text-[#141414] shadow-[0_18px_42px_rgba(0,0,0,0.24)] transition-transform duration-200 hover:scale-[1.01] active:scale-[0.99]"
             >
-              <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-white/60 to-transparent" style={{ backgroundSize: '200% 100%' }} />
+              <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-black/[0.07] to-transparent" />
               <span className="relative min-w-[94px] text-left">Unlock Pro</span>
               <span className="relative ml-2.5 flex h-[32px] w-[32px] items-center justify-center rounded-full bg-[#ececec] text-[#161616]">
                 <ArrowUpRight className="h-[16px] w-[16px] stroke-[2.3]" />
