@@ -2858,6 +2858,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             items: [
                 { id: 'profile', label: 'Profile', icon: <User size={16} /> },
                 { id: 'ai-providers', label: 'AI & Providers', icon: <Sparkles size={16} /> },
+                { id: 'codex-cli', label: 'Codex CLI', icon: <Terminal size={16} /> },
                 { id: 'skills', label: 'Skills', icon: <FlaskConical size={16} /> },
                 { id: 'calendar', label: 'Calendar', icon: <Calendar size={16} /> },
             ],
@@ -4408,7 +4409,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                         {activeTab === 'ai-providers' && (
                                             <div data-tour-id="settings-ai-providers" className="space-y-6 pb-4">
                                                 <AIProvidersSettings />
-                                                <CodexCliSettings />
+
 
                                                 {/* Response Behavior — relocated from General */}
                                                 <section className="rounded-2xl border border-border-subtle bg-bg-card overflow-hidden">
@@ -5104,6 +5105,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                                         {activeTab === 'skills' && (
                                             <SkillsSettingsTab />
+                                        )}
+
+                                        {activeTab === 'codex-cli' && (
+                                            <div className="space-y-6 animated fadeIn pb-4">
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-text-primary mb-1">Codex CLI</h3>
+                                                    <p className="text-xs text-text-secondary">Use OpenAI's Codex CLI as a local LLM provider. Requires codex installed and authenticated.</p>
+                                                </div>
+                                                <CodexCliSettings />
+                                            </div>
                                         )}
 
 
