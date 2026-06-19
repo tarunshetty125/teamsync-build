@@ -33,6 +33,7 @@ import {
   type PersonaId,
 } from './onboardingV2Types';
 import { WelcomePermissionsStep } from './steps/WelcomePermissionsStep';
+import { WhatsNewStep } from './steps/WhatsNewStep';
 
 type PremiumOnboardingStep =
   | 'welcome'
@@ -43,7 +44,8 @@ type PremiumOnboardingStep =
   | 'discovery'
   | 'building'
   | 'activation'
-  | 'v3welcome';
+  | 'v3welcome'
+  | 'whats-new';
 
 type AuthUiState = 'idle' | 'checking' | 'waiting' | 'success' | 'error';
 
@@ -1244,13 +1246,23 @@ export function PremiumOnboardingV2({
 
   const handleV3WelcomeLaunch = () => {
     if (advancingStep) return;
-    try {
-      localStorage.setItem(V3_RESUME_KEY, JSON.stringify({ step: 'v3welcome', completedAt: new Date().toISOString() } as V3ResumeState));
-    } catch { /* ignore */ }
     completePermissionsOnboarding();
+    persistV3Step('whats-new');
+    transitionToStep('whats-new');
+  };
+
+  const handleWhatsNewContinue = () => {
+    if (advancingStep) return;
+    try {
+      localStorage.setItem(V3_RESUME_KEY, JSON.stringify({ step: 'whats-new', completedAt: new Date().toISOString() } as V3ResumeState));
+    } catch { /* ignore */ }
     if (authUser) {
       finishOnboardingAfterHandoff();
     }
+  };
+
+  const handleWhatsNewSkip = () => {
+    handleWhatsNewContinue();
   };
 
   // Building step removed — save happens inline in handleDiscoverySelect
@@ -1320,13 +1332,23 @@ export function PremiumOnboardingV2({
       );
     }
 
+    if (step === 'whats-new') {
+      return (
+        <WhatsNewStep
+          isAdvancing={advancingStep === 'whats-new'}
+          onContinue={handleWhatsNewContinue}
+          onSkip={handleWhatsNewSkip}
+        />
+      );
+    }
+
     return null;
   };
 
   if (!isOpen) return null;
 
   const isIntentStep = step === 'persona' || step === 'industry' || step === 'discovery';
-  const isV3Step = step === 'v3welcome';
+  const isV3Step = step === 'v3welcome' || step === 'whats-new';
 
   return (
     <AnimatePresence mode="wait">
