@@ -2853,6 +2853,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         meta?: string;
         statusDot?: 'green' | 'red' | 'yellow';
         badge?: string;
+        badgeColor?: 'teal' | 'amber';
     };
     const sidebarGroups: Array<{ label: string; items: SettingsSidebarItem[] }> = [
         {
@@ -2867,7 +2868,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         {
             label: 'Intelligence',
             items: [
-                { id: 'profile', label: 'Profile', icon: <User size={16} /> },
+                { id: 'profile', label: 'Quietly Intelligence', icon: <User size={16} />, badge: 'NEW', badgeColor: 'amber' },
                 { id: 'ai-providers', label: 'AI & Providers', icon: <Sparkles size={16} /> },
                 { id: 'codex-cli', label: 'Codex CLI', icon: <Terminal size={16} /> },
                 { id: 'skills', label: 'Skills', icon: <FlaskConical size={16} /> },
@@ -3044,7 +3045,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 {item.badge && (
                                                                     <span
                                                                         className="relative z-10 shrink-0 overflow-hidden rounded-full px-1.5 py-[1px] text-[8px] font-bold uppercase tracking-[0.08em] leading-tight"
-                                                                        style={{
+                                                                        style={item.badgeColor === 'amber' ? {
+                                                                            background: 'linear-gradient(135deg, rgba(251,191,36,0.18), rgba(245,158,11,0.22))',
+                                                                            border: '1px solid rgba(251,191,36,0.35)',
+                                                                            color: '#fbbf24',
+                                                                            textShadow: '0 0 8px rgba(251,191,36,0.4)',
+                                                                        } : {
                                                                             background: 'linear-gradient(135deg, rgba(45,212,191,0.15), rgba(139,92,246,0.15))',
                                                                             border: '1px solid rgba(45,212,191,0.25)',
                                                                             color: '#2dd4bf',
@@ -3053,7 +3059,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                         <span
                                                                             className="absolute inset-0 pointer-events-none"
                                                                             style={{
-                                                                                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)',
+                                                                                background: item.badgeColor === 'amber'
+                                                                                    ? 'linear-gradient(90deg, transparent 0%, rgba(251,191,36,0.35) 50%, transparent 100%)'
+                                                                                    : 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)',
                                                                                 backgroundSize: '200% 100%',
                                                                                 animation: 'sidebar-badge-shimmer 2.5s ease-in-out infinite',
                                                                             }}
