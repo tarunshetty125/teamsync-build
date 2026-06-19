@@ -581,6 +581,26 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   getUpdaterCacheInfo: () => Promise<UpdaterCacheInfo>
   openUpdaterCacheFolder: () => Promise<{ success: boolean; path?: string; error?: string }>
 
+  // Update Enforcement (forced update system)
+  getUpdateEnforcementState: () => Promise<{
+    isActive: boolean
+    phase: 'none' | 'notice' | 'warning' | 'urgent' | 'blocked'
+    daysElapsed: number
+    daysRemaining: number
+    graceDaysTotal: number
+    detectedVersion: string | null
+    currentVersion: string
+  }>
+  onUpdateEnforcement: (callback: (state: {
+    isActive: boolean
+    phase: 'none' | 'notice' | 'warning' | 'urgent' | 'blocked'
+    daysElapsed: number
+    daysRemaining: number
+    graceDaysTotal: number
+    detectedVersion: string | null
+    currentVersion: string
+  }) => void) => () => void
+
   // RAG (Retrieval-Augmented Generation) API
   ragQueryMeeting: (meetingId: string, query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
   ragQueryLive: (query: string, requestId?: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>

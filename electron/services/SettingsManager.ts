@@ -50,6 +50,13 @@ export interface AppSettings {
         lanAccess?: boolean;
         lastToken?: string;
     };
+    /** Forced update enforcement state — WhatsApp-style grace period */
+    updateEnforcement?: {
+        /** ISO timestamp when an available update was first detected */
+        firstDetectedAt?: string;
+        /** The version that triggered the grace period */
+        detectedVersion?: string;
+    };
 }
 
 export type FirstSuccessActionId =

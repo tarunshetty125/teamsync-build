@@ -519,6 +519,26 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   getUpdaterCacheInfo: () => Promise<UpdaterCacheInfo>
   openUpdaterCacheFolder: () => Promise<{ success: boolean; path?: string; error?: string }>
 
+  // Update Enforcement (forced update system)
+  getUpdateEnforcementState: () => Promise<{
+    isActive: boolean
+    phase: 'none' | 'notice' | 'warning' | 'urgent' | 'blocked'
+    daysElapsed: number
+    daysRemaining: number
+    graceDaysTotal: number
+    detectedVersion: string | null
+    currentVersion: string
+  }>
+  onUpdateEnforcement: (callback: (state: {
+    isActive: boolean
+    phase: 'none' | 'notice' | 'warning' | 'urgent' | 'blocked'
+    daysElapsed: number
+    daysRemaining: number
+    graceDaysTotal: number
+    detectedVersion: string | null
+    currentVersion: string
+  }) => void) => () => void
+
   // RAG (Retrieval-Augmented Generation) API
   ragQueryMeeting: (meetingId: string, query: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
   ragQueryLive: (query: string, requestId?: string) => Promise<{ success?: boolean; fallback?: boolean; error?: string }>
@@ -1592,6 +1612,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   downloadUpdate: () => ipcRenderer.invoke("download-update"),
   getUpdaterCacheInfo: () => ipcRenderer.invoke("get-updater-cache-info"),
   openUpdaterCacheFolder: () => ipcRenderer.invoke("open-updater-cache-folder"),
+
+  // Update Enforcement
+  getUpdateEnforcementState: () => ipcRenderer.invoke("get-update-enforcement-state"),
+  onUpdateEnforcement: (callback: (state: any) => void) => {
+    const subscription = (_: any, state: any) => callback(state)
+    ipcRenderer.on("update-enforcement", subscription)
+    return () => {
+      ipcRenderer.removeListener("update-enforcement", subscription)
+    }
+  },
 
   // RAG API
   ragQueryMeeting: (meetingId: string, query: string) => ipcRenderer.invoke('rag:query-meeting', { meetingId, query }),

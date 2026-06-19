@@ -1,8 +1,8 @@
 {
-  "name": "teamsync",
-  "version": "2.5.2",
+  "name": "quietly",
+  "version": "2.7.0",
   "main": "dist-electron/electron/main.js",
-  "description": "TeamSync is a meeting notes app that uses AI to generate notes from your meetings.",
+  "description": "Quietly is an AI-powered meeting assistant that provides real-time intelligence during your calls.",
   "scripts": {
     "clean": "rimraf dist dist-electron",
     "dev": "vite",
@@ -24,8 +24,8 @@
   },
   "build": {
     "generateUpdatesFilesForAllChannels": true,
-    "appId": "com.natively.app",
-    "productName": "TeamSync",
+    "appId": "com.quietly.app",
+    "productName": "Quietly",
     "afterPack": "./scripts/ad-hoc-sign.js",
     "compression": "normal",
     "asar": true,
@@ -104,8 +104,8 @@
         }
       ],
       "extendInfo": {
-        "NSScreenCaptureUsageDescription": "TeamSync needs Screen Recording permission to analyze screens and provide interview assistance.",
-        "NSMicrophoneUsageDescription": "TeamSync needs microphone access for live transcription and interview assistance."
+        "NSScreenCaptureUsageDescription": "Quietly needs Screen Recording permission to analyze screens and provide real-time AI assistance.",
+        "NSMicrophoneUsageDescription": "Quietly needs microphone access for live transcription and AI assistance."
       }
     },
     "dmg": {
@@ -167,7 +167,7 @@
       {
         "provider": "github",
         "owner": "tarunshetty125",
-        "repo": "TeamSync",
+        "repo": "teamsync-build",
         "releaseType": "release"
       }
     ]

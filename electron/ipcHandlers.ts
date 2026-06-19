@@ -1113,6 +1113,23 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   })
 
+  safeHandle("get-update-enforcement-state", async () => {
+    try {
+      return appState.getUpdateEnforcementState()
+    } catch (err: any) {
+      console.error('[IPC] get-update-enforcement-state failed:', err)
+      return {
+        isActive: false,
+        phase: 'none',
+        daysElapsed: 0,
+        daysRemaining: 15,
+        graceDaysTotal: 15,
+        detectedVersion: null,
+        currentVersion: app.getVersion()
+      }
+    }
+  })
+
   // Window movement handlers
   safeHandle("move-window-left", async () => {
     appState.moveWindowLeft()

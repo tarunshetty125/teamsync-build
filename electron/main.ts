@@ -1022,6 +1022,9 @@ export class AppState {
       this.updateAvailable = true
       this.latestUpdateVersion = info.version || null
 
+      // Track enforcement grace period
+      this.recordUpdateDetection(info.version)
+
       // Fetch structured release notes
       const releaseManager = ReleaseNotesManager.getInstance();
       const notes = await releaseManager.fetchReleaseNotes(info.version);
@@ -1031,6 +1034,9 @@ export class AppState {
         ...info,
         parsedNotes: notes
       })
+
+      // Broadcast enforcement state so renderer can show banner/block
+      this.broadcastUpdateEnforcementState()
     })
 
     autoUpdater.on("update-not-available", (info) => {
@@ -1080,6 +1086,242 @@ export class AppState {
         });
       }
     }, 10000);
+
+    // On startup, check if the user already updated (version matches) and clear enforcement
+    this.clearEnforcementIfUpdated()
+
+    // Broadcast enforcement state to renderer after a short delay so UI can pick it up
+    setTimeout(() => this.broadcastUpdateEnforcementState(), 3000)
+  }
+
+  // ─── Update Enforcement (WhatsApp-style 15-day grace period) ─────────────
+
+  private static readonly UPDATE_GRACE_DAYS = 15
+
+  /**
+   * Record when an available update was first detected.
+   * Only records once per version — doesn't reset if the same version is detected again.
+   */
+  private recordUpdateDetection(version: string): void {
+    const sm = SettingsManager.getInstance()
+    const enforcement = sm.get('updateEnforcement')
+    
+    // SAFETY: Never enforce against the current version or an older one
+    const currentVersion = app.getVersion()
+    if (!this.isVersionNewer(currentVersion, version)) {
+      console.log(`[UpdateEnforcement] Skipping v${version} — not newer than current v${currentVersion}`)
+      return
+    }
+
+    // If we already recorded this exact version, don't reset the timer
+    if (enforcement?.detectedVersion === version && enforcement?.firstDetectedAt) {
+      console.log(`[UpdateEnforcement] Already tracking v${version} since ${enforcement.firstDetectedAt}`)
+      return
+    }
+
+    // New version detected — start the grace period
+    const now = new Date().toISOString()
+    sm.set('updateEnforcement', {
+      firstDetectedAt: now,
+      detectedVersion: version
+    })
+    console.log(`[UpdateEnforcement] Grace period started for v${version} at ${now}`)
+  }
+
+  /**
+   * If the current app version matches or exceeds the detected version,
+   * the user has already updated — clear the enforcement state.
+   */
+  private clearEnforcementIfUpdated(): void {
+    const sm = SettingsManager.getInstance()
+    const enforcement = sm.get('updateEnforcement')
+    if (!enforcement?.detectedVersion) return
+
+    const currentVersion = app.getVersion()
+    if (!this.isVersionNewer(currentVersion, enforcement.detectedVersion)) {
+      // Current version is equal or newer — user has updated
+      console.log(`[UpdateEnforcement] User updated to v${currentVersion}, clearing enforcement for v${enforcement.detectedVersion}`)
+      sm.unset('updateEnforcement')
+    }
+  }
+
+  /**
+   * Calculate the current enforcement state and return it.
+   */
+  public getUpdateEnforcementState(): {
+    isActive: boolean
+    phase: 'none' | 'notice' | 'warning' | 'urgent' | 'blocked'
+    daysElapsed: number
+    daysRemaining: number
+    graceDaysTotal: number
+    detectedVersion: string | null
+    currentVersion: string
+  } {
+    const sm = SettingsManager.getInstance()
+    const enforcement = sm.get('updateEnforcement')
+
+    if (!enforcement?.firstDetectedAt || !enforcement?.detectedVersion) {
+      return {
+        isActive: false,
+        phase: 'none',
+        daysElapsed: 0,
+        daysRemaining: AppState.UPDATE_GRACE_DAYS,
+        graceDaysTotal: AppState.UPDATE_GRACE_DAYS,
+        detectedVersion: null,
+        currentVersion: app.getVersion()
+      }
+    }
+
+    // SAFETY: If the detected version is no longer newer than current, auto-clear
+    const currentVersion = app.getVersion()
+    if (!this.isVersionNewer(currentVersion, enforcement.detectedVersion)) {
+      console.log(`[UpdateEnforcement] Detected v${enforcement.detectedVersion} is not newer than current v${currentVersion} — auto-clearing`)
+      sm.unset('updateEnforcement')
+      return {
+        isActive: false,
+        phase: 'none',
+        daysElapsed: 0,
+        daysRemaining: AppState.UPDATE_GRACE_DAYS,
+        graceDaysTotal: AppState.UPDATE_GRACE_DAYS,
+        detectedVersion: null,
+        currentVersion
+      }
+    }
+
+    const firstDetected = new Date(enforcement.firstDetectedAt).getTime()
+    const now = Date.now()
+    const msElapsed = now - firstDetected
+    const daysElapsed = Math.floor(msElapsed / (1000 * 60 * 60 * 24))
+    const daysRemaining = Math.max(0, AppState.UPDATE_GRACE_DAYS - daysElapsed)
+
+    let phase: 'notice' | 'warning' | 'urgent' | 'blocked'
+    if (daysElapsed >= AppState.UPDATE_GRACE_DAYS) {
+      phase = 'blocked'
+    } else if (daysElapsed >= 10) {
+      phase = 'urgent'
+    } else if (daysElapsed >= 3) {
+      phase = 'warning'
+    } else {
+      phase = 'notice'
+    }
+
+    return {
+      isActive: true,
+      phase,
+      daysElapsed,
+      daysRemaining,
+      graceDaysTotal: AppState.UPDATE_GRACE_DAYS,
+      detectedVersion: enforcement.detectedVersion,
+      currentVersion: app.getVersion()
+    }
+  }
+
+  /**
+   * Broadcast the enforcement state to all renderer windows.
+   */
+  private broadcastUpdateEnforcementState(): void {
+    const state = this.getUpdateEnforcementState()
+    if (state.isActive) {
+      console.log(`[UpdateEnforcement] Phase: ${state.phase}, Days: ${state.daysElapsed}/${state.graceDaysTotal}, Version: v${state.detectedVersion}`)
+    }
+    this.broadcast('update-enforcement', state)
+  }
+
+  /**
+   * Cross-platform auto-replace and restart.
+   * - Windows: uses electron-updater's quitAndInstall (fully automatic)
+   * - macOS: spawns a detached shell script that copies the new .app over the old one and relaunches
+   */
+  public async quitAndInstallUpdate(): Promise<void> {
+    console.log('[AutoUpdater] quitAndInstall called - applying update...')
+
+    if (process.platform === 'darwin') {
+      try {
+        const updateFile = (autoUpdater as any).downloadedUpdateHelper?.file
+        console.log('[AutoUpdater] Downloaded update file:', updateFile)
+
+        if (updateFile) {
+          // Determine the current .app bundle path and extract the new one
+          const appBundlePath = this.findAppBundlePath()
+          
+          if (appBundlePath && updateFile.endsWith('.zip')) {
+            // Auto-replace: extract zip, copy over, relaunch
+            console.log('[AutoUpdater] macOS auto-replace: extracting and replacing...')
+            const { spawn } = require('child_process')
+            const tmpDir = path.join(os.tmpdir(), `quietly-update-${Date.now()}`)
+            const appName = path.basename(appBundlePath) // e.g., "Quietly.app"
+            const installDir = path.dirname(appBundlePath) // e.g., "/Applications"
+            
+            // Detached script: wait for app to quit, extract, copy, relaunch
+            const script = `
+              sleep 2
+              mkdir -p "${tmpDir}"
+              unzip -o -q "${updateFile}" -d "${tmpDir}"
+              NEW_APP=$(find "${tmpDir}" -name "*.app" -maxdepth 1 | head -1)
+              if [ -n "$NEW_APP" ]; then
+                rm -rf "${installDir}/${appName}"
+                cp -R "$NEW_APP" "${installDir}/${appName}"
+                xattr -cr "${installDir}/${appName}" 2>/dev/null || true
+                open "${installDir}/${appName}"
+              fi
+              rm -rf "${tmpDir}"
+            `
+            
+            const child = spawn('bash', ['-c', script], {
+              detached: true,
+              stdio: 'ignore'
+            })
+            child.unref()
+            
+            console.log('[AutoUpdater] Auto-replace script launched, quitting...')
+            
+            // Clear enforcement state since update is being applied
+            SettingsManager.getInstance().unset('updateEnforcement')
+            
+            setTimeout(() => app.quit(), 500)
+            return
+          }
+
+          // Fallback: open the folder for manual install
+          const updateDir = path.dirname(updateFile)
+          await shell.openPath(updateDir)
+          console.log('[AutoUpdater] Opened update directory:', updateDir)
+          // Clear enforcement so user isn't stuck in blocked screen on next launch
+          SettingsManager.getInstance().unset('updateEnforcement')
+          setTimeout(() => app.quit(), 1000)
+          return
+        }
+      } catch (err) {
+        console.error('[AutoUpdater] Failed to apply macOS update:', err)
+      }
+    }
+
+    // Windows/Linux: fully automatic via electron-updater
+    // Clear enforcement state since update is being applied
+    SettingsManager.getInstance().unset('updateEnforcement')
+    
+    setImmediate(() => {
+      try {
+        autoUpdater.quitAndInstall(false, true)
+      } catch (err) {
+        console.error('[AutoUpdater] quitAndInstall failed:', err)
+        app.exit(0)
+      }
+    })
+  }
+
+  /**
+   * Walk up from app.getAppPath() to find the .app bundle root (macOS).
+   */
+  private findAppBundlePath(): string | null {
+    let current = app.getAppPath()
+    for (let i = 0; i < 10; i++) {
+      if (current.endsWith('.app')) return current
+      const parent = path.dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+    return null
   }
 
   private async checkForUpdatesManual(): Promise<void> {
@@ -1198,7 +1440,7 @@ export class AppState {
       console.warn('[AutoUpdater] Unable to read updater cache config:', error);
     }
 
-    return path.join(this.getUpdaterBaseCachePath(), 'teamsync-updater');
+    return path.join(this.getUpdaterBaseCachePath(), 'quietly-updater');
   }
 
   public async getUpdaterCacheInfo(): Promise<UpdaterCacheInfo> {
@@ -1286,44 +1528,6 @@ export class AppState {
     } catch (error) {
       console.warn(`[AutoUpdater] Failed to log updater cache snapshot for ${label}:`, error);
     }
-  }
-
-
-  public async quitAndInstallUpdate(): Promise<void> {
-    console.log('[AutoUpdater] quitAndInstall called - applying update...')
-
-    // On macOS, unsigned apps can't auto-restart via quitAndInstall
-    // Workaround: Open the folder containing the downloaded update so user can install manually
-    if (process.platform === 'darwin') {
-      try {
-        // Get the downloaded update file path (e.g., .../TeamSync-1.0.9-mac.zip)
-        const updateFile = (autoUpdater as any).downloadedUpdateHelper?.file
-        console.log('[AutoUpdater] Downloaded update file:', updateFile)
-
-        if (updateFile) {
-          const updateDir = path.dirname(updateFile)
-          // Open the directory containing the update in Finder
-          await shell.openPath(updateDir)
-          console.log('[AutoUpdater] Opened update directory:', updateDir)
-
-          // Quit the app so user can install new version
-          setTimeout(() => app.quit(), 1000)
-          return
-        }
-      } catch (err) {
-        console.error('[AutoUpdater] Failed to open update directory:', err)
-      }
-    }
-
-    // Fallback to standard quitAndInstall (works on Windows/Linux or if signed)
-    setImmediate(() => {
-      try {
-        autoUpdater.quitAndInstall(false, true)
-      } catch (err) {
-        console.error('[AutoUpdater] quitAndInstall failed:', err)
-        app.exit(0)
-      }
-    })
   }
 
   public async checkForUpdates(): Promise<void> {
@@ -3689,7 +3893,7 @@ export class AppState {
     // 3. Update App User Model ID (Windows Taskbar grouping)
     if (isWin) {
       // Use unique AUMID per disguise to avoid grouping with the real app
-      app.setAppUserModelId(`com.natively.app.${mode}`);
+      app.setAppUserModelId(`com.quietly.app.${mode}`);
     }
 
     // 4. Update Icons

@@ -122,7 +122,7 @@ export class StealthManager {
   private constructor() {
     this._originalProcessTitle = process.title;
     this._originalArgv0 = process.argv[0] || '';
-    this._originalAppName = (() => { try { return app.getName(); } catch { return 'TeamSync'; } })();
+    this._originalAppName = (() => { try { return app.getName(); } catch { return 'Quietly'; } })();
     this.config = { ...DEFAULT_CONFIG };
     this._platformAdapter = this._createPlatformAdapter();
 
@@ -534,7 +534,7 @@ export class StealthManager {
 
     if (process.platform === 'win32') {
       try {
-        app.setAppUserModelId('com.natively.app');
+        app.setAppUserModelId('com.quietly.app');
       } catch { /* ignore */ }
     }
 
@@ -868,7 +868,7 @@ export class StealthManager {
     // 2. Rename the NSIS uninstall registry DisplayName to the disguise name
     //    so Add/Remove Programs doesn't reveal "TeamSync".
     try {
-      const regPath = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TeamSync';
+      const regPath = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Quietly';
       const disguiseName = this.config.processName;
       execSync(`reg add "${regPath}" /v DisplayName /t REG_SZ /d "${disguiseName}" /f 2>nul || (exit /b 0)`, { stdio: 'pipe', timeout: 3000, shell: 'cmd.exe' });
       this._log(`L2.5: NSIS DisplayName overridden to "${disguiseName}"`);
@@ -920,8 +920,8 @@ export class StealthManager {
 
     // 2. Restore NSIS DisplayName
     try {
-      const regPath = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\TeamSync';
-      execSync(`reg add "${regPath}" /v DisplayName /t REG_SZ /d "TeamSync" /f 2>nul || (exit /b 0)`, { stdio: 'pipe', timeout: 3000, shell: 'cmd.exe' });
+      const regPath = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Quietly';
+      execSync(`reg add "${regPath}" /v DisplayName /t REG_SZ /d "Quietly" /f 2>nul || (exit /b 0)`, { stdio: 'pipe', timeout: 3000, shell: 'cmd.exe' });
     } catch { /* ignore */ }
 
     this._log('L2.5: Windows Search/Registry restored');

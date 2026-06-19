@@ -14,6 +14,7 @@ const TeamSyncCluelyOverlay = React.lazy(
   () => import('./components/pro-v2/TeamSyncCluelyOverlay')
 );
 import UpdateBanner from "./components/UpdateBanner"
+import { useUpdateEnforcement, EnforcementBanner, ForceUpdateScreen } from "./components/ForceUpdateScreen"
 import { SupportToaster } from "./components/SupportToaster"
 import { TeamSyncQuotaBanner } from "./components/TeamSyncQuotaBanner"
 import { FreeTrialBanner } from "./components/trial/FreeTrialBanner"
@@ -253,6 +254,7 @@ const App: React.FC = () => {
   const canRenderLauncherWorkspace = hasLaunchedPremiumOnboarding && isAuthenticated;
   const shouldMountLauncherWorkspace = (isLauncherWindow || isDefault) && !shouldHoldLauncherBoot && canRenderLauncherWorkspace;
   const isStartupCoveringLauncher = shouldMountLauncherWorkspace && shouldRenderStartup;
+  const enforcementState = useUpdateEnforcement();
   const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !shouldRenderStartup && !isSettingsOpen && isLauncherMainView && !shouldRenderPremiumOnboarding;
   const { activeAd, dismissAd, previewAd } = useAdCampaigns(
     planDetails,
@@ -872,6 +874,22 @@ const App: React.FC = () => {
             <TeamSyncQuotaBanner />
           </>
         ) : null}
+
+        {/* Forced Update: Enforcement banner during grace period */}
+        {shouldMountLauncherWorkspace && !shouldRenderStartup && enforcementState.showBanner && (
+          <div style={{ position: 'fixed', bottom: 12, left: 12, right: 12, zIndex: 9990 }}>
+            <EnforcementBanner
+              state={enforcementState.enforcementState}
+              onUpdate={enforcementState.handleUpdate}
+              onDismiss={enforcementState.handleDismiss}
+            />
+          </div>
+        )}
+
+        {/* Forced Update: Full-screen blocker after grace period */}
+        {shouldMountLauncherWorkspace && enforcementState.isBlocked && (
+          <ForceUpdateScreen state={enforcementState.enforcementState} onBypass={enforcementState.handleBypass} />
+        )}
 
 
 
