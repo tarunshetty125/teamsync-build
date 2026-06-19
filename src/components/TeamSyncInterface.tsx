@@ -1518,7 +1518,9 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
     useEffect(() => {
         // Fetch initial state
         if (window.electronAPI?.getUndetectable) {
-            window.electronAPI.getUndetectable().then(setIsUndetectable);
+            window.electronAPI.getUndetectable().then((val) => {
+                setIsUndetectable(val);
+            });
         }
 
         if (window.electronAPI?.onUndetectableChanged) {

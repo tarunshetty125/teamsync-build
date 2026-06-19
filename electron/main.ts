@@ -299,6 +299,7 @@ export class AppState {
     }
   };
 
+
   constructor() {
     // 1. Load boot-critical settings first (used by WindowHelpers)
     const settingsManager = SettingsManager.getInstance();
@@ -3332,7 +3333,9 @@ export class AppState {
   public setUndetectable(state: boolean): void {
     // Guard: skip if state hasn't actually changed to prevent
     // duplicate dock hide/show cycles from renderer feedback loops
-    if (this.isUndetectable === state) return;
+    if (this.isUndetectable === state) {
+      return;
+    }
 
     if (this._verboseLogging) console.log(`[Stealth] setUndetectable(${state}) called`);
 

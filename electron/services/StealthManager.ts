@@ -187,7 +187,9 @@ export class StealthManager {
    * Idempotent: calling twice is a no-op.
    */
   public engage(): void {
-    if (this._engaged || this._transitioning) return;
+    if (this._engaged || this._transitioning) {
+      return;
+    }
     this._transitioning = true;
 
     this._log('▶ Engaging advanced stealth mode');
@@ -253,7 +255,9 @@ export class StealthManager {
    * Disengage stealth — reverts all layers back to default.
    */
   public disengage(): void {
-    if (!this._engaged) return;
+    if (!this._engaged) {
+      return;
+    }
     if (this._transitioning) {
       // Re-entry during rollback — just flip flag and return
       this._engaged = false;

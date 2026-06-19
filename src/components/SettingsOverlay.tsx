@@ -1216,7 +1216,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             }
 
             // Fetch true initial state from main process
-            window.electronAPI?.getUndetectable?.().then(setIsUndetectable).catch(() => { });
+            window.electronAPI?.getUndetectable?.().then((val) => {
+                setIsUndetectable(val);
+            }).catch(() => { });
             window.electronAPI?.getOverlayMousePassthrough?.().then(setIsMousePassthrough).catch(() => { });
             window.electronAPI?.getDisguise?.().then(setDisguiseMode).catch(() => { });
             window.electronAPI?.getVerboseLogging?.().then(setVerboseLogging).catch(() => { });
@@ -2369,7 +2371,9 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         if (isOpen) {
             // Load detectable status
             if (window.electronAPI?.getUndetectable) {
-                window.electronAPI.getUndetectable().then(setIsUndetectable);
+                window.electronAPI.getUndetectable().then((val) => {
+                    setIsUndetectable(val);
+                });
             }
             if (window.electronAPI?.getOpenAtLogin) {
                 window.electronAPI.getOpenAtLogin().then(setOpenOnLogin);
