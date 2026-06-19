@@ -4347,7 +4347,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                     <div className="relative group" data-stealth-engage="true">
                                         {/* Skill Picker Dropdown */}
                                         {showSkillPicker && (
-                                            <div className={`absolute bottom-full left-0 right-0 mb-1.5 rounded-xl border shadow-lg backdrop-blur-xl overflow-hidden z-50 ${isLightTheme ? 'bg-white/95 border-black/10' : 'bg-[#1c1c1e]/95 border-white/10'}`}>
+                                            <div className={`absolute top-full left-0 right-0 mt-1.5 rounded-xl border shadow-lg backdrop-blur-xl overflow-hidden z-50 ${isLightTheme ? 'bg-white/95 border-black/10' : 'bg-[#1c1c1e]/95 border-white/10'}`}>
                                                 <div className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${isLightTheme ? 'text-gray-400' : 'text-white/30'}`}>Skills</div>
                                                 {filteredSkills.map((skill, idx) => (
                                                     <button
