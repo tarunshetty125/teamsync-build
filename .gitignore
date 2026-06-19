@@ -224,3 +224,4 @@ cluelyprompts/
 python-runtime/mac-arm64/
 python-runtime/mac-x64/
 python-runtime/windows-x64/
+natively-extracted/
