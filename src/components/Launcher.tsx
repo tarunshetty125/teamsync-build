@@ -497,10 +497,32 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             window.electronAPI.seedDemo().catch(err => console.error("Failed to seed demo:", err));
         }
 
-        // Modes onboarding should appear on each launcher open rather than only once.
-        setTimeout(() => {
-            if (mounted) setShowModesOnboarding(true);
-        }, 8000); // Increased delay so it doesn't overlap with other startup notifications
+        // Onboarding sequence: Modes (4s) → 2s gap → Profile Intelligence (4s)
+        const modesShowTimer = setTimeout(() => {
+            if (mounted) {
+                setShowModesOnboarding(true);
+                // Auto-dismiss Modes after 4 seconds
+                const modesHideTimer = setTimeout(() => {
+                    if (mounted) {
+                        setShowModesOnboarding(false);
+                        // Show Profile Intelligence after 2 second gap
+                        const profileShowTimer = setTimeout(() => {
+                            if (mounted) {
+                                setShowProfileOnboarding(true);
+                                // Auto-dismiss Profile Intelligence after 4 seconds
+                                const profileHideTimer = setTimeout(() => {
+                                    if (mounted) setShowProfileOnboarding(false);
+                                }, 4000);
+                                timers.push(profileHideTimer);
+                            }
+                        }, 2000);
+                        timers.push(profileShowTimer);
+                    }
+                }, 4000);
+                timers.push(modesHideTimer);
+            }
+        }, 3000);
+        const timers: ReturnType<typeof setTimeout>[] = [modesShowTimer];
 
         // Sync initial undetectable state
         if (window.electronAPI?.getUndetectable) {
@@ -596,6 +618,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             if (removeCalendarRecommendationListener) removeCalendarRecommendationListener();
             window.removeEventListener('teamsync:calendar-status-changed', handleCalendarStatusSync as EventListener);
             clearInterval(interval);
+            timers.forEach(t => clearTimeout(t));
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Mount-only: stable setup that must run exactly once
