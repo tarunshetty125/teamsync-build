@@ -348,6 +348,77 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 onSelectSkill={selectSkill}
             />
 
+            {/* ── Skill Picker Dropdown (rendered outside bar to avoid clipping) ── */}
+            <AnimatePresence>
+                {showSkillPicker && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -4, height: 0 }}
+                        animate={{ opacity: 1, y: 0, height: 'auto' }}
+                        exit={{ opacity: 0, y: -4, height: 0 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                        style={{
+                            width: '100%',
+                            maxWidth: responsiveLayout.contentWidth,
+                            margin: '0 auto',
+                            overflow: 'hidden',
+                            zIndex: 100,
+                        }}
+                    >
+                        <div
+                            style={{
+                                marginTop: 4,
+                                borderRadius: 12,
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                background: 'rgba(0,0,0,0.96)',
+                                backdropFilter: 'blur(20px)',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                                overflow: 'hidden',
+                                maxHeight: 220,
+                                overflowY: 'auto' as const,
+                            }}
+                        >
+                            <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.3)' }}>Skills</div>
+                            {filteredSkills.map((skill, idx) => (
+                                <button
+                                    key={skill.id}
+                                    type="button"
+                                    onClick={() => selectSkill(skill.id)}
+                                    onMouseEnter={() => setSkillPickerIndex(idx)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 10,
+                                        width: '100%',
+                                        padding: '8px 12px',
+                                        border: 'none',
+                                        background: idx === skillPickerIndex ? 'rgba(255,255,255,0.08)' : 'transparent',
+                                        color: 'inherit',
+                                        textAlign: 'left' as const,
+                                        cursor: 'pointer',
+                                        transition: 'background 100ms ease',
+                                        fontSize: 12,
+                                    }}
+                                >
+                                    <div style={{
+                                        width: 24, height: 24, borderRadius: 6,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                        background: 'rgba(139,92,246,0.15)', color: 'rgba(167,139,250,0.9)',
+                                        fontSize: 11,
+                                    }}>
+                                        ⚡
+                                    </div>
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                        <div style={{ fontWeight: 600, color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>{skill.name}</div>
+                                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{skill.description}</div>
+                                    </div>
+                                    <span style={{ fontSize: 10, fontFamily: 'monospace', flexShrink: 0, color: 'rgba(255,255,255,0.2)' }}>${skill.id}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* ── Stealth keyboard permission warning ── */}
             <AnimatePresence>
                 {stealthTapPermissionDenied && (

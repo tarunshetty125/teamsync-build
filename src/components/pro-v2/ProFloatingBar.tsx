@@ -198,67 +198,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
             <div className="v2-bar-sep" />
 
             {/* Ask AI input */}
-            <div className="v2-no-drag v2-bar-input-shell" data-stealth-engage="true" style={{ position: 'relative' }}>
-                {/* Skill picker dropdown */}
-                <AnimatePresence>
-                    {showSkillPicker && (
-                        <div
-                            style={{
-                                position: 'absolute',
-                                bottom: 'calc(100% + 6px)',
-                                left: 0,
-                                right: 0,
-                                borderRadius: 12,
-                                border: '1px solid rgba(255,255,255,0.12)',
-                                background: 'rgba(28,28,30,0.96)',
-                                backdropFilter: 'blur(20px)',
-                                boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                                overflow: 'hidden',
-                                zIndex: 100,
-                                maxHeight: 220,
-                                overflowY: 'auto',
-                            }}
-                        >
-                            <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255,255,255,0.3)' }}>Skills</div>
-                            {filteredSkills.map((skill, idx) => (
-                                <button
-                                    key={skill.id}
-                                    type="button"
-                                    onClick={() => onSelectSkill?.(skill.id)}
-                                    onMouseEnter={() => onSkillPickerIndexChange?.(idx)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 10,
-                                        width: '100%',
-                                        padding: '8px 12px',
-                                        border: 'none',
-                                        background: idx === skillPickerIndex ? 'rgba(255,255,255,0.08)' : 'transparent',
-                                        color: 'inherit',
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        transition: 'background 100ms ease',
-                                        fontSize: 12,
-                                    }}
-                                >
-                                    <div style={{
-                                        width: 24, height: 24, borderRadius: 6,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                                        background: 'rgba(139,92,246,0.15)', color: 'rgba(167,139,250,0.9)',
-                                        fontSize: 11,
-                                    }}>
-                                        ⚡
-                                    </div>
-                                    <div style={{ minWidth: 0, flex: 1 }}>
-                                        <div style={{ fontWeight: 600, color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>{skill.name}</div>
-                                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{skill.description}</div>
-                                    </div>
-                                    <span style={{ fontSize: 10, fontFamily: 'monospace', flexShrink: 0, color: 'rgba(255,255,255,0.2)' }}>${skill.id}</span>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </AnimatePresence>
+            <div className="v2-no-drag v2-bar-input-shell" data-stealth-engage="true">
                 <Sparkles size={13} strokeWidth={2} className="v2-bar-input-icon" aria-hidden="true" />
                 <input
                     ref={inputRef}
