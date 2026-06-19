@@ -3704,7 +3704,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             <span className="relative flex h-[24px] w-[24px] items-center justify-center rounded-full bg-blue-500 text-white">
                                                                 {isPremium ? <CheckCircle className="h-[13px] w-[13px] stroke-[2.3]" /> : <Sparkles className="h-[13px] w-[13px] stroke-[2.3]" />}
                                                             </span>
-                                                            <span className="relative">{isPremium ? 'Manage Pro' : isTrialActive ? 'Upgrade' : 'Quietly'}</span>
+                                                            <span className="relative">{isPremium ? 'Manage Pro' : isTrialActive ? 'Upgrade' : 'Unlock Pro'}</span>
                                                         </button>
                                                     </div>
                                                     <p className="text-xs text-text-secondary mb-2">
