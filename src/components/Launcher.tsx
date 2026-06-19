@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ArrowLeft, MoreHorizontal, Settings, RefreshCw, Ghost, Download, DownloadCloud, CheckCircle, AlertCircle, Sparkles, Calendar, Users, FileText, BriefcaseBusiness, Code2, MessageSquareText, CircleDot, Video, Clock3, CheckCircle2, PlugZap, Trash2, type LucideIcon } from 'lucide-react';
+import { ArrowRight, ArrowLeft, MoreHorizontal, Settings, RefreshCw, Ghost, Download, DownloadCloud, CheckCircle, AlertCircle, Sparkles, Calendar, Users, FileText, BriefcaseBusiness, Code2, MessageSquareText, CircleDot, Video, Clock3, CheckCircle2, PlugZap, Trash2, ExternalLink, type LucideIcon } from 'lucide-react';
 import { generateMeetingPDF } from '../utils/pdfGenerator';
 import { generateMeetingMarkdown, generateMeetingHTML } from '../utils/meetingExporters';
 import icon from "./icon.png";
@@ -1372,6 +1372,17 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                     <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${!isDetectable ? 'translate-x-4' : 'translate-x-0'}`} />
                                                 </button>
                                             </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    onOpenSettings?.('about');
+                                                }}
+                                                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-teal-500/20 bg-teal-500/10 px-3.5 text-[12px] font-semibold text-teal-400 transition-all hover:bg-teal-500/15 hover:text-teal-300 active:scale-[0.97]"
+                                            >
+                                                What's New in 2.7
+                                                <ExternalLink size={12} />
+                                            </button>
 
                                             <motion.button
                                                 data-tour-id="overlay-control"

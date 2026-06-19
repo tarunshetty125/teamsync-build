@@ -68,13 +68,27 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                 <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden mb-6">
                     <div className="p-3 border-b border-border-subtle bg-bg-card/50">
                         <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-400 shrink-0">
+                                <Sparkles size={20} />
+                            </div>
+                            <div>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Calendar Intelligence & Smart Mode Suggestion</h5>
+                                <p className="text-xs text-text-secondary leading-relaxed">
+                                    Quietly now analyses your calendar events and automatically suggests the best AI mode before a meeting starts. Matched signals, confidence scoring, and one-click mode application — all powered by event title, description, and attendee analysis.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
+                        <div className="flex items-start gap-4">
                             <div className="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400 shrink-0">
                                 <Layers size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Overlay Pro (V2)</h5>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Premium Glassmorphic Launcher</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    A completely redesigned overlay experience with a wider, panel-based layout, response history, drag-to-resize, and a floating control strip — built for power users who need more space and context during live sessions.
+                                    The Launcher has been completely redesigned with a dark workspace surface, animated grid lines, glassmorphic calendar onboarding cards with cosmic and teal gradients, specular highlights, and a polished meeting list with contextual status chips.
                                 </p>
                             </div>
                         </div>
@@ -86,9 +100,9 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Palette size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Unified Dark &amp; Light Theme</h5>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Natively-Grade Onboarding</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    A new theme-aware design system powers every surface — Settings, Launcher, and Overlay all share the same visual language. Switch between dark and light modes and everything follows.
+                                    A from-scratch onboarding flow matching premium native apps — 50/50 split layout, Google sign-in, 3D wireframe permission dialogs, animated grid backgrounds, and macOS-native iOS toggle interactions for screen recording and microphone access.
                                 </p>
                             </div>
                         </div>
@@ -100,9 +114,9 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Settings size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Advanced Settings Configuration</h5>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Complete Stealth & Undetectability</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    Redesigned settings with granular controls for audio devices, STT providers, API keys, overlay opacity, keybinds, privacy permissions, and updater cache management — all in one unified panel.
+                                    Hardened stealth mode with preloaded windows to eliminate dock flicker, race-condition fixes in overlay rendering, cleaned debug traces, and silenced console noise — ensuring zero visual artifacts in production.
                                 </p>
                             </div>
                         </div>
@@ -114,88 +128,15 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <SlidersHorizontal size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Adaptive Behavioural Modes</h5>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">Overlay Pro V2 & Adaptive Modes</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    Quietly now automatically detects your meeting context and adjusts its AI persona in real time — switching between Interview, Sales, Technical, and other modes based on the conversation flow. Manual override is always available.
+                                    A wider panel-based overlay with response history, drag-to-resize, and floating controls. Combined with behavioural modes that auto-detect meeting context — Interview, Sales, Technical, Recruiting — and adjust AI persona in real time.
                                 </p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.6</h4>
-                <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden mb-6">
-                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
-                                <LayoutGrid size={20} />
-                            </div>
-                            <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Advanced Modes Manager</h5>
-                                <p className="text-xs text-text-secondary leading-relaxed">
-                                    Seven specialized AI personas — Technical Interview, Sales, Recruiting, Team Meet, Lecture, Looking for Work, and General — powered by a config-driven Modes Manager. Every mode injects tailored intelligence, structured notes, reference files, and hidden optimized prompts in real time. Built-in templates are reusable while remaining fully customizable.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-fuchsia-500/10 flex items-center justify-center text-fuchsia-400 shrink-0">
-                                <Sparkles size={20} />
-                            </div>
-                            <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Domain Intelligence Brains</h5>
-                                <p className="text-xs text-text-secondary leading-relaxed">
-                                    Sales, Recruiting, and Team Meet now use specialized intelligence instead of generic prompting. Sales detects objections, pricing pressure, urgency, and buying signals. Recruiting evaluates ownership, STAR signals, measurable impact, and red flags. Team Meet extracts decisions, owners, blockers, deadlines, and action items with confidence scoring.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
-                                <Shield size={20} />
-                            </div>
-                            <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Real-Time Pro License Sync</h5>
-                                <p className="text-xs text-text-secondary leading-relaxed">
-                                    Pro feature access updates instantly — Modes, Profile Intelligence, and premium capabilities react immediately to license activation or expiration with no restart required. Active protected modes are safely cleared when access changes.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-3 border-b border-border-subtle bg-bg-card/50">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
-                                <Zap size={20} />
-                            </div>
-                            <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Benchmarking & Performance Telemetry</h5>
-                                <p className="text-xs text-text-secondary leading-relaxed">
-                                    A new local-only benchmarking layer measures latency, prompt compression, token estimates, and model performance in real time. TinyPrompt and Adaptive Budgeting improvements are now measurable through privacy-safe local telemetry.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-3 bg-bg-card/50">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400 shrink-0">
-                                <Database size={20} />
-                            </div>
-                            <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Enhanced Notes & Memory</h5>
-                                <p className="text-xs text-text-secondary leading-relaxed">
-                                    Meeting notes are now more context-aware with improved handling of empty sections, cleaner templates, and reduced placeholder leakage. Mode-specific meeting intelligence improves summaries and note quality across interviews, sales, and meetings.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
             {/* Architecture Section */}
             <div>
