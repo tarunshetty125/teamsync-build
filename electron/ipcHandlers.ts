@@ -3039,7 +3039,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   }) => {
     // Pro gate: system_design_tradeoffs intent requires Pro license
     if (payload.intent === 'system_design_tradeoffs' && !isProOrTrialActive()) {
-      throw new Error('Pro license required for system design features.');
+      return { success: false, error: 'pro_required', message: 'Pro license required for system design features.' };
     }
     const intelligenceManager = appState.getIntelligenceManager();
     const result = await intelligenceManager.handleAction(payload.intent, {
@@ -3164,7 +3164,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("generate-screen-scan", async (_, imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => {
     // Pro gate: screen scan requires Pro license
     if (!isProOrTrialActive()) {
-      throw new Error('Pro license required for Analyse Screen.');
+      return { success: false, error: 'pro_required', message: 'Pro license required for Analyse Screen.' };
     }
     try {
       // If no explicit images were passed from the frontend, fall back to the
