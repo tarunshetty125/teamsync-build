@@ -4345,32 +4345,6 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                     )}
 
                                     <div className="relative group" data-stealth-engage="true">
-                                        {/* Skill Picker Dropdown */}
-                                        {showSkillPicker && (
-                                            <div className={`absolute top-full left-0 right-0 mt-1.5 rounded-xl border shadow-lg backdrop-blur-xl overflow-hidden z-50 ${isLightTheme ? 'bg-white/95 border-black/10' : 'bg-[#1c1c1e]/95 border-white/10'}`}>
-                                                <div className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${isLightTheme ? 'text-gray-400' : 'text-white/30'}`}>Skills</div>
-                                                {filteredSkills.map((skill, idx) => (
-                                                    <button
-                                                        key={skill.id}
-                                                        onClick={() => selectSkill(skill.id)}
-                                                        className={`w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors ${idx === skillPickerIndex
-                                                            ? (isLightTheme ? 'bg-black/[0.06]' : 'bg-white/[0.08]')
-                                                            : (isLightTheme ? 'hover:bg-black/[0.03]' : 'hover:bg-white/[0.04]')
-                                                        }`}
-                                                        onMouseEnter={() => setSkillPickerIndex(idx)}
-                                                    >
-                                                        <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${isLightTheme ? 'bg-violet-100 text-violet-600' : 'bg-violet-500/15 text-violet-400'}`}>
-                                                            <span className="text-[11px]">⚡</span>
-                                                        </div>
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className={`text-[12px] font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white/90'}`}>{skill.name}</div>
-                                                            <div className={`text-[10px] truncate ${isLightTheme ? 'text-gray-400' : 'text-white/35'}`}>{skill.description}</div>
-                                                        </div>
-                                                        <span className={`text-[10px] font-mono flex-shrink-0 ${isLightTheme ? 'text-gray-300' : 'text-white/20'}`}>${skill.id}</span>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
                                         <input
                                             ref={textInputRef}
                                             type="text"
@@ -4668,6 +4642,32 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                     </div>
                                 </div>
                             </div>
+                            {/* Skill Picker Dropdown — rendered outside overflow-hidden panel */}
+                            {showSkillPicker && (
+                                <div className={`w-full mt-1.5 rounded-xl border shadow-lg backdrop-blur-xl overflow-hidden z-50 ${isLightTheme ? 'bg-white/95 border-black/10' : 'bg-[#1c1c1e]/95 border-white/10'}`}>
+                                    <div className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${isLightTheme ? 'text-gray-400' : 'text-white/30'}`}>Skills</div>
+                                    {filteredSkills.map((skill, idx) => (
+                                        <button
+                                            key={skill.id}
+                                            onClick={() => selectSkill(skill.id)}
+                                            className={`w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors ${idx === skillPickerIndex
+                                                ? (isLightTheme ? 'bg-black/[0.06]' : 'bg-white/[0.08]')
+                                                : (isLightTheme ? 'hover:bg-black/[0.03]' : 'hover:bg-white/[0.04]')
+                                            }`}
+                                            onMouseEnter={() => setSkillPickerIndex(idx)}
+                                        >
+                                            <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${isLightTheme ? 'bg-violet-100 text-violet-600' : 'bg-violet-500/15 text-violet-400'}`}>
+                                                <span className="text-[11px]">⚡</span>
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className={`text-[12px] font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white/90'}`}>{skill.name}</div>
+                                                <div className={`text-[10px] truncate ${isLightTheme ? 'text-gray-400' : 'text-white/35'}`}>{skill.description}</div>
+                                            </div>
+                                            <span className={`text-[10px] font-mono flex-shrink-0 ${isLightTheme ? 'text-gray-300' : 'text-white/20'}`}>${skill.id}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* ─── Pro Context Bar ─────────────────────────────── */}
