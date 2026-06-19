@@ -10,7 +10,7 @@ permissions:
 
 env:
   NODE_VERSION: "22"
-  RELEASE_REPO: tarunshetty125/Quietly
+  RELEASE_REPO: tarunshetty125/TeamSync
 
 jobs:
   metadata:
