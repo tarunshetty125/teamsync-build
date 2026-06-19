@@ -3701,10 +3701,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             className="group relative flex h-[34px] shrink-0 items-center justify-center gap-2 overflow-hidden rounded-full px-4 text-[12px] font-semibold text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
                                                             style={{
                                                                 background: 'linear-gradient(135deg, #082f49 0%, #0ea5e9 52%, #2563eb 100%)',
-                                                                boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(8,47,73,0.3), 0 2px 10px rgba(14,165,233,0.28), 0 0 0 1px rgba(255,255,255,0.12)',
+                                                                boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.7), inset 0 -1px 3px rgba(8,47,73,0.4), 0 0 16px rgba(14,165,233,0.4), 0 2px 10px rgba(14,165,233,0.3), 0 0 0 1px rgba(255,255,255,0.18)',
                                                             }}
                                                         >
-                                                            <div className="pointer-events-none absolute inset-x-1.5 top-0 h-[40%] rounded-b-md bg-gradient-to-b from-white/30 to-transparent opacity-70 blur-[1px]" />
+                                                            <div className="pointer-events-none absolute inset-x-1 top-0 h-[45%] rounded-b-md bg-gradient-to-b from-white/40 to-transparent opacity-80 blur-[1px]" />
                                                             {isPremium ? <CheckCircle size={13} className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.14)]" /> : <Sparkles size={13} className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.14)]" />}
                                                             <span className="relative z-10 tracking-[-0.01em] drop-shadow-[0_1px_1px_rgba(0,0,0,0.14)]">{isPremium ? 'Manage Pro' : isTrialActive ? 'Upgrade' : 'Unlock Pro'}</span>
                                                         </button>
