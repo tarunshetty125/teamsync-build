@@ -54,7 +54,7 @@ const ProFloatingBar = memo<ProFloatingBarProps>(function ProFloatingBar({
     onScreenScan: onScreenScanProp,
     onToggleTranscriptPause,
     onOpenLauncher,
-    stealthTapActive = false,
+    stealthTapActive: _stealthTapActive = false,
 }) {
     const [elapsed, setElapsed] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);

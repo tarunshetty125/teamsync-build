@@ -2836,7 +2836,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             }).catch(() => { });
         }
     };
-    const settingsHeaderBadge = null;
+    const settingsHeaderBadge = null as { className: string; label: string } | null;
     type SettingsSidebarItem = {
         id: string;
         label: string;
