@@ -586,7 +586,7 @@ const SkillsSettingsTab: React.FC = () => {
                     className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 border disabled:opacity-50 ${refreshDone
                         ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-500'
                         : 'text-text-secondary hover:text-text-primary bg-bg-card border-border-subtle hover:bg-bg-elevated'
-                    }`}
+                        }`}
                 >
                     {refreshDone ? (
                         <><CheckCircle size={13} /> Updated</>
@@ -692,7 +692,7 @@ const CodexCliSettings: React.FC = () => {
     React.useEffect(() => {
         window.electronAPI?.getCodexCliConfig?.().then((c: any) => {
             if (c) setConfig({ ...c, modelReasoningEffort: c.modelReasoningEffort || '' });
-        }).catch(() => {}).finally(() => setLoading(false));
+        }).catch(() => { }).finally(() => setLoading(false));
     }, []);
 
     const updateField = (field: string, value: any) => {
@@ -701,7 +701,7 @@ const CodexCliSettings: React.FC = () => {
             // Debounced auto-save
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
             saveTimerRef.current = setTimeout(() => {
-                window.electronAPI?.setCodexCliConfig?.(next).catch(() => {});
+                window.electronAPI?.setCodexCliConfig?.(next).catch(() => { });
             }, 500);
             return next;
         });
@@ -2974,7 +2974,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             mass: 1
                         }}
                         className="relative h-[74vh] max-h-[680px] w-[84vw] max-w-[860px] overflow-hidden rounded-[22px] border border-border-subtle bg-bg-primary shadow-[0_20px_60px_rgba(0,0,0,0.25),0_0_0_1px_rgba(0,0,0,0.05)]"
-                        >
+                    >
                         <div
                             id="settings-panel"
                             className="relative z-10 flex h-full w-full min-w-0"
@@ -3066,7 +3066,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     className={`group relative w-full overflow-hidden rounded-lg px-2 py-1.5 text-left text-[13px] font-medium transition-colors duration-150 flex items-center gap-2 active:scale-[0.99] ${isActive
                                                         ? 'text-text-primary'
                                                         : 'text-text-secondary hover:bg-bg-item-active/40 hover:text-text-primary'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {isActive && (
                                                         <motion.span
@@ -3087,7 +3087,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                         <button
                                             onClick={async () => {
                                                 let isActive = false;
-                                                try { isActive = await window.electronAPI?.getMeetingActive?.() ?? false; } catch {}
+                                                try { isActive = await window.electronAPI?.getMeetingActive?.() ?? false; } catch { }
                                                 if (isActive) { setShowQuitConfirm(true); } else { window.electronAPI.quitApp(); }
                                             }}
                                             className="group relative w-full overflow-hidden rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-red-400 bg-red-500/5 hover:bg-red-500/10 transition-colors duration-150 flex items-center gap-2 active:scale-[0.99]"
@@ -3282,43 +3282,43 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                         {activeTab === 'appearance' && (
                                             <div className="space-y-5 animated fadeIn">
 
-                                                    {/* Pro UI Toggle — Premium/Trial only */}
-                                                    <div className={`rounded-xl border border-border-subtle px-4 py-3 flex items-center justify-between gap-4 transition-all ${hasProAccess && useProUI ? 'border-purple-500/30 bg-purple-500/5' : ''} ${!hasProAccess ? 'opacity-80' : ''}`}>
-                                                        <div className="min-w-0">
-                                                            <div className="flex items-center gap-2">
-                                                                <Sparkles size={14} className={hasProAccess && useProUI ? 'text-purple-400' : 'text-text-secondary'} />
-                                                                <p className="text-[13px] font-medium text-text-primary">Pro UI</p>
-                                                                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20">Beta</span>
-                                                                {!hasProAccess && <Lock size={12} className="text-text-tertiary" />}
-                                                            </div>
-                                                            <p className="text-[12px] text-text-secondary mt-0.5">
-                                                                {hasProAccess
-                                                                    ? 'Floating panels layout with split insights and response surfaces'
-                                                                    : 'Upgrade to Pro to unlock the new layout'
-                                                                }
-                                                            </p>
+                                                {/* Pro UI Toggle — Premium/Trial only */}
+                                                <div className={`rounded-xl border border-border-subtle px-4 py-3 flex items-center justify-between gap-4 transition-all ${hasProAccess && useProUI ? 'border-purple-500/30 bg-purple-500/5' : ''} ${!hasProAccess ? 'opacity-80' : ''}`}>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <Sparkles size={14} className={hasProAccess && useProUI ? 'text-purple-400' : 'text-text-secondary'} />
+                                                            <p className="text-[13px] font-medium text-text-primary">Pro UI</p>
+                                                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20">Beta</span>
+                                                            {!hasProAccess && <Lock size={12} className="text-text-tertiary" />}
                                                         </div>
-                                                        {hasProAccess ? (
-                                                            <Switch
-                                                                checked={useProUI}
-                                                                onCheckedChange={() => {
-                                                                    const newState = !useProUI;
-                                                                    setUseProUI(newState);
-                                                                    localStorage.setItem('teamsync_overlay_v2', String(newState));
-                                                                    window.dispatchEvent(new CustomEvent('teamsync-overlay-v2-changed', { detail: newState }));
-                                                                }}
-                                                                aria-label="Toggle Pro UI"
-                                                                variant="purple"
-                                                            />
-                                                        ) : (
-                                                            <button
-                                                                onClick={() => setIsPremiumModalOpen(true)}
-                                                                className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 transition-colors whitespace-nowrap"
-                                                            >
-                                                                Upgrade
-                                                            </button>
-                                                        )}
+                                                        <p className="text-[12px] text-text-secondary mt-0.5">
+                                                            {hasProAccess
+                                                                ? 'Floating panels layout with split insights and response surfaces'
+                                                                : 'Upgrade to Pro to unlock the new layout'
+                                                            }
+                                                        </p>
                                                     </div>
+                                                    {hasProAccess ? (
+                                                        <Switch
+                                                            checked={useProUI}
+                                                            onCheckedChange={() => {
+                                                                const newState = !useProUI;
+                                                                setUseProUI(newState);
+                                                                localStorage.setItem('teamsync_overlay_v2', String(newState));
+                                                                window.dispatchEvent(new CustomEvent('teamsync-overlay-v2-changed', { detail: newState }));
+                                                            }}
+                                                            aria-label="Toggle Pro UI"
+                                                            variant="purple"
+                                                        />
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setIsPremiumModalOpen(true)}
+                                                            className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 transition-colors whitespace-nowrap"
+                                                        >
+                                                            Upgrade
+                                                        </button>
+                                                    )}
+                                                </div>
 
                                                 {/* General Settings — grouped card */}
                                                 <div>
@@ -3462,56 +3462,56 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                                     `v${packageJson.version}`}
                                                                 </p>
                                                             </div>
-                                                                    <button
-                                                                        onClick={async () => {
-                                                                            if (updateStatus === 'available') {
-                                                                                try {
-                                                                                    // @ts-ignore
-                                                                                    await window.electronAPI.downloadUpdate();
-                                                                                    onClose(); // Close settings to show the banner
-                                                                                } catch (err) {
-                                                                                    console.error("Failed to start download:", err);
-                                                                                }
-                                                                            } else {
-                                                                                handleCheckForUpdates();
-                                                                            }
-                                                                        }}
-                                                                        disabled={updateStatus === 'checking'}
-                                                                        className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all flex items-center gap-1.5 shrink-0 ${updateStatus === 'checking' ? 'bg-bg-input text-text-tertiary cursor-wait' :
-                                                                            updateStatus === 'available' ? 'bg-accent-primary text-white hover:bg-accent-secondary shadow-lg shadow-blue-500/20' :
-                                                                                updateStatus === 'uptodate' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
-                                                                                    updateStatus === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                                                        'bg-bg-component hover:bg-bg-input text-text-primary'
-                                                                            }`}
-                                                                    >
-                                                                        {updateStatus === 'checking' ? (
-                                                                            <>
-                                                                                <RefreshCw size={14} className="animate-spin" />
-                                                                                Checking...
-                                                                            </>
-                                                                        ) : updateStatus === 'available' ? (
-                                                                            <>
-                                                                                <ArrowDown size={14} />
-                                                                                Update Available
-                                                                            </>
-                                                                        ) : updateStatus === 'uptodate' ? (
-                                                                            <>
-                                                                                <Check size={14} />
-                                                                                Up to date
-                                                                            </>
-                                                                        ) : updateStatus === 'error' ? (
-                                                                            <>
-                                                                                <X size={14} />
-                                                                                Error
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <RefreshCw size={14} />
-                                                                                Check for updates
-                                                                            </>
-                                                                        )}
-                                                                    </button>
-                                                                </div>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    if (updateStatus === 'available') {
+                                                                        try {
+                                                                            // @ts-ignore
+                                                                            await window.electronAPI.downloadUpdate();
+                                                                            onClose(); // Close settings to show the banner
+                                                                        } catch (err) {
+                                                                            console.error("Failed to start download:", err);
+                                                                        }
+                                                                    } else {
+                                                                        handleCheckForUpdates();
+                                                                    }
+                                                                }}
+                                                                disabled={updateStatus === 'checking'}
+                                                                className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all flex items-center gap-1.5 shrink-0 ${updateStatus === 'checking' ? 'bg-bg-input text-text-tertiary cursor-wait' :
+                                                                    updateStatus === 'available' ? 'bg-accent-primary text-white hover:bg-accent-secondary shadow-lg shadow-blue-500/20' :
+                                                                        updateStatus === 'uptodate' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                                                            updateStatus === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                                                'bg-bg-component hover:bg-bg-input text-text-primary'
+                                                                    }`}
+                                                            >
+                                                                {updateStatus === 'checking' ? (
+                                                                    <>
+                                                                        <RefreshCw size={14} className="animate-spin" />
+                                                                        Checking...
+                                                                    </>
+                                                                ) : updateStatus === 'available' ? (
+                                                                    <>
+                                                                        <ArrowDown size={14} />
+                                                                        Update Available
+                                                                    </>
+                                                                ) : updateStatus === 'uptodate' ? (
+                                                                    <>
+                                                                        <Check size={14} />
+                                                                        Up to date
+                                                                    </>
+                                                                ) : updateStatus === 'error' ? (
+                                                                    <>
+                                                                        <X size={14} />
+                                                                        Error
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <RefreshCw size={14} />
+                                                                        Check for updates
+                                                                    </>
+                                                                )}
+                                                            </button>
+                                                        </div>
 
                                                         {/* Update Diagnostics */}
                                                         <div className="px-4 py-3">
@@ -3526,64 +3526,64 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                         onClick={refreshUpdaterCacheInfo}
                                                                         disabled={updaterCacheLoading}
                                                                         className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-bg-component hover:bg-bg-input text-text-primary transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-wait"
-                                                                            >
-                                                                                <RefreshCw size={13} className={updaterCacheLoading ? 'animate-spin' : ''} />
-                                                                                Refresh
+                                                                    >
+                                                                        <RefreshCw size={13} className={updaterCacheLoading ? 'animate-spin' : ''} />
+                                                                        Refresh
                                                                     </button>
                                                                     <button
                                                                         onClick={handleOpenUpdaterCacheFolder}
                                                                         disabled={!updaterCacheInfo?.cacheDir}
                                                                         className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-accent-primary hover:bg-accent-secondary text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                            >
-                                                                                <FolderOpen size={13} />
+                                                                    >
+                                                                        <FolderOpen size={13} />
                                                                         Open cache
                                                                     </button>
                                                                 </div>
                                                             </div>
 
-                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                                        <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                            <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Update Cache Location</p>
-                                                                            <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsCacheDir}>
-                                                                                {updateDiagnosticsCacheDir}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                            <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Downloaded Update File</p>
-                                                                            <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsFilePath}>
-                                                                                {updateDiagnosticsFileName}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                            <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Full Path</p>
-                                                                            <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsFilePath}>
-                                                                                {updateDiagnosticsFilePath}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-3 gap-2">
-                                                                            <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                                <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Size</p>
-                                                                                <p className="text-[11px] font-mono text-text-primary truncate">{updateDiagnosticsSize}</p>
-                                                                            </div>
-                                                                            <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                                <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Current Version</p>
-                                                                                <p className="text-[11px] font-mono text-text-primary truncate">v{updateDiagnosticsCurrentVersion.replace(/^v/, '')}</p>
-                                                                            </div>
-                                                                            <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
-                                                                                <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Latest Version</p>
-                                                                                <p className="text-[11px] font-mono text-text-primary truncate">
-                                                                                    {updateDiagnosticsLatestVersion === 'Unknown' ? 'Unknown' : `v${updateDiagnosticsLatestVersion.replace(/^v/, '')}`}
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                                <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                    <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Update Cache Location</p>
+                                                                    <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsCacheDir}>
+                                                                        {updateDiagnosticsCacheDir}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                    <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Downloaded Update File</p>
+                                                                    <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsFilePath}>
+                                                                        {updateDiagnosticsFileName}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                    <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Full Path</p>
+                                                                    <p className="text-[11px] font-mono text-text-primary truncate" title={updateDiagnosticsFilePath}>
+                                                                        {updateDiagnosticsFilePath}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="grid grid-cols-3 gap-2">
+                                                                    <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                        <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Size</p>
+                                                                        <p className="text-[11px] font-mono text-text-primary truncate">{updateDiagnosticsSize}</p>
                                                                     </div>
+                                                                    <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                        <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Current Version</p>
+                                                                        <p className="text-[11px] font-mono text-text-primary truncate">v{updateDiagnosticsCurrentVersion.replace(/^v/, '')}</p>
+                                                                    </div>
+                                                                    <div className="rounded-lg bg-bg-component/70 border border-border-subtle px-3 py-2 min-w-0">
+                                                                        <p className="text-[10px] uppercase tracking-wide text-text-tertiary font-semibold mb-1">Latest Version</p>
+                                                                        <p className="text-[11px] font-mono text-text-primary truncate">
+                                                                            {updateDiagnosticsLatestVersion === 'Unknown' ? 'Unknown' : `v${updateDiagnosticsLatestVersion.replace(/^v/, '')}`}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
 
-                                                                    {updaterCacheError && (
-                                                                        <div className="mt-2 flex items-center gap-2 text-[11px] text-red-400">
-                                                                            <AlertCircle size={12} />
-                                                                            <span className="truncate">{updaterCacheError}</span>
-                                                                        </div>
-                                                                    )}
+                                                            {updaterCacheError && (
+                                                                <div className="mt-2 flex items-center gap-2 text-[11px] text-red-400">
+                                                                    <AlertCircle size={12} />
+                                                                    <span className="truncate">{updaterCacheError}</span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -5022,8 +5022,8 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 <button
                                                                     onClick={() => setMicTestActive(prev => !prev)}
                                                                     className={`text-[11px] font-medium px-2 py-0.5 rounded-md transition-colors ${micTestActive
-                                                                            ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
-                                                                            : 'bg-bg-item-surface text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 border border-border-subtle'
+                                                                        ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
+                                                                        : 'bg-bg-item-surface text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50 border border-border-subtle'
                                                                         }`}
                                                                 >
                                                                     {micTestActive ? 'Stop Test' : 'Test Mic'}
