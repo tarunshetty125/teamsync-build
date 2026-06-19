@@ -783,8 +783,12 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         analytics.trackModeSelected(newState ? 'launcher' : 'undetectable'); // If visible (detectable), mode is normal/launcher. If not detectable, mode is undetectable.
     };
 
-    // Group meetings
-    const groupedMeetings = meetings.reduce((acc, meeting) => {
+    // Separate the demo/guide meeting so it's always pinned at the bottom
+    const demoMeeting = meetings.find((m) => m.id === 'demo-meeting');
+    const regularMeetings = meetings.filter((m) => m.id !== 'demo-meeting');
+
+    // Group regular meetings by date
+    const groupedMeetings = regularMeetings.reduce((acc, meeting) => {
         const label = getGroupLabel(meeting.date);
         if (!acc[label]) acc[label] = [];
         acc[label].push(meeting);
@@ -802,6 +806,14 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         // Approximation for others: parse date
         return new Date(b).getTime() - new Date(a).getTime();
     });
+
+    // Append the demo meeting as a pinned bottom group
+    if (demoMeeting) {
+        const pinnedLabel = 'Getting Started';
+        groupedMeetings[pinnedLabel] = [demoMeeting];
+        sortedGroups.push(pinnedLabel);
+    }
+
     const flattenedMeetings = sortedGroups.flatMap((label) => groupedMeetings[label]);
     const todayMeetings = meetings.filter((meeting) => isToday(meeting.date));
     const nextEventTimeLabel = nextCalendarEvent
@@ -1246,7 +1258,33 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                             {/* Top Section is now effectively static due to parent flex col */}
 
                             {/* TOP SECTION: contextual workspace surface */}
-                            <section className={`relative ${isLight ? 'bg-bg-primary' : 'bg-bg-primary'} px-8 pt-5 pb-6 border-b border-border-subtle shrink-0`}>
+                            <section className="relative px-8 pt-5 pb-6 border-b border-border-subtle shrink-0 overflow-hidden" style={{ backgroundColor: '#08080f' }}>
+                                {/* Animated grid lines — breathing pulse */}
+                                <style>{`
+                                  @keyframes launcherGridPulse {
+                                    0%, 100% { opacity: 0.45; transform: scale(1); }
+                                    50% { opacity: 0.85; transform: scale(1.02); }
+                                  }
+                                `}</style>
+                                <div
+                                    className="absolute inset-[-20px] z-0 pointer-events-none"
+                                    style={{
+                                        backgroundImage: `
+                                          linear-gradient(to right, rgba(255,255,255,0.12) 1px, transparent 1px),
+                                          linear-gradient(to bottom, rgba(255,255,255,0.12) 1px, transparent 1px)
+                                        `,
+                                        backgroundSize: '48px 48px',
+                                        animation: 'launcherGridPulse 6s ease-in-out infinite',
+                                        willChange: 'transform, opacity',
+                                    }}
+                                />
+                                {/* Radial fade */}
+                                <div
+                                    className="absolute inset-0 z-0 pointer-events-none"
+                                    style={{
+                                        background: `radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, #08080f 100%)`,
+                                    }}
+                                />
                                 <div className="relative z-10 max-w-5xl mx-auto space-y-4">
                                     <div className="flex items-start justify-between gap-5">
                                         <div className="min-w-0">
@@ -1418,52 +1456,60 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 animate={{ opacity: 1, y: 0 }}
                                                 exit={{ opacity: 0, y: -6 }}
                                                 transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                                                className="grid min-h-[246px] grid-cols-[minmax(0,1.8fr)_minmax(250px,0.9fr)] overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated shadow-[0_16px_40px_rgba(15,23,42,0.05)]"
+                                                className="group relative grid min-h-[246px] grid-cols-[minmax(0,1.8fr)_minmax(250px,0.9fr)] overflow-hidden rounded-xl"
+                                                style={{
+                                                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 30%, #334155 65%, #475569 100%)',
+                                                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.12), inset 0 -1px 2px rgba(15,23,42,0.5), 0 16px 40px rgba(51,65,85,0.15), 0 0 0 1px rgba(255,255,255,0.06)',
+                                                }}
                                             >
-                                                <div className="min-w-0 p-5">
+                                                {/* Specular highlight */}
+                                                <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-[30%] rounded-b-xl bg-gradient-to-b from-white/15 to-transparent opacity-60 blur-[3px]" />
+                                                <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/[0.02] to-slate-300/8 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
+
+                                                <div className="relative z-20 min-w-0 p-5">
                                                     <div className="flex items-center justify-between gap-4">
                                                         <div className="min-w-0">
-                                                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Next meeting</p>
-                                                            <h2 className="mt-2 truncate text-[24px] font-semibold leading-tight tracking-[-0.025em] text-text-primary">
+                                                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Next meeting</p>
+                                                            <h2 className="mt-2 truncate text-[24px] font-semibold leading-tight tracking-[-0.025em] text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.2)]">
                                                                 {nextCalendarEvent ? nextCalendarEvent.summary : 'No upcoming meetings'}
                                                             </h2>
                                                         </div>
-                                                        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium ${nextCalendarEvent ? 'text-emerald-600 bg-emerald-500/10 border-emerald-500/15' : 'text-text-secondary bg-bg-item-surface border-border-subtle'}`}>
+                                                        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium ${nextCalendarEvent ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/20' : 'text-slate-400 bg-white/5 border-white/10'}`}>
                                                             <Calendar size={12} />
                                                             {nextCalendarEvent ? 'Ready' : 'Clear'}
                                                         </span>
                                                     </div>
 
                                                     <div className="mt-4 grid grid-cols-3 gap-3">
-                                                        <div className="rounded-lg border border-border-subtle bg-bg-primary p-3">
-                                                            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-text-tertiary">
+                                                        <div className="rounded-lg border border-white/8 bg-white/[0.04] p-3 backdrop-blur-sm">
+                                                            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-slate-400">
                                                                 <Clock3 size={12} />
                                                                 Start time
                                                             </div>
-                                                            <p className="truncate text-[13px] font-semibold text-text-primary">{nextEventWindowLabel ?? 'No time scheduled'}</p>
+                                                            <p className="truncate text-[13px] font-semibold text-white/90">{nextEventWindowLabel ?? 'No time scheduled'}</p>
                                                         </div>
-                                                        <div className="rounded-lg border border-border-subtle bg-bg-primary p-3">
-                                                            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-text-tertiary">
+                                                        <div className="rounded-lg border border-white/8 bg-white/[0.04] p-3 backdrop-blur-sm">
+                                                            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-slate-400">
                                                                 <Users size={12} />
                                                                 Participants
                                                             </div>
-                                                            <p className="truncate text-[13px] font-semibold text-text-primary">{nextCalendarEvent ? getParticipantLabel(nextEventParticipants) : 'No event selected'}</p>
+                                                            <p className="truncate text-[13px] font-semibold text-white/90">{nextCalendarEvent ? getParticipantLabel(nextEventParticipants) : 'No event selected'}</p>
                                                         </div>
-                                                        <div className="rounded-lg border border-border-subtle bg-bg-primary p-3">
-                                                            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-text-tertiary">
+                                                        <div className="rounded-lg border border-white/8 bg-white/[0.04] p-3 backdrop-blur-sm">
+                                                            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-slate-400">
                                                                 <Video size={12} />
                                                                 Source
                                                             </div>
-                                                            <p className="truncate text-[13px] font-semibold text-text-primary">{nextCalendarEvent ? nextCalendarEvent.platform.toUpperCase() : 'Calendar'}</p>
+                                                            <p className="truncate text-[13px] font-semibold text-white/90">{nextCalendarEvent ? nextCalendarEvent.platform.toUpperCase() : 'Calendar'}</p>
                                                         </div>
                                                     </div>
 
                                                     <div className="mt-4 grid grid-cols-[0.85fr_1.15fr] gap-4">
                                                         <div>
-                                                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Likely topics</p>
+                                                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Likely topics</p>
                                                             <div className="flex flex-wrap gap-1.5">
                                                                 {(likelyTopics.length > 0 ? likelyTopics : ['Agenda review']).map((topic) => (
-                                                                    <span key={topic} className="rounded-md border border-border-subtle bg-bg-primary px-2 py-1 text-[11px] font-medium text-text-secondary">
+                                                                    <span key={topic} className="rounded-md border border-white/10 bg-white/[0.06] px-2 py-1 text-[11px] font-medium text-slate-300">
                                                                         {topic}
                                                                     </span>
                                                                 ))}
@@ -1471,11 +1517,11 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                         </div>
 
                                                         <div>
-                                                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Preparation notes</p>
+                                                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Preparation notes</p>
                                                             <div className="space-y-1.5">
                                                                 {preparationNotes.map((note) => (
-                                                                    <div key={note} className="flex items-start gap-2 text-[12px] leading-[1.35] text-text-secondary">
-                                                                        <CheckCircle2 size={13} className="mt-[1px] shrink-0 text-emerald-500" />
+                                                                    <div key={note} className="flex items-start gap-2 text-[12px] leading-[1.35] text-slate-300">
+                                                                        <CheckCircle2 size={13} className="mt-[1px] shrink-0 text-emerald-400" />
                                                                         <span className="line-clamp-1">{note}</span>
                                                                     </div>
                                                                 ))}
@@ -1484,19 +1530,19 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                     </div>
                                                 </div>
 
-                                                <aside className="flex min-w-0 flex-col justify-between border-l border-border-subtle bg-bg-primary p-5">
+                                                <aside className="relative z-20 flex min-w-0 flex-col justify-between border-l border-white/10 bg-white/[0.04] p-5 backdrop-blur-sm">
                                                     <div className="space-y-3">
                                                         <div>
-                                                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Calendar window</p>
-                                                            <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-text-primary">{upcomingCalendarEvents.length}</p>
-                                                            <p className="text-[12px] text-text-secondary">upcoming {upcomingCalendarEvents.length === 1 ? 'event' : 'events'}</p>
+                                                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Calendar window</p>
+                                                            <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] text-white">{upcomingCalendarEvents.length}</p>
+                                                            <p className="text-[12px] text-slate-400">upcoming {upcomingCalendarEvents.length === 1 ? 'event' : 'events'}</p>
                                                         </div>
-                                                        <div className="rounded-lg border border-border-subtle bg-bg-elevated p-3">
-                                                            <p className="text-[11px] font-medium text-text-tertiary">Recommendation</p>
-                                                            <p className="mt-1 truncate text-[13px] font-semibold text-text-primary">
+                                                        <div className="rounded-lg border border-white/8 bg-white/[0.06] p-3">
+                                                            <p className="text-[11px] font-medium text-slate-400">Recommendation</p>
+                                                            <p className="mt-1 truncate text-[13px] font-semibold text-white/90">
                                                                 {calendarRecommendation ? calendarRecommendation.recommendedModeLabel : 'General meeting mode'}
                                                             </p>
-                                                            <p className="mt-1 text-[12px] text-text-secondary">
+                                                            <p className="mt-1 text-[12px] text-slate-400">
                                                                 {calendarRecommendation ? getRecommendationConfidenceLabel(calendarRecommendation.confidence) : 'No mode change suggested'}
                                                             </p>
                                                         </div>
@@ -1506,7 +1552,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                         <button
                                                             type="button"
                                                             onClick={handlePrepareMeeting}
-                                                            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md bg-text-primary px-3 text-[13px] font-semibold text-bg-primary transition-opacity hover:opacity-90 active:scale-[0.98]"
+                                                            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md bg-white px-3 text-[13px] font-semibold text-[#0f172a] transition-opacity hover:opacity-90 active:scale-[0.98]"
                                                         >
                                                             <Sparkles size={14} />
                                                             {nextCalendarEvent ? 'Prepare meeting' : 'Refresh calendar'}
@@ -1515,7 +1561,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                             <button
                                                                 type="button"
                                                                 onClick={() => void window.electronAPI?.openExternal?.(nextCalendarEvent.meetingLink!)}
-                                                                className="inline-flex h-9 items-center justify-center rounded-md border border-border-subtle bg-bg-elevated px-3 text-[12px] font-medium text-text-secondary transition-colors hover:bg-bg-item-surface hover:text-text-primary active:scale-[0.98]"
+                                                                className="inline-flex h-9 items-center justify-center rounded-md border border-white/15 bg-white/[0.08] px-3 text-[12px] font-medium text-slate-300 transition-colors hover:bg-white/[0.12] hover:text-white active:scale-[0.98]"
                                                             >
                                                                 Join
                                                             </button>
@@ -1530,34 +1576,42 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 animate={{ opacity: 1, y: 0 }}
                                                 exit={{ opacity: 0, y: -6 }}
                                                 transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                                                className="grid min-h-[228px] grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] overflow-hidden rounded-xl border border-border-subtle bg-bg-elevated shadow-[0_16px_40px_rgba(15,23,42,0.05)]"
+                                                className="group relative grid min-h-[228px] grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] overflow-hidden rounded-xl"
+                                                style={{
+                                                    background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 28%, #6d28d9 58%, #a855f7 85%, #e879f9 100%)',
+                                                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.18), inset 0 -1px 2px rgba(30,27,75,0.5), 0 16px 40px rgba(168,85,247,0.15), 0 0 0 1px rgba(255,255,255,0.08)',
+                                                }}
                                             >
-                                                <div className="p-5">
+                                                {/* Specular highlight */}
+                                                <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-[30%] rounded-b-xl bg-gradient-to-b from-white/20 to-transparent opacity-60 blur-[3px]" />
+                                                <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/[0.03] to-fuchsia-200/10 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
+
+                                                <div className="relative z-20 p-5">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border-subtle bg-bg-primary text-text-secondary">
+                                                        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-white/80 backdrop-blur-sm">
                                                             <PlugZap size={18} />
                                                         </div>
                                                         <div>
-                                                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Calendar onboarding</p>
-                                                            <h2 className="mt-1 text-[24px] font-semibold tracking-[-0.025em] text-text-primary">Connect calendar context</h2>
+                                                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-purple-200/70">Calendar onboarding</p>
+                                                            <h2 className="mt-1 text-[24px] font-semibold tracking-[-0.025em] text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.2)]">Connect calendar context</h2>
                                                         </div>
                                                     </div>
-                                                    <p className="mt-4 max-w-[62ch] text-[13px] leading-6 text-text-secondary">
+                                                    <p className="mt-4 max-w-[62ch] text-[13px] leading-6 text-purple-100/70">
                                                         Quietly can prepare from your next event before the meeting starts and keep saved notes tied to the calendar title.
                                                     </p>
                                                 </div>
 
-                                                <aside className="flex flex-col justify-between border-l border-border-subtle bg-bg-primary p-5">
+                                                <aside className="relative z-20 flex flex-col justify-between border-l border-white/10 bg-white/[0.04] p-5 backdrop-blur-sm">
                                                     <div>
-                                                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-tertiary">Benefits</p>
+                                                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-purple-200/70">Benefits</p>
                                                         <div className="mt-3 space-y-2">
                                                             {[
                                                                 'See the next meeting before starting capture',
                                                                 'Surface likely topics and prep notes',
                                                                 'Preserve calendar context in saved recaps',
                                                             ].map((benefit) => (
-                                                                <div key={benefit} className="flex items-start gap-2 text-[12px] leading-[1.35] text-text-secondary">
-                                                                    <CheckCircle2 size={13} className="mt-[1px] shrink-0 text-emerald-500" />
+                                                                <div key={benefit} className="flex items-start gap-2 text-[12px] leading-[1.35] text-purple-100/80">
+                                                                    <CheckCircle2 size={13} className="mt-[1px] shrink-0 text-emerald-400" />
                                                                     <span>{benefit}</span>
                                                                 </div>
                                                             ))}
@@ -1566,7 +1620,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
                                                     <div className="mt-4">
                                                         <ConnectCalendarButton
-                                                            className="w-full justify-center"
+                                                            className="w-full justify-center !bg-white !text-[#1e1b4b] hover:!opacity-95"
                                                             onConnect={() => setIsCalendarConnected(true)}
                                                         />
                                                     </div>

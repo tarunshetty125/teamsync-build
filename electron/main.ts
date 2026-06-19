@@ -3959,6 +3959,9 @@ async function initializeApp() {
   // Pre-create settings window in background for faster first open
   appState.settingsWindowHelper.preloadWindow()
 
+  // Pre-create model selector window to prevent dock/menu bar glitch on first open
+  appState.modelSelectorWindowHelper.preloadWindow()
+
   // Note: We do NOT force dock show here anymore, respecting stealth mode.
 
   app.on("activate", () => {

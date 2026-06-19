@@ -270,7 +270,7 @@ const CalendarModeRecommendationCard: React.FC<CalendarModeRecommendationCardPro
                     <div>
                         <p className={sectionLabel}>Recommended mode</p>
                         <div className="mt-2 flex items-center gap-2 text-[14px] font-semibold text-text-primary">
-                            <WandSparkles size={15} className="text-blue-500" />
+                            <WandSparkles size={15} className="text-emerald-500" />
                             <span className="min-w-0 truncate">{recommendation.recommendedModeLabel}</span>
                         </div>
                     </div>
