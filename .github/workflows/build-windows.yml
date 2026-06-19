@@ -3,6 +3,9 @@ name: Build Windows App
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -65,13 +68,17 @@ jobs:
         run: |
           npx electron-builder --win --publish=never
 
-      # Upload artifacts
-      - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          retention-days: 3
-          path: |
-            release/*.exe
-            release/*.blockmap
-            release/*.yml
+      # Upload to GitHub Release draft (no storage cap, unlike artifacts)
+      - name: Upload to dev release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="dev-windows-latest"
+          # Delete existing release if present, then recreate
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            --title "Windows Dev Build ($(date -u +%Y-%m-%d))" \
+            --notes "Automated dev build from commit ${{ github.sha }}" \
+            --draft \
+            --prerelease \
+            release/*.exe release/*.blockmap release/*.yml
