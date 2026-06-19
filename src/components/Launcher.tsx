@@ -552,7 +552,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                         setCalendarRecommendationError(null);
                     }
                 })
-                .catch(() => {});
+                .catch(() => { });
         }
 
         let removeCalendarStatusListener: (() => void) | undefined;
@@ -731,7 +731,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             await window.electronAPI?.calendarIntelligenceDismiss?.(calendarRecommendation.eventId);
 
             // Sync the selected mode in ModesSettings so it highlights the newly active mode
-            await window.electronAPI?.modesSetSelected?.(targetMode.id).catch(() => {});
+            await window.electronAPI?.modesSetSelected?.(targetMode.id).catch(() => { });
 
             // Inject calendar event context into the AI prompt pipeline
             try {
@@ -1469,12 +1469,17 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
                                                 className="group relative grid min-h-[246px] grid-cols-[minmax(0,1.8fr)_minmax(250px,0.9fr)] overflow-hidden rounded-xl"
                                                 style={{
-                                                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 30%, #334155 65%, #475569 100%)',
-                                                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.12), inset 0 -1px 2px rgba(15,23,42,0.5), 0 16px 40px rgba(51,65,85,0.15), 0 0 0 1px rgba(255,255,255,0.06)',
+                                                    background: 'linear-gradient(180deg, #020210 0%, #0a0a2e 15%, #0c1445 40%, #111b5e 60%, #0a0a2e 85%, #020210 100%)',
+                                                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.08), inset 0 -1px 2px rgba(2,2,16,0.8), 0 16px 40px rgba(10,10,46,0.3), 0 0 0 1px rgba(255,255,255,0.04)',
                                                 }}
                                             >
-                                                {/* Moving aurora gradient */}
+                                                {/* Vertical blue curtain streaks */}
                                                 <style>{`
+                                                  @keyframes curtainShimmer {
+                                                    0% { opacity: 0.4; transform: scaleY(1); }
+                                                    50% { opacity: 0.7; transform: scaleY(1.02); }
+                                                    100% { opacity: 0.4; transform: scaleY(1); }
+                                                  }
                                                   @keyframes connectedAuroraMove {
                                                     0% { transform: translateX(-25%) translateY(-8%) rotate(-3deg); }
                                                     33% { transform: translateX(12%) translateY(12%) rotate(2deg); }
@@ -1489,24 +1494,69 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                   }
                                                 `}</style>
                                                 <div
-                                                    className="pointer-events-none absolute inset-[-40%] z-[1]"
+                                                    className="pointer-events-none absolute inset-0 z-[1]"
                                                     style={{
-                                                        background: 'radial-gradient(ellipse 50% 60% at 50% 50%, rgba(51,65,85,0.4) 0%, rgba(71,85,105,0.2) 40%, transparent 70%)',
+                                                        backgroundImage: `
+                                                          repeating-linear-gradient(90deg,
+                                                            transparent 0px,
+                                                            transparent 8px,
+                                                            rgba(59,130,246,0.06) 8px,
+                                                            rgba(59,130,246,0.03) 10px,
+                                                            transparent 10px,
+                                                            transparent 14px,
+                                                            rgba(99,102,241,0.05) 14px,
+                                                            rgba(99,102,241,0.02) 15px,
+                                                            transparent 15px,
+                                                            transparent 22px,
+                                                            rgba(59,130,246,0.04) 22px,
+                                                            rgba(59,130,246,0.02) 24px
+                                                          )
+                                                        `,
+                                                        animation: 'curtainShimmer 6s ease-in-out infinite',
+                                                        willChange: 'opacity, transform',
+                                                    }}
+                                                />
+                                                {/* Central purple/teal glow */}
+                                                <div
+                                                    className="pointer-events-none absolute inset-0 z-[2]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 70% 80% at 40% 55%, rgba(109,40,217,0.3) 0%, rgba(79,70,229,0.15) 30%, transparent 65%)',
+                                                    }}
+                                                />
+                                                {/* Teal/green top accent */}
+                                                <div
+                                                    className="pointer-events-none absolute inset-0 z-[2]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 50% 40% at 55% 10%, rgba(52,211,153,0.12) 0%, rgba(56,189,248,0.06) 40%, transparent 70%)',
+                                                    }}
+                                                />
+                                                {/* Black vignette edges */}
+                                                <div
+                                                    className="pointer-events-none absolute inset-0 z-[3]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 85% 85% at 40% 50%, transparent 30%, rgba(2,2,16,0.7) 100%)',
+                                                    }}
+                                                />
+                                                {/* Moving aurora blobs */}
+                                                <div
+                                                    className="pointer-events-none absolute inset-[-40%] z-[2]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 40% 50% at 50% 50%, rgba(79,70,229,0.2) 0%, rgba(109,40,217,0.1) 40%, transparent 70%)',
                                                         animation: 'connectedAuroraMove 9s ease-in-out infinite',
                                                         willChange: 'transform',
                                                     }}
                                                 />
                                                 <div
-                                                    className="pointer-events-none absolute inset-[-40%] z-[1]"
+                                                    className="pointer-events-none absolute inset-[-40%] z-[2]"
                                                     style={{
-                                                        background: 'radial-gradient(ellipse 45% 55% at 50% 50%, rgba(20,184,166,0.12) 0%, rgba(56,189,248,0.08) 35%, transparent 65%)',
+                                                        background: 'radial-gradient(ellipse 35% 45% at 50% 50%, rgba(52,211,153,0.08) 0%, rgba(56,189,248,0.05) 35%, transparent 65%)',
                                                         animation: 'connectedAuroraMove2 11s ease-in-out infinite',
                                                         willChange: 'transform',
                                                     }}
                                                 />
                                                 {/* Specular highlight */}
-                                                <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-[30%] rounded-b-xl bg-gradient-to-b from-white/15 to-transparent opacity-60 blur-[3px]" />
-                                                <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/[0.02] to-slate-300/8 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
+                                                <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-[25%] rounded-b-xl bg-gradient-to-b from-white/8 to-transparent opacity-50 blur-[3px]" />
+                                                <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/[0.02] to-indigo-300/5 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
 
                                                 <div className="relative z-20 min-w-0 p-5">
                                                     <div className="flex items-center justify-between gap-4">
@@ -1620,12 +1670,17 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
                                                 className="group relative grid min-h-[228px] grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] overflow-hidden rounded-xl"
                                                 style={{
-                                                    background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 28%, #6d28d9 58%, #a855f7 85%, #e879f9 100%)',
-                                                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.18), inset 0 -1px 2px rgba(30,27,75,0.5), 0 16px 40px rgba(168,85,247,0.15), 0 0 0 1px rgba(255,255,255,0.08)',
+                                                    background: 'linear-gradient(180deg, #020210 0%, #0a0a2e 15%, #0c1445 40%, #111b5e 60%, #0a0a2e 85%, #020210 100%)',
+                                                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.08), inset 0 -1px 2px rgba(2,2,16,0.8), 0 16px 40px rgba(10,10,46,0.3), 0 0 0 1px rgba(255,255,255,0.04)',
                                                 }}
                                             >
-                                                {/* Moving aurora gradient */}
+                                                {/* Vertical blue curtain streaks */}
                                                 <style>{`
+                                                  @keyframes curtainShimmer2 {
+                                                    0% { opacity: 0.45; transform: scaleY(1); }
+                                                    50% { opacity: 0.75; transform: scaleY(1.02); }
+                                                    100% { opacity: 0.45; transform: scaleY(1); }
+                                                  }
                                                   @keyframes calendarAuroraMove {
                                                     0% { transform: translateX(-30%) translateY(-10%) rotate(-5deg); }
                                                     33% { transform: translateX(10%) translateY(15%) rotate(3deg); }
@@ -1640,24 +1695,69 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                   }
                                                 `}</style>
                                                 <div
-                                                    className="pointer-events-none absolute inset-[-40%] z-[1]"
+                                                    className="pointer-events-none absolute inset-0 z-[1]"
                                                     style={{
-                                                        background: 'radial-gradient(ellipse 50% 60% at 50% 50%, rgba(168,85,247,0.35) 0%, rgba(139,92,246,0.2) 40%, transparent 70%)',
+                                                        backgroundImage: `
+                                                          repeating-linear-gradient(90deg,
+                                                            transparent 0px,
+                                                            transparent 8px,
+                                                            rgba(59,130,246,0.06) 8px,
+                                                            rgba(59,130,246,0.03) 10px,
+                                                            transparent 10px,
+                                                            transparent 14px,
+                                                            rgba(99,102,241,0.05) 14px,
+                                                            rgba(99,102,241,0.02) 15px,
+                                                            transparent 15px,
+                                                            transparent 22px,
+                                                            rgba(59,130,246,0.04) 22px,
+                                                            rgba(59,130,246,0.02) 24px
+                                                          )
+                                                        `,
+                                                        animation: 'curtainShimmer2 5s ease-in-out infinite',
+                                                        willChange: 'opacity, transform',
+                                                    }}
+                                                />
+                                                {/* Central purple glow */}
+                                                <div
+                                                    className="pointer-events-none absolute inset-0 z-[2]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 75% 85% at 45% 55%, rgba(109,40,217,0.35) 0%, rgba(79,70,229,0.18) 30%, transparent 65%)',
+                                                    }}
+                                                />
+                                                {/* Teal/green top accent */}
+                                                <div
+                                                    className="pointer-events-none absolute inset-0 z-[2]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 50% 40% at 55% 8%, rgba(52,211,153,0.15) 0%, rgba(56,189,248,0.08) 40%, transparent 70%)',
+                                                    }}
+                                                />
+                                                {/* Black vignette edges */}
+                                                <div
+                                                    className="pointer-events-none absolute inset-0 z-[3]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 85% 85% at 45% 50%, transparent 30%, rgba(2,2,16,0.7) 100%)',
+                                                    }}
+                                                />
+                                                {/* Moving aurora blobs */}
+                                                <div
+                                                    className="pointer-events-none absolute inset-[-40%] z-[2]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 40% 50% at 50% 50%, rgba(109,40,217,0.22) 0%, rgba(139,92,246,0.1) 40%, transparent 70%)',
                                                         animation: 'calendarAuroraMove 8s ease-in-out infinite',
                                                         willChange: 'transform',
                                                     }}
                                                 />
                                                 <div
-                                                    className="pointer-events-none absolute inset-[-40%] z-[1]"
+                                                    className="pointer-events-none absolute inset-[-40%] z-[2]"
                                                     style={{
-                                                        background: 'radial-gradient(ellipse 45% 55% at 50% 50%, rgba(232,121,249,0.25) 0%, rgba(192,132,252,0.15) 35%, transparent 65%)',
+                                                        background: 'radial-gradient(ellipse 35% 45% at 50% 50%, rgba(52,211,153,0.1) 0%, rgba(56,189,248,0.06) 35%, transparent 65%)',
                                                         animation: 'calendarAuroraMove2 10s ease-in-out infinite',
                                                         willChange: 'transform',
                                                     }}
                                                 />
                                                 {/* Specular highlight */}
-                                                <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-[30%] rounded-b-xl bg-gradient-to-b from-white/20 to-transparent opacity-60 blur-[3px]" />
-                                                <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/[0.03] to-fuchsia-200/10 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
+                                                <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-[25%] rounded-b-xl bg-gradient-to-b from-white/8 to-transparent opacity-50 blur-[3px]" />
+                                                <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/[0.02] to-indigo-300/5 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
 
                                                 <div className="relative z-20 p-5">
                                                     <div className="flex items-center gap-3">
@@ -1720,203 +1820,203 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                         const TypeIcon = typeMeta.Icon;
 
                                                         return (
-                                                        <motion.div
-                                                            key={m.id}
-                                                            data-meeting-id={m.id}
-                                                            layoutId={`meeting-${m.id}`}
-                                                            className={`group relative flex items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${selectedMeetingId === m.id ? 'border-border-muted bg-bg-elevated' : 'border-transparent bg-transparent hover:border-border-subtle hover:bg-bg-elevated'}`}
-                                                            onClick={() => handleOpenMeeting(m)}
-                                                        >
-                                                            <div
-                                                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${typeMeta.tone}`}
-                                                                title={typeMeta.label}
+                                                            <motion.div
+                                                                key={m.id}
+                                                                data-meeting-id={m.id}
+                                                                layoutId={`meeting-${m.id}`}
+                                                                className={`group relative flex items-center gap-3 rounded-xl border px-3 py-3 transition-colors ${selectedMeetingId === m.id ? 'border-border-muted bg-bg-elevated' : 'border-transparent bg-transparent hover:border-border-subtle hover:bg-bg-elevated'}`}
+                                                                onClick={() => handleOpenMeeting(m)}
                                                             >
-                                                                <TypeIcon size={16} className={m.title === 'Processing...' ? 'animate-spin' : ''} />
-                                                            </div>
-
-                                                            <div className="min-w-0 flex-1">
-                                                                <div className="flex min-w-0 items-center gap-2">
-                                                                    <div className={`truncate text-[14px] font-semibold ${m.title === 'Processing...' ? 'text-blue-500 italic' : 'text-text-primary'}`}>
-                                                                        {m.title}
-                                                                    </div>
-                                                                    <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium ${statusMeta.className}`}>
-                                                                        {statusMeta.label}
-                                                                    </span>
-                                                                </div>
-                                                                <p className="mt-1 truncate text-[12px] leading-5 text-text-secondary">
-                                                                    {getMeetingSummaryLine(m)}
-                                                                </p>
-                                                            </div>
-
-                                                            {/* Time & Duration Section */}
-                                                            <div className="flex shrink-0 items-center gap-3 pr-8">
-                                                                {m.title === 'Processing...' ? (
-                                                                    <div className="flex items-center gap-2">
-                                                                        <RefreshCw size={12} className="animate-spin text-blue-500" />
-                                                                        <span className="text-xs text-blue-500 font-medium">Finalizing...</span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <>
-                                                                        <span className="relative z-10 rounded-md border border-border-subtle bg-bg-primary px-2 py-1 text-center text-[10px] font-medium tracking-wide text-text-secondary tabular-nums">
-                                                                            {formatDurationPill(m.duration)}
-                                                                        </span>
-
-                                                                        {/* Time Text (Should fade out on hover) */}
-                                                                        <span className="min-w-[60px] text-right text-[12px] font-medium text-text-secondary tabular-nums">
-                                                                            {formatTime(m.date)}
-                                                                        </span>
-                                                                    </>
-                                                                )}
-                                                            </div>
-
-                                                            {/* Context Menu Trigger (Slides in on hover) */}
-                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 translate-x-4 transition-all duration-300 ease-out group-hover:opacity-100 group-hover:translate-x-0">
-                                                                <button
-                                                                    className="p-1.5 text-text-secondary hover:text-text-primary transition-colors"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setActiveMenuId(activeMenuId === m.id ? null : m.id);
-                                                                    }}
+                                                                <div
+                                                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${typeMeta.tone}`}
+                                                                    title={typeMeta.label}
                                                                 >
-                                                                    <MoreHorizontal size={16} />
-                                                                </button>
-                                                            </div>
+                                                                    <TypeIcon size={16} className={m.title === 'Processing...' ? 'animate-spin' : ''} />
+                                                                </div>
 
-                                                            {/* Dropdown Menu */}
-                                                            <AnimatePresence>
-                                                                {activeMenuId === m.id && (
-                                                                    <motion.div
-                                                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                                        exit={{ opacity: 0, scale: 0.95, y: 5 }}
-                                                                        transition={{ duration: 0.1 }}
-                                                                        layout
-                                                                        className={`absolute right-0 top-full mt-1 backdrop-blur-xl rounded-lg shadow-2xl z-50 overflow-hidden border ${isLight ? 'bg-bg-elevated border-border-muted shadow-[0_8px_24px_rgba(0,0,0,0.12)]' : 'bg-[#1E1E1E]/80 border-white/10'}`}
-                                                                        style={{ width: confirmingDeleteId === m.id ? 200 : 140 }}
-                                                                        onClick={(e) => e.stopPropagation()}
-                                                                        onMouseEnter={() => setMenuEntered(true)}
-                                                                        onMouseLeave={() => {
-                                                                            if (menuEntered && confirmingDeleteId !== m.id) setActiveMenuId(null);
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="flex min-w-0 items-center gap-2">
+                                                                        <div className={`truncate text-[14px] font-semibold ${m.title === 'Processing...' ? 'text-blue-500 italic' : 'text-text-primary'}`}>
+                                                                            {m.title}
+                                                                        </div>
+                                                                        <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-medium ${statusMeta.className}`}>
+                                                                            {statusMeta.label}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="mt-1 truncate text-[12px] leading-5 text-text-secondary">
+                                                                        {getMeetingSummaryLine(m)}
+                                                                    </p>
+                                                                </div>
+
+                                                                {/* Time & Duration Section */}
+                                                                <div className="flex shrink-0 items-center gap-3 pr-8">
+                                                                    {m.title === 'Processing...' ? (
+                                                                        <div className="flex items-center gap-2">
+                                                                            <RefreshCw size={12} className="animate-spin text-blue-500" />
+                                                                            <span className="text-xs text-blue-500 font-medium">Finalizing...</span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span className="relative z-10 rounded-md border border-border-subtle bg-bg-primary px-2 py-1 text-center text-[10px] font-medium tracking-wide text-text-secondary tabular-nums">
+                                                                                {formatDurationPill(m.duration)}
+                                                                            </span>
+
+                                                                            {/* Time Text (Should fade out on hover) */}
+                                                                            <span className="min-w-[60px] text-right text-[12px] font-medium text-text-secondary tabular-nums">
+                                                                                {formatTime(m.date)}
+                                                                            </span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Context Menu Trigger (Slides in on hover) */}
+                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 translate-x-4 transition-all duration-300 ease-out group-hover:opacity-100 group-hover:translate-x-0">
+                                                                    <button
+                                                                        className="p-1.5 text-text-secondary hover:text-text-primary transition-colors"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setActiveMenuId(activeMenuId === m.id ? null : m.id);
                                                                         }}
                                                                     >
-                                                                        <div className="p-1 flex flex-col gap-0.5">
-                                                                            <AnimatePresence mode="wait" initial={false}>
-                                                                                {confirmingDeleteId === m.id ? (
-                                                                                    <motion.div
-                                                                                        key="confirm"
-                                                                                        initial={{ opacity: 0 }}
-                                                                                        animate={{ opacity: 1 }}
-                                                                                        exit={{ opacity: 0 }}
-                                                                                        transition={{ duration: 0.12 }}
-                                                                                        className="px-3 py-2"
-                                                                                    >
-                                                                                        <p className={`text-[12px] font-medium text-center mb-2 ${isLight ? 'text-text-primary' : 'text-white/90'}`}>Delete this meeting?</p>
-                                                                                        <div className="flex justify-between gap-2">
-                                                                                            <button
-                                                                                                className={`flex-1 text-[12px] px-2 py-1.5 rounded-md transition-colors ${isLight ? 'text-text-secondary hover:text-text-primary hover:bg-bg-item-surface' : 'text-white/50 hover:text-white/80 hover:bg-white/10'}`}
-                                                                                                onClick={() => {
-                                                                                                    setConfirmingDeleteId(null);
-                                                                                                    setActiveMenuId(null);
-                                                                                                }}
-                                                                                            >
-                                                                                                Cancel
-                                                                                            </button>
-                                                                                            <button
-                                                                                                className="flex-1 text-[12px] px-2 py-1.5 rounded-md font-semibold text-red-400 bg-red-500/15 hover:bg-red-500/25 transition-colors"
-                                                                                                onClick={async () => {
-                                                                                                    if (window.electronAPI && window.electronAPI.deleteMeeting) {
-                                                                                                        const success = await window.electronAPI.deleteMeeting(m.id);
-                                                                                                        if (success) {
-                                                                                                            setMeetings(prev => prev.filter(meeting => meeting.id !== m.id));
+                                                                        <MoreHorizontal size={16} />
+                                                                    </button>
+                                                                </div>
+
+                                                                {/* Dropdown Menu */}
+                                                                <AnimatePresence>
+                                                                    {activeMenuId === m.id && (
+                                                                        <motion.div
+                                                                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                                            exit={{ opacity: 0, scale: 0.95, y: 5 }}
+                                                                            transition={{ duration: 0.1 }}
+                                                                            layout
+                                                                            className={`absolute right-0 top-full mt-1 backdrop-blur-xl rounded-lg shadow-2xl z-50 overflow-hidden border ${isLight ? 'bg-bg-elevated border-border-muted shadow-[0_8px_24px_rgba(0,0,0,0.12)]' : 'bg-[#1E1E1E]/80 border-white/10'}`}
+                                                                            style={{ width: confirmingDeleteId === m.id ? 200 : 140 }}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            onMouseEnter={() => setMenuEntered(true)}
+                                                                            onMouseLeave={() => {
+                                                                                if (menuEntered && confirmingDeleteId !== m.id) setActiveMenuId(null);
+                                                                            }}
+                                                                        >
+                                                                            <div className="p-1 flex flex-col gap-0.5">
+                                                                                <AnimatePresence mode="wait" initial={false}>
+                                                                                    {confirmingDeleteId === m.id ? (
+                                                                                        <motion.div
+                                                                                            key="confirm"
+                                                                                            initial={{ opacity: 0 }}
+                                                                                            animate={{ opacity: 1 }}
+                                                                                            exit={{ opacity: 0 }}
+                                                                                            transition={{ duration: 0.12 }}
+                                                                                            className="px-3 py-2"
+                                                                                        >
+                                                                                            <p className={`text-[12px] font-medium text-center mb-2 ${isLight ? 'text-text-primary' : 'text-white/90'}`}>Delete this meeting?</p>
+                                                                                            <div className="flex justify-between gap-2">
+                                                                                                <button
+                                                                                                    className={`flex-1 text-[12px] px-2 py-1.5 rounded-md transition-colors ${isLight ? 'text-text-secondary hover:text-text-primary hover:bg-bg-item-surface' : 'text-white/50 hover:text-white/80 hover:bg-white/10'}`}
+                                                                                                    onClick={() => {
+                                                                                                        setConfirmingDeleteId(null);
+                                                                                                        setActiveMenuId(null);
+                                                                                                    }}
+                                                                                                >
+                                                                                                    Cancel
+                                                                                                </button>
+                                                                                                <button
+                                                                                                    className="flex-1 text-[12px] px-2 py-1.5 rounded-md font-semibold text-red-400 bg-red-500/15 hover:bg-red-500/25 transition-colors"
+                                                                                                    onClick={async () => {
+                                                                                                        if (window.electronAPI && window.electronAPI.deleteMeeting) {
+                                                                                                            const success = await window.electronAPI.deleteMeeting(m.id);
+                                                                                                            if (success) {
+                                                                                                                setMeetings(prev => prev.filter(meeting => meeting.id !== m.id));
+                                                                                                            }
                                                                                                         }
-                                                                                                    }
-                                                                                                    setConfirmingDeleteId(null);
+                                                                                                        setConfirmingDeleteId(null);
+                                                                                                        setActiveMenuId(null);
+                                                                                                    }}
+                                                                                                >
+                                                                                                    Delete
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        </motion.div>
+                                                                                    ) : (
+                                                                                        <motion.div
+                                                                                            key="menu"
+                                                                                            initial={{ opacity: 0 }}
+                                                                                            animate={{ opacity: 1 }}
+                                                                                            exit={{ opacity: 0 }}
+                                                                                            transition={{ duration: 0.12 }}
+                                                                                        >
+                                                                                            <button
+                                                                                                className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-primary rounded-lg transition-colors text-left ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/10'}`}
+                                                                                                onClick={async () => {
                                                                                                     setActiveMenuId(null);
-                                                                                                }}
-                                                                                            >
-                                                                                                Delete
-                                                                                            </button>
-                                                                                        </div>
-                                                                                    </motion.div>
-                                                                                ) : (
-                                                                                    <motion.div
-                                                                                        key="menu"
-                                                                                        initial={{ opacity: 0 }}
-                                                                                        animate={{ opacity: 1 }}
-                                                                                        exit={{ opacity: 0 }}
-                                                                                        transition={{ duration: 0.12 }}
-                                                                                    >
-                                                                                        <button
-                                                                                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-primary rounded-lg transition-colors text-left ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/10'}`}
-                                                                                            onClick={async () => {
-                                                                                                setActiveMenuId(null);
-                                                                                                analytics.trackPdfExported();
-                                                                                                if (window.electronAPI && window.electronAPI.getMeetingDetails) {
-                                                                                                    try {
-                                                                                                        const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
-                                                                                                        if (fullMeeting) {
-                                                                                                            generateMeetingPDF(fullMeeting);
-                                                                                                        } else {
+                                                                                                    analytics.trackPdfExported();
+                                                                                                    if (window.electronAPI && window.electronAPI.getMeetingDetails) {
+                                                                                                        try {
+                                                                                                            const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
+                                                                                                            if (fullMeeting) {
+                                                                                                                generateMeetingPDF(fullMeeting);
+                                                                                                            } else {
+                                                                                                                generateMeetingPDF(m);
+                                                                                                            }
+                                                                                                        } catch (e) {
+                                                                                                            console.error("Failed to fetch details for PDF", e);
                                                                                                             generateMeetingPDF(m);
                                                                                                         }
-                                                                                                    } catch (e) {
-                                                                                                        console.error("Failed to fetch details for PDF", e);
+                                                                                                    } else {
                                                                                                         generateMeetingPDF(m);
                                                                                                     }
-                                                                                                } else {
-                                                                                                    generateMeetingPDF(m);
-                                                                                                }
-                                                                                            }}
-                                                                                        >
-                                                                                            <Download size={13} />
-                                                                                            Export PDF
-                                                                                        </button>
-                                                                                        <button
-                                                                                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-primary rounded-lg transition-colors text-left ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/10'}`}
-                                                                                            onClick={async () => {
-                                                                                                setActiveMenuId(null);
-                                                                                                if (window.electronAPI && window.electronAPI.getMeetingDetails) {
-                                                                                                    try {
-                                                                                                        const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
-                                                                                                        generateMeetingMarkdown(fullMeeting || m);
-                                                                                                    } catch { generateMeetingMarkdown(m); }
-                                                                                                } else { generateMeetingMarkdown(m); }
-                                                                                            }}
-                                                                                        >
-                                                                                            <FileText size={13} />
-                                                                                            Export MD
-                                                                                        </button>
-                                                                                        <button
-                                                                                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-primary rounded-lg transition-colors text-left ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/10'}`}
-                                                                                            onClick={async () => {
-                                                                                                setActiveMenuId(null);
-                                                                                                if (window.electronAPI && window.electronAPI.getMeetingDetails) {
-                                                                                                    try {
-                                                                                                        const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
-                                                                                                        generateMeetingHTML(fullMeeting || m);
-                                                                                                    } catch { generateMeetingHTML(m); }
-                                                                                                } else { generateMeetingHTML(m); }
-                                                                                            }}
-                                                                                        >
-                                                                                            <Code2 size={13} />
-                                                                                            Export HTML
-                                                                                        </button>
-                                                                                        <div className={`my-0.5 h-px ${isLight ? 'bg-border-subtle' : 'bg-white/8'}`} />
-                                                                                        <button
-                                                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors text-left"
-                                                                                            onClick={() => setConfirmingDeleteId(m.id)}
-                                                                                        >
-                                                                                            <Trash2 size={13} />
-                                                                                            Delete
-                                                                                        </button>
-                                                                                    </motion.div>
-                                                                                )}
-                                                                            </AnimatePresence>
-                                                                        </div>
-                                                                    </motion.div>
-                                                                )}
-                                                            </AnimatePresence>
-                                                        </motion.div>
+                                                                                                }}
+                                                                                            >
+                                                                                                <Download size={13} />
+                                                                                                Export PDF
+                                                                                            </button>
+                                                                                            <button
+                                                                                                className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-primary rounded-lg transition-colors text-left ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/10'}`}
+                                                                                                onClick={async () => {
+                                                                                                    setActiveMenuId(null);
+                                                                                                    if (window.electronAPI && window.electronAPI.getMeetingDetails) {
+                                                                                                        try {
+                                                                                                            const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
+                                                                                                            generateMeetingMarkdown(fullMeeting || m);
+                                                                                                        } catch { generateMeetingMarkdown(m); }
+                                                                                                    } else { generateMeetingMarkdown(m); }
+                                                                                                }}
+                                                                                            >
+                                                                                                <FileText size={13} />
+                                                                                                Export MD
+                                                                                            </button>
+                                                                                            <button
+                                                                                                className={`w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-primary rounded-lg transition-colors text-left ${isLight ? 'hover:bg-bg-item-surface' : 'hover:bg-white/10'}`}
+                                                                                                onClick={async () => {
+                                                                                                    setActiveMenuId(null);
+                                                                                                    if (window.electronAPI && window.electronAPI.getMeetingDetails) {
+                                                                                                        try {
+                                                                                                            const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
+                                                                                                            generateMeetingHTML(fullMeeting || m);
+                                                                                                        } catch { generateMeetingHTML(m); }
+                                                                                                    } else { generateMeetingHTML(m); }
+                                                                                                }}
+                                                                                            >
+                                                                                                <Code2 size={13} />
+                                                                                                Export HTML
+                                                                                            </button>
+                                                                                            <div className={`my-0.5 h-px ${isLight ? 'bg-border-subtle' : 'bg-white/8'}`} />
+                                                                                            <button
+                                                                                                className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors text-left"
+                                                                                                onClick={() => setConfirmingDeleteId(m.id)}
+                                                                                            >
+                                                                                                <Trash2 size={13} />
+                                                                                                Delete
+                                                                                            </button>
+                                                                                        </motion.div>
+                                                                                    )}
+                                                                                </AnimatePresence>
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    )}
+                                                                </AnimatePresence>
+                                                            </motion.div>
                                                         );
                                                     })}
                                                 </div>
