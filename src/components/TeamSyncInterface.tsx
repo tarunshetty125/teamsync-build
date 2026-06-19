@@ -4542,6 +4542,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                             <div className="relative group">
                                                 <button
                                                     onClick={async () => {
+                                                        if (!hasProContextAccess) return;
                                                         const nextMode: SessionMode = currentSessionMode === 'system_design' ? 'general' : 'system_design';
                                                         console.log(`[Overlay] System design mode ${nextMode === 'system_design' ? 'on' : 'off'}`);
                                                         window.electronAPI?.overlayLogSystemDesignMode?.(nextMode === 'system_design');
@@ -4555,16 +4556,18 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                     className={`
                                                     w-7 h-7 flex items-center justify-center rounded-lg
                                                     interaction-base interaction-press
-                                                    ${currentSessionMode === 'system_design'
-                                                            ? 'overlay-icon-surface overlay-icon-surface-hover text-teal-400 opacity-100'
-                                                            : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
+                                                    ${!hasProContextAccess
+                                                            ? 'overlay-icon-surface opacity-35 cursor-not-allowed'
+                                                            : currentSessionMode === 'system_design'
+                                                                ? 'overlay-icon-surface overlay-icon-surface-hover text-teal-400 opacity-100'
+                                                                : 'overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive'}
                                                 `}
                                                     style={appearance.iconStyle}
                                                 >
-                                                    <Cpu className={`w-3.5 h-3.5 ${currentSessionMode === 'system_design' ? 'animate-flame' : ''}`} />
+                                                    <Cpu className={`w-3.5 h-3.5 ${currentSessionMode === 'system_design' && hasProContextAccess ? 'animate-flame' : ''}`} />
                                                 </button>
                                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
-                                                    System Design Mode
+                                                    {!hasProContextAccess ? '🔒 Pro · System Design Mode' : 'System Design Mode'}
                                                 </div>
                                             </div>
 
@@ -4594,6 +4597,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                 </div>
                                             )}
 
+                                            {hasProContextAccess ? (
                                             <div className="relative group p-[1px] rounded-full overflow-hidden flex items-center justify-center">
                                                 {/* Rotating Glowing Border */}
                                                 <motion.div
@@ -4621,6 +4625,21 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                     Analyse Screen
                                                 </button>
                                             </div>
+                                            ) : (
+                                            <div className="relative group">
+                                                <button
+                                                    disabled
+                                                    className={`relative h-[26px] px-3.5 rounded-full flex items-center justify-center gap-1.5 text-[11px] font-bold tracking-wide whitespace-nowrap opacity-35 cursor-not-allowed ${isLightTheme ? 'text-gray-400 bg-gray-100/80' : 'text-white/30 bg-white/[0.04]'}`}
+                                                    title="🔒 Pro · Analyse Screen"
+                                                >
+                                                    <Camera className="w-3 h-3" />
+                                                    Analyse Screen
+                                                </button>
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
+                                                    🔒 Pro · Analyse Screen
+                                                </div>
+                                            </div>
+                                            )}
                                         </div>
 
 

@@ -3010,6 +3010,10 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   safeHandle("session:set-mode", async (_, mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design') => {
+    // Pro gate: system_design mode requires Pro license
+    if (mode === 'system_design' && !isProOrTrialActive()) {
+      return { success: false, error: 'pro_required', mode: 'general' };
+    }
     const intelligenceManager = appState.getIntelligenceManager();
     intelligenceManager.setSessionMode(mode);
     BrowserWindow.getAllWindows().forEach(win => {
@@ -3033,6 +3037,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     actionId?: string;
     contextTarget?: 'latest_turn' | 'active_context' | 'transcript';
   }) => {
+    // Pro gate: system_design_tradeoffs intent requires Pro license
+    if (payload.intent === 'system_design_tradeoffs' && !isProOrTrialActive()) {
+      throw new Error('Pro license required for system design features.');
+    }
     const intelligenceManager = appState.getIntelligenceManager();
     const result = await intelligenceManager.handleAction(payload.intent, {
       message: payload.message,
@@ -3152,8 +3160,12 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  // MODE 9: Screen Scan (Context-Aware Screen Intelligence)
+  // MODE 9: Screen Scan (Context-Aware Screen Intelligence) — Pro Only
   safeHandle("generate-screen-scan", async (_, imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => {
+    // Pro gate: screen scan requires Pro license
+    if (!isProOrTrialActive()) {
+      throw new Error('Pro license required for Analyse Screen.');
+    }
     try {
       // If no explicit images were passed from the frontend, fall back to the
       // screenshot queue so the AI can always "see" the user's screen.
