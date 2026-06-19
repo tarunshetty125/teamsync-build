@@ -251,10 +251,29 @@ export class PermissionManager extends EventEmitter {
     // Read real permission states even in dev mode
 
     if (process.platform !== 'darwin') {
+      // Windows: check real microphone permission via Electron API.
+      // getMediaAccessStatus('microphone') works on Windows 10 1903+ and returns
+      // 'granted', 'denied', 'restricted', or 'not-determined'.
+      // Screen recording and accessibility have no Windows permission gates.
+      let micPermission: PermissionState = 'granted';
+      if (process.platform === 'win32') {
+        try {
+          const micStatus = systemPreferences.getMediaAccessStatus('microphone');
+          micPermission = this.mapMediaStatus(micStatus as MacMediaAccessStatus);
+          if (micPermission !== 'granted') {
+            console.warn(`[PermissionManager] Windows microphone permission: ${micStatus}`);
+          }
+        } catch (e) {
+          // getMediaAccessStatus may not be available on older Electron versions
+          console.warn('[PermissionManager] Could not check Windows microphone permission:', e);
+          micPermission = 'granted'; // Assume granted if check fails
+        }
+      }
+
       return {
-        screenRecording: 'granted',
-        microphone: 'granted',
-        accessibility: 'granted',
+        screenRecording: 'granted',  // No Windows equivalent
+        microphone: micPermission,
+        accessibility: 'granted',    // No Windows equivalent
         restartRequired: false,
         platform: process.platform,
         checkedAt: new Date().toISOString(),
@@ -296,7 +315,7 @@ export class PermissionManager extends EventEmitter {
   }
 
   private readMicrophoneStatus(): MacMediaAccessStatus {
-    if (process.platform !== 'darwin') return 'granted';
+    if (process.platform !== 'darwin' && process.platform !== 'win32') return 'granted';
 
     try {
       return systemPreferences.getMediaAccessStatus('microphone') as MacMediaAccessStatus;

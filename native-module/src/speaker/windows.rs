@@ -105,18 +105,18 @@ impl SpeakerInput {
                 init_tx,
                 device_id,
             ) {
-                error!("Audio capture loop failed: {}", e);
+                error!("[Audio:WASAPI] Capture loop failed: {}", e);
             }
         });
 
         let actual_sample_rate = match init_rx.recv_timeout(Duration::from_secs(5)) {
             Ok(Ok(rate)) => rate,
             Ok(Err(e)) => {
-                error!("Audio initialization failed: {}", e);
+                error!("[Audio:WASAPI] Initialization failed: {}", e);
                 44100
             }
             Err(_) => {
-                error!("Audio initialization timeout");
+                error!("[Audio:WASAPI] Initialization timeout (5s)");
                 44100
             }
         };
@@ -137,32 +137,60 @@ impl SpeakerInput {
         init_tx: mpsc::Sender<Result<u32>>,
         device_id: Option<String>,
     ) -> Result<()> {
+        // Ensure COM is initialized on this thread (MTA).
+        // The wasapi crate calls initialize_mta() internally in some paths, but
+        // explicit initialization here guarantees correctness regardless of the
+        // crate's internal behavior or future changes. Re-initialization with the
+        // same apartment type is a no-op per the COM spec.
+        println!("[Audio:WASAPI] Capture thread starting, initializing COM...");
+        wasapi::initialize_mta().map_err(|e| anyhow::anyhow!("[Audio:WASAPI] COM init failed: {}", e))?;
+        println!("[Audio:WASAPI] COM initialized (MTA)");
+
         let init_result = (|| -> Result<_> {
             let device = match device_id {
-                Some(ref id) => match find_device_by_id(&Direction::Render, id) {
-                    Some(d) => d,
-                    None => get_default_device(&Direction::Render)
-                        .map_err(|e| anyhow::anyhow!("{}", e))
-                        .expect("No default render device"),
-                },
+                Some(ref id) => {
+                    println!("[Audio:WASAPI] Looking up device by ID: {}", id);
+                    match find_device_by_id(&Direction::Render, id) {
+                        Some(d) => {
+                            let name = d.get_friendlyname().unwrap_or_default();
+                            println!("[Audio:WASAPI] Found device: {}", name);
+                            d
+                        }
+                        None => {
+                            println!("[Audio:WASAPI] Device not found, falling back to default");
+                            get_default_device(&Direction::Render)
+                                .map_err(|e| anyhow::anyhow!("{}", e))
+                                .expect("No default render device")
+                        }
+                    }
+                }
                 None => {
+                    println!("[Audio:WASAPI] Using default render device");
                     get_default_device(&Direction::Render).map_err(|e| anyhow::anyhow!("{}", e))?
                 }
             };
 
+            let device_name = device.get_friendlyname().unwrap_or_else(|_| "<unknown>".to_string());
+            let device_id_str = device.get_id().unwrap_or_else(|_| "<no-id>".to_string());
+            println!("[Audio:WASAPI] Device: {} ({})", device_name, device_id_str);
+
             let mut audio_client = device
                 .get_iaudioclient()
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                .map_err(|e| anyhow::anyhow!("[Audio:WASAPI] get_iaudioclient: {}", e))?;
             let device_format = audio_client
                 .get_mixformat()
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                .map_err(|e| anyhow::anyhow!("[Audio:WASAPI] get_mixformat: {}", e))?;
             let actual_rate = device_format.get_samplespersec();
+            println!("[Audio:WASAPI] Device sample rate: {}Hz, channels: {}", actual_rate, device_format.get_nchannels());
+
             let desired_format =
                 WaveFormat::new(32, 32, &SampleType::Float, actual_rate as usize, 1, None);
 
             let (_def_time, min_time) = audio_client
                 .get_periods()
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                .map_err(|e| anyhow::anyhow!("[Audio:WASAPI] get_periods: {}", e))?;
+            println!("[Audio:WASAPI] Buffer period: {}00ns", min_time);
+
             // For WASAPI loopback: device=Render, but initialize with Direction::Capture
             // This triggers AUDCLNT_STREAMFLAGS_LOOPBACK flag in wasapi
             audio_client
@@ -173,16 +201,19 @@ impl SpeakerInput {
                     &ShareMode::Shared,
                     true,
                 )
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                .map_err(|e| anyhow::anyhow!("[Audio:WASAPI] initialize_client (loopback): {}", e))?;
+            println!("[Audio:WASAPI] Client initialized (loopback, shared mode)");
+
             let h_event = audio_client
                 .set_get_eventhandle()
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                .map_err(|e| anyhow::anyhow!("[Audio:WASAPI] set_get_eventhandle: {}", e))?;
             let render_client = audio_client
                 .get_audiocaptureclient()
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                .map_err(|e| anyhow::anyhow!("[Audio:WASAPI] get_audiocaptureclient: {}", e))?;
             audio_client
                 .start_stream()
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                .map_err(|e| anyhow::anyhow!("[Audio:WASAPI] start_stream: {}", e))?;
+            println!("[Audio:WASAPI] Stream started successfully");
 
             Ok((h_event, render_client, actual_rate, audio_client))
         })();
@@ -190,10 +221,14 @@ impl SpeakerInput {
         match init_result {
             Ok((h_event, render_client, sample_rate, audio_client)) => {
                 let _ = init_tx.send(Ok(sample_rate));
+                println!("[Audio:WASAPI] Entering capture loop at {}Hz", sample_rate);
+                let mut timeout_count: u64 = 0;
+                let mut total_samples: u64 = 0;
                 loop {
                     {
                         let state = waker_state.lock().unwrap();
                         if state.shutdown {
+                            println!("[Audio:WASAPI] Shutdown signal received, stopping stream");
                             let _ = audio_client.stop_stream();
                             break;
                         }
@@ -202,6 +237,10 @@ impl SpeakerInput {
                     // Timeout is normal when no audio is playing — WASAPI loopback
                     // doesn't fire events during silence. Just continue waiting.
                     if h_event.wait_for_event(3000).is_err() {
+                        timeout_count += 1;
+                        if timeout_count <= 3 || timeout_count % 20 == 0 {
+                            println!("[Audio:WASAPI] Event timeout #{} (silence — normal for loopback)", timeout_count);
+                        }
                         continue;
                     }
 
@@ -211,7 +250,7 @@ impl SpeakerInput {
                     if let Err(e) =
                         render_client.read_from_device_to_deque(bytes_per_frame, &mut temp_queue)
                     {
-                        error!("Failed to read audio data: {}", e);
+                        error!("[Audio:WASAPI] Failed to read audio data: {}", e);
                         continue;
                     }
 
@@ -232,6 +271,10 @@ impl SpeakerInput {
                     }
 
                     if !samples.is_empty() {
+                        total_samples += samples.len() as u64;
+                        if total_samples < 50000 || total_samples % 500000 == 0 {
+                            println!("[Audio:WASAPI] Total samples captured: {}", total_samples);
+                        }
                         let _ = producer.push_slice(&samples);
 
                         // Signal data ready
@@ -241,8 +284,10 @@ impl SpeakerInput {
                         cvar.notify_all();
                     }
                 }
+                println!("[Audio:WASAPI] Capture loop exited. Total samples: {}", total_samples);
             }
             Err(e) => {
+                eprintln!("[Audio:WASAPI] FATAL init error: {}", e);
                 let _ = init_tx.send(Err(e));
             }
         }
@@ -253,11 +298,14 @@ impl SpeakerInput {
 // Implement Drop to stop the thread
 impl Drop for SpeakerStream {
     fn drop(&mut self) {
+        println!("[Audio:WASAPI] SpeakerStream dropping, signaling shutdown...");
         if let Ok(mut state) = self.waker_state.lock() {
             state.shutdown = true;
         }
         if let Some(handle) = self.capture_thread.take() {
             let _ = handle.join();
         }
+        println!("[Audio:WASAPI] SpeakerStream dropped");
     }
 }
+

@@ -158,12 +158,13 @@ export function loadNativeModule(): NativeModule | null {
         const { app } = require('electron') as typeof import('electron');
         appPath = app.getAppPath();
     } catch (e) {
-        console.error('[nativeModuleLoader] app.getAppPath() not available:', e);
+        console.error('[NativeModule] app.getAppPath() not available:', e);
         cached = null;
         return null;
     }
 
     const binary = getNativeBinaryName();
+    console.log(`[NativeModule] Looking for binary: ${binary} (platform=${process.platform}, arch=${process.arch})`);
 
     const candidates: string[] = [];
 
@@ -183,28 +184,43 @@ export function loadNativeModule(): NativeModule | null {
         }
     }
 
-    // 2. Development — app.getAppPath() returns the project root directly
+    // 2. Packaged app — extraResources via process.resourcesPath.
+    //    electron-builder's extraResources copies native-module/ to resources/native-module/.
+    if (process.resourcesPath) {
+        const extraResPath = path.join(
+            process.resourcesPath,
+            'native-module',
+            binary
+        );
+        if (fs.existsSync(extraResPath)) {
+            candidates.push(extraResPath);
+        }
+    }
+
+    // 3. Development — app.getAppPath() returns the project root directly
     candidates.push(path.join(appPath, 'native-module', binary));
 
-    // 3. Development fallback — one level up if launched from a subdirectory
+    // 4. Development fallback — one level up if launched from a subdirectory
     candidates.push(path.join(appPath, '..', 'native-module', binary));
+
+    console.log(`[NativeModule] Candidate paths (${candidates.length}):`, candidates);
 
     for (const filePath of candidates) {
         try {
             const mod = require(filePath);
             validateNativeModule(mod);
             cached = mod;
-            console.log(`[nativeModuleLoader] Loaded ${binary} from: ${filePath}`);
+            console.log(`[NativeModule] Loaded from: ${filePath}`);
             return cached;
         } catch (err: unknown) {
             // Log per-path failure so developers can diagnose ABI mismatches,
             // missing builds, or wrong paths — not just a generic "failed" message.
             const msg = err instanceof Error ? err.message : String(err);
-            console.warn(`[nativeModuleLoader] Could not load from ${filePath}: ${msg}`);
+            console.warn(`[NativeModule] Could not load from ${filePath}: ${msg}`);
         }
     }
 
-    console.error(`[nativeModuleLoader] Failed to load ${binary} from all ${candidates.length} candidate paths.`);
+    console.error(`[NativeModule] Failed to load ${binary} from all ${candidates.length} candidate paths.`);
     cached = null;
     return null;
 }

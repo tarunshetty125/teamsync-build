@@ -3955,6 +3955,99 @@ async function initializeApp() {
     }
   }
 
+  // ── Startup Health Check ─────────────────────────────────────────────
+  // Non-blocking diagnostic log of critical subsystem status.
+  // Helps diagnose Windows-specific issues where a subsystem may be
+  // degraded (e.g. no native module → no audio, no sqlite-vec → slow search).
+  {
+    console.log('─────────────────────────────────────────────');
+    console.log('[System Health] Startup diagnostics');
+    console.log(`[System Health] Platform: ${process.platform} (${process.arch})`);
+    console.log(`[System Health] Electron: ${process.versions.electron}`);
+    console.log(`[System Health] Node: ${process.versions.node}`);
+
+    // Native module
+    try {
+      const { loadNativeModule } = require('./audio/nativeModuleLoader');
+      const native = loadNativeModule();
+      if (native) {
+        const hasSysAudio = typeof native.SystemAudioCapture === 'function';
+        const hasMic = typeof native.MicrophoneCapture === 'function';
+        const hasDevices = typeof native.getInputDevices === 'function';
+        console.log(`[System Health] Native module: ✓ loaded (SystemAudio=${hasSysAudio}, Mic=${hasMic}, Devices=${hasDevices})`);
+      } else {
+        console.warn('[System Health] Native module: ✗ NOT LOADED — audio capture unavailable');
+      }
+    } catch (e) {
+      console.error('[System Health] Native module: ✗ ERROR:', e);
+    }
+
+    // SQLite-vec
+    try {
+      const db = DatabaseManager.getInstance();
+      if (db) {
+        const hasVec = !!(db as any).resolvedExtPath;
+        console.log(`[System Health] SQLite-vec: ${hasVec ? '✓ native extension loaded' : '✗ using JS fallback (slower)'}`);
+      } else {
+        console.warn('[System Health] SQLite-vec: ✗ database not initialized');
+      }
+    } catch (e) {
+      console.warn('[System Health] SQLite-vec: ✗ check failed:', e);
+    }
+
+    // OCR runtime
+    try {
+      const pythonRuntimeDir = process.platform === 'darwin'
+        ? path.join(process.resourcesPath || '', 'python', 'bin', 'python3')
+        : path.join(process.resourcesPath || '', 'python', 'python.exe');
+      const ocrAvailable = fs.existsSync(pythonRuntimeDir);
+      console.log(`[System Health] OCR runtime: ${ocrAvailable ? '✓ found' : '✗ not found'} (${pythonRuntimeDir})`);
+    } catch (e) {
+      console.warn('[System Health] OCR runtime: ✗ check failed:', e);
+    }
+
+    // Permissions (Windows returns hardcoded 'granted' — noted for awareness)
+    if (process.platform === 'win32') {
+      console.log('[System Health] Permissions: Windows — using Electron systemPreferences checks');
+      try {
+        const { systemPreferences } = require('electron');
+        const micStatus = systemPreferences.getMediaAccessStatus('microphone');
+        console.log(`[System Health]   Microphone: ${micStatus}`);
+      } catch (e) {
+        console.warn('[System Health]   Microphone: check unavailable');
+      }
+    } else {
+      console.log('[System Health] Permissions: managed by PermissionManager');
+    }
+
+    // Windows environment details (Phase W-Extra diagnostics)
+    if (process.platform === 'win32') {
+      try {
+        const os = require('os');
+        console.log(`[System Health] Windows: ${os.release()} (${os.arch()})`);
+        console.log(`[System Health] CPUs: ${os.cpus()[0]?.model || 'unknown'} (${os.cpus().length} cores)`);
+        console.log(`[System Health] Memory: ${Math.round(os.totalmem() / (1024 * 1024 * 1024))}GB total, ${Math.round(os.freemem() / (1024 * 1024 * 1024))}GB free`);
+
+        // Display info for DPI/multi-monitor validation
+        const allDisplays = screen.getAllDisplays();
+        console.log(`[System Health] Displays: ${allDisplays.length}`);
+        for (const disp of allDisplays) {
+          const dpiPercent = Math.round(disp.scaleFactor * 100);
+          console.log(`[System Health]   ${disp.id}: ${disp.bounds.width}x${disp.bounds.height} @ ${dpiPercent}% DPI (workArea: ${disp.workArea.width}x${disp.workArea.height})`);
+        }
+
+        // AppData and temp paths
+        console.log(`[System Health] userData: ${app.getPath('userData')}`);
+        console.log(`[System Health] temp: ${os.tmpdir()}`);
+        console.log(`[System Health] appData: ${app.getPath('appData')}`);
+      } catch (e) {
+        console.warn('[System Health] Windows environment check failed:', e);
+      }
+    }
+
+    console.log('─────────────────────────────────────────────');
+  }
+
   // Apply initial stealth state based on isUndetectable setting.
   // NOTE: app.dock.hide() was already called pre-emptively before createWindow()
   // when isUndetectable=true. Now that windows exist, StealthManager can rehydrate

@@ -181,14 +181,17 @@ export class DatabaseManager {
                 // 2. better-sqlite3's loadExtension() auto-appends the platform extension
                 //    (.dylib/.so/.dll), so we strip it to avoid vec0.dylib.dylib.
                 let extPath = sqliteVec.getLoadablePath();
+                console.log(`[SQLiteVec] Raw loadable path: ${extPath}`);
+                console.log(`[SQLiteVec] Platform: ${process.platform}, Arch: ${process.arch}`);
                 extPath = extPath.replace('app.asar', 'app.asar.unpacked');
                 extPath = extPath.replace(/\.(dylib|so|dll)$/, '');
+                console.log(`[SQLiteVec] Resolved extension path: ${extPath}`);
                 this.db.loadExtension(extPath);
                 this.resolvedExtPath = extPath; // Store for worker thread access
-                console.log('[DatabaseManager] sqlite-vec extension loaded successfully');
+                console.log('[SQLiteVec] Loaded — native vector search active');
             } catch (extErr) {
-                console.error('[DatabaseManager] Failed to load sqlite-vec extension:', extErr);
-                console.warn('[DatabaseManager] Vector search will fall back to JS cosine similarity');
+                console.error('[SQLiteVec] Failed — extension could not be loaded:', extErr);
+                console.warn('[SQLiteVec] Vector search will fall back to JS cosine similarity');
             }
 
             this.runMigrations();

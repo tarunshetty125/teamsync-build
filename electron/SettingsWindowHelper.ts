@@ -117,7 +117,9 @@ export class SettingsWindowHelper {
             }, 60);
         } else {
             this.settingsWindow.setContentProtection(this.contentProtection);
-            if (activate) this.settingsWindow.show(); else this.settingsWindow.showInactive();
+            // Always use showInactive() first to avoid stealing focus from the
+            // user's foreground app (Zoom, browser, etc.), then focus if needed.
+            this.settingsWindow.showInactive();
             if (activate) this.settingsWindow.focus();
         }
 

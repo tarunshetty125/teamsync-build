@@ -304,10 +304,28 @@ export class WindowHelper {
       ...(isMac
         ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 14 } }
         : { frame: false, titleBarOverlay: false, autoHideMenuBar: true }),
-      ...(isMac ? { vibrancy: 'under-window' as const, visualEffectState: 'followWindow' as const } : {}),
-      transparent: isMac,
-      hasShadow: true,
-      backgroundColor: isMac ? "#00000000" : "#000000",
+      // Platform-specific visual effects
+      ...(isMac
+        ? {
+            vibrancy: 'under-window' as const,
+            visualEffectState: 'followWindow' as const,
+            transparent: true,
+            backgroundColor: '#00000000',
+          }
+        : process.platform === 'win32'
+          ? {
+              // Windows 11 (build 22000+): Mica provides system-level glass.
+              // Older Windows: falls back to a solid dark background (the
+              // backgroundMaterial property is silently ignored).
+              backgroundMaterial: 'mica' as any,
+              transparent: false,
+              backgroundColor: '#1a1a2e',
+            }
+          : {
+              transparent: false,
+              backgroundColor: '#1a1a2e',
+            }
+      ),
       focusable: true,
       resizable: true,
       movable: true,
@@ -449,6 +467,22 @@ export class WindowHelper {
           console.warn('[WindowHelper] applyStealthToWindow unavailable:', e);
         }
       });
+    } else if (process.platform === 'win32') {
+      // Windows overlay focus behavior:
+      // There is no exact equivalent of macOS NSPanel's _setPreventsActivation.
+      // We mitigate focus-stealing with:
+      //   1. showInactive() — shows the window without activating it
+      //   2. skipTaskbar: true — set in constructor, hides from taskbar
+      //   3. setAlwaysOnTop(true) — keeps overlay on top without 'floating' level
+      //   4. Mouse passthrough mode — setIgnoreMouseEvents(true) when enabled
+      //
+      // KNOWN LIMITATION: When passthrough is OFF and the user clicks the overlay,
+      // Windows WILL activate the overlay window. This is an Electron limitation —
+      // WS_EX_NOACTIVATE cannot be set via Electron's BrowserWindow API.
+      // A future native module extension could call SetWindowLongPtr to add
+      // WS_EX_NOACTIVATE, but that risks breaking Electron's internal window management.
+      this.overlayWindow.setAlwaysOnTop(true);
+      console.log('[WindowHelper] Windows overlay: alwaysOnTop + skipTaskbar (no NSPanel equivalent)');
     }
 
     // ── StealthKeyboardManager integration ────────────────────────────
@@ -932,8 +966,13 @@ export class WindowHelper {
             // console.log('[FocusDebug] switchToOverlay: macOS showInactive() only (inactive=true)');
           }
         } else {
-          if (inactive) this.overlayWindow.showInactive(); else this.overlayWindow.show();
-          if (!inactive) this.overlayWindow.focus();
+          // Windows/Linux: always use showInactive() first to avoid stealing
+          // focus from the user's foreground app (Zoom, browser, etc.).
+          // Then focus() only if explicitly requested (non-inactive mode).
+          this.overlayWindow.showInactive();
+          if (!inactive) {
+            this.overlayWindow.focus();
+          }
         }
       }
       this.isWindowVisible = true;

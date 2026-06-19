@@ -212,6 +212,20 @@ export class VisionPipeline {
 
         const pythonPath = getPythonPath();
         const scriptPath = getOCRScriptPath();
+
+        // Check if the Python runtime exists before attempting to spawn.
+        // On Windows, the python-runtime/windows-x64/ directory may be empty
+        // if prepare-win.ps1 hasn't been run. Fail gracefully instead of
+        // throwing an ENOENT error from child_process.spawn().
+        try {
+            const { app } = require('electron');
+            if (app.isPackaged && !fs.existsSync(pythonPath)) {
+                console.warn(`[OCR] Python runtime not found at: ${pythonPath}`);
+                console.warn('[OCR] OCR features unavailable — LLM vision models will be used instead');
+                return;
+            }
+        } catch { /* non-fatal check */ }
+
         this.ocrWorker = spawn(pythonPath, [scriptPath], {
             env: getPythonEnv(),
             stdio: ['pipe', 'pipe', 'pipe'],
