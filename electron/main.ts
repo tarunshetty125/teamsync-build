@@ -553,6 +553,23 @@ export class AppState {
     // Initialize IntelligenceManager with LLMHelper
     this.intelligenceManager = new IntelligenceManager(this.processingHelper.getLLMHelper())
 
+    // Initialize Phone Mirror — wire to IntelligenceManager for AI response streaming
+    try {
+      const { PhoneMirrorManager } = require('./services/phone-mirror/PhoneMirrorManager');
+      const phoneMirror = PhoneMirrorManager.getInstance();
+      phoneMirror.setIntelligenceManager(this.intelligenceManager);
+      console.log(`[PhoneMirror:INIT] IM set | IM type=${typeof this.intelligenceManager} | IM listenerCount(action_token)=${this.intelligenceManager.listenerCount('action_token')}`);
+      phoneMirror.setBroadcastCallback((state: any) => {
+        this.broadcast('phone-mirror:state-changed', state);
+      });
+      phoneMirror.autoRestore().catch((err: any) => {
+        console.warn('[Main] Phone Mirror auto-restore failed:', err);
+      });
+      console.log('[Main] Phone Mirror manager initialized');
+    } catch (err) {
+      console.warn('[Main] Phone Mirror initialization failed:', err);
+    }
+
     // Initialize ThemeManager
     this.themeManager = ThemeManager.getInstance()
 
@@ -4022,6 +4039,14 @@ async function initializeApp() {
       StealthManager.getInstance().destroy();
     } catch (e) {
       console.warn('[Main] StealthManager cleanup failed:', e);
+    }
+
+    // Shutdown Phone Mirror — close HTTP/WS server, clean up connections
+    try {
+      const { PhoneMirrorManager } = require('./services/phone-mirror/PhoneMirrorManager');
+      PhoneMirrorManager.getInstance().shutdown();
+    } catch (e) {
+      console.warn('[Main] PhoneMirrorManager cleanup failed:', e);
     }
 
     try {

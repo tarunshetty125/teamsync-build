@@ -677,6 +677,17 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   modesDeleteNoteSection: (id: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
   modesRemoveAllNoteSections: (modeId: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
   modesResetNoteSections: (modeId: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>;
+
+  // Phone Mirror (Beta) API
+  phoneMirrorEnable: () => Promise<{ success: boolean; error?: string }>;
+  phoneMirrorDisable: () => Promise<{ success: boolean }>;
+  phoneMirrorGetState: () => Promise<{ enabled: boolean; lanAccess: boolean; port: number; pairingUrl: string | null; connectedDeviceCount: number; connectedDevices: any[] }>;
+  phoneMirrorGetQrCode: () => Promise<{ success: boolean; dataUrl: string | null; error?: string }>;
+  phoneMirrorGetPairingUrl: () => Promise<{ success: boolean; url: string | null; error?: string }>;
+  phoneMirrorGetConnectedDevices: () => Promise<{ success: boolean; devices: any[] }>;
+  phoneMirrorSetLanAccess: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
+  phoneMirrorDisconnectAll: () => Promise<{ success: boolean }>;
+  onPhoneMirrorStateChanged: (callback: (state: any) => void) => () => void;
 }
 
 function toLegacyPermissionStatus(status: PermissionStatusSnapshot["microphone"]): 'granted' | 'denied' | 'not-determined' | 'restricted' {
@@ -1856,6 +1867,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   modesDeleteNoteSection: (id: string) => ipcRenderer.invoke('modes:delete-note-section', id),
   modesRemoveAllNoteSections: (modeId: string) => ipcRenderer.invoke('modes:remove-all-note-sections', modeId),
   modesResetNoteSections: (modeId: string) => ipcRenderer.invoke('modes:reset-note-sections', modeId),
+
+  // Phone Mirror (Beta) API
+  phoneMirrorEnable: () => ipcRenderer.invoke('phone-mirror:enable'),
+  phoneMirrorDisable: () => ipcRenderer.invoke('phone-mirror:disable'),
+  phoneMirrorGetState: () => ipcRenderer.invoke('phone-mirror:get-state'),
+  phoneMirrorGetQrCode: () => ipcRenderer.invoke('phone-mirror:get-qr-code'),
+  phoneMirrorGetPairingUrl: () => ipcRenderer.invoke('phone-mirror:get-pairing-url'),
+  phoneMirrorGetConnectedDevices: () => ipcRenderer.invoke('phone-mirror:get-connected-devices'),
+  phoneMirrorSetLanAccess: (enabled: boolean) => ipcRenderer.invoke('phone-mirror:set-lan-access', enabled),
+  phoneMirrorDisconnectAll: () => ipcRenderer.invoke('phone-mirror:disconnect-all'),
+  onPhoneMirrorStateChanged: (callback: (state: any) => void) => {
+    const subscription = (_: any, data: any) => callback(data);
+    ipcRenderer.on('phone-mirror:state-changed', subscription);
+    return () => { ipcRenderer.removeListener('phone-mirror:state-changed', subscription); };
+  },
 
   // Google Auth (Server-side OAuth + MongoDB)
   googleSignIn: () => ipcRenderer.invoke('auth:google-signin'),

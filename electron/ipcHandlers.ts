@@ -4813,4 +4813,91 @@ export function initializeIpcHandlers(appState: AppState): void {
       return { success: false, error: e.message };
     }
   });
+
+  // ── Phone Mirror (Beta) IPC Handlers ─────────────────────────────────────
+  const { PhoneMirrorManager } = require('./services/phone-mirror/PhoneMirrorManager');
+
+  safeHandle("phone-mirror:enable", async () => {
+    console.log(`[PhoneMirror:IPC] >>> phone-mirror:enable CALLED at ${new Date().toISOString()}`);
+    try {
+      const result = await PhoneMirrorManager.getInstance().enable();
+      console.log(`[PhoneMirror:IPC] <<< phone-mirror:enable RESULT:`, JSON.stringify(result));
+      return result;
+    } catch (e: any) {
+      console.error('[PhoneMirror:IPC] phone-mirror:enable ERROR:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  safeHandle("phone-mirror:disable", async () => {
+    console.log(`[PhoneMirror:IPC] >>> phone-mirror:disable CALLED at ${new Date().toISOString()}`);
+    console.log(`[PhoneMirror:IPC] disable call stack:`, new Error().stack);
+    try {
+      const result = await PhoneMirrorManager.getInstance().disable();
+      console.log(`[PhoneMirror:IPC] <<< phone-mirror:disable RESULT:`, JSON.stringify(result));
+      return result;
+    } catch (e: any) {
+      console.error('[PhoneMirror:IPC] phone-mirror:disable ERROR:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  safeHandle("phone-mirror:get-state", async () => {
+    try {
+      return PhoneMirrorManager.getInstance().getState();
+    } catch (e: any) {
+      console.error('[IPC] phone-mirror:get-state error:', e);
+      return { enabled: false, lanAccess: false, port: 8765, pairingUrl: null, connectedDeviceCount: 0, connectedDevices: [] };
+    }
+  });
+
+  safeHandle("phone-mirror:get-qr-code", async () => {
+    try {
+      const dataUrl = await PhoneMirrorManager.getInstance().getQrCode();
+      return { success: true, dataUrl };
+    } catch (e: any) {
+      console.error('[IPC] phone-mirror:get-qr-code error:', e);
+      return { success: false, dataUrl: null, error: e.message };
+    }
+  });
+
+  safeHandle("phone-mirror:get-pairing-url", async () => {
+    try {
+      const url = PhoneMirrorManager.getInstance().getPairingUrl();
+      return { success: true, url };
+    } catch (e: any) {
+      console.error('[IPC] phone-mirror:get-pairing-url error:', e);
+      return { success: false, url: null, error: e.message };
+    }
+  });
+
+  safeHandle("phone-mirror:get-connected-devices", async () => {
+    try {
+      const devices = PhoneMirrorManager.getInstance().getConnectedDevices();
+      return { success: true, devices };
+    } catch (e: any) {
+      console.error('[IPC] phone-mirror:get-connected-devices error:', e);
+      return { success: false, devices: [] };
+    }
+  });
+
+  safeHandle("phone-mirror:set-lan-access", async (_, enabled: boolean) => {
+    try {
+      const result = await PhoneMirrorManager.getInstance().setLanAccess(enabled);
+      return result;
+    } catch (e: any) {
+      console.error('[IPC] phone-mirror:set-lan-access error:', e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  safeHandle("phone-mirror:disconnect-all", async () => {
+    try {
+      PhoneMirrorManager.getInstance().disconnectAll();
+      return { success: true };
+    } catch (e: any) {
+      console.error('[IPC] phone-mirror:disconnect-all error:', e);
+      return { success: false, error: e.message };
+    }
+  });
 }

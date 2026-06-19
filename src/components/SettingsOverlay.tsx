@@ -6,10 +6,11 @@ import {
     Camera, RotateCcw, Eye, Layout, MessageSquare, Crop,
     ChevronDown, ChevronUp, Check, BadgeCheck, Power, Palette, Calendar, Ghost, Sun, Moon, RefreshCw, Info, Globe, FlaskConical, Terminal, Settings, Activity, ExternalLink, Trash2, FolderOpen,
     Sparkles, Pencil, Briefcase, Building2, Search, MapPin, CheckCircle, HelpCircle, Zap, SlidersHorizontal, PointerOff,
-    AlertCircle, Lock
+    AlertCircle, Lock, Smartphone
 } from 'lucide-react';
 import { analytics } from '../lib/analytics/analytics.service';
 import { AboutSection } from './AboutSection';
+import { PhoneMirrorSettings } from './settings/PhoneMirrorSettings';
 import { HelpSettings } from './settings/HelpSettings';
 import { AIProvidersSettings } from './settings/AIProvidersSettings';
 import { TeamSyncApiSettings } from './settings/TeamSyncApiSettings';
@@ -2835,23 +2836,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             }).catch(() => { });
         }
     };
-    const settingsHeaderBadge = isPremium
-        ? {
-            label: 'Activated',
-            className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-500',
-        }
-        : isTrialActive
-            ? {
-                label: 'Trial active',
-                className: 'border-sky-500/25 bg-sky-500/10 text-sky-500',
-            }
-            : null;
+    const settingsHeaderBadge = null;
     type SettingsSidebarItem = {
         id: string;
         label: string;
         icon: React.ReactNode;
         meta?: string;
         statusDot?: 'green' | 'red' | 'yellow';
+        badge?: string;
     };
     const sidebarGroups: Array<{ label: string; items: SettingsSidebarItem[] }> = [
         {
@@ -2860,6 +2852,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 { id: 'appearance', label: 'Appearance', icon: <Palette size={16} /> },
                 { id: 'audio', label: 'Audio & Speech', icon: <Mic size={16} /> },
                 { id: 'keybinds', label: 'Shortcuts', icon: <Keyboard size={16} /> },
+                { id: 'phone-mirror', label: 'Quietly Mirror', icon: <img src={icon} alt="" style={{ width: 16, height: 16, borderRadius: 4 }} />, badge: 'NEW' },
             ],
         },
         {
@@ -3039,6 +3032,26 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                     {item.icon}
                                                                 </span>
                                                                 <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
+                                                                {item.badge && (
+                                                                    <span
+                                                                        className="relative z-10 shrink-0 overflow-hidden rounded-full px-1.5 py-[1px] text-[8px] font-bold uppercase tracking-[0.08em] leading-tight"
+                                                                        style={{
+                                                                            background: 'linear-gradient(135deg, rgba(45,212,191,0.15), rgba(139,92,246,0.15))',
+                                                                            border: '1px solid rgba(45,212,191,0.25)',
+                                                                            color: '#2dd4bf',
+                                                                        }}
+                                                                    >
+                                                                        <span
+                                                                            className="absolute inset-0 pointer-events-none"
+                                                                            style={{
+                                                                                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)',
+                                                                                backgroundSize: '200% 100%',
+                                                                                animation: 'sidebar-badge-shimmer 2.5s ease-in-out infinite',
+                                                                            }}
+                                                                        />
+                                                                        {item.badge}
+                                                                    </span>
+                                                                )}
                                                                 {item.meta && (
                                                                     <span className={`relative z-10 flex items-center gap-1 max-w-[80px] truncate text-[10px] font-medium ${item.statusDot === 'green' ? 'text-emerald-500' : item.statusDot === 'red' ? 'text-red-400' : isActive ? 'text-text-secondary' : 'text-text-tertiary'}`}>
                                                                         {item.statusDot && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.statusDot === 'green' ? 'bg-emerald-500' : item.statusDot === 'red' ? 'bg-red-400' : 'bg-yellow-400'}`} />}
@@ -5239,6 +5252,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
                                         {activeTab === 'about' && (
                                             <AboutSection />
+                                        )}
+
+                                        {activeTab === 'phone-mirror' && (
+                                            <PhoneMirrorSettings />
                                         )}
                                     </motion.div>
                                 </AnimatePresence>

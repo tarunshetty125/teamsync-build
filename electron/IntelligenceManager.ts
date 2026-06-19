@@ -66,6 +66,10 @@ export class IntelligenceManager extends EventEmitter {
 
         for (const event of events) {
             this.engine.on(event, (...args: any[]) => {
+                if (event === 'action_token' || event === 'action_result') {
+                    const facadeListeners = this.listenerCount(event);
+                    console.log(`[PhoneMirror:IM_RELAY] ${event} fired from Engine → Facade re-emitting to ${facadeListeners} listener(s) | intent=${args[0]?.intent} | requestId=${args[0]?.requestId}`);
+                }
                 this.emit(event, ...args);
             });
         }

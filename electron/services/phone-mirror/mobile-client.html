@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<title>Quietly Mirror</title>
+<style>
+  /* ═══════════════════════════════════════════════════════════════
+     QUIETLY MIRROR — visionOS Spatial Glass Material System
+     12-Layer Optical Architecture · Apple Vision Pro 2026
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Layer 0 · Spatial Design Tokens ─────────────────── */
+  :root {
+    --void: #000000;
+    --void-deep: #010103;
+    --depth-1: #030306;
+    --depth-2: #07080e;
+    --depth-3: #0c0e18;
+
+    /* Glass materials */
+    --glass-base: rgba(255,255,255,0.028);
+    --glass-elevated: rgba(255,255,255,0.048);
+    --glass-intense: rgba(255,255,255,0.068);
+    --glass-tint: rgba(147,197,253,0.018);
+
+    /* Borders — layered opacity */
+    --border-hairline: rgba(255,255,255,0.055);
+    --border-glow: rgba(255,255,255,0.09);
+    --border-highlight: rgba(255,255,255,0.16);
+    --border-refract: rgba(147,197,253,0.06);
+
+    /* Text hierarchy */
+    --text-primary: rgba(255,255,255,0.95);
+    --text-secondary: rgba(255,255,255,0.58);
+    --text-tertiary: rgba(255,255,255,0.30);
+    --text-ghost: rgba(255,255,255,0.12);
+
+    /* Accent spectrum */
+    --accent: #60a5fa;
+    --accent-cyan: #22d3ee;
+    --accent-dim: rgba(96,165,250,0.12);
+    --accent-glow: rgba(96,165,250,0.06);
+    --violet: #a78bfa;
+    --violet-dim: rgba(167,139,250,0.10);
+    --emerald: #34d399;
+    --emerald-dim: rgba(52,211,153,0.10);
+    --danger: #f87171;
+    --danger-dim: rgba(248,113,113,0.10);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251,191,36,0.10);
+
+    /* Radii */
+    --r-sm: 12px;
+    --r-md: 16px;
+    --r-lg: 22px;
+    --r-xl: 28px;
+    --r-pill: 100px;
+
+    /* Physics easing */
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+    --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-apple: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+    /* Material physics */
+    --frost-blur: 48px;
+    --frost-saturate: 200%;
+    --frost-brightness: 112%;
+    --frost-contrast: 106%;
+
+    /* Typography */
+    --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+    --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: var(--void);
+    height: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    overflow-x: hidden;
+    line-height: 1.5;
+    position: relative;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     LAYER 1 — Background Atmosphere
+     Ultra-soft gradient environment with cinematic depth
+     ═══════════════════════════════════════════════════════ */
+  .layer-atmosphere {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: var(--depth-1);
+    overflow: hidden;
+  }
+
+  .atmo-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(100px);
+    opacity: 0.5;
+    will-change: transform;
+    transform: translate3d(0,0,0);
+  }
+
+  .atmo-orb--blue {
+    width: 380px; height: 380px;
+    top: -12%; left: -8%;
+    background: radial-gradient(circle, rgba(96,165,250,0.14) 0%, rgba(96,165,250,0.03) 50%, transparent 72%);
+    animation: orb-drift-1 24s ease-in-out infinite alternate;
+  }
+
+  .atmo-orb--violet {
+    width: 320px; height: 320px;
+    bottom: -8%; right: -10%;
+    background: radial-gradient(circle, rgba(167,139,250,0.11) 0%, rgba(167,139,250,0.02) 50%, transparent 72%);
+    animation: orb-drift-2 28s ease-in-out infinite alternate;
+  }
+
+  .atmo-orb--cyan {
+    width: 240px; height: 240px;
+    top: 35%; left: 45%;
+    background: radial-gradient(circle, rgba(34,211,238,0.06) 0%, transparent 65%);
+    animation: orb-drift-3 20s ease-in-out infinite alternate;
+  }
+
+  @keyframes orb-drift-1 {
+    0% { transform: translate3d(0,0,0) scale(1); }
+    100% { transform: translate3d(35px,25px,0) scale(1.18); }
+  }
+  @keyframes orb-drift-2 {
+    0% { transform: translate3d(0,0,0) scale(1); }
+    100% { transform: translate3d(-28px,-18px,0) scale(1.12); }
+  }
+  @keyframes orb-drift-3 {
+    0% { transform: translate3d(-50%,0,0) scale(1); opacity: 0.35; }
+    100% { transform: translate3d(-42%,8px,0) scale(1.25); opacity: 0.55; }
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     LAYER 2 — Ambient Light Field
+     Global light diffusion with soft bloom
+     ═══════════════════════════════════════════════════════ */
+  .layer-light-field {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 70% 45% at 50% -5%, rgba(255,255,255,0.018) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 35% at 50% 105%, rgba(96,165,250,0.008) 0%, transparent 55%),
+      radial-gradient(ellipse 30% 40% at 80% 20%, rgba(147,197,253,0.006) 0%, transparent 50%);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     LAYER 3 — Depth Fog
+     Atmospheric haze creating layer separation
+     ═══════════════════════════════════════════════════════ */
+  .layer-depth-fog {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(5,5,8,0.3) 0%,
+      transparent 25%,
+      transparent 75%,
+      rgba(5,5,8,0.4) 100%
+    );
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     LAYER 4 — Noise / Grain Texture
+     Physical grain overlay — fixed, pointer-events: none
+     ═══════════════════════════════════════════════════════ */
+  .layer-grain {
+    position: fixed;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0.018;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+    background-size: 200px;
+    mix-blend-mode: overlay;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     App Container
+     ═══════════════════════════════════════════════════════ */
+  .app {
+    position: relative;
+    z-index: 10;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 14px;
+    padding-top: max(14px, env(safe-area-inset-top));
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     PAIRING SCREEN — Elevated glass card
+     Uses Layers 5-9 for glass material
+     ═══════════════════════════════════════════════════════ */
+  .pairing-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    text-align: center;
+    padding: 48px 32px;
+  }
+
+  /* ── Glass Icon Shell (Double-bezel) ─── */
+  .pairing-icon-outer {
+    width: 96px; height: 96px;
+    border-radius: var(--r-xl);
+    padding: 3px;
+    background: linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015));
+    position: relative;
+    animation: icon-float 6s ease-in-out infinite alternate;
+    transform: translate3d(0,0,0);
+    will-change: transform;
+  }
+
+  /* Layer 10 — Edge illumination */
+  .pairing-icon-outer::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    border: 1px solid var(--border-hairline);
+    mask-image: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 100%);
+    -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 100%);
+    pointer-events: none;
+  }
+
+  /* Layer 9 — Top specular streak */
+  .pairing-icon-outer::after {
+    content: '';
+    position: absolute;
+    top: -1px; left: 12%; right: 12%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent);
+    border-radius: 1px;
+    pointer-events: none;
+  }
+
+  .pairing-icon-inner {
+    width: 100%; height: 100%;
+    border-radius: calc(var(--r-xl) - 3px);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    /* Layer 6 — Frosted material */
+    background: var(--glass-elevated);
+    backdrop-filter: blur(var(--frost-blur)) saturate(var(--frost-saturate)) brightness(var(--frost-brightness));
+    -webkit-backdrop-filter: blur(var(--frost-blur)) saturate(var(--frost-saturate)) brightness(var(--frost-brightness));
+
+    /* 4-layer shadow system */
+    box-shadow:
+      inset 0 1px 1px rgba(255,255,255,0.08),
+      inset 0 -1px 2px rgba(0,0,0,0.15),
+      0 8px 32px rgba(0,0,0,0.28),
+      0 24px 64px rgba(0,0,0,0.16);
+  }
+
+  /* Layer 8 — Internal reflection */
+  .pairing-icon-inner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      140deg,
+      rgba(255,255,255,0.08) 0%,
+      rgba(255,255,255,0.02) 25%,
+      transparent 50%,
+      rgba(255,255,255,0.015) 100%
+    );
+    pointer-events: none;
+  }
+
+  /* Layer 12 — Optical coating sweep */
+  .pairing-icon-inner::after {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: linear-gradient(
+      115deg,
+      transparent 42%,
+      rgba(255,255,255,0.04) 48%,
+      rgba(255,255,255,0.06) 50%,
+      rgba(255,255,255,0.04) 52%,
+      transparent 58%
+    );
+    animation: reflection-sweep 6s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .pairing-icon-inner svg {
+    width: 36px; height: 36px;
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 0 12px rgba(96,165,250,0.3));
+  }
+
+  @keyframes reflection-sweep {
+    0%, 100% { transform: translate3d(-30%,-30%,0) rotate(0deg); }
+    50% { transform: translate3d(30%,30%,0) rotate(5deg); }
+  }
+
+  @keyframes icon-float {
+    0% { transform: translate3d(0,0,0); }
+    100% { transform: translate3d(0,-6px,0); }
+  }
+
+  .pairing-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--text-primary);
+    line-height: 1.12;
+  }
+
+  .pairing-desc {
+    font-size: 15px;
+    color: var(--text-secondary);
+    line-height: 1.65;
+    max-width: 280px;
+    letter-spacing: -0.008em;
+  }
+
+  .pairing-error {
+    font-size: 12px;
+    color: var(--danger);
+    padding: 10px 16px;
+    background: var(--danger-dim);
+    border: 1px solid rgba(248,113,113,0.14);
+    border-radius: var(--r-md);
+    max-width: 300px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  /* ── Glass CTA Button ─── */
+  .connect-btn {
+    position: relative;
+    padding: 15px 48px;
+    border: none;
+    border-radius: var(--r-pill);
+    background: linear-gradient(135deg, rgba(96,165,250,0.9), rgba(59,130,246,0.95));
+    color: #fff;
+    font-size: 16px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    cursor: pointer;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 500ms var(--ease-spring);
+    transform: translate3d(0,0,0);
+    will-change: transform;
+
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.2),
+      inset 0 -1px 0 rgba(0,0,0,0.08),
+      0 2px 8px rgba(96,165,250,0.3),
+      0 8px 24px rgba(96,165,250,0.2),
+      0 20px 48px rgba(96,165,250,0.1);
+  }
+
+  /* Layer 12 — Premium finish sheen sweep */
+  .connect-btn::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -120%;
+    width: 80%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+    transform: skewX(-20deg);
+    animation: btn-sheen 4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes btn-sheen {
+    0%, 100% { left: -120%; }
+    50% { left: 120%; }
+  }
+
+  .connect-btn:active {
+    transform: translate3d(0,1px,0) scale(0.97);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.15),
+      0 1px 4px rgba(96,165,250,0.2);
+  }
+
+  .connect-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .pairing-footer {
+    font-size: 11px;
+    color: var(--text-ghost);
+    letter-spacing: 0.05em;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     LIVE VIEW — Full glass architecture
+     ═══════════════════════════════════════════════════════ */
+  .live-view {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+    animation: spatial-enter 0.7s var(--ease-out);
+  }
+
+  @keyframes spatial-enter {
+    from { opacity: 0; transform: translate3d(0,10px,0) scale(0.985); }
+    to { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     TOP BAR — Floating glass nav (Layer 6 + 7 + 9)
+     Vision Pro-style translucent header
+     ═══════════════════════════════════════════════════════ */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    margin: 4px 0 10px;
+    border-radius: var(--r-lg);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    transform: translate3d(0,0,0);
+
+    /* Layer 7 — Glass body + tint */
+    background:
+      linear-gradient(135deg, var(--glass-tint), var(--glass-base)),
+      var(--glass-base);
+    /* Layer 6 — Frosted material */
+    backdrop-filter: blur(var(--frost-blur)) saturate(var(--frost-saturate)) brightness(var(--frost-brightness)) contrast(var(--frost-contrast));
+    -webkit-backdrop-filter: blur(var(--frost-blur)) saturate(var(--frost-saturate)) brightness(var(--frost-brightness)) contrast(var(--frost-contrast));
+    /* Layer 10 — Edge illumination */
+    border: 1px solid var(--border-hairline);
+
+    /* 4-layer shadow system */
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      inset 0 -0.5px 0 rgba(0,0,0,0.12),
+      0 4px 16px rgba(0,0,0,0.12),
+      0 12px 32px rgba(0,0,0,0.08);
+  }
+
+  /* Layer 9 — Top specular highlight */
+  .top-bar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 18%; right: 18%;
+    height: 0.5px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* Layer 8 — Internal reflection sweep */
+  .top-bar::after {
+    content: '';
+    position: absolute;
+    top: -100%; left: -100%;
+    width: 300%; height: 300%;
+    background: linear-gradient(
+      110deg,
+      transparent 40%,
+      rgba(255,255,255,0.015) 48%,
+      rgba(255,255,255,0.03) 50%,
+      rgba(255,255,255,0.015) 52%,
+      transparent 60%
+    );
+    animation: glass-sweep 10s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  @keyframes glass-sweep {
+    0% { transform: translate3d(-33%,-33%,0); }
+    100% { transform: translate3d(33%,33%,0); }
+  }
+
+  .top-bar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 3;
+  }
+
+  .top-bar-logo {
+    width: 30px; height: 30px;
+    border-radius: 10px;
+    background: linear-gradient(140deg, var(--accent), var(--violet));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow:
+      0 2px 8px rgba(96,165,250,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.22);
+  }
+
+  /* Logo internal sheen */
+  .top-bar-logo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(165deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .top-bar-title {
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.025em;
+    color: var(--text-primary);
+    z-index: 3;
+  }
+
+  .top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 3;
+  }
+
+  /* ── Status Pill — Glass capsule ─── */
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border-radius: var(--r-pill);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    position: relative;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: all 400ms var(--ease-spring);
+    transform: translate3d(0,0,0);
+  }
+
+  .status-pill.connected {
+    background: var(--emerald-dim);
+    border: 1px solid rgba(52,211,153,0.18);
+    color: var(--emerald);
+  }
+
+  .status-pill.connecting {
+    background: var(--amber-dim);
+    border: 1px solid rgba(251,191,36,0.18);
+    color: var(--amber);
+    animation: status-breathe 2.5s ease-in-out infinite;
+  }
+
+  @keyframes status-breathe {
+    0%, 100% { opacity: 1; box-shadow: none; }
+    50% { opacity: 0.7; box-shadow: 0 0 12px rgba(251,191,36,0.1); }
+  }
+
+  .status-pill.disconnected {
+    background: var(--danger-dim);
+    border: 1px solid rgba(248,113,113,0.18);
+    color: var(--danger);
+  }
+
+  .status-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transform: translate3d(0,0,0);
+  }
+
+  .status-dot.connected {
+    background: var(--emerald);
+    box-shadow: 0 0 6px var(--emerald), 0 0 12px rgba(52,211,153,0.15);
+  }
+  .status-dot.connecting {
+    background: var(--amber);
+    animation: dot-pulse 1.8s ease-in-out infinite;
+  }
+  .status-dot.disconnected { background: var(--danger); }
+
+  @keyframes dot-pulse {
+    0%, 100% { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+    50% { opacity: 0.35; transform: translate3d(0,0,0) scale(0.8); }
+  }
+
+  .msg-count {
+    font-size: 10px;
+    font-weight: 650;
+    color: var(--text-tertiary);
+    padding: 3px 8px;
+    border-radius: var(--r-pill);
+    background: var(--glass-base);
+    border: 1px solid var(--border-hairline);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     CHAT CONTAINER — Scrollable message area
+     ═══════════════════════════════════════════════════════ */
+  .chat-container {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    scroll-behavior: smooth;
+    padding: 4px 0;
+  }
+
+  .chat-container > * + * {
+    margin-top: 12px;
+  }
+
+  .chat-container::-webkit-scrollbar { display: none; }
+
+  /* ═══════════════════════════════════════════════════════
+     MESSAGE BUBBLE — Multi-layer glass card
+     Layers 5, 6, 7, 8, 9 applied
+     ═══════════════════════════════════════════════════════ */
+  .msg-bubble {
+    border-radius: var(--r-lg);
+    position: relative;
+    overflow: hidden;
+    animation: msg-spatial-enter 0.4s var(--ease-out) both;
+    transform-origin: bottom center;
+    transform: translate3d(0,0,0);
+
+    /* Layer 7 — Glass body with tint */
+    background:
+      linear-gradient(170deg, var(--glass-tint), transparent 40%),
+      var(--glass-base);
+    /* Layer 6 — Frosted material */
+    backdrop-filter: blur(36px) saturate(190%) brightness(108%);
+    -webkit-backdrop-filter: blur(36px) saturate(190%) brightness(108%);
+    /* Layer 10 — Edge illumination */
+    border: 1px solid var(--border-hairline);
+
+    /* 4-layer shadow system */
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      inset 0 -0.5px 0 rgba(0,0,0,0.1),
+      0 2px 8px rgba(0,0,0,0.08),
+      0 8px 24px rgba(0,0,0,0.06);
+  }
+
+  @keyframes msg-spatial-enter {
+    from { opacity: 0; transform: translate3d(0,8px,0); }
+    to { opacity: 1; transform: translate3d(0,0,0); }
+  }
+
+  /* Layer 9 — Top specular streak */
+  .msg-bubble::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 14%; right: 14%;
+    height: 0.5px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* Layer 8 — Internal glass reflection */
+  .msg-bubble::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      165deg,
+      rgba(255,255,255,0.04) 0%,
+      rgba(255,255,255,0.01) 20%,
+      transparent 40%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Streaming state — accent border glow */
+  .msg-bubble.streaming {
+    border-color: rgba(96,165,250,0.1);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 2px 8px rgba(0,0,0,0.08),
+      0 0 28px rgba(96,165,250,0.035);
+  }
+
+  .msg-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 18px 0;
+    position: relative;
+    z-index: 3;
+  }
+
+  .msg-intent {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .msg-intent-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 4px var(--accent-glow), 0 0 8px rgba(96,165,250,0.08);
+  }
+
+  .msg-intent-label {
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .msg-time {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  .msg-body {
+    padding: 10px 18px 16px;
+    position: relative;
+    z-index: 3;
+  }
+
+  .msg-content {
+    font-size: 14.5px;
+    line-height: 1.72;
+    color: var(--text-primary);
+    word-break: break-word;
+    letter-spacing: -0.005em;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     MARKDOWN TYPOGRAPHY
+     ═══════════════════════════════════════════════════════ */
+  .msg-content strong { font-weight: 700; color: rgba(255,255,255,0.97); }
+  .msg-content em { font-style: italic; color: var(--text-secondary); }
+
+  .msg-content code {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    background: rgba(255,255,255,0.045);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 2px 7px;
+    color: var(--accent-cyan);
+  }
+
+  .msg-content pre {
+    position: relative;
+    background: rgba(0,0,0,0.32);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: var(--r-sm);
+    padding: 14px 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 12px 0;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  /* Specular edge on code blocks */
+  .msg-content pre::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 10%; right: 10%;
+    height: 0.5px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    pointer-events: none;
+  }
+
+  .msg-content pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--text-primary);
+  }
+
+  .msg-content h1, .msg-content h2, .msg-content h3 {
+    font-weight: 700;
+    margin: 14px 0 6px;
+    letter-spacing: -0.025em;
+  }
+
+  .msg-content h1 { font-size: 18px; }
+  .msg-content h2 { font-size: 16px; }
+  .msg-content h3 { font-size: 14px; color: var(--accent); }
+
+  .msg-content ul, .msg-content ol { padding-left: 18px; margin: 6px 0; }
+  .msg-content li { margin: 4px 0; }
+  .msg-content p { margin: 5px 0; }
+
+  .msg-content hr {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    margin: 16px 0;
+  }
+
+  /* ── Streaming Cursor ─── */
+  .streaming-cursor {
+    display: inline-block;
+    width: 2px; height: 1em;
+    background: var(--accent);
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: cursor-spatial 0.9s step-end infinite;
+    border-radius: 1px;
+    box-shadow: 0 0 6px rgba(96,165,250,0.4), 0 0 12px rgba(96,165,250,0.15);
+  }
+
+  @keyframes cursor-spatial {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     EMPTY STATE — Ethereal glass
+     ═══════════════════════════════════════════════════════ */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 60px 24px;
+    text-align: center;
+  }
+
+  .empty-icon-ring {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--glass-base);
+    border: 1px solid var(--border-hairline);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      0 4px 16px rgba(0,0,0,0.12);
+    animation: spatial-breathe 5s ease-in-out infinite;
+    transform: translate3d(0,0,0);
+  }
+
+  @keyframes spatial-breathe {
+    0%, 100% { opacity: 0.35; transform: translate3d(0,0,0) scale(1); }
+    50% { opacity: 0.5; transform: translate3d(0,-2px,0) scale(1.03); }
+  }
+
+  .empty-icon-ring svg {
+    width: 22px; height: 22px;
+    stroke: var(--text-tertiary);
+    stroke-width: 1.4;
+    fill: none;
+  }
+
+  .empty-text {
+    font-size: 13px;
+    color: var(--text-tertiary);
+    line-height: 1.65;
+    max-width: 240px;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     MERMAID DIAGRAMS
+     ═══════════════════════════════════════════════════════ */
+  .mermaid-container {
+    margin: 12px 0;
+    padding: 16px 12px;
+    background: rgba(0,0,0,0.28);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: var(--r-sm);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .mermaid-container::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 8%; right: 8%;
+    height: 0.5px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    pointer-events: none;
+  }
+
+  .mermaid-container svg { max-width: 100%; height: auto; }
+  .mermaid-container .mermaid { display: flex; justify-content: center; }
+
+  .mermaid-fallback {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: pre;
+    line-height: 1.5;
+  }
+
+  .mermaid-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 9px;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--violet);
+    margin-bottom: 10px;
+    opacity: 0.7;
+  }
+
+  .mermaid-label svg {
+    width: 12px; height: 12px;
+    stroke: var(--violet);
+    stroke-width: 2;
+    fill: none;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════ */
+  .app-footer {
+    text-align: center;
+    font-size: 10px;
+    color: var(--text-ghost);
+    padding: 8px 8px;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     RESPONSE NAVIGATOR — Overlay-style prev/next bar
+     ═══════════════════════════════════════════════════════ */
+  .response-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 7px 12px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    transform: translate3d(0,0,0);
+
+    background: var(--glass-base);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-top: 1px solid var(--border-hairline);
+    border-radius: 0 0 var(--r-lg) var(--r-lg);
+  }
+
+  /* Specular top edge */
+  .response-nav::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 20%; right: 20%;
+    height: 0.5px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+    pointer-events: none;
+  }
+
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px; height: 32px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 200ms var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+    transform: translate3d(0,0,0);
+  }
+
+  .nav-btn:active {
+    transform: translate3d(0,0,0) scale(0.9);
+    background: rgba(255,255,255,0.05);
+  }
+
+  .nav-btn:disabled {
+    opacity: 0.18;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .nav-btn svg {
+    width: 16px; height: 16px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .nav-counter {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 0 10px;
+    min-width: 95px;
+    text-align: center;
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .nav-jump {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.03em;
+    padding: 5px 10px;
+    cursor: pointer;
+    margin-left: 4px;
+    transition: all 200ms var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+    transform: translate3d(0,0,0);
+  }
+
+  .nav-jump:active { transform: translate3d(0,0,0) scale(0.94); }
+  .nav-jump:disabled { opacity: 0.25; cursor: not-allowed; }
+
+  .nav-jump svg {
+    width: 12px; height: 12px;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     REDUCED MOTION
+     ═══════════════════════════════════════════════════════ */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- Layer 1 — Background Atmosphere -->
+<div class="layer-atmosphere">
+  <div class="atmo-orb atmo-orb--blue"></div>
+  <div class="atmo-orb atmo-orb--violet"></div>
+  <div class="atmo-orb atmo-orb--cyan"></div>
+</div>
+
+<!-- Layer 2 — Ambient Light Field -->
+<div class="layer-light-field"></div>
+
+<!-- Layer 3 — Depth Fog -->
+<div class="layer-depth-fog"></div>
+
+<!-- Layer 4 — Grain Texture -->
+<div class="layer-grain"></div>
+
+<!-- App Surface -->
+<div class="app" id="app">
+
+  <!-- Pairing Screen -->
+  <div id="pairing-screen" class="pairing-screen">
+    <div class="pairing-icon-outer">
+      <div class="pairing-icon-inner">
+        
+      </div>
+    </div>
+    <h1 class="pairing-title">Quietly Mirror</h1>
+    <p class="pairing-desc">
+      Connect to your desktop to see live AI responses on this device.
+    </p>
+    <div id="pairing-error" class="pairing-error" style="display:none;"></div>
+    <button id="connect-btn" class="connect-btn" onclick="connect()">
+      Connect
+    </button>
+    <p class="pairing-footer">All data stays on your local network</p>
+  </div>
+
+  <!-- Live View -->
+  <div id="live-view" class="live-view" style="display:none;">
+    <div class="top-bar">
+      <div class="top-bar-brand">
+        <div class="top-bar-logo">
+        
+        </div>
+        <span class="top-bar-title">Quietly Mirror</span>
+      </div>
+      <div class="top-bar-right">
+        <span id="msg-count" class="msg-count" style="display:none;">0</span>
+        <div id="status-pill" class="status-pill disconnected">
+          <div id="status-dot" class="status-dot disconnected"></div>
+          <span id="status-text">Disconnected</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-container" id="chat-container">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon-ring">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+        </div>
+        <p class="empty-text">
+          Waiting for AI responses from your desktop…
+        </p>
+      </div>
+    </div>
+
+    <!-- Response Navigator -->
+    <div id="response-nav" class="response-nav" style="display:none;">
+      <button type="button" class="nav-btn" id="nav-prev" onclick="navigatePrev()" disabled>
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6" /></svg>
+      </button>
+      <span class="nav-counter" id="nav-counter">Response 1 of 1</span>
+      <button type="button" class="nav-btn" id="nav-next" onclick="navigateNext()" disabled>
+        <svg viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18" /></svg>
+      </button>
+      <button type="button" class="nav-jump" id="nav-jump" onclick="navigateLatest()" style="display:none;">
+        <svg viewBox="0 0 24 24"><polyline points="13 17 18 12 13 7" /><polyline points="6 17 11 12 6 7" /></svg>
+        Latest
+      </button>
+    </div>
+
+    <div class="app-footer">
+      Quietly Mirror · Local network only
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── State ─────────────────────────────────────────────
+  var ws = null;
+  var token = null;
+  var reconnectTimer = null;
+  var reconnectDelay = 1000;
+  var MAX_RECONNECT_DELAY = 8000;
+  var isConnected = false;
+
+  // Message history
+  var messages = [];
+  var currentRequestId = null;
+  var streamBuffer = '';
+  var messageCounter = 0;
+  var viewIndex = -1;  // -1 means "latest" (auto-follow)
+
+  // ── DOM refs ──────────────────────────────────────────
+  var pairingScreen = document.getElementById('pairing-screen');
+  var liveView = document.getElementById('live-view');
+  var connectBtn = document.getElementById('connect-btn');
+  var pairingError = document.getElementById('pairing-error');
+  var statusPill = document.getElementById('status-pill');
+  var statusDot = document.getElementById('status-dot');
+  var statusText = document.getElementById('status-text');
+  var chatContainer = document.getElementById('chat-container');
+  var emptyState = document.getElementById('empty-state');
+  var msgCountEl = document.getElementById('msg-count');
+  var responseNav = document.getElementById('response-nav');
+  var navPrev = document.getElementById('nav-prev');
+  var navNext = document.getElementById('nav-next');
+  var navCounter = document.getElementById('nav-counter');
+  var navJump = document.getElementById('nav-jump');
+
+  // ── Init ──────────────────────────────────────────────
+  function init() {
+    var params = new URLSearchParams(window.location.search);
+    token = params.get('token');
+    if (token) {
+      connect();
+    }
+  }
+
+  // ── Connect ───────────────────────────────────────────
+  window.connect = function connect() {
+    if (!token) {
+      showError('No pairing token found. Scan the QR code from Settings.');
+      return;
+    }
+
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'Connecting…';
+    pairingError.style.display = 'none';
+
+    var host = window.location.host;
+    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var wsUrl = protocol + '//' + host + '?token=' + encodeURIComponent(token);
+
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (err) {
+      showError('Failed to create connection: ' + err.message);
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'Connect';
+      return;
+    }
+
+    ws.onopen = function() {
+      setStatus('connecting');
+    };
+
+    ws.onmessage = function(event) {
+      try {
+        var msg = JSON.parse(event.data);
+        handleMessage(msg);
+      } catch (err) {
+        console.warn('[QuietlyMirror] Failed to parse message:', err);
+      }
+    };
+
+    ws.onclose = function(event) {
+      if (event.code === 4401) {
+        showError('Invalid pairing token. Please scan a new QR code.');
+        showPairingScreen();
+        return;
+      }
+
+      if (isConnected) {
+        setStatus('disconnected');
+        scheduleReconnect();
+      } else {
+        showError('Connection failed. Check that Quietly Mirror is enabled on your desktop.');
+        showPairingScreen();
+      }
+    };
+
+    ws.onerror = function() {};
+  };
+
+  // ── Message Handler ───────────────────────────────────
+  function handleMessage(msg) {
+    switch (msg.type) {
+      case 'pairing_result':
+        if (msg.payload && msg.payload.success) {
+          isConnected = true;
+          reconnectDelay = 1000;
+          setStatus('connected');
+          showLiveView();
+        } else {
+          showError(msg.payload?.error || 'Pairing failed');
+          showPairingScreen();
+        }
+        break;
+
+      case 'ai_response':
+        handleAiResponse(msg.payload, msg.timestamp);
+        break;
+
+      case 'heartbeat':
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'heartbeat', timestamp: Date.now() }));
+        }
+        break;
+
+      case 'error':
+        console.warn('[QuietlyMirror] Server error:', msg.payload);
+        break;
+    }
+  }
+
+  // ── AI Response Handler ───────────────────────────────
+  function handleAiResponse(payload, timestamp) {
+    if (!payload) return;
+
+    var ts = timestamp ? new Date(timestamp) : new Date();
+    var timeStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    var intent = payload.intent || 'ai_response';
+    var intentLabel = formatIntent(intent);
+
+    if (payload.streaming) {
+      if (payload.requestId !== currentRequestId) {
+        finalizeCurrentStream();
+        currentRequestId = payload.requestId;
+        streamBuffer = '';
+        var newMsg = {
+          id: 'msg-' + (++messageCounter),
+          intent: intentLabel,
+          content: '',
+          timestamp: timeStr,
+          streaming: true,
+        };
+        messages.push(newMsg);
+        renderNewBubble(newMsg);
+        hideEmptyState();
+      }
+      streamBuffer += payload.content;
+      updateStreamingBubble(streamBuffer);
+    } else {
+      // Final result — check if this is the end of a stream we already have
+      if (payload.requestId && payload.requestId === currentRequestId) {
+        // Same requestId as current stream — just finalize, don't duplicate
+        var lastMsg = messages[messages.length - 1];
+        if (lastMsg && lastMsg.streaming) {
+          lastMsg.streaming = false;
+          lastMsg.content = payload.content || streamBuffer;
+          var el = document.getElementById(lastMsg.id);
+          if (el) {
+            el.classList.remove('streaming');
+            var body = el.querySelector('.msg-content');
+            if (body) body.innerHTML = renderMarkdown(lastMsg.content);
+            if (window.renderPendingMermaid) setTimeout(window.renderPendingMermaid, 0);
+          }
+        } else {
+          // Already finalized by streaming — skip duplicate
+        }
+        currentRequestId = null;
+      } else {
+        // Completely new non-streaming result
+        finalizeCurrentStream();
+        currentRequestId = null;
+
+        var finalMsg = {
+          id: 'msg-' + (++messageCounter),
+          intent: intentLabel,
+          content: payload.content || '',
+          timestamp: timeStr,
+          streaming: false,
+        };
+        messages.push(finalMsg);
+        renderNewBubble(finalMsg);
+        hideEmptyState();
+      }
+    }
+
+    updateMsgCount();
+    updateNavUI();
+    // Only auto-scroll if viewing latest (auto-follow mode)
+    if (viewIndex === -1) scrollToBottom();
+  }
+
+  function finalizeCurrentStream() {
+    var lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.streaming) {
+      lastMsg.streaming = false;
+      lastMsg.content = streamBuffer;
+      var el = document.getElementById(lastMsg.id);
+      if (el) {
+        el.classList.remove('streaming');
+        var body = el.querySelector('.msg-content');
+        if (body) body.innerHTML = renderMarkdown(lastMsg.content);
+        if (window.renderPendingMermaid) setTimeout(window.renderPendingMermaid, 0);
+      }
+    }
+  }
+
+  function formatIntent(intent) {
+    if (!intent) return 'Response';
+    return intent
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+  }
+
+  // ── Render Helpers ────────────────────────────────────
+  function renderNewBubble(msg) {
+    var bubble = document.createElement('div');
+    bubble.id = msg.id;
+    bubble.className = 'msg-bubble' + (msg.streaming ? ' streaming' : '');
+
+    var headerHtml = '<div class="msg-header">'
+      + '<div class="msg-intent">'
+      + '<div class="msg-intent-dot"></div>'
+      + '<span class="msg-intent-label">' + escapeHtml(msg.intent) + '</span>'
+      + '</div>'
+      + '<span class="msg-time">' + escapeHtml(msg.timestamp) + '</span>'
+      + '</div>';
+
+    var contentHtml = msg.streaming
+      ? renderMarkdown(streamBuffer) + '<span class="streaming-cursor"></span>'
+      : renderMarkdown(msg.content);
+
+    bubble.innerHTML = headerHtml
+      + '<div class="msg-body">'
+      + '<div class="msg-content">' + contentHtml + '</div>'
+      + '</div>';
+
+    // Hide all existing bubbles, only show the new one
+    var existing = chatContainer.querySelectorAll('.msg-bubble');
+    for (var i = 0; i < existing.length; i++) {
+      existing[i].style.display = 'none';
+    }
+
+    chatContainer.appendChild(bubble);
+    // Reset scroll to top for new response
+    chatContainer.scrollTop = 0;
+
+    if (window.renderPendingMermaid) setTimeout(window.renderPendingMermaid, 0);
+  }
+
+  var scrollThrottle = null;
+
+  function updateStreamingBubble(text) {
+    var lastMsg = messages[messages.length - 1];
+    if (!lastMsg || !lastMsg.streaming) return;
+
+    var el = document.getElementById(lastMsg.id);
+    if (!el) return;
+
+    var body = el.querySelector('.msg-content');
+    if (body) {
+      body.innerHTML = renderMarkdown(text) + '<span class="streaming-cursor"></span>';
+    }
+    // Throttled auto-scroll to bottom during streaming (every 100ms max)
+    if (viewIndex === -1 && !scrollThrottle) {
+      scrollThrottle = setTimeout(function() {
+        scrollThrottle = null;
+        scrollToBottom();
+      }, 100);
+    }
+  }
+
+  function hideEmptyState() {
+    if (emptyState) emptyState.style.display = 'none';
+  }
+
+  function updateMsgCount() {
+    var count = messages.length;
+    if (count > 0) {
+      msgCountEl.textContent = count;
+      msgCountEl.style.display = '';
+    } else {
+      msgCountEl.style.display = 'none';
+    }
+  }
+
+  function scrollToBottom() {
+    requestAnimationFrame(function() {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    });
+  }
+
+  // ── Show Single Response ──────────────────────────────
+  // Only one bubble visible at a time; hide all others
+  function showResponse(index) {
+    if (index < 0 || index >= messages.length) return;
+    var allBubbles = chatContainer.querySelectorAll('.msg-bubble');
+    for (var i = 0; i < allBubbles.length; i++) {
+      allBubbles[i].style.display = 'none';
+    }
+    var target = document.getElementById(messages[index].id);
+    if (target) {
+      target.style.display = '';
+      chatContainer.scrollTop = 0;
+    }
+  }
+
+  // ── Response Navigation ────────────────────────────────
+  function updateNavUI() {
+    var total = messages.length;
+    if (total < 2) {
+      responseNav.style.display = 'none';
+      return;
+    }
+    responseNav.style.display = 'flex';
+
+    var current = viewIndex === -1 ? total - 1 : viewIndex;
+    navCounter.textContent = 'Response ' + (current + 1) + ' of ' + total;
+    navPrev.disabled = current <= 0;
+    navNext.disabled = current >= total - 1;
+
+    // Show "Jump to Latest" when not on the latest
+    if (viewIndex !== -1 && viewIndex < total - 1) {
+      navJump.style.display = '';
+    } else {
+      navJump.style.display = 'none';
+    }
+  }
+
+  window.navigatePrev = function() {
+    var total = messages.length;
+    if (total < 2) return;
+    var current = viewIndex === -1 ? total - 1 : viewIndex;
+    if (current > 0) {
+      viewIndex = current - 1;
+      showResponse(viewIndex);
+      updateNavUI();
+    }
+  };
+
+  window.navigateNext = function() {
+    var total = messages.length;
+    if (total < 2) return;
+    var current = viewIndex === -1 ? total - 1 : viewIndex;
+    if (current < total - 1) {
+      viewIndex = current + 1;
+      // If navigating to the very last, switch back to auto-follow
+      if (viewIndex === total - 1) viewIndex = -1;
+      showResponse(viewIndex === -1 ? total - 1 : viewIndex);
+      updateNavUI();
+    }
+  };
+
+  window.navigateLatest = function() {
+    viewIndex = -1;
+    showResponse(messages.length - 1);
+    scrollToBottom();
+    updateNavUI();
+  };
+
+  // ── Lightweight Markdown → HTML ──────────────────────
+  function renderMarkdown(src) {
+    if (!src) return '';
+    var html = escapeHtml(src);
+
+    // Mermaid blocks
+    var mermaidId = 0;
+    var mermaidBlocks = [];
+    html = html.replace(/```mermaid\n([\s\S]*?)```/g, function(_, code) {
+      var id = 'mermaid-' + Date.now() + '-' + (mermaidId++);
+      mermaidBlocks.push({ id: id, code: code.trim() });
+      return '<div class="mermaid-container">' +
+        '<div class="mermaid-label"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Diagram</div>' +
+        '<div class="mermaid" id="' + id + '">' + code.trim() + '</div>' +
+        '</div>';
+    });
+
+    // Code blocks
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
+      return '<pre><code>' + code.trim() + '</code></pre>';
+    });
+
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+
+    html = html.replace(/^---$/gm, '<hr>');
+
+    html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+    html = html.replace(/\n\n+/g, '</p><p>');
+    html = '<p>' + html + '</p>';
+
+    html = html.replace(/(?<!<\/(li|h[123]|pre|ul|ol|hr)>)\n(?!<)/g, '<br>');
+
+    html = html.replace(/<p>\s*<\/p>/g, '');
+
+    return html;
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ── Reconnect ─────────────────────────────────────────
+  function scheduleReconnect() {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    setStatus('connecting');
+    reconnectTimer = setTimeout(function() {
+      window.connect();
+      reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+    }, reconnectDelay);
+  }
+
+  // ── UI Helpers ────────────────────────────────────────
+  function showPairingScreen() {
+    pairingScreen.style.display = 'flex';
+    liveView.style.display = 'none';
+    connectBtn.disabled = false;
+    connectBtn.textContent = 'Connect';
+    isConnected = false;
+  }
+
+  function showLiveView() {
+    pairingScreen.style.display = 'none';
+    liveView.style.display = 'flex';
+  }
+
+  function showError(message) {
+    pairingError.textContent = message;
+    pairingError.style.display = 'block';
+  }
+
+  function setStatus(state) {
+    statusDot.className = 'status-dot ' + state;
+    statusPill.className = 'status-pill ' + state;
+    switch (state) {
+      case 'connected':
+        statusText.textContent = 'Live';
+        break;
+      case 'connecting':
+        statusText.textContent = 'Connecting…';
+        break;
+      default:
+        statusText.textContent = 'Offline';
+    }
+  }
+
+  // ── Start ─────────────────────────────────────────────
+  init();
+})();
+</script>
+
+<!-- Mermaid.js for diagram rendering -->
+<script>
+(function() {
+  var script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+  script.onload = function() {
+    window.mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#1a1a2e',
+        primaryTextColor: 'rgba(255,255,255,0.9)',
+        primaryBorderColor: 'rgba(255,255,255,0.12)',
+        lineColor: 'rgba(96,165,250,0.5)',
+        secondaryColor: '#16213e',
+        tertiaryColor: '#0f3460',
+        noteBkgColor: 'rgba(167,139,250,0.12)',
+        noteTextColor: 'rgba(255,255,255,0.85)',
+        noteBorderColor: 'rgba(167,139,250,0.25)',
+        edgeLabelBackground: '#050508',
+        fontSize: '13px',
+      },
+      flowchart: { curve: 'basis', padding: 12 },
+      sequence: { mirrorActors: false },
+    });
+    window.__mermaidReady = true;
+    renderPendingMermaid();
+  };
+  script.onerror = function() {
+    console.warn('[QuietlyMirror] Mermaid CDN failed — diagrams render as text');
+  };
+  document.head.appendChild(script);
+
+  window.renderPendingMermaid = function() {
+    if (!window.__mermaidReady) return;
+    var els = document.querySelectorAll('.mermaid:not([data-processed])');
+    els.forEach(function(el) {
+      el.setAttribute('data-processed', 'true');
+      var code = el.textContent;
+      try {
+        var id = el.id || ('mermaid-auto-' + Date.now());
+        window.mermaid.render(id + '-svg', code).then(function(result) {
+          el.innerHTML = result.svg;
+        }).catch(function() {
+          el.innerHTML = '<div class="mermaid-fallback">' + code + '</div>';
+        });
+      } catch(e) {
+        el.innerHTML = '<div class="mermaid-fallback">' + code + '</div>';
+      }
+    });
+  };
+})();
+</script>
+</body>
+</html>

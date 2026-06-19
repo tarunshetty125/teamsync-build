@@ -44,6 +44,12 @@ export interface AppSettings {
         platform?: NodeJS.Platform;
         updatedAt?: number;
     };
+    /** Phone Mirror (Beta) — stream AI responses to a phone browser on the local network */
+    phoneMirror?: {
+        enabled?: boolean;
+        lanAccess?: boolean;
+        lastToken?: string;
+    };
 }
 
 export type FirstSuccessActionId =

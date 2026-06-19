@@ -435,6 +435,17 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   modesRemoveAllNoteSections: (modeId: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
   modesResetNoteSections: (modeId: string) => Promise<{ success: boolean; state?: ModesStateSnapshot; error?: string }>
 
+  // Phone Mirror (Beta) API
+  phoneMirrorEnable: () => Promise<{ success: boolean; error?: string }>
+  phoneMirrorDisable: () => Promise<{ success: boolean }>
+  phoneMirrorGetState: () => Promise<{ enabled: boolean; lanAccess: boolean; port: number; pairingUrl: string | null; connectedDeviceCount: number; connectedDevices: Array<{ id: string; name: string; connectedAt: number }> }>
+  phoneMirrorGetQrCode: () => Promise<{ success: boolean; dataUrl: string | null; error?: string }>
+  phoneMirrorGetPairingUrl: () => Promise<{ success: boolean; url: string | null; error?: string }>
+  phoneMirrorGetConnectedDevices: () => Promise<{ success: boolean; devices: Array<{ id: string; name: string; connectedAt: number }> }>
+  phoneMirrorSetLanAccess: (enabled: boolean) => Promise<{ success: boolean; error?: string }>
+  phoneMirrorDisconnectAll: () => Promise<{ success: boolean }>
+  onPhoneMirrorStateChanged: (callback: (state: any) => void) => () => void
+
   // Meeting Lifecycle
   startMeeting: (metadata?: any) => Promise<{ success: boolean; error?: string }>
   endMeeting: () => Promise<{ success: boolean; error?: string }>

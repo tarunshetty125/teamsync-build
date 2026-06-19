@@ -4383,19 +4383,6 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                             style={appearance.inputStyle}
                                         />
 
-                                        {/* Stealth Typing Indicator */}
-                                        {stealthTapActive && (
-                                            <div className="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none z-10">
-                                                <span className="relative flex h-2 w-2">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-60"></span>
-                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
-                                                </span>
-                                                <span className={`text-[10px] font-medium tracking-wide uppercase ${isLightTheme ? 'text-violet-600/70' : 'text-violet-400/80'}`}>
-                                                    Stealth
-                                                </span>
-                                            </div>
-                                        )}
-
                                         {/* Custom Rich Placeholder */}
                                         {!inputValue && (
                                             <div className={`absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] ${isLightTheme ? 'text-gray-400' : 'text-white/40'}`}>
