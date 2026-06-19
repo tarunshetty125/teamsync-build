@@ -7,7 +7,7 @@ import ConnectCalendarButton from './ui/ConnectCalendarButton';
 import MeetingDetails from './MeetingDetails';
 import TopSearchPill from './TopSearchPill';
 import GlobalChatOverlay from './GlobalChatOverlay';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useReducedMotion, useSpring } from 'framer-motion';
 import CalendarModeRecommendationCard from './CalendarModeRecommendationCard';
 import { analytics } from '../lib/analytics/analytics.service'; // Added analytics import
 import { useShortcuts } from '../hooks/useShortcuts';
@@ -44,6 +44,167 @@ interface CalendarModeRecommendation {
 type CalendarParticipant = {
     email: string;
     name: string;
+};
+
+type MagneticCalendarRefreshButtonProps = {
+    onClick: () => void;
+    disabled: boolean;
+    isRefreshing: boolean;
+};
+
+const calendarRefreshMagneticSpring = { stiffness: 260, damping: 24, mass: 0.62 };
+const calendarRefreshTextSpring = { stiffness: 340, damping: 25, mass: 0.5 };
+
+const clampNumber = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const MagneticCalendarRefreshButton: React.FC<MagneticCalendarRefreshButtonProps> = ({
+    onClick,
+    disabled,
+    isRefreshing,
+}) => {
+    const [clickFlashKey, setClickFlashKey] = useState(0);
+    const prefersReducedMotion = useReducedMotion();
+    const fieldRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const magneticX = useMotionValue(0);
+    const magneticY = useMotionValue(0);
+    const magneticScale = useMotionValue(1);
+    const magneticRotate = useMotionValue(0);
+    const labelMotionX = useMotionValue(0);
+    const labelMotionY = useMotionValue(0);
+    const x = useSpring(magneticX, calendarRefreshMagneticSpring);
+    const y = useSpring(magneticY, calendarRefreshMagneticSpring);
+    const scale = useSpring(magneticScale, calendarRefreshMagneticSpring);
+    const rotateZ = useSpring(magneticRotate, calendarRefreshMagneticSpring);
+    const labelX = useSpring(labelMotionX, calendarRefreshTextSpring);
+    const labelY = useSpring(labelMotionY, calendarRefreshTextSpring);
+
+    const resetMagnet = () => {
+        magneticX.set(0);
+        magneticY.set(0);
+        magneticScale.set(1);
+        magneticRotate.set(0);
+        labelMotionX.set(0);
+        labelMotionY.set(0);
+        buttonRef.current?.style.setProperty('--calendar-refresh-pill-x', '52%');
+        buttonRef.current?.style.setProperty('--calendar-refresh-pill-y', '26%');
+    };
+
+    const updateMagnetFromPointer = (clientX: number, clientY: number) => {
+        if (prefersReducedMotion || disabled) return;
+
+        const field = fieldRef.current;
+        const button = buttonRef.current;
+        if (!field || !button) return;
+
+        const fieldRect = field.getBoundingClientRect();
+        const buttonRect = button.getBoundingClientRect();
+        const centerX = fieldRect.left + fieldRect.width / 2;
+        const centerY = fieldRect.top + fieldRect.height / 2;
+        const dx = clientX - centerX;
+        const dy = clientY - centerY;
+        const distance = Math.hypot(dx, dy);
+        const strength = Math.pow(clampNumber(1 - distance / 220, 0, 1), 1.18);
+
+        if (strength < 0.015) {
+            resetMagnet();
+            return;
+        }
+
+        magneticX.set(clampNumber(dx * 0.2 * strength, -18, 18));
+        magneticY.set(clampNumber(dy * 0.18 * strength, -12, 12));
+        magneticScale.set(1 + 0.025 * strength);
+        magneticRotate.set(clampNumber(dx * 0.012 * strength, -1.4, 1.4));
+        labelMotionX.set(clampNumber(dx * 0.18 * strength, -8, 8));
+        labelMotionY.set(clampNumber(dy * 0.2 * strength, -7, 7));
+
+        const highlightX = clampNumber(((clientX - buttonRect.left) / buttonRect.width) * 100, 14, 86);
+        const highlightY = clampNumber(((clientY - buttonRect.top) / buttonRect.height) * 100, 8, 68);
+        button.style.setProperty('--calendar-refresh-pill-x', `${highlightX}%`);
+        button.style.setProperty('--calendar-refresh-pill-y', `${highlightY}%`);
+    };
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        let animationFrame: number | null = null;
+        let latestPointer: { x: number; y: number } | null = null;
+
+        const handleWindowPointerMove = (event: PointerEvent) => {
+            latestPointer = { x: event.clientX, y: event.clientY };
+            if (animationFrame !== null) return;
+
+            animationFrame = window.requestAnimationFrame(() => {
+                animationFrame = null;
+                if (latestPointer) {
+                    updateMagnetFromPointer(latestPointer.x, latestPointer.y);
+                }
+            });
+        };
+
+        window.addEventListener('pointermove', handleWindowPointerMove, { passive: true });
+        window.addEventListener('pointerleave', resetMagnet);
+
+        return () => {
+            if (animationFrame !== null) {
+                window.cancelAnimationFrame(animationFrame);
+            }
+            window.removeEventListener('pointermove', handleWindowPointerMove);
+            window.removeEventListener('pointerleave', resetMagnet);
+        };
+    }, [disabled, prefersReducedMotion]);
+
+    const handleClick = () => {
+        if (!prefersReducedMotion) {
+            setClickFlashKey((key) => key + 1);
+        }
+        onClick();
+    };
+
+    return (
+        <div ref={fieldRef} className="relative flex min-h-[50px] flex-1 items-center justify-center overflow-visible">
+            <motion.div style={{ x, y, scale, rotateZ }}>
+                <button
+                    ref={buttonRef}
+                    type="button"
+                    onClick={handleClick}
+                    disabled={disabled}
+                    className="
+                        group relative inline-flex h-[40px] min-w-[168px] items-center justify-center gap-2
+                        overflow-hidden rounded-full px-4 text-[13px] font-semibold tracking-[-0.005em] text-[#050009]
+                        outline-none
+                        focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1025]
+                        disabled:cursor-wait disabled:opacity-80
+                    "
+                    style={{
+                        background: 'radial-gradient(circle at var(--calendar-refresh-pill-x, 52%) var(--calendar-refresh-pill-y, 26%), rgba(255,255,255,0.98) 0%, rgba(226,207,255,0.92) 20%, rgba(169,92,255,0.9) 48%, rgba(83,45,236,0.98) 100%)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.68), inset 0 -15px 22px rgba(55,28,207,0.42), inset 0 -2px 8px rgba(30,4,88,0.38), 0 12px 24px rgba(10,0,45,0.44), 0 0 0 1px rgba(229,214,255,0.24)',
+                    }}
+                >
+                    <span className="pointer-events-none absolute inset-x-[8%] top-1 h-[46%] rounded-full bg-gradient-to-b from-white/75 via-white/30 to-transparent blur-[8px]" />
+                    <span className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(100deg,transparent_0%,rgba(255,255,255,0.18)_42%,rgba(255,255,255,0.34)_50%,transparent_62%)] opacity-75 transition-transform duration-500 group-hover:translate-x-2" />
+                    {clickFlashKey > 0 && (
+                        <motion.span
+                            key={clickFlashKey}
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-0 z-20 rounded-full bg-white"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: [0, 1, 1, 0] }}
+                            transition={{
+                                duration: 0.18,
+                                times: [0, 0.16, 0.42, 1],
+                                ease: [0.16, 1, 0.3, 1],
+                            }}
+                        />
+                    )}
+                    <motion.span className="relative z-10 flex items-center gap-2 drop-shadow-[0_1px_1px_rgba(255,255,255,0.22)]" style={{ x: labelX, y: labelY }}>
+                        <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+                        <span>{isRefreshing ? 'Refreshing...' : 'Refresh calendar'}</span>
+                    </motion.span>
+                </button>
+            </motion.div>
+        </div>
+    );
 };
 
 interface Meeting {
@@ -1469,8 +1630,8 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
                                                 className="group relative grid min-h-[246px] grid-cols-[minmax(0,1.8fr)_minmax(250px,0.9fr)] overflow-hidden rounded-xl"
                                                 style={{
-                                                    background: 'linear-gradient(180deg, #020210 0%, #0a0a2e 15%, #0c1445 40%, #111b5e 60%, #0a0a2e 85%, #020210 100%)',
-                                                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.08), inset 0 -1px 2px rgba(2,2,16,0.8), 0 16px 40px rgba(10,10,46,0.3), 0 0 0 1px rgba(255,255,255,0.04)',
+                                                    background: 'linear-gradient(180deg, #021b33 0%, #082f49 22%, #0c4a6e 50%, #083d5e 76%, #021b33 100%)',
+                                                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.08), inset 0 -1px 2px rgba(2,27,51,0.85), 0 16px 40px rgba(2,27,51,0.35), 0 0 0 1px rgba(186,230,253,0.06)',
                                                 }}
                                             >
                                                 {/* Vertical blue curtain streaks */}
@@ -1500,48 +1661,48 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                           repeating-linear-gradient(90deg,
                                                             transparent 0px,
                                                             transparent 8px,
-                                                            rgba(59,130,246,0.06) 8px,
-                                                            rgba(59,130,246,0.03) 10px,
+                                                            rgba(14,165,233,0.08) 8px,
+                                                            rgba(14,165,233,0.04) 10px,
                                                             transparent 10px,
                                                             transparent 14px,
-                                                            rgba(99,102,241,0.05) 14px,
-                                                            rgba(99,102,241,0.02) 15px,
+                                                            rgba(125,211,252,0.06) 14px,
+                                                            rgba(125,211,252,0.03) 15px,
                                                             transparent 15px,
                                                             transparent 22px,
-                                                            rgba(59,130,246,0.04) 22px,
-                                                            rgba(59,130,246,0.02) 24px
+                                                            rgba(56,189,248,0.06) 22px,
+                                                            rgba(56,189,248,0.03) 24px
                                                           )
                                                         `,
                                                         animation: 'curtainShimmer 6s ease-in-out infinite',
                                                         willChange: 'opacity, transform',
                                                     }}
                                                 />
-                                                {/* Central purple/teal glow */}
+                                                {/* Central blue/cyan glow */}
                                                 <div
                                                     className="pointer-events-none absolute inset-0 z-[2]"
                                                     style={{
-                                                        background: 'radial-gradient(ellipse 70% 80% at 40% 55%, rgba(109,40,217,0.3) 0%, rgba(79,70,229,0.15) 30%, transparent 65%)',
+                                                        background: 'radial-gradient(ellipse 70% 80% at 40% 55%, rgba(14,165,233,0.36) 0%, rgba(2,132,199,0.2) 34%, transparent 68%)',
                                                     }}
                                                 />
-                                                {/* Teal/green top accent */}
+                                                {/* Sky top accent */}
                                                 <div
                                                     className="pointer-events-none absolute inset-0 z-[2]"
                                                     style={{
-                                                        background: 'radial-gradient(ellipse 50% 40% at 55% 10%, rgba(52,211,153,0.12) 0%, rgba(56,189,248,0.06) 40%, transparent 70%)',
+                                                        background: 'radial-gradient(ellipse 54% 42% at 55% 10%, rgba(186,230,253,0.18) 0%, rgba(56,189,248,0.1) 42%, transparent 72%)',
                                                     }}
                                                 />
                                                 {/* Black vignette edges */}
                                                 <div
                                                     className="pointer-events-none absolute inset-0 z-[3]"
                                                     style={{
-                                                        background: 'radial-gradient(ellipse 85% 85% at 40% 50%, transparent 30%, rgba(2,2,16,0.7) 100%)',
+                                                        background: 'radial-gradient(ellipse 85% 85% at 40% 50%, transparent 30%, rgba(2,27,51,0.74) 100%)',
                                                     }}
                                                 />
                                                 {/* Moving aurora blobs */}
                                                 <div
                                                     className="pointer-events-none absolute inset-[-40%] z-[2]"
                                                     style={{
-                                                        background: 'radial-gradient(ellipse 40% 50% at 50% 50%, rgba(79,70,229,0.2) 0%, rgba(109,40,217,0.1) 40%, transparent 70%)',
+                                                        background: 'radial-gradient(ellipse 40% 50% at 50% 50%, rgba(14,165,233,0.24) 0%, rgba(2,132,199,0.14) 42%, transparent 72%)',
                                                         animation: 'connectedAuroraMove 9s ease-in-out infinite',
                                                         willChange: 'transform',
                                                     }}
@@ -1549,14 +1710,14 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 <div
                                                     className="pointer-events-none absolute inset-[-40%] z-[2]"
                                                     style={{
-                                                        background: 'radial-gradient(ellipse 35% 45% at 50% 50%, rgba(52,211,153,0.08) 0%, rgba(56,189,248,0.05) 35%, transparent 65%)',
+                                                        background: 'radial-gradient(ellipse 35% 45% at 50% 50%, rgba(125,211,252,0.16) 0%, rgba(2,132,199,0.08) 38%, transparent 68%)',
                                                         animation: 'connectedAuroraMove2 11s ease-in-out infinite',
                                                         willChange: 'transform',
                                                     }}
                                                 />
                                                 {/* Specular highlight */}
                                                 <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-[25%] rounded-b-xl bg-gradient-to-b from-white/8 to-transparent opacity-50 blur-[3px]" />
-                                                <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/[0.02] to-indigo-300/5 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
+                                                <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/[0.02] to-sky-300/5 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
 
                                                 <div className="relative z-20 min-w-0 p-5">
                                                     <div className="flex items-center justify-between gap-4">
@@ -1641,14 +1802,22 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                     </div>
 
                                                     <div className="mt-4 flex flex-wrap items-center gap-2">
-                                                        <button
-                                                            type="button"
-                                                            onClick={handlePrepareMeeting}
-                                                            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md bg-white px-3 text-[13px] font-semibold text-[#0f172a] transition-opacity hover:opacity-90 active:scale-[0.98]"
-                                                        >
-                                                            <Sparkles size={14} />
-                                                            {nextCalendarEvent ? 'Prepare meeting' : 'Refresh calendar'}
-                                                        </button>
+                                                        {nextCalendarEvent ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={handlePrepareMeeting}
+                                                                className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md bg-white px-3 text-[13px] font-semibold text-[#0f172a] transition-opacity hover:opacity-90 active:scale-[0.98]"
+                                                            >
+                                                                <Sparkles size={14} />
+                                                                Prepare meeting
+                                                            </button>
+                                                        ) : (
+                                                            <MagneticCalendarRefreshButton
+                                                                onClick={handlePrepareMeeting}
+                                                                disabled={isRefreshing || isSyncingCalendar}
+                                                                isRefreshing={isRefreshing || isSyncingCalendar}
+                                                            />
+                                                        )}
                                                         {nextCalendarEvent?.meetingLink && (
                                                             <button
                                                                 type="button"
@@ -1793,7 +1962,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
                                                     <div className="mt-4">
                                                         <ConnectCalendarButton
-                                                            className="w-full justify-center !bg-white !text-[#1e1b4b] hover:!opacity-95"
+                                                            variant="magnetic"
                                                             onConnect={() => setIsCalendarConnected(true)}
                                                         />
                                                     </div>
