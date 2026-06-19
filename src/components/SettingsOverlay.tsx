@@ -20,6 +20,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useShortcuts } from '../hooks/useShortcuts';
+import { isWindows } from '../utils/platformUtils';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import {
     clampOverlayOpacity,
@@ -2682,8 +2683,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         : getPermissionTrustState(permissionStatus?.microphone);
     const calendarTrustState: TrustState = calendarStatus.connected ? 'healthy' : 'needs_attention';
     const stealthTrustState: TrustState = isUndetectable ? 'healthy' : 'disabled';
+    // On Windows, Screen Recording and Accessibility are always available (no OS gate).
+    // Filter them out so the Settings UI only shows relevant items.
     const trustReadinessItems = [
-        {
+        ...(isWindows ? [] : [{
             id: 'screen-recording',
             label: 'Screen Recording',
             state: screenRecordingTrustState,
@@ -2691,14 +2694,14 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 ? 'Restart Quietly to finish applying screen access.'
                 : 'Lets Quietly read visible meeting context when you ask for help.',
             icon: <Monitor size={16} />,
-        },
-        {
+        }]),
+        ...(isWindows ? [] : [{
             id: 'accessibility',
             label: 'Accessibility',
             state: accessibilityTrustState,
             detail: 'Keeps global shortcuts and overlay controls reliable during calls.',
             icon: <Keyboard size={16} />,
-        },
+        }]),
         {
             id: 'microphone',
             label: 'Microphone',
@@ -2729,7 +2732,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     ];
 
 
-    const permissionChecklistItems: Array<{
+    const allPermissionChecklistItems: Array<{
         id: PermissionKind;
         label: string;
         state: TrustState;
@@ -2764,10 +2767,16 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 state: getPermissionTrustState(permissionStatus?.microphone),
                 why: 'Quietly listens to your selected microphone only when capture is active.',
                 unlocks: 'Live transcript, better meeting memory, and speech-aware suggestions.',
-                fix: 'Allow microphone access, then test your input in Audio settings.',
+                fix: isWindows
+                    ? 'Allow microphone access in Windows Settings → Privacy & Security → Microphone.'
+                    : 'Allow microphone access, then test your input in Audio settings.',
                 icon: <Mic size={16} />,
             },
         ];
+    // On Windows, only show Microphone (Screen Recording and Accessibility are not OS gates)
+    const permissionChecklistItems = isWindows
+        ? allPermissionChecklistItems.filter(item => item.id === 'microphone')
+        : allPermissionChecklistItems;
     const handleToggleUndetectable = () => {
         const newState = !isUndetectable;
         setIsUndetectable(newState);
@@ -3201,7 +3210,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     </div>
                                                     <p className="text-[11px] text-text-tertiary mt-2 px-1">
                                                         Recovery: {shortcuts.toggleVisibility.length ? shortcuts.toggleVisibility.join(' ') : 'Set in Keybinds'}
-                                                        {' · '}Protection depends on meeting app and macOS capture path
+                                                        {' · '}Protection depends on meeting app and {isWindows ? 'Windows display capture path' : 'macOS capture path'}
                                                     </p>
                                                 </div>
 

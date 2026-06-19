@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePermissionsStore } from '../../../stores/usePermissionsStore';
 import type { PermissionKind, PermissionState } from '../../../lib/permissions/types';
 import { isPermissionStatusOperational } from '../../../lib/permissions/utils';
+import { isWindows } from '../../../utils/platformUtils';
 import {
   stepModalVariants,
   stepItemVariants,
@@ -11,7 +12,7 @@ import {
   ModalFrameBorder,
 } from './animations';
 
-const PERMISSION_ROWS: Array<{
+const ALL_PERMISSION_ROWS: Array<{
   key: PermissionKind;
   label: string;
   description: string;
@@ -44,6 +45,11 @@ const PERMISSION_ROWS: Array<{
     iconColor: 'text-[#bf5af2]',
   },
 ];
+
+// Windows: only Microphone needs an OS-level permission gate.
+const PERMISSION_ROWS = isWindows
+  ? ALL_PERMISSION_ROWS.filter(r => r.key === 'microphone')
+  : ALL_PERMISSION_ROWS;
 
 function getPermissionStatusInfo(state: PermissionState | undefined) {
   switch (state) {
@@ -292,7 +298,7 @@ export function PermissionsStep({ isAdvancing, onContinue }: PermissionsStepProp
                 type="button"
                 whileHover={{ y: -1, scale: 1.006 }}
                 whileTap={{ scale: 0.986 }}
-                onClick={() => void openSettings('screenRecording')}
+                onClick={() => void openSettings(isWindows ? 'microphone' : 'screenRecording')}
                 disabled={isAdvancing}
                 className="group relative inline-flex h-[42px] w-full items-center justify-center gap-2 overflow-hidden rounded-full border border-[#3b82f6]/40 bg-gradient-to-b from-[#3b82f6]/24 to-[#2563eb]/16 px-5 text-[13px] font-semibold text-white/88 shadow-[0_12px_32px_rgba(59,130,246,0.12)] transition-all duration-300 hover:border-[#3b82f6]/60 hover:shadow-[0_12px_40px_rgba(59,130,246,0.20)]"
               >

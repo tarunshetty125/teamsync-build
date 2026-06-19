@@ -9,6 +9,7 @@ import {
 import { SiOpenai, SiGoogle } from 'react-icons/si';
 import { useShortcuts } from '../../hooks/useShortcuts';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
+import { isWindows } from '../../utils/platformUtils';
 import teamsyncIcon from '../icon.png';
 
 // ----------------------
@@ -439,7 +440,9 @@ const MockPermissionsAnim = () => {
                 </div>
             </div>
             <div className="text-xs text-text-secondary text-center max-w-[280px]">
-                Quietly requires Accessibility and Screen Recording permissions to analyze screen context.
+                {isWindows
+                    ? 'Quietly requires Microphone permission to transcribe speech.'
+                    : 'Quietly requires Accessibility and Screen Recording permissions to analyze screen context.'}
             </div>
         </div>
     );
@@ -805,7 +808,9 @@ const SetupGuide = () => {
     const steps = [
         {
             title: 'Grant Permissions',
-            desc: 'Enable Screen Recording and Accessibility for Quietly in macOS Privacy & Security.',
+            desc: isWindows
+                ? 'Allow Microphone access in Windows Settings → Privacy & Security.'
+                : 'Enable Screen Recording and Accessibility for Quietly in macOS Privacy & Security.',
         },
         {
             title: 'Set Up Audio',
@@ -976,6 +981,7 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                         </div>
 
                         <div className="flex flex-col gap-3 mt-6">
+                            {!isWindows && (
                             <div className={`p-4 rounded-xl border bg-bg-item-surface border-border-subtle`}>
                                 <h4 className={`font-semibold text-sm mb-2 text-text-primary flex items-center gap-2`}>
                                     <Monitor className="w-4 h-4 text-accent-primary" /> Screen Recording
@@ -983,7 +989,9 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                                 <p className="text-xs opacity-90 mb-2">Provides Quietly the ability to read your screen temporarily when you capture context.</p>
                                 <p className="text-[11px] text-text-tertiary">System Settings &gt; Privacy & Security &gt; Screen Recording</p>
                             </div>
+                            )}
                             
+                            {!isWindows && (
                             <div className={`p-4 rounded-xl border bg-bg-item-surface border-border-subtle`}>
                                 <h4 className={`font-semibold text-sm mb-2 text-text-primary flex items-center gap-2`}>
                                     <Command className="w-4 h-4 text-purple-500" /> Accessibility
@@ -991,6 +999,7 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                                 <p className="text-xs opacity-90 mb-2">Required for Quietly to detect the global keyboard shortcuts below, regardless of what window is focused.</p>
                                 <p className="text-[11px] text-text-tertiary">System Settings &gt; Privacy & Security &gt; Accessibility</p>
                             </div>
+                            )}
                         </div>
                     </div>
                 </AccordionSection>

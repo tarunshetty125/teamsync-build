@@ -14,13 +14,14 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { usePermissionsStore } from '../../../stores/usePermissionsStore';
 import type { PermissionKind, PermissionState } from '../../../lib/permissions/types';
 import { isPermissionStatusOperational } from '../../../lib/permissions/utils';
+import { isWindows } from '../../../utils/platformUtils';
 import appIconDark from '../../../assets/iconq.png';
 
 /* ── Natively-exact constants ── */
 const MODAL_DELAY_MS = 1500;
 const EASE: [number, number, number, number] = [0.23, 1, 0.32, 1];
 
-const PERMISSION_ROWS: Array<{
+const ALL_PERMISSION_ROWS: Array<{
   key: PermissionKind;
   label: string;
   icon: typeof Monitor;
@@ -28,6 +29,12 @@ const PERMISSION_ROWS: Array<{
     { key: 'screenRecording', label: 'Screen Recording', icon: Monitor },
     { key: 'microphone', label: 'Microphone', icon: Mic },
   ];
+
+// Windows: only Microphone needs an OS-level permission gate.
+// Screen Recording and Accessibility are always available on Windows.
+const PERMISSION_ROWS = isWindows
+  ? ALL_PERMISSION_ROWS.filter(r => r.key === 'microphone')
+  : ALL_PERMISSION_ROWS;
 
 function getStatusInfo(state: PermissionState | undefined) {
   switch (state) {
@@ -565,7 +572,9 @@ export function WelcomePermissionsStep({ isAdvancing, onLaunch }: WelcomePermiss
                     Let's get you set up
                   </h2>
                   <p className="mt-1.5" style={{ fontSize: '13px', lineHeight: 1.5, color: '#8e8e93' }}>
-                    Quietly needs a few permissions to capture meetings and transcribe speech.
+                    {isWindows
+                      ? 'Quietly needs microphone access to transcribe speech.'
+                      : 'Quietly needs a few permissions to capture meetings and transcribe speech.'}
                   </p>
 
                   {/* Permission rows */}
@@ -653,7 +662,7 @@ export function WelcomePermissionsStep({ isAdvancing, onLaunch }: WelcomePermiss
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.2, duration: 0.35 }}
-                    onClick={() => void openSettings('screenRecording')}
+                    onClick={() => void openSettings(isWindows ? 'microphone' : 'screenRecording')}
                     className="relative w-full mt-5 h-[46px] rounded-[14px] text-[13.5px] font-semibold text-white flex items-center justify-center gap-1.5 cursor-pointer overflow-hidden transition-all active:scale-[0.97]"
                     style={{
                       background: 'linear-gradient(160deg, #5B8EF0 0%, #3B6FE8 50%, #2D5FD4 100%)',
@@ -669,7 +678,7 @@ export function WelcomePermissionsStep({ isAdvancing, onLaunch }: WelcomePermiss
                         filter: 'blur(0.5px)',
                       }}
                     />
-                    <span className="relative z-10">Open Settings</span>
+                    <span className="relative z-10">{isWindows ? 'Open Windows Settings' : 'Open Settings'}</span>
                   </motion.button>
                 </div>
 
@@ -700,12 +709,16 @@ export function WelcomePermissionsStep({ isAdvancing, onLaunch }: WelcomePermiss
                     const permState = status?.[activePerm.key];
                     const isGranted = permState === 'granted';
                     const needsSettings = permState === 'denied' || permState === 'restart_required';
-                    const dialogText = activePerm.key === 'screenRecording'
-                      ? '"Quietly" wants to record the screen.'
-                      : '"Quietly" wants to access the microphone.';
-                    const dialogSub = activePerm.key === 'screenRecording'
-                      ? 'Enable access in Privacy & Security settings.'
-                      : 'Required for speech transcription.';
+                    const dialogText = isWindows
+                       ? '"Quietly" wants to access the microphone.'
+                       : activePerm.key === 'screenRecording'
+                         ? '"Quietly" wants to record the screen.'
+                         : '"Quietly" wants to access the microphone.';
+                    const dialogSub = isWindows
+                       ? 'Allow access in Windows Settings → Privacy → Microphone.'
+                       : activePerm.key === 'screenRecording'
+                         ? 'Enable access in Privacy & Security settings.'
+                         : 'Required for speech transcription.';
 
                     return (
                       <>
@@ -874,7 +887,7 @@ export function WelcomePermissionsStep({ isAdvancing, onLaunch }: WelcomePermiss
                           letterSpacing: '0.04em', textTransform: 'uppercase',
                           position: 'relative', zIndex: 2,
                         }}>
-                          System Settings → Privacy & Security
+                          {isWindows ? 'Windows Settings → Privacy → Microphone' : 'System Settings → Privacy & Security'}
                         </p>
                       </>
                     );

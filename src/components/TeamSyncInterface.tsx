@@ -40,6 +40,7 @@ import {
     Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { isWindows } from '../utils/platformUtils';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight, vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 // import { ModelSelector } from './ui/ModelSelector'; // REMOVED
@@ -3895,7 +3896,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                                     </svg>
                                                 </div>
-                                                <span>Screen Recording Permission Denied</span>
+                                                <span>{isWindows ? 'Microphone Permission Denied' : 'Screen Recording Permission Denied'}</span>
                                             </div>
                                             <p className="text-[11px] text-yellow-600/70 dark:text-yellow-400/60 leading-snug pl-[26px]">
                                                 {systemAudioWarning}
@@ -3903,10 +3904,16 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
                                             <button
-                                                onClick={() => { window.electronAPI.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'); }}
+                                                onClick={() => {
+                                                    if (isWindows) {
+                                                        window.electronAPI.openExternal('ms-settings:privacy-microphone');
+                                                    } else {
+                                                        window.electronAPI.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+                                                    }
+                                                }}
                                                 className="px-3 py-1.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-700 dark:text-yellow-500 text-[11px] font-semibold transition-all active:scale-95 border border-yellow-500/20 shadow-sm"
                                             >
-                                                Open Settings
+                                                {isWindows ? 'Open Windows Settings' : 'Open Settings'}
                                             </button>
                                             <button
                                                 onClick={() => setSystemAudioWarning(null)}

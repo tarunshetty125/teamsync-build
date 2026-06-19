@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { X, Monitor, Mic, CheckCircle, AlertCircle, ExternalLink, ArrowRight } from 'lucide-react';
+import { isWindows } from '../../utils/platformUtils';
 
 const STORAGE_KEY  = 'teamsync_perms_shown_v1';
 const STARTUP_DELAY_MS = 1_400;
@@ -98,7 +99,11 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
   };
 
   const openScreenSettings = () => {
-    window.electronAPI?.openExternal?.('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    if (isWindows) {
+      window.electronAPI?.openExternal?.('ms-settings:privacy-microphone');
+    } else {
+      window.electronAPI?.openExternal?.('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    }
   };
 
   const handleDismiss = () => {
@@ -206,19 +211,22 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
                   </p>
                 </motion.div>
 
-                {/* Permission rows — macOS only shows real status */}
+                {/* Permission rows */}
                 <motion.div variants={ITEM} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <PermRow
-                    icon={Monitor}
-                    label="Screen Recording"
-                    description={platform === 'darwin' ? 'Required to capture meeting content' : 'Required to capture meeting content'}
-                    status={scrStatus}
-                    platform={platform}
-                    actionLabel="Open Settings"
-                    actionIcon={ExternalLink}
-                    onAction={platform === 'darwin' ? openScreenSettings : undefined}
-                    reduced={reduced}
-                  />
+                  {/* Screen Recording — macOS only */}
+                  {!isWindows && (
+                    <PermRow
+                      icon={Monitor}
+                      label="Screen Recording"
+                      description={platform === 'darwin' ? 'Required to capture meeting content' : 'Required to capture meeting content'}
+                      status={scrStatus}
+                      platform={platform}
+                      actionLabel="Open Settings"
+                      actionIcon={ExternalLink}
+                      onAction={platform === 'darwin' ? openScreenSettings : undefined}
+                      reduced={reduced}
+                    />
+                  )}
                   <PermRow
                     icon={Mic}
                     label="Microphone"
@@ -255,7 +263,9 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
                   </button>
                   {!allGranted && (
                     <p style={{ fontSize: '11px', color: T.t4, textAlign: 'center', marginTop: '10px', fontFamily: T.font }}>
-                      You can grant permissions later in System Preferences.
+                      {isWindows
+                        ? 'You can grant permissions later in Windows Settings → Privacy.'
+                        : 'You can grant permissions later in System Preferences.'}
                     </p>
                   )}
                 </motion.div>

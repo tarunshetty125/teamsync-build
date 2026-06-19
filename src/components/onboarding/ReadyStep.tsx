@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion';
 import { Monitor, Mic, Accessibility, Zap } from 'lucide-react';
+import { isWindows } from '../../utils/platformUtils';
 
 interface ReadyStepProps {
   onLaunch: () => void;
 }
 
-const CAPABILITIES = [
+const ALL_CAPABILITIES = [
   {
     icon: Monitor,
     label: 'Screen Recording',
@@ -40,6 +41,11 @@ const CAPABILITIES = [
     dot: 'var(--text-tertiary)',
   },
 ];
+
+// Windows: only show Microphone (the only real OS permission)
+const CAPABILITIES = isWindows
+  ? ALL_CAPABILITIES.filter(c => c.label === 'Microphone')
+  : ALL_CAPABILITIES;
 
 const containerVariants = {
   hidden: {},

@@ -4,11 +4,15 @@ import type {
   PermissionStatusSnapshot,
 } from './types';
 
-const REQUIRED_PERMISSIONS: PermissionKind[] = [
-  'screenRecording',
-  'microphone',
-  'accessibility',
-];
+const isWindows = typeof navigator !== 'undefined'
+  ? (navigator.platform?.toLowerCase().startsWith('win') || /win32/i.test(navigator.userAgent))
+  : false;
+
+// On Windows, only microphone requires an OS-level permission gate.
+// Screen Recording and Accessibility are always available on Windows.
+const REQUIRED_PERMISSIONS: PermissionKind[] = isWindows
+  ? ['microphone']
+  : ['screenRecording', 'microphone', 'accessibility'];
 
 export function isPermissionGranted(state: PermissionState): boolean {
   return state === 'granted';

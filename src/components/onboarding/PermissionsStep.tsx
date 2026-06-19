@@ -3,6 +3,7 @@ import { Eye, AudioLines, Sparkles, RefreshCw, ShieldCheck, AlertTriangle } from
 import { PermissionCard } from './PermissionCard';
 import type { PermissionKind, PermissionStatusSnapshot } from '../../lib/permissions/types';
 import { isPermissionStatusOperational } from '../../lib/permissions/utils';
+import { isWindows } from '../../utils/platformUtils';
 
 interface PermissionsStepProps {
   status: PermissionStatusSnapshot | null;
@@ -131,7 +132,7 @@ export function PermissionsStep({
           animate={{ opacity: [0.45, 0.75, 0.45] }}
           transition={{ duration: 5.2, repeat: Infinity, ease: [0.22, 1, 0.36, 1] }}
         />
-        {snapshot.restartRequired ? (
+        {snapshot.restartRequired && !isWindows ? (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -185,6 +186,7 @@ export function PermissionsStep({
           </motion.div>
         ) : null}
 
+        {!isWindows && (
         <PermissionCard
           icon={Eye}
           title="Screen understanding"
@@ -205,12 +207,15 @@ export function PermissionsStep({
               : undefined
           }
         />
+        )}
 
         <PermissionCard
           icon={AudioLines}
           title="Live transcription"
           description="Capture microphone and meeting audio in realtime with production STT."
-          detail="Reopen System Settings and enable Quietly under Privacy & Security -> Microphone."
+          detail={isWindows
+            ? 'Allow microphone access in Windows Settings → Privacy & Security → Microphone.'
+            : 'Reopen System Settings and enable Quietly under Privacy & Security -> Microphone.'}
           status={snapshot.microphone}
           isBusy={activePermission === 'microphone' && isChecking}
           primaryAction={microphonePrimary}
@@ -227,6 +232,7 @@ export function PermissionsStep({
           }
         />
 
+        {!isWindows && (
         <PermissionCard
           icon={Sparkles}
           title="Interview assistance"
@@ -247,6 +253,7 @@ export function PermissionsStep({
               : undefined
           }
         />
+        )}
       </div>
 
       <div className="relative mt-[14px] flex items-center justify-between gap-3">
