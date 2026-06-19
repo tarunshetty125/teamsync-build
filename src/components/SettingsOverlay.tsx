@@ -2875,13 +2875,6 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 { id: 'calendar', label: 'Calendar', icon: <Calendar size={16} /> },
             ],
         },
-        {
-            label: 'System',
-            items: [
-                { id: 'privacy', label: 'Privacy', icon: <Ghost size={16} /> },
-                { id: 'account', label: 'Account', icon: <User size={16} /> },
-            ],
-        },
     ];
     const settingsMotionEase = [0.22, 1, 0.36, 1] as const;
     const sectionMotionProps = shouldReduceMotion
@@ -3085,8 +3078,39 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                 </div>
 
                                 <div className="mt-auto border-t border-border-subtle">
+                                    {/* Pinned System items */}
+                                    <div className="px-2 pt-3 pb-0 space-y-px">
+                                        <div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-text-tertiary">System</div>
+                                        {[
+                                            { id: 'privacy', label: 'Privacy', icon: <Ghost size={16} /> },
+                                            { id: 'account', label: 'Account', icon: <User size={16} /> },
+                                        ].map((item) => {
+                                            const isActive = activeTab === item.id;
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    onClick={() => openSettingsSection(item.id)}
+                                                    aria-current={isActive ? 'page' : undefined}
+                                                    className={`group relative w-full overflow-hidden rounded-lg px-2 py-1.5 text-left text-[13px] font-medium transition-colors duration-150 flex items-center gap-2 active:scale-[0.99] ${isActive
+                                                        ? 'text-text-primary'
+                                                        : 'text-text-secondary hover:bg-bg-item-active/40 hover:text-text-primary'
+                                                    }`}
+                                                >
+                                                    {isActive && (
+                                                        <motion.span
+                                                            layoutId="settings-sidebar-active"
+                                                            className="absolute inset-0 rounded-lg bg-bg-item-active"
+                                                            transition={sidebarIndicatorTransition}
+                                                        />
+                                                    )}
+                                                    <span className="relative z-10 shrink-0 text-text-tertiary">{item.icon}</span>
+                                                    <span className="relative z-10 min-w-0 flex-1 truncate">{item.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                     {/* Pinned Support links */}
-                                    <div className="px-2 pt-3 pb-1 space-y-px">
+                                    <div className="px-2 pt-2 pb-1 space-y-px">
                                         {[
                                             { id: 'help', label: 'Setup & Guide', icon: <LifeBuoy size={16} /> },
                                             { id: 'about', label: 'About', icon: <Info size={16} /> },
