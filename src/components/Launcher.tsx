@@ -497,7 +497,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             window.electronAPI.seedDemo().catch(err => console.error("Failed to seed demo:", err));
         }
 
-        // Onboarding sequence: Modes (4s) → 2s gap → Profile Intelligence (4s)
+        // Onboarding sequence: Modes (4s) → 2s gap → Quietly Intelligence (4s)
         const modesShowTimer = setTimeout(() => {
             if (mounted) {
                 setShowModesOnboarding(true);
@@ -505,11 +505,11 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                 const modesHideTimer = setTimeout(() => {
                     if (mounted) {
                         setShowModesOnboarding(false);
-                        // Show Profile Intelligence after 2 second gap
+                        // Show Quietly Intelligence after 2 second gap
                         const profileShowTimer = setTimeout(() => {
                             if (mounted) {
                                 setShowProfileOnboarding(true);
-                                // Auto-dismiss Profile Intelligence after 4 seconds
+                                // Auto-dismiss Quietly Intelligence after 4 seconds
                                 const profileHideTimer = setTimeout(() => {
                                     if (mounted) setShowProfileOnboarding(false);
                                 }, 4000);

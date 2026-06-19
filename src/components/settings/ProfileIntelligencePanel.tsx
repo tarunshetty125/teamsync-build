@@ -174,7 +174,7 @@ const ProfileIntelligencePanel: React.FC<ProfileIntelligencePanelProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-[16px] font-semibold tracking-[-0.03em] text-white">Profile Intelligence</h1>
+              <h1 className="text-[16px] font-semibold tracking-[-0.03em] text-white">Quietly Intelligence</h1>
               <span className="relative overflow-hidden rounded-[4px] bg-[#FACC15] px-[6px] py-[1.5px] text-[8px] font-black uppercase tracking-[0.06em] text-black shadow-[0_0_12px_rgba(250,204,21,0.35)]">
                 Beta
                 <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-white/40 to-transparent" />

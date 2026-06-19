@@ -106,7 +106,7 @@ const SettingsPopup = () => {
         return stored !== 'false'; // Default to true if not set
     });
 
-    // Profile Intelligence state — synced with Settings panel via IPC
+    // Quietly Intelligence state — synced with Settings panel via IPC
     const [profileModeOn, setProfileModeOn] = useState(false);
     const [profileAvailable, setProfileAvailable] = useState(false);
 
@@ -292,7 +292,7 @@ const SettingsPopup = () => {
 
 
 
-                    {/* Profile Intelligence Toggle */}
+                    {/* Quietly Intelligence Toggle */}
                     <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group ${!profileAvailable ? 'opacity-50 grayscale cursor-not-allowed' : `${itemHoverClass} cursor-default`}`} title={!profileAvailable ? 'Upload resume & JD in Settings first' : ''}>
                         <div className="flex items-center gap-3">
                             <svg

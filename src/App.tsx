@@ -989,7 +989,7 @@ const App: React.FC = () => {
             // If user activated during post-trial modal, close it — they have a plan now
             setShowTrialExpiredModal(false);
             setActiveTrial(null);
-            // After activation, open settings to Profile Intelligence
+            // After activation, open settings to Quietly Intelligence
             setTimeout(() => {
               setSettingsInitialTab('profile');
               setIsSettingsOpen(true);

@@ -189,7 +189,7 @@ const ProContextBar: React.FC<ProContextBarProps> = ({
         if (profileData?.hasResume) {
             result.push({ label: 'Resume loaded', color: 'green' });
         } else {
-            result.push({ label: 'No resume · enable Profile Intelligence', color: 'gold' });
+            result.push({ label: 'No resume · enable Quietly Intelligence', color: 'gold' });
         }
 
         // Chip 3: X YOE · Domain (gold)

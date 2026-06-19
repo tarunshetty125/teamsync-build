@@ -1551,10 +1551,10 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                         <div>
                             <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-4">
                                 <h4 className="text-[13px] font-semibold text-amber-500 flex items-center gap-2 mb-1">
-                                    <User size={14} /> Profile Intelligence System
+                                    <User size={14} /> Quietly Intelligence System
                                 </h4>
                                 <p className="text-[11px] text-text-secondary leading-relaxed mb-0">
-                                    Instead of telling the AI who you are during every prompt, Profile Intelligence parses your background and universally injects it into all queries so it responds securely customized to your job role. 
+                                    Instead of telling the AI who you are during every prompt, Quietly Intelligence parses your background and universally injects it into all queries so it responds securely customized to your job role. 
                                 </p>
                             </div>
 
@@ -1566,7 +1566,7 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                                     <ul className="text-[11px] text-text-secondary space-y-1 list-disc pl-4">
                                         <li><strong>Zero Context Prep:</strong> Model inherits your coding stack, experience, etc.</li>
                                         <li><strong>Resume Parsing:</strong> Upload your PDF Resume for local extraction.</li>
-                                        <li><strong>Global Toggle:</strong> Enable <span className="text-amber-500 font-semibold">Profile Intelligence</span> from the Profile Intelligence settings panel.</li>
+                                        <li><strong>Global Toggle:</strong> Enable <span className="text-amber-500 font-semibold">Quietly Intelligence</span> from the Quietly Intelligence settings panel.</li>
                                     </ul>
                                 </div>
 
@@ -1600,7 +1600,7 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ()
                                         <Upload className="w-4 h-4 text-emerald-500" /> How to Use
                                     </h4>
                                     <ul className="text-[11px] text-text-secondary space-y-1 list-disc pl-4">
-                                        <li>Open <strong>Settings → Profile Intelligence</strong></li>
+                                        <li>Open <strong>Settings → Quietly Intelligence</strong></li>
                                         <li>Scroll to the <strong>Custom Context</strong> textarea</li>
                                         <li>Type anything — auto-saved after 800 ms</li>
                                         <li>Up to 4,000 characters with a live counter</li>

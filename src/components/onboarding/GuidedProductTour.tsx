@@ -48,7 +48,7 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     id: 'profile-intelligence',
-    title: 'Profile Intelligence',
+    title: 'Quietly Intelligence',
     description: 'Add resume and role context when you want Quietly to answer from your background.',
     settingsTab: 'profile',
   },

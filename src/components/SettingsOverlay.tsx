@@ -133,7 +133,7 @@ const deleteProfileScopeItems = [
     'Snapshots',
     'Dossiers',
     'Notes',
-    'Profile Intelligence',
+    'Quietly Intelligence',
 ];
 
 const formatCalendarWindow = (event: NormalizedEvent | null): string => {
@@ -1151,7 +1151,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
             setDeleteProfileConfirmOpen(false);
             setDeleteProfileStatus({
                 variant: 'success',
-                message: 'Profile Intelligence deleted.',
+                message: 'Quietly Intelligence deleted.',
             });
         } catch (error) {
             profileHardDeleteUiGuardRef.current = false;
@@ -2914,7 +2914,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             <Trash2 size={16} />
                         </span>
                         <div className="min-w-0">
-                            <h4 className="text-[14px] font-semibold text-text-primary">Delete Profile Intelligence</h4>
+                            <h4 className="text-[14px] font-semibold text-text-primary">Delete Quietly Intelligence</h4>
                             <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
                                 Permanently removes profile data and generated intelligence from this device.
                             </p>
@@ -2950,7 +2950,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                     className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-3.5 py-2 text-[12px] font-semibold text-red-400 transition-all hover:bg-red-500/15 hover:text-red-300 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                 >
                     {deleteProfileDeleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                    {deleteProfileDeleting ? 'Deleting...' : 'Delete Profile Intelligence'}
+                    {deleteProfileDeleting ? 'Deleting...' : 'Delete Quietly Intelligence'}
                 </button>
             </div>
         </section>
@@ -3775,12 +3775,12 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                                 </div>
 
                                                                 <div className="flex items-center gap-3">
-                                                                    {/* Profile Intelligence Toggle */}
+                                                                    {/* Quietly Intelligence Toggle */}
                                                                     <div
                                                                         className={`flex items-center gap-2 bg-bg-input px-3 py-1.5 rounded-full border border-border-subtle ${!canEnableProfileIntelligence ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                                                        title={!hasProfileAccess ? 'Requires Pro license' : !profileStatus.hasProfile ? 'Upload a resume to enable Profile Intelligence' : ''}
+                                                                        title={!hasProfileAccess ? 'Requires Pro license' : !profileStatus.hasProfile ? 'Upload a resume to enable Quietly Intelligence' : ''}
                                                                     >
-                                                                        <span className="text-xs font-medium text-text-secondary">Profile Intelligence</span>
+                                                                        <span className="text-xs font-medium text-text-secondary">Quietly Intelligence</span>
                                                                         <Switch
                                                                             checked={Boolean(profileStatus.profileMode && canEnableProfileIntelligence)}
                                                                             disabled={!canEnableProfileIntelligence}
@@ -5300,10 +5300,10 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             </div>
                             <div className="min-w-0">
                                 <h3 id="delete-profile-intelligence-title" className="text-[16px] font-semibold text-text-primary">
-                                    Delete Profile Intelligence?
+                                    Delete Quietly Intelligence?
                                 </h3>
                                 <p id="delete-profile-intelligence-description" className="mt-2 text-[12px] leading-relaxed text-text-secondary">
-                                    This permanently removes Resume, Job Description, AOT results, Snapshots, Dossiers, Notes, and Profile Intelligence from this device.
+                                    This permanently removes Resume, Job Description, AOT results, Snapshots, Dossiers, Notes, and Quietly Intelligence from this device.
                                 </p>
                             </div>
                         </div>
@@ -5340,7 +5340,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                 className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500 px-4 py-2 text-[12px] font-semibold text-white transition-all hover:bg-red-400 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
                             >
                                 {deleteProfileDeleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                                {deleteProfileDeleting ? 'Deleting...' : 'Delete Profile Intelligence'}
+                                {deleteProfileDeleting ? 'Deleting...' : 'Delete Quietly Intelligence'}
                             </button>
                         </div>
                     </motion.div>
