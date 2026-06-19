@@ -1,4 +1,5 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { motion, useMotionValue, useSpring, useReducedMotion } from 'framer-motion';
 import {
   Smartphone,
   Brain,
@@ -8,8 +9,15 @@ import {
   Layers,
   LayoutGrid,
   ArrowRight,
+  Code2,
+  FileText,
+  Users,
+  Mic,
+  MessageSquare,
+  Briefcase,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type React from 'react';
 
 /* ── Types ── */
 export type WhatsNewStepProps = {
@@ -23,11 +31,231 @@ interface Feature {
   title: string;
   description: string;
   icon: LucideIcon;
-  accent: string;          // HSL color for icon circle
-  accentGlow: string;      // Matching top-edge glow
-  wide?: boolean;          // Spans 2 columns
+  accent: string;
+  accentGlow: string;
+  wide?: boolean;
+  illustration: React.ReactNode;
 }
 
+/* ── Animation ── */
+const EASE: [number, number, number, number] = [0.23, 1, 0.32, 1];
+
+const containerVariants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.06, delayChildren: 0.15 } },
+};
+
+const itemUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: EASE } },
+};
+
+const cardVariant = {
+  hidden: { opacity: 0, y: 28, scale: 0.97 },
+  visible: {
+    opacity: 1, y: 0, scale: 1,
+    transition: { type: 'spring' as const, duration: 0.65, bounce: 0.10 },
+  },
+};
+
+/* ═══ Mini illustrations (pure CSS/SVG, no images) ═══ */
+
+function PhoneIllustration() {
+  return (
+    <div className="absolute -right-1 -bottom-1 flex items-end justify-end opacity-60 group-hover:opacity-80 transition-opacity duration-500">
+      <div
+        className="relative"
+        style={{
+          width: 34, height: 58, borderRadius: 7,
+          background: 'linear-gradient(145deg, rgba(14,165,233,0.25), rgba(14,165,233,0.08))',
+          border: '1px solid rgba(14,165,233,0.30)',
+          boxShadow: '0 6px 16px rgba(14,165,233,0.15)',
+        }}
+      >
+        <div style={{
+          position: 'absolute', inset: 3, borderRadius: 4,
+          background: 'linear-gradient(180deg, rgba(14,165,233,0.20) 0%, rgba(56,189,248,0.08) 100%)',
+          border: '1px solid rgba(14,165,233,0.15)',
+        }}>
+          <div style={{ margin: '5px 4px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ height: 1.5, width: '80%', background: 'rgba(255,255,255,0.25)', borderRadius: 1 }} />
+            <div style={{ height: 1.5, width: '60%', background: 'rgba(255,255,255,0.15)', borderRadius: 1 }} />
+            <div style={{ height: 1.5, width: '70%', background: 'rgba(255,255,255,0.10)', borderRadius: 1 }} />
+          </div>
+        </div>
+        <div style={{
+          position: 'absolute', top: 2, left: '50%', transform: 'translateX(-50%)',
+          width: 11, height: 2, borderRadius: 1, background: 'rgba(255,255,255,0.12)',
+        }} />
+      </div>
+      <div
+        style={{
+          position: 'absolute', top: 4, right: 28,
+          width: 28, height: 20, borderRadius: 4,
+          background: 'rgba(14,165,233,0.15)',
+          border: '1px solid rgba(14,165,233,0.25)',
+          backdropFilter: 'blur(8px)',
+          boxShadow: '0 3px 8px rgba(14,165,233,0.20)',
+          transform: 'rotate(-6deg)',
+        }}
+      />
+    </div>
+  );
+}
+
+function PersonaIllustration() {
+  return (
+    <div className="absolute -right-1 -bottom-1 flex items-end justify-end opacity-55 group-hover:opacity-75 transition-opacity duration-500">
+      <div style={{
+        width: 50, height: 38, borderRadius: 7,
+        background: 'linear-gradient(145deg, rgba(217,167,49,0.15), rgba(217,167,49,0.05))',
+        border: '1px solid rgba(217,167,49,0.25)',
+        padding: '6px',
+        display: 'flex', flexDirection: 'column', gap: 3,
+      }}>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <div style={{
+            width: 10, height: 10, borderRadius: '50%',
+            background: 'linear-gradient(135deg, rgba(217,167,49,0.5), rgba(217,167,49,0.25))',
+            border: '1px solid rgba(217,167,49,0.35)',
+          }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <div style={{ height: 1.5, width: 20, background: 'rgba(255,255,255,0.25)', borderRadius: 1 }} />
+            <div style={{ height: 1.5, width: 14, background: 'rgba(255,255,255,0.12)', borderRadius: 1 }} />
+          </div>
+        </div>
+        <div style={{ height: 1.5, width: '90%', background: 'rgba(255,255,255,0.10)', borderRadius: 1 }} />
+        <div style={{ height: 1.5, width: '70%', background: 'rgba(255,255,255,0.08)', borderRadius: 1 }} />
+      </div>
+    </div>
+  );
+}
+
+function TerminalIllustration() {
+  return (
+    <div className="absolute -right-1 -bottom-1 flex items-end justify-end opacity-55 group-hover:opacity-75 transition-opacity duration-500">
+      <div style={{
+        width: 48, height: 34, borderRadius: 6,
+        background: 'rgba(0,0,0,0.5)',
+        border: '1px solid rgba(34,197,94,0.25)',
+        padding: 4, display: 'flex', flexDirection: 'column', gap: 2,
+        boxShadow: '0 4px 12px rgba(34,197,94,0.10)',
+      }}>
+        <div style={{ display: 'flex', gap: 2, marginBottom: 1 }}>
+          <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(255,95,86,0.6)' }} />
+          <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(255,189,46,0.6)' }} />
+          <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(39,201,63,0.6)' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <div style={{ color: 'rgba(34,197,94,0.7)', fontSize: 5, fontFamily: 'monospace' }}>$</div>
+          <div style={{ height: 1.5, width: 22, background: 'rgba(34,197,94,0.35)', borderRadius: 1 }} />
+        </div>
+        <div style={{ height: 1.5, width: 28, background: 'rgba(255,255,255,0.10)', borderRadius: 1, marginLeft: 7 }} />
+        <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <div style={{ width: 3, height: 6, background: 'rgba(34,197,94,0.6)', borderRadius: 1 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SkillsIllustration() {
+  return (
+    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 opacity-50 group-hover:opacity-70 transition-opacity duration-500">
+      <div style={{
+        width: 78, borderRadius: 7,
+        background: 'rgba(0,0,0,0.4)',
+        border: '1px solid rgba(168,85,247,0.20)',
+        padding: 4, display: 'flex', flexDirection: 'column', gap: 2,
+        boxShadow: '0 6px 16px rgba(168,85,247,0.12)',
+      }}>
+        <div style={{
+          height: 12, borderRadius: 4,
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', alignItems: 'center', paddingLeft: 4, gap: 2,
+        }}>
+          <div style={{ color: 'rgba(168,85,247,0.7)', fontSize: 6, fontFamily: 'monospace', fontWeight: 700 }}>/</div>
+          <div style={{ height: 1.5, width: 28, background: 'rgba(255,255,255,0.15)', borderRadius: 1 }} />
+        </div>
+        {['Summarize', 'Draft reply', 'Analyze'].map((label) => (
+          <div key={label} style={{
+            height: 10, borderRadius: 3,
+            background: 'rgba(168,85,247,0.10)',
+            border: '1px solid rgba(168,85,247,0.15)',
+            display: 'flex', alignItems: 'center', paddingLeft: 4, gap: 2,
+          }}>
+            <Sparkles size={5} style={{ color: 'rgba(168,85,247,0.6)' }} />
+            <span style={{ fontSize: 5, color: 'rgba(255,255,255,0.40)', fontWeight: 600 }}>{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProvidersIllustration() {
+  return (
+    <div className="absolute -right-1 -bottom-1 flex items-end justify-end opacity-50 group-hover:opacity-70 transition-opacity duration-500">
+      <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end' }}>
+        {[20, 26, 17].map((size, i) => (
+          <div key={i} style={{
+            width: size, height: size * 0.7, borderRadius: size / 3,
+            background: `rgba(234,134,45,${0.08 + i * 0.05})`,
+            border: `1px solid rgba(234,134,45,${0.15 + i * 0.05})`,
+            boxShadow: `0 3px 8px rgba(234,134,45,${0.06 + i * 0.03})`,
+          }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OverlayIllustration() {
+  return (
+    <div className="absolute -right-1 -bottom-2 flex items-end justify-end opacity-50 group-hover:opacity-70 transition-opacity duration-500">
+      {[0, 1, 2].map((i) => (
+        <div key={i} style={{
+          position: 'absolute',
+          right: 3 + i * 6, bottom: 3 + i * 4,
+          width: 36, height: 25, borderRadius: 6,
+          background: `rgba(59,130,246,${0.06 + i * 0.04})`,
+          border: `1px solid rgba(59,130,246,${0.12 + i * 0.06})`,
+          boxShadow: `0 ${3 + i * 1.5}px ${6 + i * 3}px rgba(59,130,246,${0.05 + i * 0.03})`,
+          transform: `rotate(${-3 + i * 3}deg)`,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+function ModesIllustration() {
+  const modes = [
+    { label: 'Interview', color: 'rgba(250,204,21,0.50)' },
+    { label: 'Sales', color: 'rgba(59,130,246,0.50)' },
+    { label: 'Lecture', color: 'rgba(168,85,247,0.50)' },
+    { label: 'Recruiting', color: 'rgba(34,197,94,0.50)' },
+    { label: 'Team', color: 'rgba(14,165,233,0.50)' },
+  ];
+  return (
+    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-wrap gap-1 max-w-[100px] opacity-55 group-hover:opacity-75 transition-opacity duration-500">
+      {modes.map((mode) => (
+        <div key={mode.label} style={{
+          padding: '2px 6px', borderRadius: 4,
+          background: mode.color.replace('0.50', '0.10'),
+          border: `1px solid ${mode.color.replace('0.50', '0.20')}`,
+          fontSize: 6, fontWeight: 600,
+          color: mode.color.replace('0.50', '0.80'),
+          whiteSpace: 'nowrap',
+        }}>
+          {mode.label}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Features ── */
 const FEATURES: Feature[] = [
   {
     title: 'Quietly Mirror',
@@ -35,6 +263,7 @@ const FEATURES: Feature[] = [
     icon: Smartphone,
     accent: 'hsl(195, 90%, 50%)',
     accentGlow: 'rgba(14, 165, 233, 0.35)',
+    illustration: <PhoneIllustration />,
   },
   {
     title: 'Persona',
@@ -42,6 +271,7 @@ const FEATURES: Feature[] = [
     icon: Brain,
     accent: 'hsl(38, 85%, 55%)',
     accentGlow: 'rgba(217, 167, 49, 0.30)',
+    illustration: <PersonaIllustration />,
   },
   {
     title: 'Codex CLI',
@@ -49,6 +279,7 @@ const FEATURES: Feature[] = [
     icon: Terminal,
     accent: 'hsl(152, 68%, 46%)',
     accentGlow: 'rgba(34, 197, 94, 0.30)',
+    illustration: <TerminalIllustration />,
   },
   {
     title: 'Skills & Commands',
@@ -57,6 +288,7 @@ const FEATURES: Feature[] = [
     accent: 'hsl(270, 76%, 62%)',
     accentGlow: 'rgba(168, 85, 247, 0.30)',
     wide: true,
+    illustration: <SkillsIllustration />,
   },
   {
     title: 'AI Providers',
@@ -64,6 +296,7 @@ const FEATURES: Feature[] = [
     icon: Cloud,
     accent: 'hsl(24, 85%, 55%)',
     accentGlow: 'rgba(234, 134, 45, 0.30)',
+    illustration: <ProvidersIllustration />,
   },
   {
     title: 'Pro Overlay V2',
@@ -71,6 +304,7 @@ const FEATURES: Feature[] = [
     icon: Layers,
     accent: 'hsl(217, 85%, 56%)',
     accentGlow: 'rgba(59, 130, 246, 0.30)',
+    illustration: <OverlayIllustration />,
   },
   {
     title: 'Meeting Modes',
@@ -79,40 +313,9 @@ const FEATURES: Feature[] = [
     accent: 'hsl(172, 66%, 50%)',
     accentGlow: 'rgba(45, 212, 191, 0.28)',
     wide: true,
+    illustration: <ModesIllustration />,
   },
 ];
-
-/* ── Animation variants ── */
-const EASE: [number, number, number, number] = [0.23, 1, 0.32, 1];
-
-const containerVariants = {
-  hidden: {},
-  visible: {
-    transition: {
-      staggerChildren: 0.06,
-      delayChildren: 0.15,
-    },
-  },
-};
-
-const itemUp = {
-  hidden: { opacity: 0, y: 24 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.7, ease: EASE },
-  },
-};
-
-const cardVariant = {
-  hidden: { opacity: 0, y: 28, scale: 0.97 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { type: 'spring' as const, duration: 0.65, bounce: 0.10 },
-  },
-};
 
 /* ── Feature Card ── */
 function FeatureCard({ feature }: { feature: Feature }) {
@@ -120,55 +323,226 @@ function FeatureCard({ feature }: { feature: Feature }) {
   return (
     <motion.div
       variants={cardVariant}
-      className={`group relative overflow-hidden rounded-[16px] p-5 ${feature.wide ? 'col-span-2' : ''}`}
+      whileHover={{ y: -3, scale: 1.01, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
+      className={`group relative overflow-hidden rounded-[14px] p-3.5 ${feature.wide ? 'col-span-2' : ''}`}
       style={{
-        background: '#0f1218',
-        border: '1px solid rgba(255,255,255,0.06)',
-        minHeight: '130px',
+        background: 'linear-gradient(160deg, #151c2c 0%, #0f1420 60%, #0c101a 100%)',
+        border: '1px solid rgba(255,255,255,0.12)',
+        minHeight: '90px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.15), 0 8px 24px rgba(0,0,0,0.20), 0 16px 48px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.06)',
       }}
     >
+      {/* Glass inner top highlight */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-[1px]"
+        style={{ background: 'linear-gradient(90deg, transparent 10%, rgba(255,255,255,0.18) 50%, transparent 90%)' }}
+      />
       {/* Top edge glow */}
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-60"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[2px] opacity-70"
         style={{
-          background: `linear-gradient(90deg, transparent 10%, ${feature.accentGlow} 50%, transparent 90%)`,
+          background: `linear-gradient(90deg, transparent 5%, ${feature.accentGlow} 50%, transparent 95%)`,
         }}
       />
-      {/* Inner radial glow */}
+      {/* Corner radial glow */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-0 opacity-40 transition-opacity duration-500 group-hover:opacity-60"
         style={{
-          background: `radial-gradient(ellipse 60% 50% at 50% 0%, ${feature.accentGlow} 0%, transparent 70%)`,
+          background: `radial-gradient(ellipse 50% 60% at 85% 80%, ${feature.accentGlow} 0%, transparent 70%)`,
         }}
       />
 
-      {/* Icon circle */}
+      {/* Illustration */}
+      {feature.illustration}
+
       <div
-        className="mb-3 flex h-9 w-9 items-center justify-center rounded-[10px]"
+        className="relative z-10 mb-2 flex h-7 w-7 items-center justify-center rounded-[8px]"
         style={{
           background: `${feature.accent}18`,
           border: `1px solid ${feature.accent}28`,
         }}
       >
-        <Icon
-          size={17}
-          strokeWidth={1.8}
-          style={{ color: feature.accent }}
-        />
+        <Icon size={14} strokeWidth={1.8} style={{ color: feature.accent }} />
       </div>
 
       {/* Title */}
-      <h3
-        className="text-[15px] font-semibold leading-tight tracking-[-0.01em] text-white/92"
-        style={{ letterSpacing: '-0.01em' }}
-      >
+      <h3 className="relative z-10 text-[13px] font-bold leading-tight tracking-[-0.01em] text-white">
         {feature.title}
       </h3>
 
       {/* Description */}
-      <p className="mt-1.5 text-[12.5px] font-medium leading-[1.45] text-white/48">
+      <p className="relative z-10 mt-1 max-w-[70%] text-[11px] font-medium leading-[1.4] text-white/55">
         {feature.description}
       </p>
+    </motion.div>
+  );
+}
+
+/* ═══ Magnetic Get Started Button ═══ */
+
+const magneticSpring = { stiffness: 260, damping: 24, mass: 0.62 };
+const textSpring = { stiffness: 340, damping: 25, mass: 0.5 };
+const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
+
+function MagneticGetStarted({
+  isAdvancing,
+  onContinue,
+  onSkip,
+}: {
+  isAdvancing: boolean;
+  onContinue: () => void;
+  onSkip: () => void;
+}) {
+  const prefersReducedMotion = useReducedMotion();
+  const fieldRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [flashKey, setFlashKey] = useState(0);
+
+  const magneticX = useMotionValue(0);
+  const magneticY = useMotionValue(0);
+  const magneticScale = useMotionValue(1);
+  const magneticRotate = useMotionValue(0);
+  const magneticTextX = useMotionValue(0);
+  const magneticTextY = useMotionValue(0);
+
+  const x = useSpring(magneticX, magneticSpring);
+  const y = useSpring(magneticY, magneticSpring);
+  const scale = useSpring(magneticScale, magneticSpring);
+  const rotateZ = useSpring(magneticRotate, magneticSpring);
+  const textX = useSpring(magneticTextX, textSpring);
+  const textY = useSpring(magneticTextY, textSpring);
+
+  const resetMagnet = useCallback(() => {
+    magneticX.set(0);
+    magneticY.set(0);
+    magneticScale.set(1);
+    magneticRotate.set(0);
+    magneticTextX.set(0);
+    magneticTextY.set(0);
+    btnRef.current?.style.setProperty('--pill-x', '52%');
+    btnRef.current?.style.setProperty('--pill-y', '26%');
+  }, [magneticX, magneticY, magneticScale, magneticRotate, magneticTextX, magneticTextY]);
+
+  const updateMagnet = useCallback(
+    (clientX: number, clientY: number) => {
+      if (prefersReducedMotion || isAdvancing) return;
+      const field = fieldRef.current;
+      const button = btnRef.current;
+      if (!field || !button) return;
+
+      const fieldRect = field.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      const cx = fieldRect.left + fieldRect.width / 2;
+      const cy = fieldRect.top + fieldRect.height / 2;
+      const dx = clientX - cx;
+      const dy = clientY - cy;
+      const dist = Math.hypot(dx, dy);
+      const radius = 120;
+      const strength = Math.pow(clamp(1 - dist / radius, 0, 1), 1.4);
+
+      if (strength < 0.02) {
+        resetMagnet();
+        return;
+      }
+
+      magneticX.set(clamp(dx * 0.1 * strength, -8, 8));
+      magneticY.set(clamp(dy * 0.08 * strength, -5, 5));
+      magneticScale.set(1 + 0.012 * strength);
+      magneticRotate.set(clamp(dx * 0.005 * strength, -0.6, 0.6));
+      magneticTextX.set(clamp(dx * 0.08 * strength, -4, 4));
+      magneticTextY.set(clamp(dy * 0.1 * strength, -3, 3));
+
+      const hx = clamp(((clientX - buttonRect.left) / buttonRect.width) * 100, 14, 86);
+      const hy = clamp(((clientY - buttonRect.top) / buttonRect.height) * 100, 8, 68);
+      button.style.setProperty('--pill-x', `${hx}%`);
+      button.style.setProperty('--pill-y', `${hy}%`);
+    },
+    [prefersReducedMotion, isAdvancing, resetMagnet, magneticX, magneticY, magneticScale, magneticRotate, magneticTextX, magneticTextY],
+  );
+
+  useEffect(() => {
+    let af: number | null = null;
+    let latest: { x: number; y: number } | null = null;
+
+    const onMove = (e: PointerEvent) => {
+      latest = { x: e.clientX, y: e.clientY };
+      if (af !== null) return;
+      af = requestAnimationFrame(() => {
+        af = null;
+        if (latest) updateMagnet(latest.x, latest.y);
+      });
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('pointerleave', resetMagnet);
+    return () => {
+      if (af !== null) cancelAnimationFrame(af);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerleave', resetMagnet);
+    };
+  }, [updateMagnet, resetMagnet]);
+
+  const handleClick = () => {
+    if (!prefersReducedMotion) setFlashKey((k) => k + 1);
+    onContinue();
+  };
+
+  return (
+    <motion.div variants={itemUp} className="mt-5 flex flex-col items-center gap-2">
+      <div
+        ref={fieldRef}
+        className="relative flex min-h-[56px] w-full items-center justify-center overflow-visible"
+      >
+        <motion.button
+          ref={btnRef}
+          type="button"
+          onClick={handleClick}
+          disabled={isAdvancing}
+          whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
+          transition={{ type: 'spring', stiffness: 360, damping: 24 }}
+          className="group relative inline-flex h-[42px] min-w-[200px] items-center justify-center overflow-hidden rounded-full px-6 text-[13px] font-semibold tracking-[-0.005em] text-[#050009] outline-none transition-[filter] duration-200 ease-out disabled:cursor-not-allowed disabled:opacity-60"
+          style={{
+            x,
+            y,
+            scale,
+            rotateZ,
+            background: 'radial-gradient(circle at var(--pill-x, 52%) var(--pill-y, 26%), rgba(255,255,255,0.98) 0%, rgba(226,207,255,0.92) 20%, rgba(169,92,255,0.9) 48%, rgba(83,45,236,0.98) 100%)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.68), inset 0 -15px 22px rgba(55,28,207,0.42), inset 0 -2px 8px rgba(30,4,88,0.38), 0 12px 24px rgba(10,0,45,0.44), 0 0 0 1px rgba(229,214,255,0.24)',
+          }}
+        >
+          {/* Glass bevel */}
+          <span className="pointer-events-none absolute inset-x-[8%] top-1 h-[46%] rounded-full bg-gradient-to-b from-white/75 via-white/30 to-transparent blur-[8px]" />
+          {/* Highlight sweep */}
+          <span className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(100deg,transparent_0%,rgba(255,255,255,0.18)_42%,rgba(255,255,255,0.34)_50%,transparent_62%)] opacity-75 transition-transform duration-500 group-hover:translate-x-2" />
+          {/* Click flash */}
+          {flashKey > 0 && (
+            <motion.span
+              key={flashKey}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-20 rounded-full bg-white"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0, 1, 1, 0] }}
+              transition={{ duration: 0.18, times: [0, 0.16, 0.42, 1], ease: [0.16, 1, 0.3, 1] }}
+            />
+          )}
+          <motion.span
+            className="relative z-10 flex items-center gap-2 drop-shadow-[0_1px_1px_rgba(255,255,255,0.22)]"
+            style={{ x: textX, y: textY }}
+          >
+            Get Started
+            <ArrowRight size={14} className="transition-transform duration-200 group-hover:translate-x-0.5" />
+          </motion.span>
+        </motion.button>
+      </div>
+
+      <button
+        type="button"
+        onClick={onSkip}
+        disabled={isAdvancing}
+        className="text-[13px] font-medium text-[#8e8e93] transition-colors hover:text-[#50505a] disabled:cursor-not-allowed"
+      >
+        Skip
+      </button>
     </motion.div>
   );
 }
@@ -185,24 +559,33 @@ export function WhatsNewStep({ isAdvancing, onContinue, onSkip }: WhatsNewStepPr
       transition={{ duration: 0.4, ease: EASE }}
       className={`fixed inset-0 z-[140] flex items-center justify-center overflow-hidden ${isAdvancing ? 'pointer-events-none' : ''}`}
       style={{
-        backgroundColor: '#08090f',
+        backgroundColor: '#F0F2F6',
         fontFamily: "'Inter', 'Geist', ui-sans-serif, system-ui, sans-serif",
       }}
     >
-      {/* Subtle dot grid */}
+      {/* Animated grid lines — matching WelcomePermissionsStep */}
+      <style>{`
+        @keyframes gridPulse {
+          0%, 100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.03); }
+        }
+      `}</style>
       <div
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-[-20px]"
         style={{
-          backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)`,
-          backgroundSize: '32px 32px',
+          backgroundImage: `
+            linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)
+          `,
+          backgroundSize: '48px 48px',
+          animation: 'gridPulse 6s ease-in-out infinite',
+          willChange: 'transform, opacity',
         }}
       />
-      {/* Vignette */}
+      {/* Radial fade */}
       <div
         className="pointer-events-none absolute inset-0"
-        style={{
-          background: 'radial-gradient(ellipse 80% 70% at 50% 45%, transparent 30%, #08090f 100%)',
-        }}
+        style={{ background: 'radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, #F0F2F6 100%)' }}
       />
 
       {/* Content */}
@@ -210,22 +593,26 @@ export function WhatsNewStep({ isAdvancing, onContinue, onSkip }: WhatsNewStepPr
         initial="hidden"
         animate="visible"
         variants={containerVariants}
-        className="relative z-10 mx-auto flex w-full max-w-[820px] flex-col items-center px-6"
+        className="relative z-10 mx-auto flex w-full max-w-[680px] flex-col items-center px-5"
       >
         {/* Eyebrow */}
         <motion.div
           variants={itemUp}
-          className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/[0.06] px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-300/70"
+          className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/[0.08] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600/80"
         >
-          <Sparkles size={12} />
+          <Sparkles size={10} />
           Quietly 2.7
         </motion.div>
 
         {/* Title */}
         <motion.h1
           variants={itemUp}
-          className="text-center text-[42px] font-semibold leading-[1.06] tracking-[-0.04em] text-white/92"
-          style={{ textShadow: '0 0 40px rgba(255,255,255,0.08)' }}
+          className="text-center text-[32px] font-semibold leading-[1.06] tracking-[-0.04em]"
+          style={{
+            background: 'linear-gradient(180deg, #2f2f34 0%, #50505a 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
         >
           What's New
         </motion.h1>
@@ -233,7 +620,7 @@ export function WhatsNewStep({ isAdvancing, onContinue, onSkip }: WhatsNewStepPr
         {/* Subtitle */}
         <motion.p
           variants={itemUp}
-          className="mt-3 text-center text-[15px] font-medium leading-relaxed text-white/45"
+          className="mt-2 text-center text-[13px] font-medium leading-relaxed text-[#8e8e93]"
         >
           Seven powerful upgrades to supercharge your meetings
         </motion.p>
@@ -241,7 +628,7 @@ export function WhatsNewStep({ isAdvancing, onContinue, onSkip }: WhatsNewStepPr
         {/* Bento Grid */}
         <motion.div
           variants={containerVariants}
-          className="mt-8 grid w-full grid-cols-3 gap-3"
+          className="mt-5 grid w-full grid-cols-3 gap-2"
         >
           {FEATURES.map((feature) => (
             <FeatureCard key={feature.title} feature={feature} />
@@ -249,44 +636,11 @@ export function WhatsNewStep({ isAdvancing, onContinue, onSkip }: WhatsNewStepPr
         </motion.div>
 
         {/* CTA */}
-        <motion.div variants={itemUp} className="mt-8 flex flex-col items-center gap-3">
-          <motion.button
-            type="button"
-            onClick={onContinue}
-            disabled={isAdvancing}
-            whileHover={{ scale: 1.02, y: -1 }}
-            whileTap={{ scale: 0.98 }}
-            className="group relative flex h-[50px] w-[260px] items-center justify-center gap-2 overflow-hidden rounded-full text-[15px] font-semibold text-white outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50"
-            style={{
-              background: 'linear-gradient(135deg, #082f49 0%, #0ea5e9 52%, #2563eb 100%)',
-              boxShadow:
-                'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(8,47,73,0.3), 0 4px 16px rgba(14,165,233,0.32), 0 0 0 1px rgba(255,255,255,0.10)',
-            }}
-          >
-            {/* Glass bevel */}
-            <span
-              className="pointer-events-none absolute inset-x-3 top-0 h-[40%] rounded-b-full"
-              style={{
-                background: 'linear-gradient(to bottom, rgba(255,255,255,0.35), transparent)',
-                filter: 'blur(2px)',
-                opacity: 0.75,
-              }}
-            />
-            <span className="relative z-10 flex items-center gap-2">
-              Get Started
-              <ArrowRight size={16} className="transition-transform duration-200 group-hover:translate-x-0.5" />
-            </span>
-          </motion.button>
-
-          <button
-            type="button"
-            onClick={onSkip}
-            disabled={isAdvancing}
-            className="text-[13px] font-medium text-white/30 transition-colors hover:text-white/50 disabled:cursor-not-allowed"
-          >
-            Skip
-          </button>
-        </motion.div>
+        <MagneticGetStarted
+          isAdvancing={isAdvancing}
+          onContinue={onContinue}
+          onSkip={onSkip}
+        />
       </motion.div>
     </motion.div>
   );
