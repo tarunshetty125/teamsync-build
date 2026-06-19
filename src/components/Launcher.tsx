@@ -1473,6 +1473,37 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                     boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.12), inset 0 -1px 2px rgba(15,23,42,0.5), 0 16px 40px rgba(51,65,85,0.15), 0 0 0 1px rgba(255,255,255,0.06)',
                                                 }}
                                             >
+                                                {/* Moving aurora gradient */}
+                                                <style>{`
+                                                  @keyframes connectedAuroraMove {
+                                                    0% { transform: translateX(-25%) translateY(-8%) rotate(-3deg); }
+                                                    33% { transform: translateX(12%) translateY(12%) rotate(2deg); }
+                                                    66% { transform: translateX(-10%) translateY(-4%) rotate(-1deg); }
+                                                    100% { transform: translateX(-25%) translateY(-8%) rotate(-3deg); }
+                                                  }
+                                                  @keyframes connectedAuroraMove2 {
+                                                    0% { transform: translateX(18%) translateY(8%) rotate(2deg); }
+                                                    33% { transform: translateX(-18%) translateY(-12%) rotate(-3deg); }
+                                                    66% { transform: translateX(12%) translateY(4%) rotate(1deg); }
+                                                    100% { transform: translateX(18%) translateY(8%) rotate(2deg); }
+                                                  }
+                                                `}</style>
+                                                <div
+                                                    className="pointer-events-none absolute inset-[-40%] z-[1]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 50% 60% at 50% 50%, rgba(51,65,85,0.4) 0%, rgba(71,85,105,0.2) 40%, transparent 70%)',
+                                                        animation: 'connectedAuroraMove 9s ease-in-out infinite',
+                                                        willChange: 'transform',
+                                                    }}
+                                                />
+                                                <div
+                                                    className="pointer-events-none absolute inset-[-40%] z-[1]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 45% 55% at 50% 50%, rgba(20,184,166,0.12) 0%, rgba(56,189,248,0.08) 35%, transparent 65%)',
+                                                        animation: 'connectedAuroraMove2 11s ease-in-out infinite',
+                                                        willChange: 'transform',
+                                                    }}
+                                                />
                                                 {/* Specular highlight */}
                                                 <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-[30%] rounded-b-xl bg-gradient-to-b from-white/15 to-transparent opacity-60 blur-[3px]" />
                                                 <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/[0.02] to-slate-300/8 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
@@ -1593,6 +1624,37 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                     boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.18), inset 0 -1px 2px rgba(30,27,75,0.5), 0 16px 40px rgba(168,85,247,0.15), 0 0 0 1px rgba(255,255,255,0.08)',
                                                 }}
                                             >
+                                                {/* Moving aurora gradient */}
+                                                <style>{`
+                                                  @keyframes calendarAuroraMove {
+                                                    0% { transform: translateX(-30%) translateY(-10%) rotate(-5deg); }
+                                                    33% { transform: translateX(10%) translateY(15%) rotate(3deg); }
+                                                    66% { transform: translateX(-15%) translateY(-5%) rotate(-2deg); }
+                                                    100% { transform: translateX(-30%) translateY(-10%) rotate(-5deg); }
+                                                  }
+                                                  @keyframes calendarAuroraMove2 {
+                                                    0% { transform: translateX(20%) translateY(10%) rotate(3deg); }
+                                                    33% { transform: translateX(-20%) translateY(-15%) rotate(-4deg); }
+                                                    66% { transform: translateX(15%) translateY(5%) rotate(2deg); }
+                                                    100% { transform: translateX(20%) translateY(10%) rotate(3deg); }
+                                                  }
+                                                `}</style>
+                                                <div
+                                                    className="pointer-events-none absolute inset-[-40%] z-[1]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 50% 60% at 50% 50%, rgba(168,85,247,0.35) 0%, rgba(139,92,246,0.2) 40%, transparent 70%)',
+                                                        animation: 'calendarAuroraMove 8s ease-in-out infinite',
+                                                        willChange: 'transform',
+                                                    }}
+                                                />
+                                                <div
+                                                    className="pointer-events-none absolute inset-[-40%] z-[1]"
+                                                    style={{
+                                                        background: 'radial-gradient(ellipse 45% 55% at 50% 50%, rgba(232,121,249,0.25) 0%, rgba(192,132,252,0.15) 35%, transparent 65%)',
+                                                        animation: 'calendarAuroraMove2 10s ease-in-out infinite',
+                                                        willChange: 'transform',
+                                                    }}
+                                                />
                                                 {/* Specular highlight */}
                                                 <div className="pointer-events-none absolute inset-x-4 top-0 z-10 h-[30%] rounded-b-xl bg-gradient-to-b from-white/20 to-transparent opacity-60 blur-[3px]" />
                                                 <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-transparent via-white/[0.03] to-fuchsia-200/10 opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
