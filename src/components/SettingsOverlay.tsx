@@ -3705,6 +3705,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             }}
                                                         >
                                                             <div className="pointer-events-none absolute inset-x-1 top-0 h-[45%] rounded-b-md bg-gradient-to-b from-white/40 to-transparent opacity-80 blur-[1px]" />
+                                                            <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-cyan-300/25 to-transparent" />
                                                             {isPremium ? <CheckCircle size={13} className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.14)]" /> : <Sparkles size={13} className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.14)]" />}
                                                             <span className="relative z-10 tracking-[-0.01em] drop-shadow-[0_1px_1px_rgba(0,0,0,0.14)]">{isPremium ? 'Manage Pro' : isTrialActive ? 'Upgrade' : 'Unlock Pro'}</span>
                                                         </button>
