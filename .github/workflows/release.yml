@@ -10,7 +10,7 @@ permissions:
 
 env:
   NODE_VERSION: "22"
-  RELEASE_REPO: tarunshetty125/TeamSync
+  RELEASE_REPO: tarunshetty125/Quietly
 
 jobs:
   metadata:
@@ -266,16 +266,16 @@ jobs:
           required=(
             "${{ needs.metadata.outputs.windows_manifest }}"
             "${{ needs.metadata.outputs.mac_manifest }}"
-            "TeamSync-Setup-${version}.exe"
-            "TeamSync-${version}.dmg"
-            "TeamSync-${version}-arm64.dmg"
-            "TeamSync-${version}-mac.zip"
-            "TeamSync-${version}-arm64-mac.zip"
-            "TeamSync-Setup-${version}.exe.blockmap"
-            "TeamSync-${version}.dmg.blockmap"
-            "TeamSync-${version}-arm64.dmg.blockmap"
-            "TeamSync-${version}-mac.zip.blockmap"
-            "TeamSync-${version}-arm64-mac.zip.blockmap"
+            "Quietly-Setup-${version}.exe"
+            "Quietly-${version}.dmg"
+            "Quietly-${version}-arm64.dmg"
+            "Quietly-${version}-mac.zip"
+            "Quietly-${version}-arm64-mac.zip"
+            "Quietly-Setup-${version}.exe.blockmap"
+            "Quietly-${version}.dmg.blockmap"
+            "Quietly-${version}-arm64.dmg.blockmap"
+            "Quietly-${version}-mac.zip.blockmap"
+            "Quietly-${version}-arm64-mac.zip.blockmap"
           )
 
           for file in "${required[@]}"; do
@@ -291,7 +291,7 @@ jobs:
           set -euo pipefail
           cat > release-notes.md <<EOF
           ## Summary
-          TeamSync ${{ needs.metadata.outputs.version }} desktop release.
+          Quietly ${{ needs.metadata.outputs.version }} desktop release.
 
           ## Technical
           - Channel: ${{ needs.metadata.outputs.channel }}
@@ -317,7 +317,7 @@ jobs:
           release_args=(
             release create "${tag}"
             --repo "${RELEASE_REPO}"
-            --title "TeamSync ${version}"
+            --title "Quietly ${version}"
             --notes-file release-notes.md
           )
 
