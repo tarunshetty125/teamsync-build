@@ -2868,7 +2868,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         {
             label: 'Intelligence',
             items: [
-                { id: 'profile', label: 'Quietly Intelligence', icon: <User size={16} />, badge: 'NEW', badgeColor: 'amber' },
+                { id: 'profile', label: 'Persona', icon: <User size={16} />, badge: 'NEW', badgeColor: 'amber' },
                 { id: 'ai-providers', label: 'AI & Providers', icon: <Sparkles size={16} /> },
                 { id: 'codex-cli', label: 'Codex CLI', icon: <Terminal size={16} /> },
                 { id: 'skills', label: 'Skills', icon: <FlaskConical size={16} /> },
