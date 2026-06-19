@@ -153,7 +153,9 @@ export class StealthManager {
         },
         reassertAfterLifecycle: (reason: string) => {
           this._log(`L6: Reasserting macOS visibility after ${reason}`);
-          this._applyDarwinOSVisibility();
+          // skipSetName: true — calling app.setName() repeatedly during reassertion
+          // causes macOS to re-register the app identity and flash a new dock icon.
+          this._applyDarwinOSVisibility({ skipSetName: true });
         },
       };
     }
@@ -650,6 +652,18 @@ export class StealthManager {
     } catch (e) {
       this._warn('L1: setContentProtection failed for window:', e);
       return false;
+    }
+
+    // F-003: Immediately set the disguised window title so new windows created
+    // during stealth don't leak the real app name in Task Manager (Windows) or
+    // Activity Monitor (macOS) during the gap before the watchdog fires.
+    if (this._engaged) {
+      try {
+        const targetTitle = this.config.processName;
+        if (win.getTitle() !== targetTitle) {
+          win.setTitle(targetTitle);
+        }
+      } catch { /* best-effort — title API may not be ready yet */ }
     }
 
     if (process.platform === 'darwin') {
@@ -1178,9 +1192,11 @@ export class StealthManager {
       // only needs to run once during initial engage().
       try { this._applyProcessDisguise({ skipLsAppInfo: true }); } catch (e) { this._warn(`L5: process reassert failed after ${reason}:`, e); }
       try { this._applyWindowProtection(); } catch (e) { this._warn(`L5: window reassert failed after ${reason}:`, e); }
-      // Skip app.setName() during reassertion — it was set during initial
-      // engage() and re-calling it causes macOS to flash a new dock icon.
-      try { this._applyDarwinOSVisibility({ skipSetName: true }); } catch (e) { this._warn(`L5: OS visibility reassert failed after ${reason}:`, e); }
+      // F-001: Route through the platform adapter so Windows lifecycle
+      // reassertion calls _applyWindowsOSVisibility() (re-applying
+      // setSkipTaskbar) instead of the previous Darwin-only no-op.
+      // macOS adapter passes skipSetName: true to prevent dock icon flash.
+      try { this._platformAdapter.reassertAfterLifecycle(reason); } catch (e) { this._warn(`L5: OS visibility reassert failed after ${reason}:`, e); }
       this._markRuntimeEngaged();
     }, 200);
 
