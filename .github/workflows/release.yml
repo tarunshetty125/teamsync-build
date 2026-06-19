@@ -75,10 +75,42 @@ jobs:
             echo "mac_manifest=${mac_manifest}"
           } >> "${GITHUB_OUTPUT}"
 
+  # ── Create the GitHub Release shell (empty, both build jobs upload into it) ──
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: metadata
+    steps:
+      - name: Create release (if not exists)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ needs.metadata.outputs.tag }}"
+          version="${{ needs.metadata.outputs.version }}"
+
+          if gh release view "${tag}" --repo "${RELEASE_REPO}" > /dev/null 2>&1; then
+            echo "Release ${tag} already exists in ${RELEASE_REPO}"
+          else
+            release_args=(
+              release create "${tag}"
+              --repo "${RELEASE_REPO}"
+              --title "Quietly ${version}"
+              --notes "## Quietly ${version}\n\n- Channel: ${{ needs.metadata.outputs.channel }}\n- Source: ${{ github.repository }}@${{ github.sha }}"
+            )
+            if [[ "${{ needs.metadata.outputs.prerelease }}" == "true" ]]; then
+              release_args+=(--prerelease)
+            fi
+            gh "${release_args[@]}"
+          fi
+
   build-mac:
     name: Build macOS
     runs-on: macos-latest
-    needs: metadata
+    needs:
+      - metadata
+      - create-release
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -144,21 +176,27 @@ jobs:
             --arm64 \
             --publish=never
 
-      - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-release-assets
-          if-no-files-found: error
-          path: |
-            release/*.dmg
-            release/*.zip
-            release/*.blockmap
-            release/${{ needs.metadata.outputs.mac_manifest }}
+      - name: Publish macOS assets to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ needs.metadata.outputs.tag }}"
+          echo "Uploading macOS assets to ${RELEASE_REPO} @ ${tag}"
+          gh release upload "${tag}" \
+            release/*.dmg \
+            release/*.zip \
+            release/*.blockmap \
+            release/${{ needs.metadata.outputs.mac_manifest }} \
+            --repo "${RELEASE_REPO}" --clobber
 
   build-windows:
     name: Build Windows
     runs-on: windows-latest
-    needs: metadata
+    needs:
+      - metadata
+      - create-release
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -217,124 +255,16 @@ jobs:
           --win
           --publish=never
 
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-release-assets
-          if-no-files-found: error
-          path: |
-            release/*.exe
-            release/*.blockmap
-            release/${{ needs.metadata.outputs.windows_manifest }}
-
-  publish:
-    name: Publish public release assets
-    runs-on: ubuntu-latest
-    needs:
-      - metadata
-      - build-mac
-      - build-windows
-    steps:
-      - name: Download release assets
-        uses: actions/download-artifact@v4
-        with:
-          path: downloaded-release-assets
-
-      - name: Prepare upload directory
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p upload
-          find downloaded-release-assets -type f \( \
-            -name "*.dmg" -o \
-            -name "*.zip" -o \
-            -name "*.exe" -o \
-            -name "*.blockmap" \
-          \) -exec cp {} upload/ \;
-
-          for manifest in "${{ needs.metadata.outputs.windows_manifest }}" "${{ needs.metadata.outputs.mac_manifest }}"; do
-            manifest_path="$(find downloaded-release-assets -type f -name "${manifest}" | head -n 1)"
-            if [[ -z "${manifest_path}" ]]; then
-              echo "Missing update manifest in downloaded artifacts: ${manifest}" >&2
-              exit 1
-            fi
-            cp "${manifest_path}" upload/
-          done
-
-          ls -la upload
-
-      - name: Validate required release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          version="${{ needs.metadata.outputs.version }}"
-          required=(
-            "${{ needs.metadata.outputs.windows_manifest }}"
-            "${{ needs.metadata.outputs.mac_manifest }}"
-            "Quietly-Setup-${version}.exe"
-            "Quietly-${version}.dmg"
-            "Quietly-${version}-arm64.dmg"
-            "Quietly-${version}-mac.zip"
-            "Quietly-${version}-arm64-mac.zip"
-            "Quietly-Setup-${version}.exe.blockmap"
-            "Quietly-${version}.dmg.blockmap"
-            "Quietly-${version}-arm64.dmg.blockmap"
-            "Quietly-${version}-mac.zip.blockmap"
-            "Quietly-${version}-arm64-mac.zip.blockmap"
-          )
-
-          for file in "${required[@]}"; do
-            if [[ ! -f "upload/${file}" ]]; then
-              echo "Missing required release asset: ${file}" >&2
-              exit 1
-            fi
-          done
-
-      - name: Write release notes
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > release-notes.md <<EOF
-          ## Summary
-          Quietly ${{ needs.metadata.outputs.version }} desktop release.
-
-          ## Technical
-          - Channel: ${{ needs.metadata.outputs.channel }}
-          - Source repository: ${{ github.repository }}
-          - Source commit: ${{ github.sha }}
-          - Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          EOF
-
-      - name: Create public GitHub release
+      - name: Publish Windows assets to GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
         run: |
           set -euo pipefail
-
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "Missing RELEASE_REPO_TOKEN secret" >&2
-            exit 1
-          fi
-
           tag="${{ needs.metadata.outputs.tag }}"
-          version="${{ needs.metadata.outputs.version }}"
-          release_args=(
-            release create "${tag}"
-            --repo "${RELEASE_REPO}"
-            --title "Quietly ${version}"
-            --notes-file release-notes.md
-          )
-
-          if [[ "${{ needs.metadata.outputs.prerelease }}" == "true" ]]; then
-            release_args+=(--prerelease)
-          fi
-
-          if gh release view "${tag}" --repo "${RELEASE_REPO}" > /dev/null 2>&1; then
-            echo "Release ${tag} already exists in ${RELEASE_REPO}; uploading assets with --clobber"
-          else
-            gh "${release_args[@]}"
-          fi
-
-          gh release upload "${tag}" upload/* --repo "${RELEASE_REPO}" --clobber
+          echo "Uploading Windows assets to ${RELEASE_REPO} @ ${tag}"
+          gh release upload "${tag}" \
+            release/*.exe \
+            release/*.blockmap \
+            release/${{ needs.metadata.outputs.windows_manifest }} \
+            --repo "${RELEASE_REPO}" --clobber
