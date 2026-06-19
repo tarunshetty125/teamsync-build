@@ -4,7 +4,7 @@
  * Layout: Bar → Rolling transcript strip → Two panels side-by-side
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCluelyOverlayBridge } from './useCluelyOverlayBridge';
 import { useStealthKeyboard } from '../../hooks/useStealthKeyboard';
@@ -267,6 +267,35 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
         window.electronAPI?.setWindowMode?.('launcher');
     }, []);
 
+    // ── Skill Picker (/ and $ prefix commands) ─────────────────────────
+    const skillPickerLoaded = useRef(false);
+    const [skillPickerItems, setSkillPickerItems] = useState<Array<{ id: string; name: string; description: string }>>([] );
+    const [skillPickerIndex, setSkillPickerIndex] = useState(0);
+
+    const skillPickerMatch = bridge.inputValue.match(/^[$/]([a-z0-9_-]*)$/i);
+    const skillPickerQuery = skillPickerMatch?.[1]?.toLowerCase() || '';
+    const filteredSkills = skillPickerMatch && skillPickerItems.length > 0
+        ? skillPickerItems.filter(s => s.id.includes(skillPickerQuery) || s.name.toLowerCase().includes(skillPickerQuery))
+        : [];
+    const showSkillPicker = filteredSkills.length > 0;
+
+    // Lazy-load skills list on first trigger character
+    useEffect(() => {
+        if ((bridge.inputValue.startsWith('$') || bridge.inputValue.startsWith('/')) && !skillPickerLoaded.current) {
+            skillPickerLoaded.current = true;
+            window.electronAPI?.skillsRefresh?.().then((result: any) => {
+                if (Array.isArray(result)) setSkillPickerItems(result);
+            }).catch(() => { });
+        }
+    }, [bridge.inputValue]);
+
+    // Reset picker index when filter changes
+    useEffect(() => { setSkillPickerIndex(0); }, [skillPickerQuery]);
+
+    const selectSkill = useCallback((skillId: string) => {
+        bridge.setInputValue('$' + skillId + ' ');
+    }, [bridge.setInputValue]);
+
     const transcriptPillText = useMemo(
         () => getTranscriptPillText(bridge.rollingTranscript, bridge.lastFinalSentence),
         [bridge.lastFinalSentence, bridge.rollingTranscript],
@@ -312,6 +341,11 @@ const TeamSyncCluelyOverlay: React.FC<TeamSyncCluelyOverlayProps> = ({
                 onOpenLauncher={handleOpenLauncher}
                 hasAttachments={bridge.attachedContext.length > 0}
                 stealthTapActive={stealthTapActive}
+                showSkillPicker={showSkillPicker}
+                filteredSkills={filteredSkills}
+                skillPickerIndex={skillPickerIndex}
+                onSkillPickerIndexChange={setSkillPickerIndex}
+                onSelectSkill={selectSkill}
             />
 
             {/* ── Stealth keyboard permission warning ── */}
