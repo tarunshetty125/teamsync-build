@@ -614,9 +614,13 @@ const SkillsSettingsTab: React.FC = () => {
                 </div>
                 <button
                     onClick={handleOpenFolder}
-                    className="px-4 py-2 rounded-lg text-xs font-medium bg-bg-input hover:bg-bg-elevated border border-border-subtle text-text-primary transition-colors flex-shrink-0"
+                    className="relative overflow-hidden inline-flex h-[40px] items-center gap-2.5 rounded-full bg-white pl-4 pr-2 text-[13px] font-semibold tracking-[-0.035em] text-[#141414] shadow-[0_14px_36px_rgba(0,0,0,0.20)] transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98] flex-shrink-0"
                 >
-                    Open Folder
+                    <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-black/[0.07] to-transparent" />
+                    <span className="relative">Upload</span>
+                    <span className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full bg-[#ececec] text-[#161616]">
+                        <Upload className="h-[14px] w-[14px] stroke-[2.3]" />
+                    </span>
                 </button>
             </div>
 
