@@ -3698,15 +3698,13 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         </div>
                                                         <button
                                                             onClick={() => setIsPremiumModalOpen(true)}
-                                                            className={`text-[11px] font-semibold flex items-center gap-1.5 transition-all duration-200 px-2.5 py-1 rounded-full border shadow-[0_0_10px_rgba(250,204,21,0.2)] hover:shadow-[0_0_15px_rgba(250,204,21,0.3)] ${isPremium
-                                                                ? (isLight ? 'bg-bg-component text-text-primary border-border-subtle hover:bg-bg-item-surface' : 'bg-zinc-800 text-white border-white/10 hover:bg-zinc-700')
-                                                                : isTrialActive
-                                                                    ? 'bg-violet-500/15 text-violet-300 border-violet-500/30 hover:bg-violet-500/25 active:scale-[0.98]'
-                                                                    : 'bg-[#FACC15] text-black border-transparent hover:bg-[#FDE047] active:scale-[0.98]'
-                                                                }`}
+                                                            className="relative overflow-hidden inline-flex h-[36px] items-center gap-2 rounded-full bg-white pl-2 pr-3.5 text-[12px] font-semibold tracking-[-0.03em] text-[#141414] shadow-[0_10px_28px_rgba(0,0,0,0.18)] transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98] flex-shrink-0"
                                                         >
-                                                            {isPremium ? <CheckCircle size={12} className="text-green-400" /> : isTrialActive ? <Sparkles size={12} className="text-violet-400" /> : <Sparkles size={12} className="text-black/80" />}
-                                                            {isPremium ? 'Manage Pro' : isTrialActive ? 'Upgrade' : 'Unlock Pro'}
+                                                            <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-blue-500/[0.08] to-transparent" />
+                                                            <span className="relative flex h-[24px] w-[24px] items-center justify-center rounded-full bg-blue-500 text-white">
+                                                                {isPremium ? <CheckCircle className="h-[13px] w-[13px] stroke-[2.3]" /> : <Sparkles className="h-[13px] w-[13px] stroke-[2.3]" />}
+                                                            </span>
+                                                            <span className="relative">{isPremium ? 'Manage Pro' : isTrialActive ? 'Upgrade' : 'Quietly'}</span>
                                                         </button>
                                                     </div>
                                                     <p className="text-xs text-text-secondary mb-2">
