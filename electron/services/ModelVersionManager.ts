@@ -48,6 +48,7 @@ export enum TextModelFamily {
   GEMINI_PRO = 'text_gemini_pro',
   CLAUDE = 'text_claude',
   GROQ = 'text_groq',
+  BEDROCK = 'text_bedrock',
 }
 
 export interface TieredModels {
@@ -99,6 +100,7 @@ const TEXT_BASELINE_MODELS: Record<TextModelFamily, string> = {
   [TextModelFamily.GEMINI_PRO]: 'gemini-3.1-pro-preview',
   [TextModelFamily.CLAUDE]: 'claude-sonnet-4-6',
   [TextModelFamily.GROQ]: 'llama-3.3-70b-versatile',
+  [TextModelFamily.BEDROCK]: 'anthropic.claude-sonnet-4-20260514-v1:0',
 };
 
 /** Vision-capable model ordering for screenshot analysis */
@@ -115,6 +117,7 @@ export const TEXT_PROVIDER_ORDER: TextModelFamily[] = [
   TextModelFamily.GROQ,
   TextModelFamily.OPENAI,
   TextModelFamily.CLAUDE,
+  TextModelFamily.BEDROCK,
   TextModelFamily.GEMINI_FLASH,
   TextModelFamily.GEMINI_PRO,
 ];
@@ -309,6 +312,14 @@ export function classifyTextModel(modelId: string): TextModelFamily | null {
   // Groq text models — broader: llama, mixtral, gemma (NOT scout-only like vision)
   if (lower.includes('llama') || lower.includes('mixtral') || lower.includes('gemma')) {
     return TextModelFamily.GROQ;
+  }
+
+  // Bedrock models — AWS model ID format (anthropic.*, amazon.*, meta.*, etc.)
+  if (lower.startsWith('anthropic.') || lower.startsWith('amazon.') || lower.startsWith('meta.') ||
+      lower.startsWith('mistral.') || lower.startsWith('cohere.') || lower.startsWith('ai21.') ||
+      lower.startsWith('openai.gpt-oss') || lower.startsWith('us.') || lower.startsWith('eu.') ||
+      lower.startsWith('apac.')) {
+    return TextModelFamily.BEDROCK;
   }
 
   return null;

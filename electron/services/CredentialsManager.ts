@@ -13,6 +13,8 @@ import {
     type SupportedRuntimeSttProvider,
 } from '../audio/stt/SttRuntimeConfig';
 import { isBedrockModelId, resolveBedrockModelId } from '../llm/BedrockModelIds';
+import type { BedrockClient } from './BedrockClient';
+import { BedrockCredentialHealthMonitor } from './BedrockCredentialHealthMonitor';
 
 const CREDENTIALS_PATH = path.join(app.getPath('userData'), 'credentials.enc');
 
@@ -548,25 +550,60 @@ export class CredentialsManager {
             hasSessionToken: !!this.credentials.bedrockCredentials.sessionToken,
             hasProfileName: !!this.credentials.bedrockCredentials.profileName,
         });
+
+        // Stop health monitor when credentials change — old checkFn closure references stale client
+        BedrockCredentialHealthMonitor.stop();
+        BedrockCredentialHealthMonitor.reset();
+    }
+
+    // ── Cached Bedrock Client ──────────────────────────────────────
+    //
+    // Reused across test/fetch calls to share SDK clients, HTTP connection
+    // pools, and model cache. Only recreated when credentials change.
+
+    private _cachedBedrockClient: BedrockClient | null = null;
+    private _cachedBedrockHash: string = '';
+
+    private getOrCreateBedrockClient(credentials: BedrockCredentials): BedrockClient {
+        const hash = `${credentials.authMode}|${credentials.region}|${credentials.profileName || ''}|${credentials.accessKeyId ? 'AK' : ''}|${credentials.secretAccessKey ? 'SK' : ''}`;
+        if (this._cachedBedrockClient && this._cachedBedrockHash === hash) {
+            return this._cachedBedrockClient;
+        }
+        const { BedrockClient: BC } = require('./BedrockClient');
+        this._cachedBedrockClient = new BC(credentials);
+        this._cachedBedrockHash = hash;
+        return this._cachedBedrockClient;
+    }
+
+    /**
+     * Get the cached BedrockClient instance (if any).
+     * Allows external consumers (ProviderRegistry, LLMHelper) to reuse the same
+     * client that was created during test/fetch rather than creating their own.
+     */
+    public getCachedBedrockClient(): BedrockClient | null {
+        return this._cachedBedrockClient;
     }
 
     public async testBedrockConnection(credentials?: BedrockCredentials): Promise<void> {
         const resolved = credentials || this.getBedrockCredentials();
         if (!resolved) throw new Error('No Bedrock credentials configured.');
-        const { BedrockClient } = require('./BedrockClient');
-        await new BedrockClient(resolved).validate();
+        const client = this.getOrCreateBedrockClient(resolved);
+        await client.validate();
         console.log('[BEDROCK_AUTH]', {
             authMode: resolved.authMode,
             region: resolved.region,
             success: true,
         });
+
+        // Start proactive health monitoring after successful authentication
+        BedrockCredentialHealthMonitor.start(() => client.validate());
     }
 
     public async fetchBedrockModels(credentials?: BedrockCredentials): Promise<BedrockFetchedModel[]> {
         const resolved = credentials || this.getBedrockCredentials();
         if (!resolved) throw new Error('No Bedrock credentials configured.');
-        const { BedrockClient } = require('./BedrockClient');
-        const models = await new BedrockClient(resolved).fetchModels();
+        const client = this.getOrCreateBedrockClient(resolved);
+        const models = await client.fetchModels();
         this.setBedrockFetchedModels(models);
         return models;
     }

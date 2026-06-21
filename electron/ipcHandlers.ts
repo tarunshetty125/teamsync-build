@@ -2156,8 +2156,8 @@ export function initializeIpcHandlers(appState: AppState): void {
         } : undefined,
       };
     } catch (error: any) {
-      const { BedrockClient } = require('./services/BedrockClient');
-      const msg = sanitizeErrorMessage(BedrockClient.normalizeError(error));
+      const { formatBedrockError } = require('./services/BedrockErrorMapper');
+      const msg = sanitizeErrorMessage(formatBedrockError(error));
       console.error('[IPC] Bedrock credential save failed:', msg);
       return { success: false, error: msg };
     }
@@ -2197,8 +2197,8 @@ export function initializeIpcHandlers(appState: AppState): void {
         } : undefined,
       };
     } catch (error: any) {
-      const { BedrockClient } = require('./services/BedrockClient');
-      const msg = sanitizeErrorMessage(BedrockClient.normalizeError(error));
+      const { formatBedrockError } = require('./services/BedrockErrorMapper');
+      const msg = sanitizeErrorMessage(formatBedrockError(error));
       console.error('[IPC] Bedrock connection test failed:', msg);
       return { success: false, error: msg };
     }
@@ -2211,10 +2211,28 @@ export function initializeIpcHandlers(appState: AppState): void {
       const models = await cm.fetchBedrockModels(credentials || undefined);
       return { success: true, models };
     } catch (error: any) {
-      const { BedrockClient } = require('./services/BedrockClient');
-      const msg = sanitizeErrorMessage(BedrockClient.normalizeError(error));
+      const { formatBedrockError } = require('./services/BedrockErrorMapper');
+      const msg = sanitizeErrorMessage(formatBedrockError(error));
       console.error('[IPC] Bedrock model fetch failed:', msg);
       return { success: false, error: msg };
+    }
+  });
+
+  safeHandle("get-bedrock-telemetry", async () => {
+    try {
+      const { BedrockTelemetry } = require('./services/BedrockTelemetry');
+      return { success: true, metrics: BedrockTelemetry.getMetrics() };
+    } catch (error: any) {
+      return { success: false, error: error?.message || 'Telemetry unavailable' };
+    }
+  });
+
+  safeHandle("get-bedrock-credential-health", async () => {
+    try {
+      const { BedrockCredentialHealthMonitor } = require('./services/BedrockCredentialHealthMonitor');
+      return { success: true, health: BedrockCredentialHealthMonitor.getState() };
+    } catch (error: any) {
+      return { success: false, error: error?.message || 'Health monitor unavailable' };
     }
   });
 

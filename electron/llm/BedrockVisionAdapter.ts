@@ -1,4 +1,5 @@
 import type { BedrockClient } from '../services/BedrockClient';
+import { BedrockCapabilityRegistry } from '../services/BedrockCapabilityRegistry';
 import { resolveBedrockModelId, resolveBedrockVisionModel } from './BedrockModelIds';
 
 export interface BedrockRuntimeRoute {
@@ -34,7 +35,12 @@ export async function resolveBedrockRuntimeRoute(args: {
             };
         }
 
-        const visionModel = resolveBedrockVisionModel(models);
+        // Prefer registry-based vision model resolution (uses API metadata).
+        // Falls back to hardcoded ranking if registry isn't populated.
+        const registry = BedrockCapabilityRegistry.getActive();
+        const registryVisionModel = registry?.resolveBestVisionModel();
+
+        const visionModel = registryVisionModel || resolveBedrockVisionModel(models);
         if (!visionModel) {
             throw new Error('No Bedrock multimodal model available. Enable Claude Sonnet or Amazon Nova model access in Amazon Bedrock for this region/account.');
         }

@@ -1842,6 +1842,7 @@ export class IntelligenceEngine extends EventEmitter {
 	                    skipModeInjection: true,
 	                    skipCustomNotesInjection,
 	                    maxOutputTokens: providerPrompt.maxOutputTokens,
+	                    signal,
 	                },
             });
 

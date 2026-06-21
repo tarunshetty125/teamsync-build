@@ -83,5 +83,6 @@ export function createProviderRateLimiters() {
         gemini: new RateLimiter(120, 2.0),    // 120 req/min
         openai: new RateLimiter(120, 2.0),    // 120 req/min
         claude: new RateLimiter(120, 2.0),    // 120 req/min
+        bedrock: new RateLimiter(10, 0.17),   // ~10 req/min (conservative on-demand)
     };
 }

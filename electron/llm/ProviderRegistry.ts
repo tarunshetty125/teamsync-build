@@ -19,6 +19,7 @@ import { ModelVersionManager, ModelFamily, TextModelFamily } from '../services/M
 import { createProviderRateLimiters } from '../services/RateLimiter';
 import { BedrockClient } from '../services/BedrockClient';
 import type { CustomProvider, CurlProvider, BedrockCredentials } from '../services/CredentialsManager';
+import { CredentialsManager } from '../services/CredentialsManager';
 import { isBedrockModelId } from './BedrockModelIds';
 
 // ---------------------------------------------------------------------------
@@ -159,12 +160,34 @@ export class ProviderRegistry {
 
     setBedrockCredentials(credentials: BedrockCredentials | null): void {
         this._bedrockCredentials = credentials;
-        this._bedrockClient = credentials ? new BedrockClient(credentials) : null;
+        if (!credentials) {
+            this._bedrockClient = null;
+        } else {
+            // Reuse cached client from CredentialsManager when available.
+            // This ensures one runtime client, one model cache, one HTTP pool.
+            try {
+                const cached = CredentialsManager.getInstance().getCachedBedrockClient();
+                this._bedrockClient = cached || new BedrockClient(credentials);
+            } catch {
+                // CredentialsManager not yet initialized (early app boot)
+                this._bedrockClient = new BedrockClient(credentials);
+            }
+        }
         console.log('[ProviderRegistry] Bedrock credentials updated', {
             authMode: credentials?.authMode,
             region: credentials?.region,
             configured: !!credentials,
+            reusingCached: this._bedrockClient !== null && credentials !== null,
         });
+    }
+
+    /**
+     * Directly set the BedrockClient instance.
+     * Used when CredentialsManager creates/refreshes the cached client
+     * to push the same instance into the runtime registry.
+     */
+    setBedrockClient(client: BedrockClient | null): void {
+        this._bedrockClient = client;
     }
 
     // -----------------------------------------------------------------------

@@ -4346,6 +4346,14 @@ async function initializeApp() {
       console.warn('[Main] PhoneMirrorManager cleanup failed:', e);
     }
 
+    // Stop Bedrock health monitor interval to prevent dangling timers
+    try {
+      const { BedrockCredentialHealthMonitor } = require('./services/BedrockCredentialHealthMonitor');
+      BedrockCredentialHealthMonitor.stop();
+    } catch (e) {
+      // Health monitor may not have been started
+    }
+
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       CredentialsManager.getInstance().scrubMemory();

@@ -1,4 +1,5 @@
 import { isBedrockGptOssModel } from './BedrockModelIds';
+import { BedrockCapabilityRegistry } from '../services/BedrockCapabilityRegistry';
 
 export interface ModelCapabilities {
   vision: boolean;
@@ -53,6 +54,16 @@ function isGeminiVisionModel(modelId: string): boolean {
 
 function isBedrockVisionModel(modelId: string): boolean {
   if (isBedrockGptOssModel(modelId)) return false;
+
+  // Use the capability registry when populated (metadata-driven, not string matching)
+  const registry = BedrockCapabilityRegistry.getActive();
+  if (registry?.isPopulated()) {
+    return registry.supportsVision(modelId);
+  }
+
+  // Fallback for pre-connection state: conservative string matching.
+  // This path is only reached before the user has connected to Bedrock
+  // for the first time. Once fetchModels() runs, the registry takes over.
   return (
     modelId.includes('anthropic.claude') ||
     modelId.includes('amazon.nova-pro') ||

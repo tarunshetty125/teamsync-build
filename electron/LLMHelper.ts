@@ -3,6 +3,9 @@ import Groq from "groq-sdk"
 import { GroqKeyManager } from './services/GroqKeyManager'
 import { GroqClient } from './services/GroqClient'
 import { BedrockClient } from './services/BedrockClient'
+import { BedrockCapabilityRegistry } from './services/BedrockCapabilityRegistry'
+import { isBedrockReauthError, mapBedrockError } from './services/BedrockErrorMapper'
+import { BedrockTelemetry } from './services/BedrockTelemetry'
 import { CodexCliService, CodexCliConfig, DEFAULT_CODEX_CLI_CONFIG } from './services/CodexCliService'
 import OpenAI from "openai"
 import Anthropic from "@anthropic-ai/sdk"
@@ -50,9 +53,22 @@ const CLAUDE_MODEL = "claude-sonnet-4-6"
 const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 const MAX_OUTPUT_TOKENS = 65536
 const CLAUDE_MAX_OUTPUT_TOKENS = 64000
-const BEDROCK_MAX_OUTPUT_TOKENS = 4096
-const GROQ_TEXT_REQUEST_CHAR_CAP = 24_000
 const BEDROCK_AUTH_WARNING_DEDUPE_MS = 45_000
+const GROQ_TEXT_REQUEST_CHAR_CAP = 24_000
+
+/**
+ * Resolve the max output tokens for a Bedrock model.
+ * Uses the capability registry for model-specific limits.
+ * Falls back to a safe default (8192) when registry is not populated.
+ */
+function resolveBedrockMaxOutputTokens(modelId?: string): number {
+    if (!modelId) return 8192;
+    const registry = BedrockCapabilityRegistry.getActive();
+    if (registry?.isPopulated()) {
+        return registry.getMaxOutputTokens(modelId);
+    }
+    return 8192;
+}
 
 const MODEL_BUDGETS = {
   groq_llama_70b: {
@@ -433,27 +449,7 @@ function detectProviderLabel(modelId: string): string {
 }
 
 export function isBedrockReauthenticationError(error: any): boolean {
-  const raw = [
-    error?.name,
-    error?.Code,
-    error?.code,
-    error?.message,
-    error?.Message,
-    typeof error === 'string' ? error : '',
-  ].filter(Boolean).join(' ').toLowerCase();
-
-  return [
-    'expiredtoken',
-    'expired token',
-    'token has expired',
-    'credentials expired',
-    'session expired',
-    'sso session',
-    'security token included in the request is expired',
-    'security token included in the request is invalid',
-    'invalidclienttoken',
-    'unrecognizedclient',
-  ].some(signal => raw.includes(signal));
+  return isBedrockReauthError(error);
 }
 
 export class LLMHelper {
@@ -2464,22 +2460,68 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     return route.modelId;
   }
 
-  public async generateWithBedrock(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string, maxOutputTokens: number = BEDROCK_MAX_OUTPUT_TOKENS): Promise<string> {
+  public async generateWithBedrock(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string, maxOutputTokens?: number, signal?: AbortSignal): Promise<string> {
     if (!this.bedrockClient) throw new Error("Bedrock client not initialized");
+    await this.rateLimiters.bedrock.acquire();
     let model = modelId || this.currentModelId;
-    try {
-      model = await this.resolveBedrockRuntimeModel(imagePaths, model);
-      console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model });
-      return await this.bedrockClient.generate(userMessage, {
-        modelId: model,
-        systemPrompt,
-        imagePaths,
-        maxOutputTokens,
-      });
-    } catch (error) {
-      this.notifyBedrockReauthenticationRequired(error, model);
-      throw error;
+    const resolvedMaxTokens = maxOutputTokens || resolveBedrockMaxOutputTokens(model);
+    model = await this.resolveBedrockRuntimeModel(imagePaths, model);
+
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`[BEDROCK_RETRY] attempt=${attempt}/${MAX_RETRIES} model=${model}`);
+          BedrockTelemetry.recordRetry();
+        }
+        const start = Date.now();
+        console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model, maxTokens: resolvedMaxTokens, attempt });
+        const result = await this.bedrockClient.generate(userMessage, {
+          modelId: model,
+          systemPrompt,
+          imagePaths,
+          maxOutputTokens: resolvedMaxTokens,
+        }, signal);
+        BedrockTelemetry.recordRequest(Date.now() - start, Math.ceil(result.length / 4), false);
+        return result;
+      } catch (error) {
+        const mapped = mapBedrockError(error);
+
+        if (!mapped.isRetryable || attempt === MAX_RETRIES) {
+          BedrockTelemetry.recordRequest(0, 0, true);
+          this.notifyBedrockReauthenticationRequired(error, model);
+          throw error;
+        }
+
+        if (signal?.aborted) {
+          BedrockTelemetry.recordCancel();
+          throw error;
+        }
+
+        const baseDelay = mapped.retryAfterMs || 500;
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.warn(`[BEDROCK_RETRY] ${mapped.awsExceptionName}: retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        if (mapped.awsExceptionName === 'ThrottlingException' || mapped.httpStatus === 429) {
+          BedrockTelemetry.record429();
+        }
+
+        await new Promise<void>((resolve, reject) => {
+          const onAbort = () => { clearTimeout(timer); reject(new Error('Aborted during retry backoff')); };
+          const timer = setTimeout(() => {
+            if (signal) signal.removeEventListener('abort', onAbort);
+            resolve();
+          }, delay);
+          if (signal) {
+            if (signal.aborted) { clearTimeout(timer); reject(new Error('Aborted during retry backoff')); return; }
+            signal.addEventListener('abort', onAbort, { once: true });
+          }
+        });
+
+        await this.rateLimiters.bedrock.acquire();
+      }
     }
+    // Unreachable but TypeScript needs this
+    throw new Error('Bedrock generate retries exhausted');
   }
 
   // The handler for cURL requests
@@ -3238,6 +3280,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
 	        actionType?: string;
 	      };
 	      disableProviderFallbacks?: boolean;
+	      signal?: AbortSignal;
 	    }
 	  ): AsyncGenerator<string, void, unknown> {
 	  
@@ -3636,7 +3679,7 @@ Return only the final answer. No meta commentary.
 	    if (this.isBedrockModel(routeModelId) && this.bedrockClient) {
 	      const bedrockSystem = hasExplicitSystemPromptOverride ? (systemPromptOverride ?? '') : OPENAI_SYSTEM_PROMPT;
 	      const finalBedrockSystem = this.injectLanguageInstruction(bedrockSystem);
-	      yield* this.streamWithBedrock(userContent, finalBedrockSystem, imagePaths, routeModelId, maxOutputTokens);
+	      yield* this.streamWithBedrock(userContent, finalBedrockSystem, imagePaths, routeModelId, maxOutputTokens, runtimeOptions?.signal);
 	      return;
 	    }
 	  
@@ -3768,6 +3811,7 @@ Return only the final answer. No meta commentary.
 	        actionType?: string;
 	      };
 	      disableProviderFallbacks?: boolean;
+	      signal?: AbortSignal;
 	    }
 	  ): AsyncGenerator<string, void, unknown> {
     return this.streamChat(
@@ -3785,6 +3829,7 @@ Return only the final answer. No meta commentary.
 	        providerOverride: runtimeOptions?.providerOverride,
 	        requestContext: runtimeOptions?.requestContext,
 	        disableProviderFallbacks: runtimeOptions?.disableProviderFallbacks,
+	        signal: runtimeOptions?.signal,
 	      }
 	    );
 	  }
@@ -3804,6 +3849,7 @@ Return only the final answer. No meta commentary.
       skipModeInjection?: boolean;
       skipCustomNotesInjection?: boolean;
       maxOutputTokens?: number;
+      signal?: AbortSignal;
     };
   }): AsyncGenerator<string, void, unknown> {
     return this.streamStructuredPrompt(
@@ -3819,6 +3865,7 @@ Return only the final answer. No meta commentary.
         providerOverride: args.provider,
         requestContext: args.requestContext,
         disableProviderFallbacks: true,
+        signal: args.runtimeOptions?.signal,
       }
     );
   }
@@ -4022,21 +4069,74 @@ Return only the final answer. No meta commentary.
     }
   }
 
-  public async * streamWithBedrock(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string, maxOutputTokens: number = BEDROCK_MAX_OUTPUT_TOKENS): AsyncGenerator<string, void, unknown> {
+  public async * streamWithBedrock(userMessage: string, systemPrompt?: string, imagePaths?: string[], modelId?: string, maxOutputTokens?: number, signal?: AbortSignal): AsyncGenerator<string, void, unknown> {
     if (!this.bedrockClient) throw new Error("Bedrock client not initialized");
+    await this.rateLimiters.bedrock.acquire();
     let model = modelId || this.currentModelId;
-    try {
-      model = await this.resolveBedrockRuntimeModel(imagePaths, model);
-      console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model });
-      yield* this.bedrockClient.stream(userMessage, {
-        modelId: model,
-        systemPrompt,
-        imagePaths,
-        maxOutputTokens,
-      });
-    } catch (error) {
-      this.notifyBedrockReauthenticationRequired(error, model);
-      throw error;
+    const resolvedMaxTokens = maxOutputTokens || resolveBedrockMaxOutputTokens(model);
+    model = await this.resolveBedrockRuntimeModel(imagePaths, model);
+
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`[BEDROCK_RETRY] attempt=${attempt}/${MAX_RETRIES} model=${model}`);
+          BedrockTelemetry.recordRetry();
+        }
+        const streamStart = Date.now();
+        console.log('[BEDROCK_ROUTE]', { provider: 'bedrock', model, maxTokens: resolvedMaxTokens, attempt });
+        let outputTokenEstimate = 0;
+        for await (const chunk of this.bedrockClient.stream(userMessage, {
+          modelId: model,
+          systemPrompt,
+          imagePaths,
+          maxOutputTokens: resolvedMaxTokens,
+        }, signal)) {
+          outputTokenEstimate += Math.ceil(chunk.length / 4);
+          yield chunk;
+        }
+        BedrockTelemetry.recordRequest(Date.now() - streamStart, outputTokenEstimate, false);
+        return; // Success — exit retry loop
+      } catch (error) {
+        const mapped = mapBedrockError(error);
+
+        // Non-retryable or final attempt → throw
+        if (!mapped.isRetryable || attempt === MAX_RETRIES) {
+          BedrockTelemetry.recordRequest(0, 0, true);
+          this.notifyBedrockReauthenticationRequired(error, model);
+          throw error;
+        }
+
+        // Abort signal fired → don't retry
+        if (signal?.aborted) {
+          BedrockTelemetry.recordCancel();
+          throw error;
+        }
+
+        // Exponential backoff: retryAfterMs × 2^attempt (500 → 1000 → 2000)
+        const baseDelay = mapped.retryAfterMs || 500;
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.warn(`[BEDROCK_RETRY] ${mapped.awsExceptionName}: retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        if (mapped.awsExceptionName === 'ThrottlingException' || mapped.httpStatus === 429) {
+          BedrockTelemetry.record429();
+        }
+
+        // Wait with abort awareness — clean up listener on resolve to prevent leak
+        await new Promise<void>((resolve, reject) => {
+          const onAbort = () => { clearTimeout(timer); reject(new Error('Aborted during retry backoff')); };
+          const timer = setTimeout(() => {
+            if (signal) signal.removeEventListener('abort', onAbort);
+            resolve();
+          }, delay);
+          if (signal) {
+            if (signal.aborted) { clearTimeout(timer); reject(new Error('Aborted during retry backoff')); return; }
+            signal.addEventListener('abort', onAbort, { once: true });
+          }
+        });
+
+        // Re-acquire rate limiter token before retry
+        await this.rateLimiters.bedrock.acquire();
+      }
     }
   }
 

@@ -1686,12 +1686,18 @@ export const AIProvidersSettings: React.FC = () => {
                                     placeholder="Profile Name (optional)"
                                     className="text-xs"
                                 />
-                                <Input
+                                <select
                                     value={bedrockCredentials.region}
                                     onChange={(e) => setBedrockCredentials(prev => ({ ...prev, region: e.target.value }))}
-                                    placeholder="Region"
-                                    className="text-xs"
-                                />
+                                    className="w-full rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
+                                >
+                                    {[
+                                        'us-east-1', 'us-east-2', 'us-west-2',
+                                        'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1', 'eu-north-1',
+                                        'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2', 'ap-south-1',
+                                        'sa-east-1', 'ca-central-1', 'me-south-1', 'af-south-1',
+                                    ].map(r => <option key={r} value={r}>{r}</option>)}
+                                </select>
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 gap-3 mb-4">
@@ -1716,12 +1722,18 @@ export const AIProvidersSettings: React.FC = () => {
                                     placeholder="Session Token (optional)"
                                     className="text-xs"
                                 />
-                                <Input
+                                <select
                                     value={bedrockCredentials.region}
                                     onChange={(e) => setBedrockCredentials(prev => ({ ...prev, region: e.target.value }))}
-                                    placeholder="Region"
-                                    className="text-xs"
-                                />
+                                    className="w-full rounded-lg border border-border-subtle bg-bg-input px-3 py-2 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-primary/40"
+                                >
+                                    {[
+                                        'us-east-1', 'us-east-2', 'us-west-2',
+                                        'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1', 'eu-north-1',
+                                        'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ap-northeast-2', 'ap-south-1',
+                                        'sa-east-1', 'ca-central-1', 'me-south-1', 'af-south-1',
+                                    ].map(r => <option key={r} value={r}>{r}</option>)}
+                                </select>
                             </div>
                         )}
 
@@ -1766,6 +1778,38 @@ export const AIProvidersSettings: React.FC = () => {
                             <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-[10px] leading-relaxed text-amber-200">
                                 <AlertCircle size={13} className="mt-0.5 shrink-0 text-amber-300" />
                                 <span>{bedrockVisionWarning}</span>
+                            </div>
+                        )}
+
+                        {/* Diagnostics & Utility Links */}
+                        {hasStoredKey.bedrock && (
+                            <div className="mt-3 flex items-center justify-between border-t border-border-subtle pt-3">
+                                <div className="flex items-center gap-3 text-[10px] text-text-secondary">
+                                    {dynamicModels.bedrock?.length > 0 && (
+                                        <span>{dynamicModels.bedrock.length} model{dynamicModels.bedrock.length !== 1 ? 's' : ''} available</span>
+                                    )}
+                                    <span className="opacity-50">•</span>
+                                    <span>{bedrockCredentials.region}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <a
+                                        href={`https://${bedrockCredentials.region}.console.aws.amazon.com/bedrock/home?region=${bedrockCredentials.region}#/modelaccess`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-accent-primary/70 hover:text-accent-primary transition-colors"
+                                    >
+                                        Model Access ↗
+                                    </a>
+                                    <span className="text-[10px] text-text-secondary opacity-30">|</span>
+                                    <a
+                                        href={`https://${bedrockCredentials.region}.console.aws.amazon.com/bedrock/home?region=${bedrockCredentials.region}#/chat-playground`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-accent-primary/70 hover:text-accent-primary transition-colors"
+                                    >
+                                        Playground ↗
+                                    </a>
+                                </div>
                             </div>
                         )}
                     </div>
