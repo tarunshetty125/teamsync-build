@@ -73,6 +73,7 @@ for (const sharedFile of sharedRuntimeFiles) {
   }
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
 const start = Date.now();
 
 build({
@@ -90,8 +91,13 @@ build({
     '.js': 'js',
   },
   logLevel: 'warning',
+  // Strip all console.* calls in production builds (mac + win).
+  // Prevents log spam, avoids leaking internal state (model IDs, regions,
+  // credential modes) to stdout, and eliminates string formatting overhead.
+  // Dev builds keep all logs for debugging.
+  ...(isProduction ? { drop: ['console'] } : {}),
 }).then(() => {
-  console.log(`[build-electron] Done in ${Date.now() - start}ms`);
+  console.log(`[build-electron] Done in ${Date.now() - start}ms (${isProduction ? 'PRODUCTION — console stripped' : 'development'})`);
 }).catch((err) => {
   console.error('[build-electron] Build failed:', err.message);
   process.exit(1);
