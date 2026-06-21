@@ -130,7 +130,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Remove nested sharp (prevents electron-rebuild failure)
         run: rm -rf node_modules/@xenova/transformers/node_modules/sharp
@@ -219,7 +219,7 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Remove nested sharp (prevents electron-rebuild failure)
         run: Remove-Item -Recurse -Force node_modules/@xenova/transformers/node_modules/sharp -ErrorAction SilentlyContinue
