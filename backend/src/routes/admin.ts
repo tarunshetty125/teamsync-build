@@ -9,11 +9,34 @@ const router = Router();
 // ── Simple bearer-token auth for admin routes ─────────────────────────
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
 
+// ── Rate limiter: max 5 failed attempts per IP per 15 min ─────────────
+const failedAttempts = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+
 function requireAdmin(req: Request, res: Response, next: Function) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+
+  // Check rate limit
+  const entry = failedAttempts.get(ip);
+  if (entry && entry.count >= RATE_LIMIT_MAX && now < entry.resetAt) {
+    return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+  }
+
   const auth = req.headers.authorization;
   if (!auth || auth !== `Bearer ${ADMIN_SECRET}`) {
+    // Track failed attempt
+    if (!entry || now >= entry.resetAt) {
+      failedAttempts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    } else {
+      entry.count++;
+    }
     return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  // Clear on success
+  failedAttempts.delete(ip);
   next();
 }
 
