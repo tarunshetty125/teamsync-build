@@ -6,6 +6,8 @@ import { attachV1WebSocketServer, createV1Router } from './routes/v1';
 import { getBackendConfig } from './config/env';
 import licensingRoutes from './licensing/routes';
 import webhookRoutes from './licensing/routes/webhooks';
+import adminRoutes from './routes/admin';
+import path from 'path';
 
 const backendConfig = getBackendConfig();
 
@@ -50,7 +52,13 @@ app.use(express.json({
 app.use('/auth', authRoutes);
 app.use('/license', licensingRoutes);
 app.use('/webhooks', webhookRoutes);
+app.use('/admin', adminRoutes);
 app.use('/v1', createV1Router());
+
+// Serve admin dashboard
+app.get('/admin-panel', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 // Health check
 app.get('/health', (_req, res) => {
