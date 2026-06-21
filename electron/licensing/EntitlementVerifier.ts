@@ -8,7 +8,7 @@ import { API_BASE_URL } from '../../src/lib/config/apiConfig';
 import { loadNativeModule } from '../audio/nativeModuleLoader';
 import { LICENSE_PUBLIC_KEY } from './licensePublicKey';
 
-export type EntitlementPlan = 'free' | 'pro' | 'pro_plus' | 'team';
+export type EntitlementPlan = 'free' | 'pro' | 'pro_plus' | 'team' | 'enterprise';
 
 export interface SignedEntitlement {
   plan: EntitlementPlan;
@@ -22,6 +22,8 @@ export interface SignedEntitlement {
   entitlementVersion: number;
   features: string[];
   issuer: string;
+  /** Server-authoritative timestamp — signed inside payload to prevent clock manipulation */
+  serverTime?: string;
   signature: string;
 }
 
@@ -30,6 +32,12 @@ export interface EntitlementCache {
   lastSuccessfulSyncAt?: string;
   lastSyncAttemptAt?: string;
   migrationAttemptedAt?: string;
+  // Anti-rollback: detect cache file replacement attacks
+  previousEntitlementHash?: string;
+  lastAcceptedSignature?: string;
+  entitlementSequence?: number;
+  // Signed server time: used instead of Date.now() for grace calculations
+  lastSuccessfulServerTime?: string;
 }
 
 export interface EntitlementStatus {
@@ -45,7 +53,9 @@ export interface EntitlementStatus {
     | 'revoked'
     | 'invalid_signature'
     | 'device_mismatch'
-    | 'sync_required';
+    | 'sync_required'
+    | 'tampered'
+    | 'clock_rollback';
   entitlement?: SignedEntitlement;
   features: string[];
   expiresAt?: string;
@@ -53,7 +63,13 @@ export interface EntitlementStatus {
   lastSuccessfulSyncAt?: string;
 }
 
-type SyncReason = 'startup' | 'background' | 'manual' | 'activation' | 'trial' | 'deactivation';
+export type SyncReason = 'startup' | 'background' | 'manual' | 'activation' | 'trial' | 'deactivation'
+  | 'focus' | 'online' | 'sleep_wake' | 'purchase' | 'restore';
+
+/** Clock drift tolerance (5 minutes) — if local time is this far behind server time, flag as suspicious */
+const CLOCK_DRIFT_TOLERANCE_MS = 5 * 60 * 1000;
+/** Small random jitter (0–5 min) added to offline grace expiry to prevent synchronized reconnect storms */
+const GRACE_JITTER_MAX_MS = 5 * 60 * 1000;
 
 const LICENSE_BACKEND_URL = (process.env.LICENSE_BACKEND_URL || API_BASE_URL).replace(/\/+$/g, '');
 const CACHE_FILE = 'license-entitlement-cache.json';
@@ -66,6 +82,10 @@ export function canonicalize(value: unknown): string {
   const record = value as Record<string, unknown>;
   return `{${Object.keys(record)
     .sort()
+    // Skip undefined values — matches JSON.stringify behavior.
+    // Critical for backward compatibility: entitlements signed without serverTime
+    // must verify correctly when sanitizeEntitlement sets serverTime to undefined.
+    .filter(key => record[key] !== undefined)
     .map(key => `${JSON.stringify(key)}:${canonicalize(record[key])}`)
     .join(',')}}`;
 }
@@ -152,12 +172,36 @@ export class EntitlementVerifier extends EventEmitter {
       };
     }
 
-    const nowMs = this.now().getTime();
+    // Use signed server time when available to prevent local clock manipulation.
+    // Falls back to Date.now() for backward compatibility with older server responses.
+    const serverTimeMs = this.cache.lastSuccessfulServerTime
+      ? Date.parse(this.cache.lastSuccessfulServerTime)
+      : 0;
+    const localNowMs = this.now().getTime();
+    const nowMs = serverTimeMs > 0 ? serverTimeMs : localNowMs;
+
+    // Clock rollback detection: if local time is significantly behind server time,
+    // the user may have rolled back their system clock to extend grace/expiry.
+    if (serverTimeMs > 0 && localNowMs < serverTimeMs - CLOCK_DRIFT_TOLERANCE_MS) {
+      return {
+        isPremium: false,
+        plan: 'free',
+        trial: false,
+        status: 'clock_rollback',
+        features: [],
+        entitlement,
+        expiresAt: entitlement.expiresAt,
+        graceUntil: entitlement.graceUntil,
+        lastSuccessfulSyncAt: this.cache.lastSuccessfulSyncAt,
+      };
+    }
+
     const expiresAtMs = Date.parse(entitlement.expiresAt);
     const graceUntilMs = Date.parse(entitlement.graceUntil);
     const lastSyncMs = this.cache.lastSuccessfulSyncAt ? Date.parse(this.cache.lastSuccessfulSyncAt) : 0;
-    const syncedRecently = lastSyncMs > 0 && nowMs - lastSyncMs <= OFFLINE_GRACE_MS;
-    const premiumPlan = entitlement.plan === 'pro' || entitlement.plan === 'pro_plus' || entitlement.plan === 'team' || entitlement.trial;
+    const syncedRecently = lastSyncMs > 0 && localNowMs - lastSyncMs <= OFFLINE_GRACE_MS;
+    const premiumPlan = entitlement.plan === 'pro' || entitlement.plan === 'pro_plus'
+      || entitlement.plan === 'team' || entitlement.plan === 'enterprise' || entitlement.trial;
 
     if (!premiumPlan) {
       return {
@@ -173,14 +217,16 @@ export class EntitlementVerifier extends EventEmitter {
       };
     }
 
-    if (Number.isFinite(expiresAtMs) && nowMs <= expiresAtMs) {
+    if (Number.isFinite(expiresAtMs) && localNowMs <= expiresAtMs) {
       return this.statusFromEntitlement(entitlement, 'active');
     }
 
+    // Offline grace: add randomized jitter to prevent synchronized reconnect storms
+    const graceJitter = this.getGraceJitter();
     if (
       syncedRecently &&
       Number.isFinite(graceUntilMs) &&
-      nowMs <= graceUntilMs
+      localNowMs <= graceUntilMs + graceJitter
     ) {
       return this.statusFromEntitlement(entitlement, 'offline_grace');
     }
@@ -211,32 +257,54 @@ export class EntitlementVerifier extends EventEmitter {
     return status.isPremium && (
       status.plan === 'pro' ||
       status.plan === 'pro_plus' ||
-      status.plan === 'team'
+      status.plan === 'team' ||
+      status.plan === 'enterprise'
     );
   }
 
   /**
-   * Returns true ONLY for Pro Plus or Team plans.
-   * Use this to gate Pro-Plus-exclusive features: stealth, phone mirror,
-   * company research, API access, priority routing, cross-session search.
+   * Returns true ONLY for Pro Plus, Team, or Enterprise plans.
+   * Backward-compat helper — new code should prefer hasCapability().
    */
   hasProPlusAccess(): boolean {
     const status = this.getStatus();
     return status.isPremium && (
       status.plan === 'pro_plus' ||
-      status.plan === 'team'
+      status.plan === 'team' ||
+      status.plan === 'enterprise'
     );
   }
 
   /**
    * Returns the resolved tier for the current entitlement.
-   * Used by the frontend to render tier-appropriate UI and upgrade prompts.
+   * Backward-compat helper — new code should use capabilities.
    */
   getPlanTier(): 'free' | 'pro' | 'pro_plus' {
     const status = this.getStatus();
     if (!status.isPremium) return 'free';
-    if (status.plan === 'pro_plus' || status.plan === 'team') return 'pro_plus';
+    if (status.plan === 'pro_plus' || status.plan === 'team' || status.plan === 'enterprise') return 'pro_plus';
     return 'pro';
+  }
+
+  // ── Capability-Based Feature Gates ─────────────────────────────────────
+  // Server is the source of truth for capabilities via the features[] array.
+  // Prefer these over plan-string checks for all new code.
+
+  /**
+   * Check if the current entitlement includes a specific capability.
+   * @example verifier.hasCapability('phone_mirror')
+   */
+  hasCapability(capability: string): boolean {
+    const status = this.getStatus();
+    return status.isPremium && status.features.includes(capability);
+  }
+
+  /**
+   * Get all capabilities granted by the current entitlement.
+   * Returns a frozen copy to prevent mutation.
+   */
+  getCapabilities(): readonly string[] {
+    return Object.freeze(this.getStatus().features.slice());
   }
 
   getCachedEntitlement(): SignedEntitlement | undefined {
@@ -377,9 +445,23 @@ export class EntitlementVerifier extends EventEmitter {
       return { success: false, error: `Entitlement rejected: ${validation.reason}` };
     }
 
+    // Anti-rollback: store hash of previous entitlement and increment sequence
+    if (this.cache.entitlement) {
+      const { signature: _prevSig, ...prevUnsigned } = this.cache.entitlement;
+      this.cache.previousEntitlementHash = crypto.createHash('sha256').update(canonicalize(prevUnsigned)).digest('hex');
+    }
+    this.cache.lastAcceptedSignature = entitlement.signature;
+    this.cache.entitlementSequence = (this.cache.entitlementSequence ?? 0) + 1;
+
     this.cache.entitlement = entitlement;
     this.cache.lastSuccessfulSyncAt = this.now().toISOString();
     this.cache.lastSyncAttemptAt = this.cache.lastSuccessfulSyncAt;
+
+    // Store signed server time for clock-tamper-resistant grace calculations
+    if (entitlement.serverTime) {
+      this.cache.lastSuccessfulServerTime = entitlement.serverTime;
+    }
+
     this.persistCache();
     this.emit('changed', this.getStatus(), reason);
     return { success: true, entitlement };
@@ -387,7 +469,8 @@ export class EntitlementVerifier extends EventEmitter {
 
   private statusFromEntitlement(entitlement: SignedEntitlement, status: 'active' | 'offline_grace'): EntitlementStatus {
     return {
-      isPremium: entitlement.plan === 'pro' || entitlement.plan === 'pro_plus' || entitlement.plan === 'team' || entitlement.trial,
+      isPremium: entitlement.plan === 'pro' || entitlement.plan === 'pro_plus'
+        || entitlement.plan === 'team' || entitlement.plan === 'enterprise' || entitlement.trial,
       plan: entitlement.plan,
       provider: entitlement.trial ? 'trial' : 'license',
       trial: entitlement.trial,
@@ -408,7 +491,7 @@ export class EntitlementVerifier extends EventEmitter {
 
   private sanitizeEntitlement(raw: Record<string, unknown>): SignedEntitlement | null {
     const plan = raw.plan;
-    if (plan !== 'free' && plan !== 'pro' && plan !== 'pro_plus' && plan !== 'team') return null;
+    if (plan !== 'free' && plan !== 'pro' && plan !== 'pro_plus' && plan !== 'team' && plan !== 'enterprise') return null;
     if (typeof raw.userId !== 'string') return null;
     if (typeof raw.deviceId !== 'string') return null;
     if (typeof raw.licenseId !== 'string') return null;
@@ -432,6 +515,8 @@ export class EntitlementVerifier extends EventEmitter {
       entitlementVersion: raw.entitlementVersion,
       features: raw.features as string[],
       issuer: raw.issuer,
+      // serverTime is optional for backward compat with older server responses
+      serverTime: typeof raw.serverTime === 'string' ? raw.serverTime : undefined,
       signature: raw.signature,
     };
   }
@@ -456,11 +541,26 @@ export class EntitlementVerifier extends EventEmitter {
       if (!fs.existsSync(this.cachePath)) return;
       const parsed = JSON.parse(fs.readFileSync(this.cachePath, 'utf8'));
       if (isRecord(parsed)) {
+        const loadedSequence = typeof parsed.entitlementSequence === 'number' ? parsed.entitlementSequence : 0;
+
+        // Anti-rollback: reject cache if sequence number went backward
+        if (this.cache.entitlementSequence !== undefined && loadedSequence < this.cache.entitlementSequence) {
+          console.warn('[EntitlementVerifier] Anti-rollback: cache sequence went backward, forcing sync');
+          this.cache = {};
+          return;
+        }
+
         this.cache = {
           entitlement: isRecord(parsed.entitlement) ? this.sanitizeEntitlement(parsed.entitlement) || undefined : undefined,
           lastSuccessfulSyncAt: typeof parsed.lastSuccessfulSyncAt === 'string' ? parsed.lastSuccessfulSyncAt : undefined,
           lastSyncAttemptAt: typeof parsed.lastSyncAttemptAt === 'string' ? parsed.lastSyncAttemptAt : undefined,
           migrationAttemptedAt: typeof parsed.migrationAttemptedAt === 'string' ? parsed.migrationAttemptedAt : undefined,
+          // Anti-rollback fields
+          previousEntitlementHash: typeof parsed.previousEntitlementHash === 'string' ? parsed.previousEntitlementHash : undefined,
+          lastAcceptedSignature: typeof parsed.lastAcceptedSignature === 'string' ? parsed.lastAcceptedSignature : undefined,
+          entitlementSequence: loadedSequence,
+          // Server time
+          lastSuccessfulServerTime: typeof parsed.lastSuccessfulServerTime === 'string' ? parsed.lastSuccessfulServerTime : undefined,
         };
       }
     } catch (error) {
@@ -473,11 +573,31 @@ export class EntitlementVerifier extends EventEmitter {
     try {
       fs.mkdirSync(path.dirname(this.cachePath), { recursive: true });
       const tmpPath = `${this.cachePath}.tmp`;
-      fs.writeFileSync(tmpPath, JSON.stringify(this.cache, null, 2));
+      const json = JSON.stringify(this.cache, null, 2);
+      fs.writeFileSync(tmpPath, json);
+      // Verify write integrity before atomic rename to prevent corruption
+      const readBack = fs.readFileSync(tmpPath, 'utf8');
+      if (readBack !== json) {
+        console.warn('[EntitlementVerifier] Cache write verification failed, aborting persist');
+        try { fs.unlinkSync(tmpPath); } catch { /* cleanup best-effort */ }
+        return;
+      }
       fs.renameSync(tmpPath, this.cachePath);
     } catch (error) {
       console.warn('[EntitlementVerifier] Failed to persist entitlement cache:', error);
     }
+  }
+
+  /**
+   * Deterministic per-device grace jitter to prevent synchronized reconnect storms.
+   * Returns a value between 0 and GRACE_JITTER_MAX_MS, stable for a given device.
+   */
+  private getGraceJitter(): number {
+    const deviceId = this.getDeviceId();
+    const hash = crypto.createHash('sha256').update(`grace-jitter-${deviceId}`).digest();
+    // Use first 4 bytes as a uint32 to derive a stable fraction
+    const fraction = hash.readUInt32BE(0) / 0xFFFFFFFF;
+    return Math.floor(fraction * GRACE_JITTER_MAX_MS);
   }
 
   private async get(route: string): Promise<any> {

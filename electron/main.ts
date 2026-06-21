@@ -134,6 +134,7 @@ import { warmupIntentClassifier } from "./llm"
 import { ModesManager } from "./services/ModesManager"
 import { getTranscriptDisplayLabel } from "../src/utils/transcriptSpeakers"
 import { EntitlementVerifier } from "./licensing/EntitlementVerifier"
+import { LicenseSyncManager } from "./licensing/LicenseSyncManager"
 
 type STTProvider = SttSupervisor;
 
@@ -920,8 +921,14 @@ export class AppState {
           this.clearPremiumStateAfterEntitlementLoss();
         }
       });
-      const details = await entitlementVerifier.initialize();
-      console.log(`[AppState] License bootstrap complete: premium=${details.isPremium} provider=${details.provider || 'none'} plan=${details.plan || 'none'} status=${details.status}`);
+
+      // Initialize the LicenseSyncManager — it wraps the verifier and owns
+      // sync scheduling, state machine, event bus, and telemetry.
+      const syncManager = LicenseSyncManager.getInstance();
+      syncManager.setMeetingActiveCallback(() => this.getIsMeetingActive());
+      const syncState = await syncManager.initialize();
+
+      console.log(`[AppState] License bootstrap complete: premium=${syncState.isPremium} plan=${syncState.plan} status=${syncState.status} tier=${syncState.tier}`);
     } catch (error) {
       console.warn('[AppState] License bootstrap skipped:', error);
     }

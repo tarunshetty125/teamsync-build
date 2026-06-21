@@ -12,6 +12,8 @@ export interface EntitlementPayload {
   entitlementVersion: number;
   features: string[];
   issuer: string;
+  /** Server-authoritative timestamp — signed inside payload to prevent clock manipulation */
+  serverTime: string;
   signature: string;
 }
 

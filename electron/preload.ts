@@ -1852,6 +1852,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
     };
   },
 
+  // ── Capability-based feature gates ────────────────────────────────────────
+  licenseHasCapability: (capability: string) => ipcRenderer.invoke("license:has-capability", capability),
+  licenseGetCapabilities: () => ipcRenderer.invoke("license:get-capabilities"),
+
+  // ── LicenseSyncManager state ──────────────────────────────────────────────
+  licenseGetState: () => ipcRenderer.invoke("license:get-state"),
+  licenseTriggerSync: (reason?: string) => ipcRenderer.invoke("license:trigger-sync", reason),
+  licenseWindowFocused: () => ipcRenderer.invoke("license:window-focused"),
+  licenseOnline: () => ipcRenderer.invoke("license:online"),
+
+  // ── License event subscription ────────────────────────────────────────────
+  onLicenseState: (callback: (state: any) => void) => {
+    const subscription = (_: any, state: any) => callback(state);
+    ipcRenderer.on('license:state', subscription);
+    return () => {
+      ipcRenderer.removeListener('license:state', subscription);
+    };
+  },
+  onLicenseEvent: (event: string, callback: (state: any) => void) => {
+    const subscription = (_: any, state: any) => callback(state);
+    ipcRenderer.on(event, subscription);
+    return () => {
+      ipcRenderer.removeListener(event, subscription);
+    };
+  },
+
   onModesActiveCleared: (callback: () => void) => {
     const subscription = () => callback();
     ipcRenderer.on('modes-active-cleared', subscription);

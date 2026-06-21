@@ -903,7 +903,7 @@ const App: React.FC = () => {
             expiresAt={activeTrial.expiresAt}
             usage={activeTrial.usage}
             onUpgrade={() => {
-              setSettingsInitialTab('api');
+              setSettingsInitialTab('profile');
               setIsSettingsOpen(true);
             }}
           />

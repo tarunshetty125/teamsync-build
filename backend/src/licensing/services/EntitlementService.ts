@@ -61,6 +61,30 @@ const PLAN_FEATURES: Record<LicensePlan, string[]> = {
     'cross_session_search',
     'team_management',
   ],
+  enterprise: [
+    'profile_intelligence',
+    'job_description_intelligence',
+    'company_research',
+    'custom_modes',
+    'premium_intelligence',
+    'screen_scan',
+    'system_design',
+    'negotiation_coach',
+    'pro_overlay',
+    'code_cli',
+    'post_call_workflow',
+    'unlimited_history',
+    'advanced_stealth',
+    'screen_capture_protection',
+    'phone_mirror',
+    'api_access',
+    'priority_routing',
+    'cross_session_search',
+    'team_management',
+    'sso',
+    'audit_log',
+    'custom_branding',
+  ],
 };
 
 export class EntitlementService {
@@ -130,6 +154,9 @@ export class EntitlementService {
       entitlementVersion: params.entitlementVersion,
       features: PLAN_FEATURES[params.plan] ?? [],
       issuer: this.config.licenseIssuer,
+      // Server-authoritative time — signed inside payload to prevent clock manipulation.
+      // Client uses this instead of Date.now() for grace period calculations.
+      serverTime: now.toISOString(),
     });
   }
 

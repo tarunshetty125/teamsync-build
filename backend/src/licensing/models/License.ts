@@ -1,4 +1,4 @@
-export type LicensePlan = 'free' | 'pro' | 'pro_plus' | 'team';
+export type LicensePlan = 'free' | 'pro' | 'pro_plus' | 'team' | 'enterprise';
 export type LicenseStatus = 'active' | 'expired' | 'revoked' | 'disabled';
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'expired' | 'failed';
 

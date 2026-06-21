@@ -728,6 +728,35 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   licenseDeactivate: () => Promise<{ success: boolean; error?: string }>
   licenseGetTier: () => Promise<{ tier: 'free' | 'pro' | 'pro_plus' }>
 
+  // Capability-based feature gates
+  licenseHasCapability: (capability: string) => Promise<{ has: boolean }>
+  licenseGetCapabilities: () => Promise<{ capabilities: readonly string[] }>
+
+  // LicenseSyncManager state (single authoritative source)
+  licenseGetState: () => Promise<{
+    status: string;
+    capabilities: string[];
+    tier: string;
+    lastSync: string | null;
+    nextSync: string | null;
+    offlineGraceRemaining: number;
+    syncInProgress: boolean;
+    serverReachable: boolean;
+    plan: string;
+    isPremium: boolean;
+    trial: boolean;
+    features: string[];
+    expiresAt?: string;
+    graceUntil?: string;
+  }>
+  licenseTriggerSync: (reason?: string) => Promise<any>
+  licenseWindowFocused: () => Promise<{ success: boolean }>
+  licenseOnline: () => Promise<{ success: boolean }>
+
+  // License event subscriptions
+  onLicenseState: (callback: (state: any) => void) => () => void
+  onLicenseEvent: (event: string, callback: (state: any) => void) => () => void
+
   // Overlay Opacity (Stealth Mode)
   getOverlayOpacity: () => Promise<number | null>;
   setOverlayOpacity: (opacity: number) => Promise<void>;

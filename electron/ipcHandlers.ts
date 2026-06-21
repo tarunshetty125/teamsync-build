@@ -12,6 +12,7 @@ import * as crypto from "crypto";
 import { AudioDevices } from "./audio/AudioDevices";
 import { PermissionManager } from "./services/PermissionManager";
 import { EntitlementVerifier, type EntitlementStatus } from "./licensing/EntitlementVerifier";
+import { LicenseSyncManager } from "./licensing/LicenseSyncManager";
 import { TEAMSYNC_USAGE_URL } from "../src/lib/config/apiConfig";
 import type { PermissionKind } from "../src/lib/permissions/types";
 import {
@@ -346,18 +347,18 @@ export function initializeIpcHandlers(appState: AppState): void {
       ? await entitlementVerifier.startTrial()
       : await entitlementVerifier.activateLicense(typeof payload === 'string' ? payload : payload?.licenseKey || '');
     broadcastLicenseState();
-    return {
+    return Object.freeze({
       ...result,
-      entitlement: result.entitlement ? {
+      entitlement: result.entitlement ? Object.freeze({
         plan: result.entitlement.plan,
         trial: result.entitlement.trial,
         issuedAt: result.entitlement.issuedAt,
         expiresAt: result.entitlement.expiresAt,
         graceUntil: result.entitlement.graceUntil,
         entitlementVersion: result.entitlement.entitlementVersion,
-        features: result.entitlement.features,
-      } : undefined,
-    };
+        features: Object.freeze(result.entitlement.features.slice()),
+      }) : undefined,
+    });
   });
 
   safeHandle("license:sync", async (event) => {
@@ -365,7 +366,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     if (rejected) return rejected;
     const status = await entitlementVerifier.sync('manual');
     broadcastLicenseState();
-    return toPlanState(status);
+    return Object.freeze(toPlanState(status));
   });
 
   safeHandle("license:deactivate", async (event) => {
@@ -384,11 +385,49 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("license:get-entitlement", async (event) => {
     const rejected = rejectUntrustedLicenseSender(event);
     if (rejected) return rejected;
-    return toPlanState();
+    return Object.freeze(toPlanState());
   });
 
+
   safeHandle("license:get-tier", async () => {
-    return { tier: getPlanTier() };
+    return Object.freeze({ tier: getPlanTier() });
+  });
+
+  // ── Capability-based feature gates (new) ──────────────────────────────────
+  // Server is the source of truth for capabilities via the features[] array.
+  // Renderer should prefer these over plan-string checks.
+
+  safeHandle("license:has-capability", async (_event, capability: string) => {
+    return Object.freeze({ has: entitlementVerifier.hasCapability(capability) });
+  });
+
+  safeHandle("license:get-capabilities", async () => {
+    return Object.freeze({ capabilities: entitlementVerifier.getCapabilities() });
+  });
+
+  // ── LicenseSyncManager state (single authoritative source) ────────────────
+
+  const syncManager = LicenseSyncManager.getInstance();
+
+  safeHandle("license:get-state", async () => {
+    return syncManager.getState();
+  });
+
+  safeHandle("license:trigger-sync", async (event, reason?: string) => {
+    const rejected = rejectUntrustedLicenseSender(event);
+    if (rejected) return rejected;
+    return await syncManager.triggerSync((reason as any) || 'manual');
+  });
+
+  // Window focus / online triggers for push-based refresh
+  safeHandle("license:window-focused", async () => {
+    syncManager.handleWindowFocus();
+    return { success: true };
+  });
+
+  safeHandle("license:online", async () => {
+    syncManager.handleOnline();
+    return { success: true };
   });
 
   safeHandle("app:get-startup-state", async () => {
@@ -2992,6 +3031,8 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("end-meeting", async () => {
     try {
       await appState.endMeeting();
+      // Apply any deferred license downgrade that was held during the meeting
+      LicenseSyncManager.getInstance().applyPendingDowngrade();
       return { success: true };
     } catch (error: any) {
       console.error("Error ending meeting:", error);

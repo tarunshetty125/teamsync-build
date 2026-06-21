@@ -1213,6 +1213,17 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     const [planTier, setPlanTier] = useState<'free' | 'pro' | 'pro_plus'>('free');
     const isProPlus = planTier === 'pro_plus';
 
+    // License sync state — single authoritative source from LicenseSyncManager.
+    // Renderer NEVER computes license state; it subscribes to frozen snapshots.
+    const [licenseState, setLicenseState] = useState<{
+        status: string;
+        lastSync: string | null;
+        syncInProgress: boolean;
+        serverReachable: boolean;
+        offlineGraceRemaining: number;
+        capabilities: string[];
+    } | null>(null);
+
     // Fetch plan tier for section gating
     useEffect(() => {
         window.electronAPI?.licenseGetTier?.().then((result) => {
@@ -1221,6 +1232,15 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
         window.electronAPI?.getStartupState?.().then((state) => {
             if (state?.license?.tier) setPlanTier(state.license.tier);
         }).catch(() => {});
+        // Fetch license sync state
+        window.electronAPI?.licenseGetState?.().then((state) => {
+            if (state) setLicenseState(state);
+        }).catch(() => {});
+        // Subscribe to real-time license state changes
+        const unsub = window.electronAPI?.onLicenseState?.((state) => {
+            if (state) setLicenseState(state);
+        });
+        return () => { unsub?.(); };
     }, [isPremium]);
     useEffect(() => {
         if (!isLicenseLoaded) return;
@@ -1573,7 +1593,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
     }, [profileStatus.hasProfile, profileStatus.profileMode]);
 
     useEffect(() => {
-        const openPremiumUpgrade = () => setIsPremiumModalOpen(true);
+        const openPremiumUpgrade = () => setActiveTab('profile');
         window.addEventListener('open-premium-upgrade', openPremiumUpgrade);
         return () => {
             window.removeEventListener('open-premium-upgrade', openPremiumUpgrade);
@@ -3623,7 +3643,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             />
                                                         ) : (
                                                             <button
-                                                                onClick={() => setIsPremiumModalOpen(true)}
+                                                                onClick={() => setActiveTab('profile')}
                                                                 className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 transition-colors whitespace-nowrap"
                                                             >
                                                                 Upgrade
@@ -4008,7 +4028,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             )}
                                                         </div>
                                                         <button
-                                                            onClick={() => setIsPremiumModalOpen(true)}
+                                                            onClick={() => setActiveTab('profile')}
                                                             className="group relative flex h-[34px] shrink-0 items-center justify-center gap-2 overflow-hidden rounded-full px-4 text-[12px] font-semibold text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
                                                             style={{
                                                                 background: isPremium
@@ -4863,6 +4883,77 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                     <h3 className="text-lg font-semibold text-text-primary mb-1">Account</h3>
                                                     <p className="text-[13px] text-text-secondary">Manage your signed-in Google account.</p>
                                                 </div>
+
+                                                {/* License Status Pill */}
+                                                {licenseState && (
+                                                    <div className="rounded-xl border overflow-hidden" style={{
+                                                        borderColor: licenseState.status === 'ACTIVE' ? 'rgba(0,214,143,0.15)'
+                                                            : licenseState.status === 'OFFLINE_GRACE' ? 'rgba(255,170,0,0.15)'
+                                                            : licenseState.status === 'EXPIRED' || licenseState.status === 'REVOKED' ? 'rgba(255,107,107,0.15)'
+                                                            : 'rgba(255,255,255,0.06)',
+                                                        background: licenseState.status === 'ACTIVE' ? 'rgba(0,214,143,0.04)'
+                                                            : licenseState.status === 'OFFLINE_GRACE' ? 'rgba(255,170,0,0.04)'
+                                                            : licenseState.status === 'EXPIRED' || licenseState.status === 'REVOKED' ? 'rgba(255,107,107,0.04)'
+                                                            : 'rgba(255,255,255,0.02)',
+                                                    }}>
+                                                        <div className="flex items-center justify-between px-4 py-3">
+                                                            <div className="flex items-center gap-2.5">
+                                                                {/* Status dot with optional pulse animation */}
+                                                                <div className="relative flex items-center justify-center">
+                                                                    <div className="w-2 h-2 rounded-full" style={{
+                                                                        background: licenseState.syncInProgress ? '#a78bfa'
+                                                                            : licenseState.status === 'ACTIVE' ? '#00D68F'
+                                                                            : licenseState.status === 'OFFLINE_GRACE' ? '#FFAA00'
+                                                                            : licenseState.status === 'EXPIRED' || licenseState.status === 'REVOKED' || licenseState.status === 'TAMPERED' ? '#FF6B6B'
+                                                                            : 'rgba(255,255,255,0.3)',
+                                                                    }} />
+                                                                    {licenseState.syncInProgress && (
+                                                                        <div className="absolute w-2 h-2 rounded-full animate-ping" style={{
+                                                                            background: 'rgba(167,139,250,0.5)',
+                                                                        }} />
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-[12px] font-medium" style={{
+                                                                        color: licenseState.syncInProgress ? '#a78bfa'
+                                                                            : licenseState.status === 'ACTIVE' ? '#00D68F'
+                                                                            : licenseState.status === 'OFFLINE_GRACE' ? '#FFAA00'
+                                                                            : licenseState.status === 'EXPIRED' || licenseState.status === 'REVOKED' || licenseState.status === 'TAMPERED' ? '#FF6B6B'
+                                                                            : 'rgba(240,240,245,0.45)',
+                                                                    }}>
+                                                                        {licenseState.syncInProgress ? 'Syncing...'
+                                                                            : licenseState.status === 'ACTIVE' ? 'Active'
+                                                                            : licenseState.status === 'FREE' ? 'Free Plan'
+                                                                            : licenseState.status === 'OFFLINE_GRACE'
+                                                                                ? `Offline mode · ${Math.round(licenseState.offlineGraceRemaining / 3600000)}h remaining`
+                                                                            : licenseState.status === 'EXPIRED' ? 'Expired'
+                                                                            : licenseState.status === 'REVOKED' ? 'Revoked'
+                                                                            : licenseState.status === 'TAMPERED' ? 'Verification failed'
+                                                                            : licenseState.status
+                                                                        }
+                                                                    </span>
+                                                                    {licenseState.lastSync && !licenseState.syncInProgress && (
+                                                                        <span className="text-[10px] ml-2" style={{ color: 'rgba(240,240,245,0.25)' }}>
+                                                                            Last synced {(() => {
+                                                                                const mins = Math.round((Date.now() - new Date(licenseState.lastSync!).getTime()) / 60000);
+                                                                                if (mins < 1) return 'just now';
+                                                                                if (mins < 60) return `${mins}m ago`;
+                                                                                return `${Math.round(mins / 60)}h ago`;
+                                                                            })()}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {!licenseState.serverReachable && licenseState.status !== 'FREE' && (
+                                                                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{
+                                                                    background: 'rgba(255,170,0,0.1)',
+                                                                    color: '#FFAA00',
+                                                                    border: '1px solid rgba(255,170,0,0.15)',
+                                                                }}>Offline</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {authUser ? (
                                                     <div>

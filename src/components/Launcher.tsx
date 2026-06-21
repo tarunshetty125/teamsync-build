@@ -1687,7 +1687,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 </div>
                                                 {meetingUsage.remaining <= 2 && (
                                                     <button
-                                                        onClick={() => onOpenSettings?.('account')}
+                                                        onClick={() => onOpenSettings?.('profile')}
                                                         className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-all active:scale-[0.97]"
                                                         style={{
                                                             background: 'linear-gradient(135deg, rgba(108,92,231,0.15), rgba(167,139,250,0.15))',
