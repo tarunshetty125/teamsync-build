@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from "electron"
 import type { ModeReferenceFile, ModesStateSnapshot, PublicModeTemplate } from "../src/lib/modes/types";
 import type {
   PermissionKind,
@@ -486,6 +486,9 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   // Skills
   skillsRefresh: () => Promise<Array<{ id: string; name: string; description: string; source: 'builtin' | 'userData' }>>
   skillsOpenFolder: () => Promise<{ success: boolean; path: string; error?: string }>
+  skillsInstallFromPath: (sourcePath: string) => Promise<{ success: boolean; skillId?: string; error?: string }>
+  skillsDelete: (skillId: string) => Promise<{ success: boolean; error?: string }>
+  getFilePathFromDrop: (file: File) => string | null
 
   // Codex CLI
   getCodexCliConfig: () => Promise<any>
@@ -1558,6 +1561,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Skills API
   skillsRefresh: () => ipcRenderer.invoke('skills:list'),
   skillsOpenFolder: () => ipcRenderer.invoke('skills:open-folder'),
+  skillsInstallFromPath: (sourcePath: string) => ipcRenderer.invoke('skills:install-from-path', sourcePath),
+  skillsDelete: (skillId: string) => ipcRenderer.invoke('skills:delete', skillId),
+  getFilePathFromDrop: (file: File) => {
+    try {
+      return webUtils.getPathForFile(file);
+    } catch {
+      return null;
+    }
+  },
 
   // Codex CLI
   getCodexCliConfig: () => ipcRenderer.invoke('get-codex-cli-config'),

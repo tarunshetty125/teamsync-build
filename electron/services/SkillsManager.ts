@@ -276,6 +276,84 @@ ${skill.instructions}
     return { success: true, path: folder };
   }
 
+  /**
+   * Install a skill from a given filesystem path.
+   * Accepts either:
+   *   - A directory containing a SKILL.md file
+   *   - A direct path to a SKILL.md file (its parent dir is used)
+   * Copies the entire skill folder into userData/skills/<folder-name>/
+   */
+  async installSkillFromPath(sourcePath: string): Promise<{ success: boolean; skillId?: string; error?: string }> {
+    try {
+      const stat = fs.statSync(sourcePath);
+      let sourceDir: string;
+
+      if (stat.isFile()) {
+        // If user dropped a SKILL.md file directly, use its parent directory
+        if (path.basename(sourcePath) !== SKILL_FILE_NAME) {
+          return { success: false, error: `Expected a folder containing ${SKILL_FILE_NAME}, or the ${SKILL_FILE_NAME} file itself.` };
+        }
+        sourceDir = path.dirname(sourcePath);
+      } else if (stat.isDirectory()) {
+        sourceDir = sourcePath;
+      } else {
+        return { success: false, error: 'Invalid path: not a file or directory.' };
+      }
+
+      // Verify SKILL.md exists in the source directory
+      const skillFilePath = path.join(sourceDir, SKILL_FILE_NAME);
+      if (!fs.existsSync(skillFilePath)) {
+        return { success: false, error: `No ${SKILL_FILE_NAME} found in the dropped folder.` };
+      }
+
+      // Parse it first to validate
+      const content = fs.readFileSync(skillFilePath, 'utf8');
+      const folderName = path.basename(sourceDir);
+      const parsed = parseSkillMarkdown(content, folderName, 'userData', skillFilePath);
+
+      // Destination inside userData/skills/
+      const destDir = path.join(this.skillsDir, parsed.id);
+
+      // Don't overwrite built-in skills
+      if (BUILTIN_SKILL_IDS.has(parsed.id)) {
+        return { success: false, error: `Cannot overwrite built-in skill "${parsed.id}".` };
+      }
+
+      // Copy the folder recursively
+      this.copyDirRecursive(sourceDir, destDir);
+
+      console.log(`[SkillsManager] Installed skill "${parsed.id}" from ${sourceDir}`);
+      return { success: true, skillId: parsed.id };
+    } catch (error: any) {
+      console.error('[SkillsManager] installSkillFromPath error:', error);
+      return { success: false, error: error?.message || 'Failed to install skill.' };
+    }
+  }
+
+  /**
+   * Delete a user-installed skill by id.
+   * Built-in skills cannot be deleted.
+   */
+  deleteSkill(id: string): { success: boolean; error?: string } {
+    const wanted = slugify(id);
+    if (!wanted) return { success: false, error: 'Invalid skill id.' };
+    if (BUILTIN_SKILL_IDS.has(wanted)) {
+      return { success: false, error: 'Cannot delete built-in skills.' };
+    }
+    const skillDir = path.join(this.skillsDir, wanted);
+    if (!fs.existsSync(skillDir)) {
+      return { success: false, error: 'Skill not found.' };
+    }
+    try {
+      fs.rmSync(skillDir, { recursive: true, force: true });
+      console.log(`[SkillsManager] Deleted skill "${wanted}"`);
+      return { success: true };
+    } catch (error: any) {
+      console.error('[SkillsManager] deleteSkill error:', error);
+      return { success: false, error: error?.message || 'Failed to delete skill.' };
+    }
+  }
+
   // ── Internal ────────────────────────────────────────────────────────
 
   private ensureSkillsDir(): void {
@@ -342,5 +420,19 @@ ${skill.instructions}
       }
     }
     return skills;
+  }
+
+  private copyDirRecursive(src: string, dest: string): void {
+    fs.mkdirSync(dest, { recursive: true });
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+    for (const entry of entries) {
+      const srcPath = path.join(src, entry.name);
+      const destPath = path.join(dest, entry.name);
+      if (entry.isDirectory()) {
+        this.copyDirRecursive(srcPath, destPath);
+      } else if (entry.isFile()) {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    }
   }
 }

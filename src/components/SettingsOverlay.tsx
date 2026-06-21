@@ -524,6 +524,63 @@ const ProviderSelect: React.FC<ProviderSelectProps> = ({ value, options, onChang
     );
 };
 
+// ── Skill Delete Button (two-click confirm) ──────
+const SkillDeleteButton: React.FC<{ skillId: string; onDeleted: () => void }> = ({ skillId, onDeleted }) => {
+    const [state, setState] = React.useState<'idle' | 'confirm' | 'deleting'>('idle');
+    const resetTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    React.useEffect(() => {
+        return () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); };
+    }, []);
+
+    const handleClick = async () => {
+        if (state === 'idle') {
+            setState('confirm');
+            resetTimerRef.current = setTimeout(() => setState('idle'), 2500);
+            return;
+        }
+        if (state === 'confirm') {
+            if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+            setState('deleting');
+            try {
+                const res = await window.electronAPI?.skillsDelete?.(skillId);
+                if (res?.success) {
+                    onDeleted();
+                } else {
+                    console.warn('[SkillDeleteButton] Delete failed:', res?.error);
+                }
+            } catch (err) {
+                console.warn('[SkillDeleteButton] Delete error:', err);
+            }
+            setState('idle');
+        }
+    };
+
+    return (
+        <button
+            onClick={handleClick}
+            disabled={state === 'deleting'}
+            className={`
+                flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all duration-200 border
+                ${state === 'confirm'
+                    ? 'bg-red-500/10 border-red-500/25 text-red-400 hover:bg-red-500/20'
+                    : state === 'deleting'
+                        ? 'bg-bg-elevated border-border-subtle text-text-tertiary opacity-50'
+                        : 'bg-transparent border-transparent text-text-tertiary opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20'
+                }
+            `}
+            title={state === 'confirm' ? 'Click again to confirm' : 'Delete skill'}
+        >
+            {state === 'deleting' ? (
+                <RefreshCw size={11} className="animate-spin" />
+            ) : (
+                <Trash2 size={11} />
+            )}
+            {state === 'confirm' && <span>Delete?</span>}
+        </button>
+    );
+};
+
 // ── Skills Settings Tab (extracted to avoid hooks-in-IIFE violation) ──────
 const SkillsSettingsTab: React.FC = () => {
     const [skillsList, setSkillsList] = React.useState<Array<{ id: string; name: string; description: string; source: 'builtin' | 'userData' }>>([]);
@@ -531,6 +588,13 @@ const SkillsSettingsTab: React.FC = () => {
     const [skillsFolderPath, setSkillsFolderPath] = React.useState<string | null>(null);
     const [skillsError, setSkillsError] = React.useState<string | null>(null);
     const [refreshDone, setRefreshDone] = React.useState(false);
+
+    // Drag-and-drop state
+    const [isDragOver, setIsDragOver] = React.useState(false);
+    const [dropStatus, setDropStatus] = React.useState<'idle' | 'installing' | 'success' | 'error'>('idle');
+    const [dropMessage, setDropMessage] = React.useState<string | null>(null);
+    const dragCounterRef = React.useRef(0);
+    const dropResetTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const loadSkills = React.useCallback(async () => {
         setSkillsLoading(true);
@@ -572,6 +636,90 @@ const SkillsSettingsTab: React.FC = () => {
         }
     };
 
+    // ── Drag-and-drop handlers ──
+    const resetDropStatus = React.useCallback(() => {
+        if (dropResetTimerRef.current) clearTimeout(dropResetTimerRef.current);
+        dropResetTimerRef.current = setTimeout(() => {
+            setDropStatus('idle');
+            setDropMessage(null);
+        }, 2500);
+    }, []);
+
+    const handleDragEnter = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterRef.current += 1;
+        if (dragCounterRef.current === 1) {
+            setIsDragOver(true);
+        }
+    }, []);
+
+    const handleDragLeave = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterRef.current -= 1;
+        if (dragCounterRef.current <= 0) {
+            dragCounterRef.current = 0;
+            setIsDragOver(false);
+        }
+    }, []);
+
+    const handleDragOver = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
+
+    const handleDrop = React.useCallback(async (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterRef.current = 0;
+        setIsDragOver(false);
+
+        if (typeof window.electronAPI?.skillsInstallFromPath !== 'function') {
+            setDropStatus('error');
+            setDropMessage('Skill install not available in this version.');
+            resetDropStatus();
+            return;
+        }
+
+        // Get the first dropped file/folder path via Electron's webUtils bridge
+        const files = e.dataTransfer?.files;
+        if (!files || files.length === 0) {
+            setDropStatus('error');
+            setDropMessage('No files detected. Drop a skill folder here.');
+            resetDropStatus();
+            return;
+        }
+
+        const droppedPath = window.electronAPI?.getFilePathFromDrop?.(files[0]) ?? null;
+        if (!droppedPath) {
+            setDropStatus('error');
+            setDropMessage('Could not read file path. Try using the Open Folder button instead.');
+            resetDropStatus();
+            return;
+        }
+
+        setDropStatus('installing');
+        setDropMessage('Installing skill…');
+
+        try {
+            const result = await window.electronAPI.skillsInstallFromPath(droppedPath);
+            if (result.success) {
+                setDropStatus('success');
+                setDropMessage(`Installed "${result.skillId}" successfully!`);
+                // Refresh the skills list
+                await loadSkills();
+            } else {
+                setDropStatus('error');
+                setDropMessage(result.error || 'Failed to install skill.');
+            }
+        } catch (err: any) {
+            setDropStatus('error');
+            setDropMessage(err?.message || 'Unexpected error during install.');
+        }
+        resetDropStatus();
+    }, [loadSkills, resetDropStatus]);
+
     return (
         <div className="space-y-6 animated fadeIn h-full select-text pb-4">
             {/* Header */}
@@ -598,32 +746,108 @@ const SkillsSettingsTab: React.FC = () => {
                 </button>
             </div>
 
-            {/* Skills Folder Card */}
-            <div className="bg-bg-card rounded-xl border border-border-subtle p-5 flex items-center justify-between gap-4">
-                <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-bg-elevated flex items-center justify-center text-text-tertiary flex-shrink-0 mt-0.5">
-                        <FolderOpen size={18} />
+            {/* Drop Zone + Upload Card */}
+            <div
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                className={`
+                    relative rounded-xl border-2 border-dashed transition-all duration-300 overflow-hidden
+                    ${isDragOver
+                        ? 'border-accent-primary bg-accent-primary/[0.06] scale-[1.01]'
+                        : dropStatus === 'success'
+                            ? 'border-emerald-500/40 bg-emerald-500/[0.04]'
+                            : dropStatus === 'error'
+                                ? 'border-red-500/40 bg-red-500/[0.04]'
+                                : 'border-border-subtle bg-bg-card hover:border-border-default'
+                    }
+                `}
+            >
+                {/* Shimmer layer on drag */}
+                {isDragOver && (
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        <div
+                            className="absolute inset-0 opacity-[0.07]"
+                            style={{
+                                background: 'linear-gradient(120deg, transparent 30%, var(--accent-primary) 50%, transparent 70%)',
+                                animation: 'shimmer-sweep 1.5s ease-in-out infinite',
+                            }}
+                        />
                     </div>
-                    <div className="min-w-0">
-                        <h4 className="text-sm font-semibold text-text-primary">Skills Folder</h4>
-                        <p className="text-xs text-text-secondary mt-0.5">
-                            Add a folder containing a SKILL.md file here. Scripts and assets are ignored in this v1.
-                        </p>
-                        {skillsFolderPath && (
-                            <p className="mt-2 text-[11px] text-text-tertiary font-mono truncate">{skillsFolderPath}</p>
+                )}
+
+                <div className="px-5 py-6 flex flex-col items-center text-center gap-3 relative z-10">
+                    {/* Icon */}
+                    <div className={`
+                        w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300
+                        ${isDragOver
+                            ? 'bg-accent-primary/15 text-accent-primary scale-110'
+                            : dropStatus === 'installing'
+                                ? 'bg-amber-500/10 text-amber-500'
+                                : dropStatus === 'success'
+                                    ? 'bg-emerald-500/10 text-emerald-500 scale-110'
+                                    : dropStatus === 'error'
+                                        ? 'bg-red-500/10 text-red-400'
+                                        : 'bg-bg-elevated text-text-tertiary'
+                        }
+                    `}>
+                        {dropStatus === 'installing' ? (
+                            <RefreshCw size={22} className="animate-spin" />
+                        ) : dropStatus === 'success' ? (
+                            <CheckCircle size={22} />
+                        ) : dropStatus === 'error' ? (
+                            <AlertCircle size={22} />
+                        ) : isDragOver ? (
+                            <Upload size={22} className="animate-bounce" />
+                        ) : (
+                            <FolderOpen size={22} />
                         )}
                     </div>
+
+                    {/* Text */}
+                    <div>
+                        {isDragOver ? (
+                            <p className="text-sm font-semibold text-accent-primary">Drop to install</p>
+                        ) : dropMessage ? (
+                            <p className={`text-sm font-medium ${
+                                dropStatus === 'success' ? 'text-emerald-500'
+                                : dropStatus === 'error' ? 'text-red-400'
+                                : 'text-text-primary'
+                            }`}>
+                                {dropMessage}
+                            </p>
+                        ) : (
+                            <>
+                                <p className="text-sm font-semibold text-text-primary mb-0.5">
+                                    Drop skill folder here
+                                </p>
+                                <p className="text-xs text-text-tertiary">
+                                    Drag a folder containing SKILL.md to install it, or use the button below.
+                                </p>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Open Folder button */}
+                    {dropStatus === 'idle' && !isDragOver && (
+                        <button
+                            onClick={handleOpenFolder}
+                            className="relative overflow-hidden inline-flex h-[36px] items-center gap-2 rounded-full bg-white pl-3.5 pr-2 text-[12px] font-semibold tracking-[-0.035em] text-[#141414] shadow-[0_10px_28px_rgba(0,0,0,0.18)] transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98] mt-1"
+                        >
+                            <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-black/[0.07] to-transparent" />
+                            <span className="relative">Open Folder</span>
+                            <span className="relative flex h-[24px] w-[24px] items-center justify-center rounded-full bg-[#ececec] text-[#161616]">
+                                <FolderOpen className="h-[12px] w-[12px] stroke-[2.3]" />
+                            </span>
+                        </button>
+                    )}
+
+                    {/* Folder path */}
+                    {skillsFolderPath && dropStatus === 'idle' && !isDragOver && (
+                        <p className="text-[10px] text-text-tertiary font-mono truncate max-w-full mt-1">{skillsFolderPath}</p>
+                    )}
                 </div>
-                <button
-                    onClick={handleOpenFolder}
-                    className="relative overflow-hidden inline-flex h-[40px] items-center gap-2.5 rounded-full bg-white pl-4 pr-2 text-[13px] font-semibold tracking-[-0.035em] text-[#141414] shadow-[0_14px_36px_rgba(0,0,0,0.20)] transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98] flex-shrink-0"
-                >
-                    <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-black/[0.07] to-transparent" />
-                    <span className="relative">Upload</span>
-                    <span className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full bg-[#ececec] text-[#161616]">
-                        <Upload className="h-[14px] w-[14px] stroke-[2.3]" />
-                    </span>
-                </button>
             </div>
 
             {/* Error */}
@@ -638,7 +862,7 @@ const SkillsSettingsTab: React.FC = () => {
                 {skillsList.map((skill) => (
                     <div
                         key={skill.id}
-                        className="bg-bg-card rounded-xl border border-border-subtle p-5 transition-colors hover:border-border-default"
+                        className="bg-bg-card rounded-xl border border-border-subtle p-5 transition-colors hover:border-border-default group"
                     >
                         <div className="flex items-start justify-between gap-3 mb-2">
                             <div className="flex items-center gap-3 min-w-0">
@@ -652,11 +876,16 @@ const SkillsSettingsTab: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-1.5 flex-shrink-0">
-                                <CheckCircle size={12} className="text-green-500" />
-                                <span className="text-[11px] font-medium text-text-secondary">
-                                    {skill.source === 'builtin' ? 'Built-in' : 'Local'}
-                                </span>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                <div className="flex items-center gap-1.5">
+                                    <CheckCircle size={12} className="text-green-500" />
+                                    <span className="text-[11px] font-medium text-text-secondary">
+                                        {skill.source === 'builtin' ? 'Built-in' : 'Local'}
+                                    </span>
+                                </div>
+                                {skill.source !== 'builtin' && (
+                                    <SkillDeleteButton skillId={skill.id} onDeleted={loadSkills} />
+                                )}
                             </div>
                         </div>
                         <p className="text-xs text-text-secondary leading-relaxed ml-11">
@@ -672,7 +901,7 @@ const SkillsSettingsTab: React.FC = () => {
                     <FlaskConical size={20} className="mx-auto mb-2 text-text-tertiary" />
                     <p className="text-sm text-text-secondary mb-1">No skills found</p>
                     <p className="text-xs text-text-tertiary">
-                        Open the skills folder and add a folder with SKILL.md.
+                        Drop a skill folder above or open the skills folder to add one manually.
                     </p>
                 </div>
             )}

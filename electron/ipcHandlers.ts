@@ -4625,6 +4625,26 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
+  safeHandle("skills:install-from-path", async (_event: any, sourcePath: string) => {
+    try {
+      const { SkillsManager } = require('./services/SkillsManager');
+      return await SkillsManager.getInstance().installSkillFromPath(sourcePath);
+    } catch (e: any) {
+      console.warn('[IPC] skills:install-from-path error:', e?.message || e);
+      return { success: false, error: e?.message || 'failed to install skill' };
+    }
+  });
+
+  safeHandle("skills:delete", (_event: any, skillId: string) => {
+    try {
+      const { SkillsManager } = require('./services/SkillsManager');
+      return SkillsManager.getInstance().deleteSkill(skillId);
+    } catch (e: any) {
+      console.warn('[IPC] skills:delete error:', e?.message || e);
+      return { success: false, error: e?.message || 'failed to delete skill' };
+    }
+  });
+
   // ── Codex CLI ──────────────────────────────────────────────────────────
 
   safeHandle("get-codex-cli-config", () => {
