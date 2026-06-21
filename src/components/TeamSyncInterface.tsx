@@ -4567,7 +4567,7 @@ const TeamSyncInterface: React.FC<TeamSyncInterfaceProps> = ({
                                                     <Cpu className={`w-3.5 h-3.5 ${currentSessionMode === 'system_design' && hasProContextAccess ? 'animate-flame' : ''}`} />
                                                 </button>
                                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 text-[10px] tracking-wide font-medium bg-black/90 text-white/90 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none backdrop-blur-xl shadow-lg border border-white/10 z-50">
-                                                    {!hasProContextAccess ? '🔒 Pro · System Design Mode' : 'System Design Mode'}
+                                                    {!hasProContextAccess ? '🔒 Pro Plus · System Design Mode' : 'System Design Mode'}
                                                 </div>
                                             </div>
 

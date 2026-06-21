@@ -8,7 +8,7 @@ import { API_BASE_URL } from '../../src/lib/config/apiConfig';
 import { loadNativeModule } from '../audio/nativeModuleLoader';
 import { LICENSE_PUBLIC_KEY } from './licensePublicKey';
 
-export type EntitlementPlan = 'free' | 'pro' | 'team';
+export type EntitlementPlan = 'free' | 'pro' | 'pro_plus' | 'team';
 
 export interface SignedEntitlement {
   plan: EntitlementPlan;
@@ -157,7 +157,7 @@ export class EntitlementVerifier extends EventEmitter {
     const graceUntilMs = Date.parse(entitlement.graceUntil);
     const lastSyncMs = this.cache.lastSuccessfulSyncAt ? Date.parse(this.cache.lastSuccessfulSyncAt) : 0;
     const syncedRecently = lastSyncMs > 0 && nowMs - lastSyncMs <= OFFLINE_GRACE_MS;
-    const premiumPlan = entitlement.plan === 'pro' || entitlement.plan === 'team' || entitlement.trial;
+    const premiumPlan = entitlement.plan === 'pro' || entitlement.plan === 'pro_plus' || entitlement.plan === 'team' || entitlement.trial;
 
     if (!premiumPlan) {
       return {
@@ -200,6 +200,43 @@ export class EntitlementVerifier extends EventEmitter {
 
   hasPremiumAccess(): boolean {
     return this.getStatus().isPremium;
+  }
+
+  /**
+   * Returns true for Pro, Pro Plus, or Team plans (anything above free).
+   * Use this to gate Pro-tier features: modes, screen scan, profile intelligence, etc.
+   */
+  hasProAccess(): boolean {
+    const status = this.getStatus();
+    return status.isPremium && (
+      status.plan === 'pro' ||
+      status.plan === 'pro_plus' ||
+      status.plan === 'team'
+    );
+  }
+
+  /**
+   * Returns true ONLY for Pro Plus or Team plans.
+   * Use this to gate Pro-Plus-exclusive features: stealth, phone mirror,
+   * company research, API access, priority routing, cross-session search.
+   */
+  hasProPlusAccess(): boolean {
+    const status = this.getStatus();
+    return status.isPremium && (
+      status.plan === 'pro_plus' ||
+      status.plan === 'team'
+    );
+  }
+
+  /**
+   * Returns the resolved tier for the current entitlement.
+   * Used by the frontend to render tier-appropriate UI and upgrade prompts.
+   */
+  getPlanTier(): 'free' | 'pro' | 'pro_plus' {
+    const status = this.getStatus();
+    if (!status.isPremium) return 'free';
+    if (status.plan === 'pro_plus' || status.plan === 'team') return 'pro_plus';
+    return 'pro';
   }
 
   getCachedEntitlement(): SignedEntitlement | undefined {
@@ -350,7 +387,7 @@ export class EntitlementVerifier extends EventEmitter {
 
   private statusFromEntitlement(entitlement: SignedEntitlement, status: 'active' | 'offline_grace'): EntitlementStatus {
     return {
-      isPremium: entitlement.plan === 'pro' || entitlement.plan === 'team' || entitlement.trial,
+      isPremium: entitlement.plan === 'pro' || entitlement.plan === 'pro_plus' || entitlement.plan === 'team' || entitlement.trial,
       plan: entitlement.plan,
       provider: entitlement.trial ? 'trial' : 'license',
       trial: entitlement.trial,
@@ -371,7 +408,7 @@ export class EntitlementVerifier extends EventEmitter {
 
   private sanitizeEntitlement(raw: Record<string, unknown>): SignedEntitlement | null {
     const plan = raw.plan;
-    if (plan !== 'free' && plan !== 'pro' && plan !== 'team') return null;
+    if (plan !== 'free' && plan !== 'pro' && plan !== 'pro_plus' && plan !== 'team') return null;
     if (typeof raw.userId !== 'string') return null;
     if (typeof raw.deviceId !== 'string') return null;
     if (typeof raw.licenseId !== 'string') return null;

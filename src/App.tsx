@@ -123,7 +123,7 @@ const App: React.FC = () => {
   const [hasLoadedLicense, setHasLoadedLicense] = useState(false);
   const [hasCompletedBootstrap, setHasCompletedBootstrap] = useState(false);
   const [hasLaunchedPremiumOnboarding, setHasLaunchedPremiumOnboarding] = useState<boolean>(() => !(isLauncherWindow || isDefault));
-  const [planDetails, setPlanDetails] = useState<{ isPremium: boolean; plan?: string; provider?: string }>({ isPremium: false });
+  const [planDetails, setPlanDetails] = useState<{ isPremium: boolean; plan?: string; tier?: 'free' | 'pro' | 'pro_plus'; provider?: string }>({ isPremium: false, tier: 'free' });
 
   // Overlay opacity — initialized from SettingsManager via IPC.
   // Starts with theme-aware default until the persisted value is loaded.

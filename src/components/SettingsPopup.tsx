@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { MessageSquare, Camera, Zap } from 'lucide-react';
+import { MessageSquare, Camera, Zap, Lock } from 'lucide-react';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 
@@ -13,6 +13,8 @@ const SettingsPopup = () => {
     const isFirstRender = React.useRef(true);
 
     const [hasStoredKey, setHasStoredKey] = useState<Record<string, boolean>>({});
+    const [planTier, setPlanTier] = useState<'free' | 'pro' | 'pro_plus'>('free');
+    const isProPlus = planTier === 'pro_plus';
 
     // Load credentials func
     const loadCredentials = async () => {
@@ -40,6 +42,16 @@ const SettingsPopup = () => {
         window.addEventListener('focus', handleFocus);
 
         return () => window.removeEventListener('focus', handleFocus);
+    }, []);
+
+    // Fetch plan tier for gating
+    useEffect(() => {
+        window.electronAPI?.licenseGetTier?.().then((result) => {
+            if (result?.tier) setPlanTier(result.tier);
+        }).catch(() => {});
+        window.electronAPI?.getStartupState?.().then((state) => {
+            if (state?.license?.tier) setPlanTier(state.license.tier);
+        }).catch(() => {});
     }, []);
 
     // Fetch initial undetectable state from main process (source of truth)
@@ -220,28 +232,35 @@ const SettingsPopup = () => {
             <div ref={contentRef} className={`w-[200px] max-h-[100vh] p-2 flex flex-col animate-scale-in origin-top-left ${popupPanelClass}`}>
                 <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col min-h-0">
 
-                    {/* Undetectability */}
-                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group cursor-default ${itemHoverClass}`}>
+                    {/* Undetectability — Pro Plus gated */}
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group ${!isProPlus ? 'opacity-50 cursor-not-allowed' : `${itemHoverClass} cursor-default`}`} title={!isProPlus ? 'Pro Plus plan required' : ''}>
                         <div className="flex items-center gap-3">
-                            <CustomGhost
-                                className={`w-4 h-4 transition-colors ${isUndetectable ? (isLightTheme ? 'text-slate-900' : 'text-white') : iconInactiveClass}`}
-                                fill={isUndetectable ? "currentColor" : "none"}
-                                stroke={isUndetectable ? "none" : "currentColor"}
-                                eyeColor={isUndetectable ? (isLightTheme ? "white" : "black") : (isLightTheme ? "#334155" : "white")}
-                            />
-                            <span className={`text-[12px] font-medium transition-colors ${isUndetectable ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>{isUndetectable ? 'Undetectable' : 'Detectable'}</span>
+                            {!isProPlus ? (
+                                <Lock className={`w-3.5 h-3.5 ${isLightTheme ? 'text-slate-400' : 'text-slate-500'}`} />
+                            ) : (
+                                <CustomGhost
+                                    className={`w-4 h-4 transition-colors ${isUndetectable ? (isLightTheme ? 'text-slate-900' : 'text-white') : iconInactiveClass}`}
+                                    fill={isUndetectable ? "currentColor" : "none"}
+                                    stroke={isUndetectable ? "none" : "currentColor"}
+                                    eyeColor={isUndetectable ? (isLightTheme ? "white" : "black") : (isLightTheme ? "#334155" : "white")}
+                                />
+                            )}
+                            <span className={`text-[12px] font-medium transition-colors ${!isProPlus ? (isLightTheme ? 'text-slate-400' : 'text-slate-500') : isUndetectable ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>{isUndetectable ? 'Undetectable' : 'Detectable'}{!isProPlus ? '' : ''}</span>
+                            {!isProPlus && <span className={`text-[9px] font-semibold px-1.5 py-[1px] rounded-[4px] ${isLightTheme ? 'bg-violet-50 text-violet-500 border border-violet-100/50' : 'bg-violet-500/10 text-violet-400'}`}>PRO+</span>}
                         </div>
                         <button
                             onClick={() => {
+                                if (!isProPlus) return;
                                 const newState = !isUndetectable;
                                 setIsUndetectable(newState);
                                 window.electronAPI?.setUndetectable(newState);
                             }}
-                            className={`w-[30px] h-[18px] rounded-full p-[1.5px] transition-all duration-300 ease-spring active:scale-[0.92] ${isUndetectable
+                            className={`w-[30px] h-[18px] rounded-full p-[1.5px] transition-all duration-300 ease-spring ${!isProPlus ? 'cursor-not-allowed' : 'active:scale-[0.92]'} ${isUndetectable && isProPlus
                                 ? (isLightTheme ? 'bg-slate-900 shadow-[0_2px_8px_rgba(15,23,42,0.18)]' : 'bg-white shadow-[0_2px_8px_rgba(255,255,255,0.2)]')
                                 : defaultToggleTrackClass}`}
+                            disabled={!isProPlus}
                         >
-                            <div className={`w-[15px] h-[15px] rounded-full transition-transform duration-300 ease-spring ${toggleKnobClass} ${isUndetectable ? 'translate-x-[12px]' : 'translate-x-0'}`} />
+                            <div className={`w-[15px] h-[15px] rounded-full transition-transform duration-300 ease-spring ${toggleKnobClass} ${isUndetectable && isProPlus ? 'translate-x-[12px]' : 'translate-x-0'}`} />
                         </button>
                     </div>
 

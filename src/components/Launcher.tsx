@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ArrowLeft, MoreHorizontal, Settings, RefreshCw, Ghost, Download, DownloadCloud, CheckCircle, AlertCircle, Sparkles, Calendar, Users, FileText, BriefcaseBusiness, Code2, MessageSquareText, CircleDot, Video, Clock3, CheckCircle2, PlugZap, Trash2, ExternalLink, type LucideIcon } from 'lucide-react';
+import { ArrowRight, ArrowLeft, MoreHorizontal, Settings, RefreshCw, Ghost, Download, DownloadCloud, CheckCircle, AlertCircle, Sparkles, Calendar, Users, FileText, BriefcaseBusiness, Code2, MessageSquareText, CircleDot, Video, Clock3, CheckCircle2, PlugZap, Trash2, ExternalLink, Lock, type LucideIcon } from 'lucide-react';
 import { generateMeetingPDF } from '../utils/pdfGenerator';
 import { generateMeetingMarkdown, generateMeetingHTML } from '../utils/meetingExporters';
 import icon from "./icon.png";
@@ -440,6 +440,8 @@ const CALENDAR_REFRESH_GATE_MESSAGE = 'Connect Google Calendar before refreshing
 const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onOpenModes, onOpenProfile, onPageChange, ollamaPullStatus = 'idle', ollamaPullPercent = 0, ollamaPullMessage = '' }) => {
     const [meetings, setMeetings] = useState<Meeting[]>([]);
     const [isDetectable, setIsDetectable] = useState(false);
+    const [planTier, setPlanTier] = useState<'free' | 'pro' | 'pro_plus'>('free');
+    const isProPlus = planTier === 'pro_plus';
     const [isMeetingActive, setIsMeetingActive] = useState(false);
     const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
     const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
@@ -692,6 +694,11 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
             });
         }
 
+        // Fetch plan tier for UI gating
+        window.electronAPI?.licenseGetTier?.().then((result) => {
+            if (mounted && result?.tier) setPlanTier(result.tier);
+        }).catch(() => {});
+
         // Listen for undetectable changes
         let removeUndetectableListener: (() => void) | undefined;
         if (window.electronAPI?.onUndetectableChanged) {
@@ -882,7 +889,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
             const result = await window.electronAPI.modesSetActive(targetMode.id);
             if (!result.success) {
-                if (result.error === 'pro_required') {
+                if (result.error === 'PRO_REQUIRED') {
                     throw new Error('Pro or trial access is required to apply this mode.');
                 }
                 throw new Error(result.error || 'Unable to apply the recommended mode.');
@@ -938,6 +945,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     }
 
     const toggleDetectable = () => {
+        if (!isProPlus) return;
         const newState = !isDetectable;
         setIsDetectable(newState);
         window.electronAPI?.setUndetectable(!newState); // Note: setUndetectable takes the *undetectable* state, which is inverse of *detectable*
@@ -1521,16 +1529,18 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                 <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} />
                                             </button>
 
-                                            <div className="flex h-9 items-center gap-2 rounded-md border border-border-subtle bg-bg-elevated px-2.5">
-                                                <Ghost size={13} className="text-text-secondary" />
+                                            <div className={`flex h-9 items-center gap-2 rounded-md border border-border-subtle bg-bg-elevated px-2.5 ${!isProPlus ? 'opacity-50 cursor-not-allowed' : ''}`} title={!isProPlus ? 'Pro Plus plan required for Stealth' : ''}>
+                                                {!isProPlus ? <Lock size={13} className="text-text-secondary" /> : <Ghost size={13} className="text-text-secondary" />}
                                                 <span className="text-[12px] font-medium text-text-secondary">{isDetectable ? 'Detectable' : 'Undetectable'}</span>
+                                                {!isProPlus && <span className="text-[9px] font-semibold px-1 py-[1px] rounded bg-violet-500/10 text-violet-400">PRO+</span>}
                                                 <button
                                                     type="button"
                                                     aria-label="Toggle detectable mode"
-                                                    className={`relative h-4 w-8 rounded-full transition-colors ${!isDetectable ? 'bg-accent-primary' : 'bg-bg-toggle-switch'}`}
+                                                    className={`relative h-4 w-8 rounded-full transition-colors ${!isProPlus ? 'cursor-not-allowed bg-bg-toggle-switch' : !isDetectable ? 'bg-accent-primary' : 'bg-bg-toggle-switch'}`}
                                                     onClick={toggleDetectable}
+                                                    disabled={!isProPlus}
                                                 >
-                                                    <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${!isDetectable ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                    <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${!isDetectable && isProPlus ? 'translate-x-4' : 'translate-x-0'}`} />
                                                 </button>
                                             </div>
 

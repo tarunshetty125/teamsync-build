@@ -2974,7 +2974,7 @@ export class AppState {
 
   public getStartupState(): {
     bootstrapComplete: boolean;
-    license: { isPremium: boolean; plan?: string; provider?: string };
+    license: { isPremium: boolean; plan?: string; tier?: 'free' | 'pro' | 'pro_plus'; provider?: string };
     knowledge: {
       engineReady: boolean;
       hasResume: boolean;
@@ -2987,12 +2987,14 @@ export class AppState {
       };
     };
   } {
-    let license = { isPremium: false as boolean, plan: undefined as string | undefined, provider: undefined as string | undefined };
+    let license = { isPremium: false as boolean, plan: undefined as string | undefined, tier: 'free' as 'free' | 'pro' | 'pro_plus', provider: undefined as string | undefined };
     try {
-      const status = EntitlementVerifier.getInstance().getStatus();
+      const ev = EntitlementVerifier.getInstance();
+      const status = ev.getStatus();
       license = {
         isPremium: status.isPremium,
         plan: status.plan,
+        tier: ev.getPlanTier(),
         provider: status.provider,
       };
     } catch { /* optional premium build */ }

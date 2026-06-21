@@ -240,12 +240,27 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   };
 
+  // ── Tier-aware gates (3-tier pricing: Free / Pro / Pro Plus) ──────────────
   /**
-   * Returns true if the user has an active premium license OR an unexpired free trial.
-   * Used to gate profile intelligence features (resume upload, JD upload, company research, etc.).
+   * Returns true for Pro OR Pro Plus (anything above free).
+   * Gates: screen scan, specialized modes, profile intelligence, negotiation coach,
+   * pro overlay, unlimited history, code CLI.
    */
-  const isProOrTrialActive = (): boolean => entitlementVerifier.hasPremiumAccess();
-  const hasActiveProPlan = (): boolean => entitlementVerifier.hasPremiumAccess();
+  const isProOrAbove = (): boolean => entitlementVerifier.hasProAccess();
+
+  /**
+   * Returns true ONLY for Pro Plus (or legacy team plan).
+   * Gates: advanced stealth, screen capture protection, phone mirror,
+   * company research, API access, priority routing, cross-session search, system design.
+   */
+  const isProPlusActive = (): boolean => entitlementVerifier.hasProPlusAccess();
+
+  /** Returns the resolved pricing tier for graduated gate responses. */
+  const getPlanTier = (): 'free' | 'pro' | 'pro_plus' => entitlementVerifier.getPlanTier();
+
+  /** @deprecated — use isProOrAbove() instead. Kept for backward compat if referenced elsewhere. */
+  const isProOrTrialActive = isProOrAbove;
+  const hasActiveProPlan = isProOrAbove;
 
   const broadcastNegotiationStateChanged = (): void => {
     try {
@@ -370,6 +385,10 @@ export function initializeIpcHandlers(appState: AppState): void {
     const rejected = rejectUntrustedLicenseSender(event);
     if (rejected) return rejected;
     return toPlanState();
+  });
+
+  safeHandle("license:get-tier", async () => {
+    return { tier: getPlanTier() };
   });
 
   safeHandle("app:get-startup-state", async () => {
@@ -1210,11 +1229,17 @@ export function initializeIpcHandlers(appState: AppState): void {
 
 
   safeHandle("set-undetectable", async (_, state: boolean) => {
+    if (!isProPlusActive()) {
+      return { success: false, error: 'PRO_PLUS_REQUIRED', message: 'Pro Plus plan required for stealth mode.' };
+    }
     appState.setUndetectable(state)
     return { success: true }
   })
 
   safeHandle("set-disguise", async (_, mode: 'terminal' | 'settings' | 'activity' | 'none') => {
+    if (mode !== 'none' && !isProPlusActive()) {
+      return { success: false, error: 'PRO_PLUS_REQUIRED', message: 'Pro Plus plan required for process disguise.' };
+    }
     appState.setDisguise(mode)
     return { success: true }
   })
@@ -1246,6 +1271,9 @@ export function initializeIpcHandlers(appState: AppState): void {
   const { StealthManager } = require('./services/StealthManager');
 
   safeHandle("stealth:engage", async () => {
+    if (!isProPlusActive()) {
+      return { success: false, error: 'PRO_PLUS_REQUIRED', message: 'Pro Plus plan required for advanced stealth.' };
+    }
     try {
       StealthManager.getInstance().engage();
       return { success: true };
@@ -1717,6 +1745,9 @@ export function initializeIpcHandlers(appState: AppState): void {
   const USAGE_CACHE_TTL_MS = 60_000;
 
   safeHandle("set-teamsync-api-key", async (_, apiKey: string) => {
+    if (apiKey && !isProPlusActive()) {
+      return { success: false, error: 'PRO_PLUS_REQUIRED', message: 'Pro Plus plan required for API access.' };
+    }
     try {
       const { CredentialsManager } = require('./services/CredentialsManager');
       const cm = CredentialsManager.getInstance();
@@ -3028,9 +3059,9 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   safeHandle("session:set-mode", async (_, mode: 'behavioral' | 'coding' | 'follow_up' | 'general' | 'salary' | 'system_design') => {
-    // Pro gate: system_design mode requires Pro license
-    if (mode === 'system_design' && !isProOrTrialActive()) {
-      return { success: false, error: 'pro_required', mode: 'general' };
+    // Pro Plus gate: system_design mode requires Pro Plus license
+    if (mode === 'system_design' && !isProPlusActive()) {
+      return { success: false, error: 'PRO_PLUS_REQUIRED', mode: 'general' };
     }
     const intelligenceManager = appState.getIntelligenceManager();
     intelligenceManager.setSessionMode(mode);
@@ -3055,9 +3086,9 @@ export function initializeIpcHandlers(appState: AppState): void {
     actionId?: string;
     contextTarget?: 'latest_turn' | 'active_context' | 'transcript';
   }) => {
-    // Pro gate: system_design_tradeoffs intent requires Pro license
-    if (payload.intent === 'system_design_tradeoffs' && !isProOrTrialActive()) {
-      return { success: false, error: 'pro_required', message: 'Pro license required for system design features.' };
+    // Pro Plus gate: system_design_tradeoffs intent requires Pro Plus license
+    if (payload.intent === 'system_design_tradeoffs' && !isProPlusActive()) {
+      return { success: false, error: 'PRO_PLUS_REQUIRED', message: 'Pro Plus plan required for system design features.' };
     }
     const intelligenceManager = appState.getIntelligenceManager();
     const result = await intelligenceManager.handleAction(payload.intent, {
@@ -3181,8 +3212,8 @@ export function initializeIpcHandlers(appState: AppState): void {
   // MODE 9: Screen Scan (Context-Aware Screen Intelligence) — Pro Only
   safeHandle("generate-screen-scan", async (_, imagePaths?: string[], extractedText?: string, forcedMode?: string, requestId?: string) => {
     // Pro gate: screen scan requires Pro license
-    if (!isProOrTrialActive()) {
-      return { success: false, error: 'pro_required', message: 'Pro license required for Analyse Screen.' };
+    if (!isProOrAbove()) {
+      return { success: false, error: 'PRO_REQUIRED', message: 'Pro plan required for Analyse Screen.' };
     }
     try {
       // If no explicit images were passed from the frontend, fall back to the
@@ -3286,6 +3317,9 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   safeHandle("generate-system-design-tradeoffs", async (_, requestId?: string) => {
+    if (!isProPlusActive()) {
+      return { answer: null, error: 'PRO_PLUS_REQUIRED' };
+    }
     try {
       const intelligenceManager = appState.getIntelligenceManager();
       const answer = await intelligenceManager.runSystemDesignTradeoffs(requestId);
@@ -3833,9 +3867,9 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("profile:upload-resume", async (_, fileToken: string) => {
     try {
-      // Premium gate: require active license or free trial for profile features
-      if (!isProOrTrialActive()) {
-        return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
+      // Pro gate: require active license or free trial for profile features
+      if (!isProOrAbove()) {
+        return { success: false, error: 'PRO_REQUIRED', message: 'Pro plan required for Profile Intelligence.' };
       }
       const resolved = await resolveProfileFileToken(fileToken);
       if (!resolved.success) return resolved;
@@ -3888,9 +3922,9 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("profile:set-mode", async (_, enabled: boolean) => {
     try {
-      // Premium gate: only allow enabling profile mode with active license or free trial
-      if (enabled && !isProOrTrialActive()) {
-        return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
+      // Pro gate: only allow enabling profile mode with active license or free trial
+      if (enabled && !isProOrAbove()) {
+        return { success: false, error: 'PRO_REQUIRED', message: 'Pro plan required for Profile Intelligence.' };
       }
       if (!appState.isBootstrapReady()) {
         await appState.bootstrapPersistentState();
@@ -3941,7 +3975,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       if (!appState.isBootstrapReady()) {
         await appState.bootstrapPersistentState();
       }
-      if (!hasActiveProPlan()) {
+      if (!isProOrAbove()) {
         return {
           error: 'PRO_REQUIRED',
           engineReady: false,
@@ -4034,9 +4068,9 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("profile:upload-jd", async (_, fileToken: string) => {
     try {
-      // Premium gate
-      if (!isProOrTrialActive()) {
-        return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
+      // Pro gate
+      if (!isProOrAbove()) {
+        return { success: false, error: 'PRO_REQUIRED', message: 'Pro plan required for Profile Intelligence.' };
       }
       const resolved = await resolveProfileFileToken(fileToken);
       if (!resolved.success) return resolved;
@@ -4073,9 +4107,9 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("profile:research-company", async (_, companyName: string) => {
     try {
-      // Premium gate
-      if (!isProOrTrialActive()) {
-        return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
+      // Pro Plus gate — company research is a Pro Plus exclusive feature
+      if (!isProPlusActive()) {
+        return { success: false, error: 'PRO_PLUS_REQUIRED', message: 'Pro Plus plan required for Company Research.' };
       }
       if (!appState.isBootstrapReady()) {
         await appState.bootstrapPersistentState();
@@ -4106,8 +4140,8 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle('run_company_research', async (_, payload: { company: string; role?: string; forceRefresh?: boolean }) => {
     try {
-      if (!isProOrTrialActive()) {
-        return { success: false, error: 'LICENSE_REQUIRED' };
+      if (!isProPlusActive()) {
+        return { success: false, error: 'PRO_PLUS_REQUIRED', message: 'Pro Plus plan required for Company Research.' };
       }
       if (!appState.isBootstrapReady()) {
         await appState.bootstrapPersistentState();
@@ -4149,9 +4183,9 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("profile:generate-negotiation", async (_, force: boolean = false) => {
     try {
-      // Premium gate
-      if (!isProOrTrialActive()) {
-        return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
+      // Pro gate
+      if (!isProOrAbove()) {
+        return { success: false, error: 'PRO_REQUIRED', message: 'Pro plan required for Profile Intelligence.' };
       }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) {
@@ -4233,9 +4267,9 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("profile:set-negotiation-context-enabled", async (_, enabled: boolean) => {
     try {
-      if (!isProOrTrialActive()) {
+      if (!isProOrAbove()) {
         console.warn('[IPC] Negotiation toggle blocked — Pro license required');
-        return { success: false, error: 'Pro license required. Please activate a license key to use Profile Intelligence features.' };
+        return { success: false, error: 'PRO_REQUIRED', message: 'Pro plan required for Negotiation Coach.' };
       }
       const orchestrator = appState.getKnowledgeOrchestrator();
       if (!orchestrator) {
@@ -4480,7 +4514,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("modes:create", async (_, params: { name?: string; templateType?: string; templateId?: string }) => {
     try {
-      if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
+      if (!isProOrAbove()) return { success: false, error: 'PRO_REQUIRED' };
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
       const mode = mgr.createMode({
@@ -4501,14 +4535,14 @@ export function initializeIpcHandlers(appState: AppState): void {
       const mgr = ModesManager.getInstance();
       // Gate: changing templateType to a non-general template requires pro.
       // Also gate if the existing mode is already non-general (editing a pro mode requires pro).
-      if (!isProOrTrialActive()) {
+      if (!isProOrAbove()) {
         const requestedTemplate = updates.templateId ?? updates.templateType;
         if (requestedTemplate && requestedTemplate !== 'general') {
-          return { success: false, error: 'pro_required' };
+          return { success: false, error: 'PRO_REQUIRED' };
         }
         const existing = mgr.getModes().find((m: any) => m.id === id);
         if (existing && existing.templateType !== 'general') {
-          return { success: false, error: 'pro_required' };
+          return { success: false, error: 'PRO_REQUIRED' };
         }
       }
       mgr.updateMode(id, updates);
@@ -4522,7 +4556,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("modes:delete", async (_, id: string) => {
     try {
-      if (!isProOrTrialActive()) return { success: false, error: 'pro_required' };
+      if (!isProOrAbove()) return { success: false, error: 'PRO_REQUIRED' };
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
       mgr.deleteMode(id);
@@ -4553,8 +4587,8 @@ export function initializeIpcHandlers(appState: AppState): void {
       if (id !== null) {
         const { ModesManager } = require('./services/ModesManager');
         const targetMode = ModesManager.getInstance().getModes().find((m: any) => m.id === id);
-        if (targetMode && targetMode.templateType !== 'general' && !isProOrTrialActive()) {
-          return { success: false, error: 'pro_required' };
+        if (targetMode && targetMode.templateType !== 'general' && !isProOrAbove()) {
+          return { success: false, error: 'PRO_REQUIRED' };
         }
       }
       const { ModesManager } = require('./services/ModesManager');
@@ -4749,7 +4783,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
-      if (!isProOrTrialActive() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'pro_required' };
+      if (!isProOrAbove() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'PRO_REQUIRED' };
       const result = await showOpenDialogNormalized({
         properties: ['openFile'],
         filters: [
@@ -4789,7 +4823,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
-      if (!isProOrTrialActive() && !ownsGeneralReferenceFile(mgr, id)) return { success: false, error: 'pro_required' };
+      if (!isProOrAbove() && !ownsGeneralReferenceFile(mgr, id)) return { success: false, error: 'PRO_REQUIRED' };
       mgr.deleteReferenceFile(id);
       broadcastModesState();
       return { success: true, state: mgr.getState() };
@@ -4815,7 +4849,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
-      if (!isProOrTrialActive() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'pro_required' };
+      if (!isProOrAbove() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'PRO_REQUIRED' };
       const section = mgr.addNoteSection({ modeId, title, description });
       broadcastModesState();
       return { success: true, section, state: mgr.getState() };
@@ -4829,7 +4863,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
-      if (!isProOrTrialActive() && !ownsGeneralSection(mgr, id)) return { success: false, error: 'pro_required' };
+      if (!isProOrAbove() && !ownsGeneralSection(mgr, id)) return { success: false, error: 'PRO_REQUIRED' };
       mgr.updateNoteSection(id, updates);
       broadcastModesState();
       return { success: true, state: mgr.getState() };
@@ -4843,7 +4877,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
-      if (!isProOrTrialActive() && !ownsGeneralSection(mgr, id)) return { success: false, error: 'pro_required' };
+      if (!isProOrAbove() && !ownsGeneralSection(mgr, id)) return { success: false, error: 'PRO_REQUIRED' };
       mgr.deleteNoteSection(id);
       broadcastModesState();
       return { success: true, state: mgr.getState() };
@@ -4857,7 +4891,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
-      if (!isProOrTrialActive() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'pro_required' };
+      if (!isProOrAbove() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'PRO_REQUIRED' };
       mgr.removeAllNoteSections(modeId);
       broadcastModesState();
       return { success: true, state: mgr.getState() };
@@ -4871,7 +4905,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
-      if (!isProOrTrialActive() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'pro_required' };
+      if (!isProOrAbove() && !isGeneralModeId(mgr, modeId)) return { success: false, error: 'PRO_REQUIRED' };
       mgr.resetNoteSections(modeId);
       broadcastModesState();
       return { success: true, state: mgr.getState() };
@@ -4886,6 +4920,9 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("phone-mirror:enable", async () => {
     console.log(`[PhoneMirror:IPC] >>> phone-mirror:enable CALLED at ${new Date().toISOString()}`);
+    if (!isProPlusActive()) {
+      return { success: false, error: 'PRO_PLUS_REQUIRED', message: 'Pro Plus plan required for Phone Mirror.' };
+    }
     try {
       const result = await PhoneMirrorManager.getInstance().enable();
       console.log(`[PhoneMirror:IPC] <<< phone-mirror:enable RESULT:`, JSON.stringify(result));

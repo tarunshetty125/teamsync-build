@@ -113,8 +113,9 @@ type GenerateActionPayload = {
 
 type LicenseBridgeState = {
   isPremium: boolean
-  plan: 'free' | 'pro' | 'team' | string
+  plan: 'free' | 'pro' | 'pro_plus' | 'team' | string
   isActive: boolean
+  tier?: 'free' | 'pro' | 'pro_plus'
   provider?: string
   status?: string
   trial?: boolean
@@ -653,6 +654,7 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   licenseGetDetails: () => Promise<LicenseBridgeState>
   getUserPlan: () => Promise<LicenseBridgeState>
   licenseCheckPremiumAsync: () => Promise<boolean>
+  licenseGetTier: () => Promise<{ tier: 'free' | 'pro' | 'pro_plus' }>
   licenseDeactivate: () => Promise<{ success: boolean; error?: string }>
 
   // Tavily Search API
@@ -1828,6 +1830,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   licenseGetDetails: () => ipcRenderer.invoke('license:get-entitlement'),
   getUserPlan: () => ipcRenderer.invoke('license:get-entitlement'),
   licenseCheckPremiumAsync: async () => (await syncEntitlementState()).isPremium === true,
+  licenseGetTier: () => ipcRenderer.invoke('license:get-tier'),
   getStartupState: () => ipcRenderer.invoke('app:get-startup-state'),
   getAOTState: () => ipcRenderer.invoke('app:get-aot-state'),
   forceResync: () => ipcRenderer.invoke('app:force-resync'),

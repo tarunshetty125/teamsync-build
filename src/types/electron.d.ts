@@ -677,7 +677,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   // License Management
   getStartupState: () => Promise<{
     bootstrapComplete: boolean;
-    license: { isPremium: boolean; plan?: string; provider?: string };
+    license: { isPremium: boolean; plan?: string; provider?: string; tier?: 'free' | 'pro' | 'pro_plus' };
     knowledge: {
       engineReady: boolean;
       hasResume: boolean;
@@ -701,7 +701,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   }>
   forceResync: () => Promise<{
     bootstrapComplete: boolean;
-    license: { isPremium: boolean; plan?: string; provider?: string };
+    license: { isPremium: boolean; plan?: string; provider?: string; tier?: 'free' | 'pro' | 'pro_plus' };
     knowledge: {
       engineReady: boolean;
       hasResume: boolean;
@@ -725,6 +725,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   onLicenseRestored: (callback: (data: { isPremium: boolean; plan?: string; provider?: string }) => void) => () => void
   onLicenseStatusChanged: (callback: (data: { isPremium: boolean, plan?: string }) => void) => () => void
   licenseDeactivate: () => Promise<{ success: boolean; error?: string }>
+  licenseGetTier: () => Promise<{ tier: 'free' | 'pro' | 'pro_plus' }>
 
   // Overlay Opacity (Stealth Mode)
   getOverlayOpacity: () => Promise<number | null>;
