@@ -1210,6 +1210,18 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
     // Auto-disable Pro UI if premium/trial access is lost
     const hasProAccess = isPremium || isTrialActive;
+    const [planTier, setPlanTier] = useState<'free' | 'pro' | 'pro_plus'>('free');
+    const isProPlus = planTier === 'pro_plus';
+
+    // Fetch plan tier for section gating
+    useEffect(() => {
+        window.electronAPI?.licenseGetTier?.().then((result) => {
+            if (result?.tier) setPlanTier(result.tier);
+        }).catch(() => {});
+        window.electronAPI?.getStartupState?.().then((state) => {
+            if (state?.license?.tier) setPlanTier(state.license.tier);
+        }).catch(() => {});
+    }, [isPremium]);
     useEffect(() => {
         if (!isLicenseLoaded) return;
         if (!hasProAccess && useProUI) {
@@ -3447,26 +3459,38 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         <div className="flex items-center justify-between px-4 py-2.5">
                                                             <div>
                                                                 <div className="flex items-center gap-2">
-                                                                    <p className="text-[13px] font-medium text-text-primary">Screen sharing privacy</p>
-                                                                    <span className={`${statusChipBaseClass} ${getTrustChipClass(stealthTrustState)}`}>
-                                                                        {isUndetectable ? 'Protected' : 'Disabled'}
-                                                                    </span>
+                                                                    <p className={`text-[13px] font-medium ${!isProPlus ? 'text-text-secondary' : 'text-text-primary'}`}>Screen sharing privacy</p>
+                                                                    {!isProPlus && <Lock size={12} className="text-text-tertiary" />}
+                                                                    {!isProPlus && <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide bg-amber-500/10 text-amber-400 border border-amber-500/20">PRO+</span>}
+                                                                    {isProPlus && (
+                                                                        <span className={`${statusChipBaseClass} ${getTrustChipClass(stealthTrustState)}`}>
+                                                                            {isUndetectable ? 'Protected' : 'Disabled'}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
-                                                                <p className="text-[12px] text-text-secondary mt-0.5">
-                                                                    {isUndetectable ? 'Content protection applied to supported windows' : 'Windows may be visible during screen sharing'}
+                                                                <p className={`text-[12px] mt-0.5 ${!isProPlus ? 'text-text-tertiary' : 'text-text-secondary'}`}>
+                                                                    {!isProPlus ? 'Pro Plus required for screen sharing privacy' : isUndetectable ? 'Content protection applied to supported windows' : 'Windows may be visible during screen sharing'}
                                                                 </p>
                                                             </div>
-                                                            <Switch checked={isUndetectable} onCheckedChange={handleToggleUndetectable} aria-label="Toggle screen sharing privacy" />
+                                                            <div className={!isProPlus ? 'opacity-40 pointer-events-none' : ''}>
+                                                                <Switch checked={isUndetectable} onCheckedChange={handleToggleUndetectable} aria-label="Toggle screen sharing privacy" />
+                                                            </div>
                                                         </div>
 
                                                         <div className="flex items-center justify-between px-4 py-2.5">
                                                             <div>
-                                                                <p className="text-[13px] font-medium text-text-primary">Mouse passthrough</p>
-                                                                <p className="text-[12px] text-text-secondary mt-0.5">
-                                                                    {isMousePassthrough ? 'Clicks pass through to the app underneath' : 'Overlay remains interactive'}
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className={`text-[13px] font-medium ${!hasProAccess ? 'text-text-secondary' : 'text-text-primary'}`}>Mouse passthrough</p>
+                                                                    {!hasProAccess && <Lock size={12} className="text-text-tertiary" />}
+                                                                    {!hasProAccess && <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20">PRO</span>}
+                                                                </div>
+                                                                <p className={`text-[12px] mt-0.5 ${!hasProAccess ? 'text-text-tertiary' : 'text-text-secondary'}`}>
+                                                                    {!hasProAccess ? 'Pro plan required for mouse passthrough' : isMousePassthrough ? 'Clicks pass through to the app underneath' : 'Overlay remains interactive'}
                                                                 </p>
                                                             </div>
-                                                            <Switch checked={isMousePassthrough} onCheckedChange={handleToggleMousePassthrough} aria-label="Toggle mouse passthrough" variant="sky" />
+                                                            <div className={!hasProAccess ? 'opacity-40 pointer-events-none' : ''}>
+                                                                <Switch checked={isMousePassthrough} onCheckedChange={handleToggleMousePassthrough} aria-label="Toggle mouse passthrough" variant="sky" />
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <p className="text-[11px] text-text-tertiary mt-2 px-1">
@@ -5432,16 +5456,33 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
 
 
                                         {activeTab === 'skills' && (
-                                            <SkillsSettingsTab />
+                                            <div className="animated fadeIn">
+                                                {!hasProAccess && (
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <Lock size={14} className="text-text-tertiary" />
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20">PRO</span>
+                                                        <span className="text-[12px] text-text-secondary">Upgrade to Pro to manage custom skills.</span>
+                                                    </div>
+                                                )}
+                                                <div className={!hasProAccess ? 'opacity-40 pointer-events-none select-none' : ''}>
+                                                    <SkillsSettingsTab />
+                                                </div>
+                                            </div>
                                         )}
 
                                         {activeTab === 'codex-cli' && (
                                             <div className="space-y-6 animated fadeIn pb-4">
                                                 <div>
-                                                    <h3 className="text-lg font-bold text-text-primary mb-1">Codex CLI</h3>
-                                                    <p className="text-xs text-text-secondary">Use OpenAI's Codex CLI as a local LLM provider. Requires codex installed and authenticated.</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <h3 className="text-lg font-bold text-text-primary mb-1">Codex CLI</h3>
+                                                        {!hasProAccess && <Lock size={14} className="text-text-tertiary" />}
+                                                        {!hasProAccess && <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20">PRO</span>}
+                                                    </div>
+                                                    <p className="text-xs text-text-secondary">{!hasProAccess ? 'Upgrade to Pro to use Codex CLI as a local LLM provider.' : 'Use OpenAI\'s Codex CLI as a local LLM provider. Requires codex installed and authenticated.'}</p>
                                                 </div>
-                                                <CodexCliSettings />
+                                                <div className={!hasProAccess ? 'opacity-40 pointer-events-none select-none' : ''}>
+                                                    <CodexCliSettings />
+                                                </div>
                                             </div>
                                         )}
 
@@ -5525,7 +5566,18 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                         )}
 
                                         {activeTab === 'phone-mirror' && (
-                                            <PhoneMirrorSettings />
+                                            <div className="animated fadeIn">
+                                                {!isProPlus && (
+                                                    <div className="flex items-center gap-2 mb-4">
+                                                        <Lock size={14} className="text-text-tertiary" />
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide bg-amber-500/10 text-amber-400 border border-amber-500/20">PRO+</span>
+                                                        <span className="text-[12px] text-text-secondary">Upgrade to Pro Plus to use Phone Mirror.</span>
+                                                    </div>
+                                                )}
+                                                <div className={!isProPlus ? 'opacity-40 pointer-events-none select-none' : ''}>
+                                                    <PhoneMirrorSettings />
+                                                </div>
+                                            </div>
                                         )}
                                     </motion.div>
                                 </AnimatePresence>

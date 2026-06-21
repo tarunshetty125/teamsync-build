@@ -455,6 +455,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const [isCalendarRecommendationOpen, setIsCalendarRecommendationOpen] = useState(false);
     const [isApplyingCalendarMode, setIsApplyingCalendarMode] = useState(false);
     const [calendarRecommendationError, setCalendarRecommendationError] = useState<string | null>(null);
+    const [meetingUsage, setMeetingUsage] = useState<{ isFree: boolean; count: number; limit: number; remaining: number } | null>(null);
 
     // Global search state (for AI chat overlay)
     const [isGlobalChatOpen, setIsGlobalChatOpen] = useState(false);
@@ -522,6 +523,8 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         if (window.electronAPI && window.electronAPI.getRecentMeetings) {
             window.electronAPI.getRecentMeetings().then(setMeetings).catch(err => console.error("Failed to fetch meetings:", err));
         }
+        // Fetch meeting usage for free tier counter
+        window.electronAPI?.getMeetingUsage?.().then(setMeetingUsage).catch(() => {});
     };
 
     const applyEvents = (events: any[]) => {
@@ -1629,6 +1632,75 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                             </motion.button>
                                         </div>
                                     </div>
+
+                                    {/* Free tier meeting counter */}
+                                    {meetingUsage && meetingUsage.isFree && (
+                                        <div className="mx-1 mt-2 mb-1">
+                                            <div className="flex items-center justify-between rounded-lg border px-3 py-2"
+                                                style={{
+                                                    borderColor: meetingUsage.remaining === 0
+                                                        ? 'rgba(255,107,107,0.2)'
+                                                        : meetingUsage.remaining <= 2
+                                                            ? 'rgba(255,170,0,0.2)'
+                                                            : 'rgba(255,255,255,0.06)',
+                                                    background: meetingUsage.remaining === 0
+                                                        ? 'rgba(255,107,107,0.06)'
+                                                        : meetingUsage.remaining <= 2
+                                                            ? 'rgba(255,170,0,0.04)'
+                                                            : 'rgba(255,255,255,0.02)',
+                                                }}
+                                            >
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    {/* Progress dots */}
+                                                    <div className="flex items-center gap-[3px]">
+                                                        {Array.from({ length: meetingUsage.limit }).map((_, i) => (
+                                                            <div
+                                                                key={i}
+                                                                className="h-[6px] w-[6px] rounded-full transition-all duration-300"
+                                                                style={{
+                                                                    background: i < meetingUsage.count
+                                                                        ? meetingUsage.remaining === 0
+                                                                            ? '#FF6B6B'
+                                                                            : meetingUsage.remaining <= 2
+                                                                                ? '#FFAA00'
+                                                                                : '#00D68F'
+                                                                        : 'rgba(255,255,255,0.1)',
+                                                                    boxShadow: i < meetingUsage.count
+                                                                        ? meetingUsage.remaining === 0
+                                                                            ? '0 0 4px rgba(255,107,107,0.4)'
+                                                                            : meetingUsage.remaining <= 2
+                                                                                ? '0 0 4px rgba(255,170,0,0.3)'
+                                                                                : '0 0 4px rgba(0,214,143,0.3)'
+                                                                        : 'none',
+                                                                }}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    <span className="text-[11px] font-medium" style={{
+                                                        color: meetingUsage.remaining === 0 ? '#FF6B6B' : meetingUsage.remaining <= 2 ? '#FFAA00' : 'rgba(240,240,245,0.45)',
+                                                    }}>
+                                                        {meetingUsage.remaining === 0
+                                                            ? 'Meeting limit reached'
+                                                            : `${meetingUsage.remaining} of ${meetingUsage.limit} free meetings left`
+                                                        }
+                                                    </span>
+                                                </div>
+                                                {meetingUsage.remaining <= 2 && (
+                                                    <button
+                                                        onClick={() => onOpenSettings?.('account')}
+                                                        className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-all active:scale-[0.97]"
+                                                        style={{
+                                                            background: 'linear-gradient(135deg, rgba(108,92,231,0.15), rgba(167,139,250,0.15))',
+                                                            border: '1px solid rgba(108,92,231,0.25)',
+                                                            color: '#a78bfa',
+                                                        }}
+                                                    >
+                                                        Upgrade
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <AnimatePresence mode="wait">
                                         {isCalendarConnected ? (

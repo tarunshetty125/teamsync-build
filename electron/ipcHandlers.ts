@@ -2966,6 +2966,21 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("start-meeting", async (event, metadata?: any) => {
     try {
+      // Free users: limit to 6 meetings total
+      const FREE_MEETING_LIMIT = 6;
+      if (!isProOrAbove()) {
+        const meetings = await DatabaseManager.getInstance().getRecentMeetings(FREE_MEETING_LIMIT + 1);
+        if (meetings && meetings.length >= FREE_MEETING_LIMIT) {
+          return {
+            success: false,
+            error: 'PRO_REQUIRED',
+            message: `Free plan is limited to ${FREE_MEETING_LIMIT} meetings. Upgrade to Pro for unlimited meetings.`,
+            meetingCount: meetings.length,
+            limit: FREE_MEETING_LIMIT,
+          };
+        }
+      }
+
       await appState.startMeeting(metadata);
       return { success: true };
     } catch (error: any) {
@@ -2987,6 +3002,19 @@ export function initializeIpcHandlers(appState: AppState): void {
   safeHandle("get-recent-meetings", async () => {
     // Fetch from SQLite (limit 50)
     return DatabaseManager.getInstance().getRecentMeetings(50);
+  });
+
+  safeHandle("get-meeting-usage", async () => {
+    const FREE_MEETING_LIMIT = 6;
+    const isFree = !isProOrAbove();
+    const meetings = await DatabaseManager.getInstance().getRecentMeetings(FREE_MEETING_LIMIT + 1);
+    const count = meetings?.length ?? 0;
+    return {
+      isFree,
+      count,
+      limit: FREE_MEETING_LIMIT,
+      remaining: isFree ? Math.max(0, FREE_MEETING_LIMIT - count) : -1, // -1 = unlimited
+    };
   });
 
   safeHandle("get-meeting-details", async (event, id) => {

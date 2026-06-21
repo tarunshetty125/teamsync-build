@@ -374,6 +374,7 @@ interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   endMeeting: () => Promise<{ success: boolean; error?: string }>
   finalizeMicSTT: () => Promise<void>
   getRecentMeetings: () => Promise<Array<{ id: string; title: string; date: string; duration: string; summary: string }>>
+  getMeetingUsage: () => Promise<{ isFree: boolean; count: number; limit: number; remaining: number }>
   getMeetingDetails: (id: string) => Promise<any>
   updateMeetingTitle: (id: string, title: string) => Promise<boolean>
   updateMeetingSummary: (id: string, updates: { overview?: string, actionItems?: string[], keyPoints?: string[], actionItemsTitle?: string, keyPointsTitle?: string }) => Promise<boolean>
@@ -1186,6 +1187,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   endMeeting: () => ipcRenderer.invoke("end-meeting"),
   finalizeMicSTT: () => ipcRenderer.invoke("finalize-mic-stt"),
   getRecentMeetings: () => ipcRenderer.invoke("get-recent-meetings"),
+  getMeetingUsage: () => ipcRenderer.invoke("get-meeting-usage"),
   getMeetingDetails: (id: string) => ipcRenderer.invoke("get-meeting-details", id),
   updateMeetingTitle: (id: string, title: string) => ipcRenderer.invoke("update-meeting-title", { id, title }),
   updateMeetingSummary: (id: string, updates: any) => ipcRenderer.invoke("update-meeting-summary", { id, updates }),

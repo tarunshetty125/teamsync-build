@@ -539,6 +539,10 @@ const App: React.FC = () => {
         // Let's explicitly request mode change.
         await window.electronAPI.setWindowMode('overlay');
         return true;
+      } else if (result.error === 'PRO_REQUIRED') {
+        // Free meeting limit reached
+        setPermissionsError((result as any).message || 'Free plan meeting limit reached. Upgrade to Pro for unlimited meetings.');
+        setPermissionsStep('permissions');
       } else {
         console.error("Failed to start meeting:", result.error);
         await refreshPermissions();
