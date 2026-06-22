@@ -27,7 +27,9 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-
+        with:
+          submodules: recursive
+          token: ${{ secrets.RELEASE_REPO_TOKEN }}
       - name: Validate tag and channel
         id: meta
         shell: bash
@@ -114,7 +116,9 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-
+        with:
+          submodules: recursive
+          token: ${{ secrets.RELEASE_REPO_TOKEN }}
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -200,7 +204,9 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-
+        with:
+          submodules: recursive
+          token: ${{ secrets.RELEASE_REPO_TOKEN }}
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
