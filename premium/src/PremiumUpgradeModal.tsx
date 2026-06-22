@@ -163,8 +163,15 @@ export const PremiumUpgradeModal: React.FC<PremiumUpgradeModalProps> = ({ isOpen
                     </Toast>
                     {isPremium ? (
                         <div className="flex flex-col items-center text-center py-6">
-                            <div className="w-16 h-16 rounded-[16px] bg-green-500/10 border border-green-500/20 flex flex-col items-center justify-center mb-6 shadow-inner relative group transition-transform duration-500 hover:scale-105">
-                                <CheckCircle size={28} className="text-green-400" strokeWidth={2} />
+                            <div
+                                className="w-16 h-16 rounded-[16px] flex flex-col items-center justify-center mb-6 relative group transition-transform duration-500 hover:scale-105 overflow-hidden"
+                                style={{
+                                    background: 'linear-gradient(135deg, #082f49 0%, #0ea5e9 52%, #2563eb 100%)',
+                                    boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.5), inset 0 -1px 3px rgba(8,47,73,0.4), 0 0 16px rgba(14,165,233,0.3), 0 2px 10px rgba(14,165,233,0.2), 0 0 0 1px rgba(255,255,255,0.12)',
+                                }}
+                            >
+                                <div className="pointer-events-none absolute inset-x-1 top-0 h-[45%] rounded-b-md bg-gradient-to-b from-white/30 to-transparent opacity-75 blur-[1px]" />
+                                <CheckCircle size={28} className="text-white" strokeWidth={2} />
                             </div>
                             <h2 className={`text-[18px] font-semibold tracking-tight ${isLight ? 'text-text-primary' : 'text-white/90'}`}>Pro License Active</h2>
                                 <p className={`text-[13px] mt-2 max-w-[280px] mx-auto leading-relaxed mb-8 ${isLight ? 'text-text-secondary' : 'text-white/50'}`}>
@@ -173,8 +180,14 @@ export const PremiumUpgradeModal: React.FC<PremiumUpgradeModalProps> = ({ isOpen
 
                             <button
                                 onClick={handleDeactivate}
-                                className="w-full py-3 rounded-[10px] bg-red-500/10 text-red-400 border border-red-500/20 text-[13px] font-medium hover:bg-red-500/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 shadow-inner"
+                                className="relative w-full py-3 rounded-[10px] text-white text-[13px] font-medium active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 overflow-hidden"
+                                style={{
+                                    background: 'linear-gradient(135deg, #450a0a 0%, #ef4444 52%, #dc2626 100%)',
+                                    boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.5), inset 0 -1px 3px rgba(69,10,10,0.4), 0 0 16px rgba(239,68,68,0.3), 0 2px 10px rgba(239,68,68,0.2), 0 0 0 1px rgba(255,255,255,0.12)',
+                                }}
                             >
+                                <div className="pointer-events-none absolute inset-x-1 top-0 h-[45%] rounded-b-md bg-gradient-to-b from-white/30 to-transparent opacity-75 blur-[1px]" />
+                                <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-red-300/20 to-transparent" />
                                 <X size={15} /> Deactivate License
                             </button>
                             <p className={`text-[10px] text-center px-4 mt-4 leading-relaxed ${isLight ? 'text-text-tertiary' : 'text-white/30'}`}>
@@ -185,8 +198,15 @@ export const PremiumUpgradeModal: React.FC<PremiumUpgradeModalProps> = ({ isOpen
                         <>
                             {/* Header */}
                             <div className="flex flex-col items-center text-center gap-3 mb-1">
-                                <div className={`w-10 h-10 rounded-[10px] flex items-center justify-center shadow-inner relative group transition-transform duration-500 hover:scale-105 ${isLight ? 'bg-bg-input border border-border-subtle' : 'bg-white/[0.03] border border-white/[0.05]'}`}>
-                                    <Lock size={16} className={isLight ? 'text-text-secondary' : 'text-white/70'} strokeWidth={2} />
+                                <div
+                                    className="w-10 h-10 rounded-[10px] flex items-center justify-center relative group transition-transform duration-500 hover:scale-105 overflow-hidden"
+                                    style={{
+                                        background: 'linear-gradient(135deg, #082f49 0%, #0ea5e9 52%, #2563eb 100%)',
+                                        boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.5), inset 0 -1px 3px rgba(8,47,73,0.4), 0 0 16px rgba(14,165,233,0.3), 0 2px 10px rgba(14,165,233,0.2), 0 0 0 1px rgba(255,255,255,0.12)',
+                                    }}
+                                >
+                                    <div className="pointer-events-none absolute inset-x-1 top-0 h-[45%] rounded-b-md bg-gradient-to-b from-white/30 to-transparent opacity-75 blur-[1px]" />
+                                    <Lock size={16} className="text-white" strokeWidth={2} />
                                 </div>
                                 <div>
                                     <h2 className={`text-[15px] font-medium tracking-tight ${isLight ? 'text-text-primary' : 'text-white/90'}`}>Unlock Pro</h2>
@@ -195,7 +215,7 @@ export const PremiumUpgradeModal: React.FC<PremiumUpgradeModalProps> = ({ isOpen
                             </div>
 
                             {/* Feature list */}
-                            <div className={`mt-5 space-y-2 rounded-xl p-4 ${isLight ? 'bg-bg-input border border-border-subtle' : 'bg-white/[0.02] border border-white/[0.04]'}`}>
+                            <div className="mt-5 space-y-2 rounded-xl p-4 bg-[#050505] border border-white/[0.06]">
                                 {[
                                     'Professional Identity Graph',
                                     'JD analysis & persona tuning',
@@ -214,8 +234,14 @@ export const PremiumUpgradeModal: React.FC<PremiumUpgradeModalProps> = ({ isOpen
                             {/* Buy button */}
                             <button
                                 onClick={() => window.electronAPI?.openExternal?.('https://github.com/TarunShetty256/')}
-                                className="mt-5 w-full py-2.5 rounded-[10px] bg-[#FACC15] text-black text-[12px] font-semibold hover:bg-[#FDE047] active:scale-[0.98] transition-all duration-200 flex items-center justify-center shadow-[0_0_15px_rgba(250,204,21,0.15)] hover:shadow-[0_0_20px_rgba(250,204,21,0.25)]"
+                                className="relative mt-5 w-full py-2.5 rounded-[10px] text-white text-[12px] font-semibold active:scale-[0.98] transition-all duration-200 flex items-center justify-center overflow-hidden"
+                                style={{
+                                    background: 'linear-gradient(135deg, #082f49 0%, #0ea5e9 52%, #2563eb 100%)',
+                                    boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.5), inset 0 -1px 3px rgba(8,47,73,0.4), 0 0 16px rgba(14,165,233,0.3), 0 2px 10px rgba(14,165,233,0.2), 0 0 0 1px rgba(255,255,255,0.12)',
+                                }}
                             >
+                                <div className="pointer-events-none absolute inset-x-1 top-0 h-[45%] rounded-b-md bg-gradient-to-b from-white/30 to-transparent opacity-75 blur-[1px]" />
+                                <span className="pointer-events-none absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-sky-300/20 to-transparent" />
                                 Purchase License
                             </button>
 
