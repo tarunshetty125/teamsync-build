@@ -3455,7 +3455,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                             </div>
 
                             {/* Content */}
-                            <div className="settings-right-surface relative min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-bg-main px-6 py-5">
+                            <div className="settings-right-surface relative min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-[#0c0c0c] px-6 py-5">
                                 <AnimatePresence mode="wait" initial={false}>
                                     <motion.div
                                         key={activeTab}
@@ -4559,31 +4559,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                         profileData={profileData}
                                                         currentGenerationId={profileData?.generationId}
                                                     />
-                                                ) : (
-                                                    <div className="mt-6 rounded-2xl border border-dashed border-border-subtle bg-bg-item-surface p-6 shadow-sm">
-                                                        <div className="max-w-[520px]">
-                                                            <p className="text-[14px] font-semibold text-text-primary">Create your profile intelligence</p>
-                                                            <p className="mt-2 text-[12px] leading-relaxed text-text-secondary">
-                                                                Add a resume once so Quietly can personalize answers, interview framing, and role-specific preparation.
-                                                            </p>
-                                                        </div>
-                                                        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                                            {['Personal context', 'Role-aware answers', 'Reusable memory'].map((benefit) => (
-                                                                <div key={benefit} className="flex items-center gap-2 rounded-lg bg-bg-input/60 px-3 py-2 text-[11px] font-medium text-text-secondary">
-                                                                    <CheckCircle size={13} className="text-emerald-500" />
-                                                                    <span className="truncate">{benefit}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleSelectResume}
-                                                            className="mt-5 rounded-lg bg-text-primary px-4 py-2 text-[12px] font-semibold text-bg-main transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
-                                                        >
-                                                            Select resume
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                ) : null}
 
                                                 {/* Salary Negotiation Script */}
                                                 {profileData?.hasActiveJD && (

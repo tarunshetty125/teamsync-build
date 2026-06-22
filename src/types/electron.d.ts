@@ -726,6 +726,7 @@ export interface ElectronAPI extends ProviderAnalyticsSessionSnapshotBridge {
   onLicenseRestored: (callback: (data: { isPremium: boolean; plan?: string; provider?: string }) => void) => () => void
   onLicenseStatusChanged: (callback: (data: { isPremium: boolean, plan?: string }) => void) => () => void
   licenseDeactivate: () => Promise<{ success: boolean; error?: string }>
+  licenseGetHardwareId: () => Promise<string>
   licenseGetTier: () => Promise<{ tier: 'free' | 'pro' | 'pro_plus' }>
 
   // Capability-based feature gates

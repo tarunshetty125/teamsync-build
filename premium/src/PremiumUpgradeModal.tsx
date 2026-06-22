@@ -120,7 +120,7 @@ export const PremiumUpgradeModal: React.FC<PremiumUpgradeModalProps> = ({ isOpen
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-            className="fixed inset-0 z-[200] flex items-center justify-center" 
+            className="fixed inset-0 z-[5000] flex items-center justify-center" 
             onClick={onClose}
         >
             {/* Backdrop */}
