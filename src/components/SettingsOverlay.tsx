@@ -4028,7 +4028,7 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                                                             )}
                                                         </div>
                                                         <button
-                                                            onClick={() => setActiveTab('profile')}
+                                                            onClick={() => setIsPremiumModalOpen(true)}
                                                             className="group relative flex h-[34px] shrink-0 items-center justify-center gap-2 overflow-hidden rounded-full px-4 text-[12px] font-semibold text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
                                                             style={{
                                                                 background: isPremium

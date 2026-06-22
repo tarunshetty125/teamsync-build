@@ -352,7 +352,7 @@ function LockedFooter({
   onOpenTeamSyncAPI?: () => void;
 }) {
   const handleUnlockPro = () => {
-    window.electronAPI?.openExternal?.('mailto:tarunshetty125@gmail.com');
+    onOpenTeamSyncAPI?.();
   };
 
   return (
