@@ -4159,12 +4159,19 @@ async function initializeApp() {
   PermissionManager.getInstance().startMonitoring()
   appState.createWindow()
 
-  // Restore persisted V2 layout after window creation so WindowHelper uses it
+  // Restore persisted V2 layout after window creation — only for Pro/Pro Plus users
   {
     const persistedV2 = SettingsManager.getInstance().get('overlayV2Layout');
     if (persistedV2 === true) {
-      appState.getWindowHelper().setOverlayUsesV2Layout(true);
-      console.log('[Main] Restored overlayV2Layout = true into WindowHelper');
+      // Only apply V2 if user has an active pro or pro_plus entitlement
+      const { EntitlementVerifier } = require('./licensing/EntitlementVerifier');
+      const hasPro = EntitlementVerifier.getInstance().hasProAccess();
+      if (hasPro) {
+        appState.getWindowHelper().setOverlayUsesV2Layout(true);
+        console.log('[Main] Restored overlayV2Layout = true into WindowHelper (pro user)');
+      } else {
+        console.log('[Main] overlayV2Layout persisted but user is free — staying on v1');
+      }
     }
   }
 

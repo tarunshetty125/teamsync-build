@@ -16,6 +16,7 @@ import { ChevronLeft, ChevronRight, ChevronsRight, Code2, FileText, X, PanelLeft
 import { SkeletonLoader, EmptyListeningState } from '../ui/PremiumStates';
 import CodeBlock from '../ui/CodeBlock';
 import MermaidRenderer from '../ui/MermaidRenderer';
+import { NegotiationCoachingCard } from '../../premium';
 import type { V2Message } from './useCluelyOverlayBridge';
 import type { ResponseSelectionMode } from '../../lib/overlay/responseHistorySelection';
 import { getProviderModelMetadata } from '../../lib/providers/providerModelMetadata';
@@ -142,7 +143,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
         setTimeout(() => setCopied(false), 2000);
     }, [renderedResponse?.text]);
 
-    const hasContent = !!renderedResponse?.text || isProcessing;
+    const hasContent = !!renderedResponse?.text || isProcessing || !!(renderedResponse?.isNegotiationCoaching && renderedResponse?.negotiationCoachingData);
     const source = renderedResponse?.source;
     const sourceIcon = source ? (SOURCE_ICONS[source] || '✦') : null;
     const isStreaming = renderedResponse?.isStreaming;
@@ -439,7 +440,7 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                 className={`v2-scroll-area v2-response-scroll v2-no-drag${isSystemDesignResponse ? ' v2-response-scroll--system-design' : ''}`}
             >
                 <AnimatePresence mode="wait">
-                    {isProcessing && !renderedResponse?.text ? (
+                    {isProcessing && !renderedResponse?.text && !(renderedResponse?.isNegotiationCoaching && renderedResponse?.negotiationCoachingData) ? (
                         <motion.div
                             key="skeleton"
                             initial={{ opacity: 0 }}
@@ -449,51 +450,23 @@ const ProResponseSurface = memo<ProResponseSurfaceProps>(function ProResponseSur
                         >
                             <SkeletonLoader isLightTheme={false} />
                         </motion.div>
-                    ) : renderedResponse?.text ? (
+                    ) : (renderedResponse?.text || (renderedResponse?.isNegotiationCoaching && renderedResponse?.negotiationCoachingData)) ? (
                         <motion.div
-                            key={`response-${renderedResponse.id}`}
+                            key={`response-${renderedResponse!.id}`}
                             initial={{ opacity: 0, y: 6, scale: 0.995 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                             className="v2-response-body"
                         >
                             {/* Negotiation coaching card */}
-                            {renderedResponse.isNegotiationCoaching && renderedResponse.negotiationCoachingData ? (
-                                <div style={{
-                                    padding: '16px',
-                                    borderRadius: '14px',
-                                    background: 'rgba(139, 92, 246, 0.06)',
-                                    border: '1px solid rgba(139, 92, 246, 0.12)',
-                                }}>
-                                    <div style={{
-                                        fontSize: '11px',
-                                        fontWeight: 600,
-                                        letterSpacing: '0.08em',
-                                        textTransform: 'uppercase',
-                                        color: 'rgba(196, 181, 253, 0.7)',
-                                        marginBottom: '8px',
-                                    }}>
-                                        {renderedResponse.negotiationCoachingData.phase || 'Negotiation'}
-                                    </div>
-                                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6 }}>
-                                        {renderedResponse.negotiationCoachingData.tacticalNote}
-                                    </div>
-                                    {renderedResponse.negotiationCoachingData.exactScript && (
-                                        <div style={{
-                                            marginTop: '12px',
-                                            padding: '12px',
-                                            borderRadius: '10px',
-                                            background: 'rgba(255,255,255,0.04)',
-                                            border: '1px solid rgba(255,255,255,0.06)',
-                                            fontSize: '13px',
-                                            fontStyle: 'italic',
-                                            color: 'rgba(255,255,255,0.78)',
-                                            lineHeight: 1.6,
-                                        }}>
-                                            "{renderedResponse.negotiationCoachingData.exactScript}"
-                                        </div>
-                                    )}
-                                </div>
+                            {renderedResponse!.isNegotiationCoaching && renderedResponse!.negotiationCoachingData ? (
+                                <NegotiationCoachingCard
+                                    {...renderedResponse!.negotiationCoachingData}
+                                    phase={renderedResponse!.negotiationCoachingData.phase as any}
+                                    onSilenceTimerEnd={() => {
+                                        // Silence timer ended — no-op for now (V2 doesn't mutate messages in-place)
+                                    }}
+                                />
                             ) : (
                                 <V2ResponseText
                                     text={renderedResponse.text}

@@ -30,6 +30,7 @@ export class KnowledgeOrchestrator {
     private aotPipeline: AOTPipeline;
     private salaryEngine: SalaryIntelligenceEngine;
     private negotiationTracker: NegotiationConversationTracker;
+    private negotiationContextEnabled: boolean = false;
 
     // Cached state for fast retrieval
     private activeResume: KnowledgeDocument | null = null;
@@ -1310,8 +1311,33 @@ Keywords: ${jd.keywords?.join(', ')}`;
         return this.negotiationTracker;
     }
 
+    /**
+     * Enable or disable negotiation context injection into LLM prompts.
+     * When enabled, the negotiation tracker's state is included in responses.
+     */
+    setNegotiationContextEnabled(enabled: boolean): { enabled: boolean; state: any } {
+        this.negotiationContextEnabled = enabled;
+        if (enabled && !this.negotiationTracker.isActive()) {
+            // Auto-activate the tracker when enabling context
+            const script = this.getNegotiationScript();
+            this.negotiationTracker.activate(script?.salary_range?.max ?? null);
+        }
+        return {
+            enabled: this.negotiationContextEnabled,
+            state: this.negotiationTracker.getState(),
+        };
+    }
+
+    /**
+     * Check if negotiation context injection is enabled.
+     */
+    isNegotiationContextEnabled(): boolean {
+        return this.negotiationContextEnabled;
+    }
+
     resetNegotiationSession(): void {
         this.negotiationTracker.reset();
+        this.negotiationContextEnabled = false;
     }
 
     /**

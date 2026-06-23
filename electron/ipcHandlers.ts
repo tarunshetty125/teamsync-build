@@ -382,9 +382,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     return { success: true, profileDeleted: profileDelete.success };
   });
 
-  safeHandle("license:get-entitlement", async (event) => {
-    const rejected = rejectUntrustedLicenseSender(event);
-    if (rejected) return rejected;
+  safeHandle("license:get-entitlement", async () => {
     return Object.freeze(toPlanState());
   });
 
@@ -548,6 +546,10 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("set-overlay-v2-layout", async (_, enabled: boolean) => {
     const effectiveValue = !!enabled;
+    // V2 layout is a Pro/Pro Plus feature — free users stay on v1
+    if (effectiveValue && !isProOrAbove()) {
+      return { success: false, error: 'PRO_REQUIRED', message: 'Pro plan required for V2 overlay layout.' };
+    }
     appState.getWindowHelper().setOverlayUsesV2Layout(effectiveValue);
     // Persist to SettingsManager so value survives restart
     const { SettingsManager } = require('./services/SettingsManager');

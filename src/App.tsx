@@ -31,9 +31,6 @@ import {
   PremiumPromoToaster,
   RemoteCampaignToaster,
   PremiumUpgradeModal,
-  TeamSyncApiPromoToaster,
-  MaxUltraUpgradeToaster,
-  ModesSettings as PremiumModesSettings,
   useAdCampaigns
 } from './premium'
 import { analytics } from "./lib/analytics/analytics.service"
@@ -689,11 +686,7 @@ const App: React.FC = () => {
                   className="h-[74vh] w-[62vw] max-h-[700px] max-w-[840px] transform-gpu overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#0c0e14] shadow-2xl"
                   style={{ willChange: 'transform, opacity' }}
                 >
-                  {(isPremiumActive || !!activeTrial) ? (
-                    <PremiumModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
-                  ) : (
-                    <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
-                  )}
+                  <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
                 </motion.div>
               </motion.div>
             )}
@@ -943,18 +936,7 @@ const App: React.FC = () => {
             }}
           />
         )}
-        {/* Ad toasters — render whenever activeAd is set (isLauncherMainView guard bypassed
-          when triggered via preview shortcut so the card always surfaces) */}
-        {(isLauncherMainView || !!activeAd) && !isSettingsOpen && shouldMountLauncherWorkspace && !shouldRenderStartup && (
-          <TeamSyncApiPromoToaster
-            isOpen={activeAd === 'teamsync_api'}
-            onDismiss={() => dismissAd('teamsync_api')}
-            onOpenSettings={(tab: string) => {
-              setSettingsInitialTab(tab);
-              setIsSettingsOpen(true);
-            }}
-          />
-        )}
+
         {(isLauncherMainView || !!activeAd) && shouldMountLauncherWorkspace && !shouldRenderStartup && (
           <>
             <ProfileFeatureToaster
@@ -980,13 +962,7 @@ const App: React.FC = () => {
                 setShowPremiumModal(true);
               }}
             />
-            <MaxUltraUpgradeToaster
-              isOpen={activeAd === 'max_ultra_upgrade'}
-              onDismiss={dismissAd}
-              onUpgrade={() => {
-                setShowPremiumModal(true);
-              }}
-            />
+
 
             {/* Remote Campaigns Render Logic */}
             <RemoteCampaignToaster
