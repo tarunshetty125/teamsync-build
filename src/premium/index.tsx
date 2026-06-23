@@ -60,6 +60,10 @@ const _negotiationCard = import.meta.glob<any>(
 );
 
 
+const _modesSettings = import.meta.glob<any>(
+  '../../premium/src/ModesSettings.tsx',
+  { eager: true }
+);
 const _researchPanel = import.meta.glob<any>(
   '../../premium/src/ResearchPanel.tsx',
   { eager: true }
@@ -106,7 +110,8 @@ export const useAdCampaigns: typeof nullAdCampaigns =
 export const NegotiationCoachingCard: React.FC<any> =
   get(_negotiationCard, 'NegotiationCoachingCard', NullComponent);
 
-
+export const ModesSettings: React.FC<any> =
+  get(_modesSettings, 'default', NullComponent);
 
 export const ResearchPanel: React.FC<any> =
   get(_researchPanel, 'ResearchPanel', NullComponent);

@@ -31,6 +31,7 @@ import {
   PremiumPromoToaster,
   RemoteCampaignToaster,
   PremiumUpgradeModal,
+  ModesSettings as PremiumModesSettings,
   useAdCampaigns
 } from './premium'
 import { analytics } from "./lib/analytics/analytics.service"
@@ -686,7 +687,11 @@ const App: React.FC = () => {
                   className="h-[74vh] w-[62vw] max-h-[700px] max-w-[840px] transform-gpu overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#0c0e14] shadow-2xl"
                   style={{ willChange: 'transform, opacity' }}
                 >
-                  <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
+                  {(isPremiumActive || !!activeTrial) ? (
+                    <PremiumModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
+                  ) : (
+                    <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
+                  )}
                 </motion.div>
               </motion.div>
             )}
