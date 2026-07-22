@@ -14,6 +14,7 @@ const app = express();
 const PORT = backendConfig.port;
 const ALLOWED_ORIGINS = new Set([
   'https://apiteamsync.duckdns.org',
+  'https://teamsync-backend-rqmq.onrender.com',
   'https://api.teamsync.ai',
   'http://localhost:5180',
   'http://localhost:3000',

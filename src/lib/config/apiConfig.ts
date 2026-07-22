@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = 'https://apiteamsync.duckdns.org';
+const DEFAULT_API_BASE_URL = 'https://teamsync-backend-rqmq.onrender.com';
 
 const configuredApiBaseUrl =
   typeof process !== 'undefined'
