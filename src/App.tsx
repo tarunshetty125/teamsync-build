@@ -33,8 +33,8 @@ import {
   PremiumUpgradeModal,
   TeamSyncApiPromoToaster,
   MaxUltraUpgradeToaster,
-  ModesSettings as PremiumModesSettings,
-  useAdCampaigns
+  useAdCampaigns,
+  PremiumModes
 } from './premium'
 import { analytics } from "./lib/analytics/analytics.service"
 import { ErrorBoundary } from "./components/ErrorBoundary"
@@ -415,6 +415,22 @@ const App: React.FC = () => {
       void syncStartupState();
     });
 
+    // Subscribe to the authoritative LicenseSyncManager state channel for real-time
+    // plan changes (activation, upgrade, downgrade, revocation). This is the single
+    // source of truth — it fires on every state transition including tier changes.
+    const removeLicenseState = window.electronAPI?.onLicenseState?.((state: any) => {
+      if (state && typeof state.isPremium === 'boolean') {
+        setIsPremiumActive(state.isPremium);
+        setPlanDetails(prev => ({
+          ...prev,
+          isPremium: state.isPremium,
+          ...(state.plan ? { plan: state.plan } : {}),
+          ...(state.tier ? { tier: state.tier } : {}),
+        }));
+        setHasLoadedLicense(true);
+      }
+    });
+
     const removeKnowledgeReady = window.electronAPI?.onKnowledgeEngineReady?.(() => {
       void syncStartupState();
     });
@@ -435,6 +451,7 @@ const App: React.FC = () => {
       if (removeBedrockAuthWarning) removeBedrockAuthWarning();
       if (removeLicenseRestored) removeLicenseRestored();
       if (removeLicenseListener) removeLicenseListener();
+      if (removeLicenseState) removeLicenseState();
       if (removeKnowledgeReady) removeKnowledgeReady();
       if (removeAuthLoggedOut) removeAuthLoggedOut();
       if (trialPollId) clearInterval(trialPollId);
@@ -686,14 +703,10 @@ const App: React.FC = () => {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.99, y: 6 }}
                   transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
-                  className="h-[74vh] w-[62vw] max-h-[700px] max-w-[840px] transform-gpu overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#0c0e14] shadow-2xl"
+                  className="h-[640px] max-h-[calc(100vh-96px)] w-[840px] max-w-[calc(100vw-96px)] transform-gpu overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#171717] shadow-2xl"
                   style={{ willChange: 'transform, opacity' }}
                 >
-                  {(isPremiumActive || !!activeTrial) ? (
-                    <PremiumModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
-                  ) : (
-                    <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
-                  )}
+                  <PremiumModes onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenTeamSyncAPI={() => { setIsModesOpen(false); setSettingsInitialTab('profile'); setIsSettingsOpen(true); }} />
                 </motion.div>
               </motion.div>
             )}

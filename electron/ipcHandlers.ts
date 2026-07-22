@@ -347,6 +347,11 @@ export function initializeIpcHandlers(appState: AppState): void {
       ? await entitlementVerifier.startTrial()
       : await entitlementVerifier.activateLicense(typeof payload === 'string' ? payload : payload?.licenseKey || '');
     broadcastLicenseState();
+    // Ensure the authoritative LicenseSyncManager reconciles immediately so all
+    // windows receive the updated license:state snapshot in real time.
+    if (result.success) {
+      syncManager.triggerSync('activation').catch(() => {});
+    }
     return Object.freeze({
       ...result,
       entitlement: result.entitlement ? Object.freeze({
@@ -379,6 +384,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
     clearActiveModeOnLicenseLoss();
     broadcastLicenseState();
+    syncManager.triggerSync('deactivation').catch(() => {});
     return { success: true, profileDeleted: profileDelete.success };
   });
 

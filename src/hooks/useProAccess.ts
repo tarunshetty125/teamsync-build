@@ -43,11 +43,13 @@ export function useProAccess() {
 
     const removeLicenseRestored = window.electronAPI?.onLicenseRestored?.(handlePlanSignal);
     const removeLicenseStatusChanged = window.electronAPI?.onLicenseStatusChanged?.(handlePlanSignal);
+    const removeLicenseState = window.electronAPI?.onLicenseState?.(handlePlanSignal);
 
     return () => {
       mounted = false;
       removeLicenseRestored?.();
       removeLicenseStatusChanged?.();
+      removeLicenseState?.();
     };
   }, []);
 

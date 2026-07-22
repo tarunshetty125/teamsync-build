@@ -74,6 +74,10 @@ const _researchPanel = import.meta.glob<any>(
   '../../premium/src/ResearchPanel.tsx',
   { eager: true }
 );
+const _premiumModes = import.meta.glob<any>(
+  '../../premium/src/PremiumModes.tsx',
+  { eager: true }
+);
 
 // ─── Helper ──────────────────────────────────────────────────────────
 function get<T>(mods: Record<string, any>, name: string, fallback: T): T {
@@ -127,3 +131,6 @@ export const ModesSettings: React.FC<any> =
 
 export const ResearchPanel: React.FC<any> =
   get(_researchPanel, 'ResearchPanel', NullComponent);
+
+export const PremiumModes: React.FC<any> =
+  get(_premiumModes, 'PremiumModes', NullComponent);

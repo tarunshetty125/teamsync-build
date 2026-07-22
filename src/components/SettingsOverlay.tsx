@@ -879,9 +879,11 @@ const SkillsSettingsTab: React.FC = () => {
                             <div className="flex items-center gap-2 flex-shrink-0">
                                 <div className="flex items-center gap-1.5">
                                     <CheckCircle size={12} className="text-green-500" />
-                                    <span className="text-[11px] font-medium text-text-secondary">
-                                        {skill.source === 'builtin' ? 'Built-in' : 'Local'}
-                                    </span>
+                                    {skill.source !== 'builtin' && (
+                                        <span className="text-[11px] font-medium text-text-secondary">
+                                            Local
+                                        </span>
+                                    )}
                                 </div>
                                 {skill.source !== 'builtin' && (
                                     <SkillDeleteButton skillId={skill.id} onDeleted={loadSkills} />
@@ -1568,6 +1570,19 @@ const SettingsOverlay: React.FC<SettingsOverlayProps> = ({
                 refreshProfileStateRef.current?.().catch(() => { });
             });
         }
+    }, []);
+
+    // Subscribe to LicenseSyncManager's authoritative state channel for real-time
+    // plan changes — ensures Pro/Pro Plus features activate immediately.
+    useEffect(() => {
+        if (!window.electronAPI?.onLicenseState) return;
+        return window.electronAPI.onLicenseState((state: any) => {
+            if (state && typeof state.isPremium === 'boolean') {
+                setIsPremium(state.isPremium);
+                if (state.plan) setPremiumPlan(state.plan);
+                refreshProfileStateRef.current?.().catch(() => { });
+            }
+        });
     }, []);
 
     useEffect(() => {
