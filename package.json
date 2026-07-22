@@ -1,6 +1,6 @@
 {
   "name": "quietly",
-  "version": "2.7.3",
+  "version": "2.7.4",
   "main": "dist-electron/electron/main.js",
   "description": "Quietly is an AI-powered meeting assistant that provides real-time intelligence during your calls.",
   "scripts": {
